@@ -3,7 +3,7 @@
 **Authority:** This is one of the 3 canonical authority docs for this repo. See Section 6 below.
 
 **Last updated:** 2026-03-24
-**Branch:** master @ f967a21
+**Branch:** master @ 01f6e72
 
 ---
 
@@ -40,8 +40,8 @@ Placeholder. No milestone beyond M2 is currently defined.
 |-------|-------|-----------|--------|
 | **M2-A** | Structural PNG baseline (dims, layers, metadata gates) | M1 closed | ESTABLISHED |
 | **M2-B** | Source panel + grid assembly (draw box, find sprites, drag-to-grid) | M2-A | ESTABLISHED — source-panel 10/10 PASS (5c67ef2); source-to-grid 13/13 PASS (380edee) at root + /xpedit. D1, D2/C2, G1 PROVEN. |
-| **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | ESTABLISHED — 15/18 W-actions PROVEN. W15 visualization connected (960974f), needs verifier proof of drag→bounds. W16/W17 DEFERRED. |
-| **M2-D** | Full SAR workflow coverage (all remaining WIRED actions get verifier proof) | M2-B, M2-C | IN PROGRESS — registry expanded from 47 → 77 entries (ac60fd3–69115e9). 14 executable + 16 stubs. 31 WS selectors added. 2 new recipes. |
+| **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | ESTABLISHED — 15/18 W-actions PROVEN. W15 visualization connected (`2d9aa30`), needs verifier proof of drag→bounds. W16/W17 DEFERRED. |
+| **M2-D** | Full SAR workflow coverage (all remaining WIRED actions get verifier proof) | M2-B, M2-C | IN PROGRESS — registry expanded from 47 → 77 entries (5c2aab1–d7e791c on current master lineage). 14 executable + 16 stubs. 31 WS selectors added. 2 new recipes. |
 | **M2-E** | Semantic editing (region-based dictionary-driven edits) | M2-D | NOT STARTED |
 | **M2-F** | Analyze/auto-slice (assistive, not authoritative) | M2-D | NOT STARTED |
 
@@ -53,10 +53,10 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 **Last reviewed:** 2026-03-24
 
-1. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions runs `23479759126` and `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
+1. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions run `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
 2. **M2-D full SAR workflow coverage** — M2-B and M2-C are established. Remaining WIRED actions outside the whole-sheet blocked/deferred set need committed proof.
 3. **PB-01/02/03 undo gaps** in source panel anchor ops — small fixes that affect M2-D completeness.
-4. **PB-06 SelectTool visualization** — FIXED (960974f): `canvas.setSelectionTool()` now called during mount. Marching-ants renderer connected. Needs verifier proof of drag→bounds→visual. W18 (undo) is PROVEN. W16/W17 remain deferred.
+4. **PB-06 SelectTool visualization** — FIXED (`2d9aa30`): `canvas.setSelectionTool()` now called during mount. Marching-ants renderer connected. Needs verifier proof of drag→bounds→visual. W18 (undo) is PROVEN. W16/W17 remain deferred.
 
 This stack is execution priority, not timeless truth. Re-evaluate when any sub-phase status changes.
 
@@ -153,9 +153,9 @@ The M2 verifier is a pipeline with five stages:
 
 **Stage 1 — Capability Canon** is human-curated and already exists (`m2-capability-canon-inventory.md`). It classifies every action as PROVEN/WIRED/PARTIAL/PLANNED/BLOCKED/DEFERRED and tracks code evidence and proof evidence.
 
-**Stage 2 — Action Registry** (`action_registry.json`) exists (committed 85ff3b8, expanded in M2-D). Machine-readable extraction of the capability canon: one entry per action with `id`, `family`, `selectorKey` (reference into `selectors.mjs`), `gestureType` (constrained enum), `paramBindings` (preparatory input steps), `preconditions`, `postconditions`, `acceptanceEligible`, and `generatorReadiness`. Schema: `action_registry_schema.json` (JSON Schema draft-07). Current coverage: 47 READY-family actions; M2-D pass adds 30 more (14 executable + 16 stubs).
+**Stage 2 — Action Registry** (`action_registry.json`) exists and was expanded in the current M2-D pass. Machine-readable extraction of the capability canon: one entry per action with `id`, `family`, `selectorKey` (reference into `selectors.mjs`), `gestureType` (constrained enum), `paramBindings` (preparatory input steps), `preconditions`, `postconditions`, `acceptanceEligible`, and `generatorReadiness`. Schema: `action_registry_schema.json` (JSON Schema draft-07). Current coverage: 47 READY-family actions; M2-D pass adds 30 more (14 executable + 16 stubs).
 
-**Stage 3 — Recipe Generator** (`recipe_generator.mjs`) exists (committed 85ff3b8). Reads the action registry and composes bounded workflow sequences. A recipe is an ordered list of `{ actionId, params, expectedOutcome }` steps with `_derived` metadata for runner consumption. Currently produces 6 fixed regression recipes for READY-family workflows. Import-safe (no side effects on module import). Bounded-random generation is future work.
+**Stage 3 — Recipe Generator** (`recipe_generator.mjs`) exists. Reads the action registry and composes bounded workflow sequences. A recipe is an ordered list of `{ actionId, params, expectedOutcome }` steps with `_derived` metadata for runner consumption. Currently produces 8 fixed regression recipes for READY-family workflows. Import-safe (no side effects on module import). Bounded-random generation is future work.
 
 **Stage 4 — DOM Runner** (`dom_runner.mjs`) exists (committed 85ff3b8). Executes recipe steps via Playwright DOM actions — never `page.evaluate()` for action driving. Supports gestures: click, setInputFiles, selectOption, fill. Enforces recipe-level precondition gates, refuses blocked gestures, constrains main gestures to value-less types (click, rightClick). Uses `verifier_lib.mjs` for `openWorkbench()`, `captureState()`, base-path resolution, and structured reporting. Proof: 3 recipes pass (bundle_template_apply, bug_report_dismiss, xp_import_roundtrip).
 
@@ -163,7 +163,7 @@ The M2 verifier is a pipeline with five stages:
 
 ### Selector Infrastructure
 
-`selectors.mjs` (committed 85ff3b8) centralizes DOM selectors used by both the action registry and runners. 102+ selector keys verified against `web/workbench.html`. Gesture types defined with blocked flags for canvas/keyboard. M2-D pass adds 31 whole-sheet selectors.
+`selectors.mjs` centralizes DOM selectors used by both the action registry and runners. 102+ selector keys verified against `web/workbench.html`. Gesture types defined with blocked flags for canvas/keyboard. M2-D pass adds 31 whole-sheet selectors.
 
 ### Relationship to Existing Infrastructure
 
@@ -189,12 +189,12 @@ The M2 verifier is a pipeline with five stages:
 
 | # | Component | Status | Commit |
 |---|-----------|--------|--------|
-| 1 | `selectors.mjs` | **Done** | 85ff3b8 |
-| 2 | `action_registry_schema.json` | **Done** | 85ff3b8 |
-| 3 | `action_registry.json` | **Done** — 77 entries (47 foundation + 30 M2-D expansion) | 85ff3b8, 4363c40 |
-| 4 | `recipe_generator.mjs` | **Done** (8 fixed recipes) | 85ff3b8, 9056275 |
-| 5 | `dom_runner.mjs` | **Done** (click, setInputFiles, selectOption, fill) | 85ff3b8 |
-| 6 | M2-D registry expansion | **Done** — 31 selectors, 14 executable + 16 stub entries, W15 fix, 2 recipes | ac60fd3–9056275 |
+| 1 | `selectors.mjs` | **Done** | foundation landed earlier; expanded in `5c2aab1` |
+| 2 | `action_registry_schema.json` | **Done** | foundation landed earlier |
+| 3 | `action_registry.json` | **Done** — 77 entries (47 foundation + 30 M2-D expansion) | current master; latest M2-D expansion in `757cf74`, reconciled in `d7e791c` |
+| 4 | `recipe_generator.mjs` | **Done** (8 fixed recipes) | current master; latest addition `70da189` |
+| 5 | `dom_runner.mjs` | **Done** (click, setInputFiles, selectOption, fill) | foundation landed earlier |
+| 6 | M2-D registry expansion | **Done** — 31 selectors, 14 executable + 16 stub entries, W15 fix, 2 recipes | `5c2aab1`–`d7e791c` |
 
 ---
 

@@ -3495,6 +3495,37 @@ Root: 8/8 PASS at `output/ws_tools_test_w15w18/report.json`
 
 ---
 
+## Canon Reconciliation: M2-D Landed, W15 Hookup Fixed, Proof Still Pending
+
+**Date:** 2026-03-24
+**Branch / HEAD:** `master` @ `01f6e72`
+**Result:** Canon/log reconciliation after the rebased M2-D landing on current `master`
+
+### Evidence
+
+- The rebased M2-D registry expansion is present on current `master`:
+  - `5c2aab1` — add 31 whole-sheet selectors
+  - `8d119ad` — add 7 F3 source-panel entries
+  - `408a5e3` — add 5 F6 grid-panel entries
+  - `757cf74` — add 18 F7 whole-sheet entries
+  - `2d9aa30` — connect `canvas.setSelectionTool(editorState.selectTool)`
+  - `70da189` — add source-panel mode-cycle and grid frame-management recipes
+  - `d7e791c` — correct stale W15 blocker text and align recipe preconditions
+- The older `2026-03-24` W15/W18 entry at `PLAYWRIGHT_FAILURE_LOG.md:3143` remains valid as historical evidence for the pre-fix state, but its W15 visualization diagnosis is now superseded by `2d9aa30`.
+
+### Current Truth After Reconciliation
+
+- `W15` is still **WIRED**, not **PROVEN**.
+- The old product gap is closed: the SelectTool visualization path is now connected to the canvas renderer.
+- The remaining W15 gap is verifier proof: no committed UI-driven lane yet proves drag → non-empty bounds → visible marching-ants state.
+- M2-D infrastructure is landed on `master` (77 registry rows, 8 recipes), but the remaining work is proof and workflow completeness, not more registry scaffolding.
+- Highest-priority open M2 items remain:
+  - proof for the new M2-D READY actions
+  - PB-01 / PB-03 undo-history fixes in the source panel
+  - Slice 5 manual-assembly end-to-end proof
+
+---
+
 ## Doc Lifecycle: Worksheet Retired
 
 **Date:** 2026-03-24
@@ -3563,4 +3594,3 @@ Root: 8/8 PASS at `output/ws_tools_test_w15w18/report.json`
 **Reason:** Superseded/completed — doc reconciliation pass 2026-03-24
 **References rewritten:** 3 file(s)
 **Script:** `scripts/doc_lifecycle_stitch.sh`
-

@@ -40,7 +40,7 @@ This repo uses a 3-doc canonical authority model. Agents must treat ONLY these 3
 - Audit date: 2026-03-24
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD: `cce5ccf`
+- Audited HEAD: `01f6e72`
 - Current branch role: active M2 acceptance and verifier architecture line; MVP deployment live at `rikiworld.com/xpedit`; M2-D registry expansion landed (77 entries)
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
@@ -61,17 +61,16 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
 ## Current Milestone
 
 - The overall product goal remains **full XP-file editor parity** as defined in `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md`.
-- The current working milestone is **Milestone 1: bundle-native new-XP authoring viability**.
-- Milestone 1 means:
-  - create and edit the required native bundle actions (`idle`, `attack`, `death`) through shipped whole-sheet workbench controls
-  - preserve required structure and layers
-  - export/apply correctly into Skin Dock/runtime
-  - support a usable authoring loop for save/export/test
-  - pass canonical verifier evidence plus final manual/runtime review
-- Milestone 1 does **not** mean full existing-XP load/edit/export parity is complete.
+- **Milestone 1 is closed.** It is the baseline, not the active workstream.
+- The current working milestone is **Milestone 2: practical PNG ingest and manual assembly**.
+- Milestone 2 means:
+  - preserve the arbitrary-PNG structural ingest baseline
+  - support practical uploaded-PNG workflows through shipped controls
+  - make source-panel extraction, source-to-grid assembly, and whole-sheet correction acceptance-provable
+  - drive verifier progress through the canonical SAR/action-response model rather than ad hoc workflow claims
+- Milestone 2 does **not** mean perfect automatic slicing, full existing-XP parity, or full REXPaint parity.
 - A canonical XP verifier family now exists in `scripts/xp_fidelity_test/`, including bundle workflow runners. Do not reuse the deleted blank-flow single-frame harness as evidence.
-- Do not start broader REXPaint UX/UI redesign as if full parity is already proven. The current work is Phase 4 acceptance, responsiveness, and repeatability on the bundle-native line.
-- If Milestone 1 closes, the next milestone is **Milestone 2: practical PNG ingest and manual assembly**, not "perfect automatic slicing."
+- Do not start broader REXPaint UX/UI redesign as if full parity is already proven. The current work is M2 acceptance, proof, and repeatability on the PNG/manual-assembly line.
 
 ## Explicit Milestone Definitions
 
@@ -368,11 +367,11 @@ No distinct palette asset files (`.pal`, `palette.json`, etc.) exist in the repo
 
 > A canonical M2 capability inventory exists at `docs/plans/2026-03-23-m2-capability-canon-inventory.md`. It cross-references every doc in this index against current code wiring and failure-log proof to classify each user-reachable behavior as PROVEN, WIRED, PARTIAL, PLANNED, BLOCKED, or DEFERRED.
 >
-> Key findings (updated 2026-03-24, HEAD cce5ccf):
+> Key findings (updated 2026-03-24, HEAD 01f6e72):
 > - M1 is closed (see status correction above)
 > - 96 SAR-enumerated actions: **23 PROVEN** on committed code (B1/B2/B3 promoted via live Cloud Run browser test), 64 WIRED, 2 PARTIAL, 4 PLANNED, 1 BLOCKED, 2 DEFERRED
 > - M2-B source-panel proof is **committed** (5c67ef2, d12740c): 10/10 PASS at root + /xpedit
-> - M2-C whole-sheet: 15/18 PROVEN. W15 visualization connected (960974f), needs verifier proof. W16/W17 DEFERRED.
+> - M2-C whole-sheet: 15/18 PROVEN. W15 visualization connected (`2d9aa30`), needs verifier proof. W16/W17 DEFERRED.
 > - **M2-D registry expansion landed**: 77 entries (47 foundation + 30 expansion). 31 WS selectors, 14 executable + 16 stub entries, W15 product fix, 8 fixed recipes. Generator stack: selectors.mjs → schema → registry → recipe_generator.mjs → dom_runner.mjs (all committed).
 > - **Unified M2 verifier architecture** documented in `docs/plans/2026-03-23-workbench-canonical-spec.md` §5
 > - MVP deployment live at `rikiworld.com/xpedit` with GitHub Issue delivery for bug reports (Secret Manager, verified Issues #6/#7)

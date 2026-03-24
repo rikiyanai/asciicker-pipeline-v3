@@ -2,7 +2,7 @@
 
 **Created:** 2026-03-23
 **Last updated:** 2026-03-24
-**Branch:** master @ f967a21
+**Branch:** master @ 01f6e72
 **Purpose:** Canonical answer to "what user-reachable workbench behaviors should be possible right now?" — distinguishing intent, code wiring, and verified proof.
 **Supersedes:** No prior canonical capability inventory existed. This doc synthesizes claims from the full doc set and measures them against code and failure-log reality.
 
@@ -161,14 +161,14 @@ Each capability row has five columns:
 | W12 | Add layer | SAR blueprint | `_addLayer()` whole-sheet-init.js:1168, `.ws-layer-add-btn` click handler | Layer runner step 4: w12_add PASS (root + /xpedit) | **PROVEN** | M2-C |
 | W13 | Delete layer | SAR blueprint | `_deleteActiveLayer()` whole-sheet-init.js:1178, delete btn click handler | Layer runner step 6: w13_delete PASS (root + /xpedit) | **PROVEN** | M2-C |
 | W14 | Move layer | SAR blueprint | `_moveLayerUp/Down()` whole-sheet-init.js:1189/1198, up/down btn handlers | Layer runner step 5: w14_move PASS (root + /xpedit) | **PROVEN** | M2-C |
-| W15 | Select tool | Implementation checklist | SelectToolAdapter wired (25dc204), button #wsToolSelect, shortcut 'S' | Activation only: activeTool=select PASS. Selection visualization NOT connected (canvas.setSelectionTool never called). Drag→bounds query unverified. | WIRED | M2-C |
+| W15 | Select tool | Implementation checklist | SelectToolAdapter wired, button `#wsToolSelect`, shortcut `S`; visualization hookup connected in `2d9aa30` | Activation path is wired and the canvas selection renderer is connected. End-to-end verifier proof of drag → non-empty bounds → visible selection is still missing. | WIRED | M2-C |
 | W16 | Oval tool | Implementation checklist | Code exists on disk but NOT wired (PB-05) | No evidence | DEFERRED | M2-C |
 | W17 | Text tool | Implementation checklist | Code exists on disk but NOT wired (PB-07) | No evidence | DEFERRED | M2-C |
 | W18 | Per-stroke undo/redo | SAR blueprint, implementation checklist | Ctrl+Z/Y wired to workbench undo/redo (25dc204, b497090); sidebar buttons already worked | WS tools runner: paint→Ctrl+Z→glyph reverted PASS (root + /xpedit) | **PROVEN** | M2-C |
 
 **Whole-Sheet Known Gaps:**
 - PB-05: OvalTool exists on disk, not wired — DEFERRED
-- PB-06: SelectTool wired (25dc204) but visualization not connected — canvas.setSelectionTool() never called, marching-ants renderer inactive. Activation works, selection drag+query unproven.
+- PB-06: SelectTool visualization hookup is fixed (`2d9aa30`), but no committed verifier proof yet covers selection drag, non-empty bounds, and visible marching-ants state end-to-end.
 - PB-07: TextTool exists on disk, not wired — DEFERRED
 - ~~W12-W14~~: **CORRECTED + PROVEN** — code exists at whole-sheet-init.js:1168-1204. Now PROVEN via layer runner (7bdab92).
 - ~~W18~~: **PROVEN** — Ctrl+Z/Y keyboard shortcuts wired at 25dc204, sidebar buttons already worked. Proven via tools runner paint→Ctrl+Z→revert at 8f79b35. Note: editor-app.js internal undo stack stubs remain (line 950-960) but workbench snapshot undo works end-to-end.
@@ -287,7 +287,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | Slice 1 | PNG Structural Baseline | YES | Ad-hoc proof only (M2-A 9/9 structural gates PASS via `run_structural_baseline_test.mjs`); not a formal unified-architecture slice |
 | Slice 2 | Source-Panel Contract | diagnostic | **YES** — committed runner `run_source_panel_workflow_test.mjs` (5c67ef2), 10/10 PASS; not yet a unified-architecture recipe but committed proof exists |
 | Slice 3 | Source-to-Grid Contract | YES | **YES** — committed runner `run_source_to_grid_workflow_test.mjs` (380edee), 13/13 PASS root + /xpedit; D1/D2/G1 PROVEN |
-| Slice 4 | Whole-Sheet Tools + Layers | YES | **YES** — 15/18 W-actions PROVEN: fidelity rerun (46fe06f) W2/W3/W5/W8/W9; layer runner (7bdab92) W10-W14; tools runner (daf161b→8f79b35) W1/W4/W6/W7/W18. W15 WIRED (activation only, visualization not connected). W16/W17 DEFERRED. |
+| Slice 4 | Whole-Sheet Tools + Layers | YES | **YES** — 15/18 W-actions PROVEN: fidelity rerun (46fe06f) W2/W3/W5/W8/W9; layer runner (7bdab92) W10-W14; tools runner (daf161b→8f79b35) W1/W4/W6/W7/W18. W15 remains WIRED, but the old visualization blocker is fixed (`2d9aa30`) and only verifier proof is missing. W16/W17 DEFERRED. |
 | Slice 5 | Manual Assembly E2E | YES | NO |
 
 **4 of 5 slices have committed proof** (Slice 1 structural, Slice 2 source-panel, Slice 3 source-to-grid, Slice 4 whole-sheet). Only Slice 5 (manual assembly E2E) has zero proof. The unified M2 verifier architecture (canonical spec §5) will replace ad-hoc runners with generated recipes.
@@ -301,7 +301,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 - **INDEX.md line 90** (2026-03-21): "Milestone 1 is not closed until they are verified"
 - **CLAUDE.md** (2026-03-23): "Milestone 1 is closed on canonical root-hosted master"
 - **PLAYWRIGHT_FAILURE_LOG.md**: M1 closed with commit 14e8e95, 7/7 edge workflows PASS
-- **Resolution needed:** INDEX.md must be updated with a 2026-03-23 audit note
+- **Resolution:** INDEX.md now records M1 closed as baseline and Milestone 2 as the active workstream
 
 ### Conflict 2: Undo/Redo implementation status (HIGH — functional gap)
 
@@ -343,8 +343,9 @@ Ranked by M2 acceptance importance:
    - 12 remaining actions WIRED but unverified (move, resize, row/col drag, cut, delete, zoom).
 
 3. **Whole-sheet correction** (focus → paint → eyedropper → erase → save)
-   - 6 tools WIRED. Per-stroke undo NOT connected. 3 tools NOT wired (Select, Oval, Text).
-   - The whole-sheet editor IS mounted and functional for basic painting, but no proof exists.
+   - W1/W2-W8/W18 are PROVEN across committed whole-sheet runners.
+   - W15 visualization is connected but still lacks committed end-to-end proof; W16/W17 remain deferred.
+   - Save/export are proven separately, but no single committed integrated whole-sheet correction lane exists yet.
 
 4. **Context menu outcomes** (add sprite, add to row, set anchor, pad, delete)
    - All handlers WIRED. DOM-only probed in coverage agent. No state assertions.
@@ -406,7 +407,7 @@ The source panel has 7 of 19 actions PROVEN via committed M2-B runner (`run_sour
 | F4: Context Menu (C1-C9) | 9 | **READY** | 9/9 in registry (85ff3b8) | None |
 | F5: Source-to-Grid (D1-D2) | 2 | **PROVEN** | 0/2 — cross-panel drag abstraction needed | D1 drag and D2/C2 context menu verified but gestureType not in registry model |
 | F6: Grid Panel (G1-G14) | 14 | **MOSTLY READY** | 5/14 in M2-D pass (G5-G6, G9-G11) | G3/G4 dual-button schema gap; G7/G8 deferred alias rows (=C6/C7); G13 needs inputRange; G1/G2/G12/G14 need canvas gestures |
-| F7: Whole-Sheet Editor (W1-W18) | 18 | **PARTIALLY PROVEN** | 2/18 executable (W12-W13) + 16 stubs in M2-D pass | 15/18 PROVEN but most need canvas/keyboard/dynamic-row gesture abstractions. W15 WIRED (visualization gap). W16-W17 DEFERRED. W18 PROVEN but deferred (dual-button schema gap). |
+| F7: Whole-Sheet Editor (W1-W18) | 18 | **PARTIALLY PROVEN** | 2/18 executable (W12-W13) + 16 stubs in M2-D pass | 15/18 PROVEN but most need canvas/keyboard/dynamic-row gesture abstractions. W15 WIRED (visualization connected, proof gap remains). W16-W17 DEFERRED. W18 PROVEN but deferred (dual-button schema gap). |
 | F8: Jitter/Alignment (J1-J6) | 6 | **READY** | 6/6 in registry (85ff3b8) | None |
 | F9: Lifecycle (L1-L3) | 3 | **READY** | 3/3 in registry (85ff3b8) | None |
 | F10: Runtime Dock (R1-R7) | 7 | **READY** | 7/7 in registry (85ff3b8) | None |
@@ -457,7 +458,7 @@ The following `getState()` gaps block full generator autonomy:
 | Doc | Role in Canon | Freshness | Key Update Needed |
 |-----|---------------|-----------|-------------------|
 | CLAUDE.md | Entry point, milestone status | Current (2026-03-23) | None |
-| docs/INDEX.md | Navigation hub, milestone definitions | Updated 2026-03-23: M1 closure note, M2-B committed, doc classification table, restructured Active High-Signal Docs | None |
+| docs/INDEX.md | Navigation hub, milestone definitions | Updated 2026-03-24: branch truth aligned to current master; M1 baseline and M2 active status made explicit | None |
 | PLAYWRIGHT_FAILURE_LOG.md | Reality/proof ground truth | Current (2026-03-23) | None |
 | docs/COMPLETE_UI_CONTROL_REFERENCE.md | Control-level inventory | Updated 2026-03-23: scope clarification appended by stitch script | None |
 | docs/WORKBENCH_DOCS_ARCHIVE.md#workbench-source-panel-ux-checklist | Source panel feature tracking | Updated 2026-03-23: proof-status note added, provisional/uncommitted language removed | None |
