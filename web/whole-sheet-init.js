@@ -1539,6 +1539,7 @@ function getState() {
     activeLayerIndex: editorState.layerStack ? editorState.layerStack.activeIndex : 0,
     hasFontLoaded: !!(editorState.cp437Font && editorState.cp437Font.spriteSheet),
     activeTool: editorState.activeTool,
+    selectionBounds: editorState.selectTool ? editorState.selectTool.getSelectionBounds() : null,
     drawGlyph: editorState.drawGlyph,
     drawFg: editorState.drawFg,
     drawBg: editorState.drawBg,

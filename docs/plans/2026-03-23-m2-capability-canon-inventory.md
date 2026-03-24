@@ -80,10 +80,10 @@ Each capability row has five columns:
 |---|--------|-------------|---------------|----------------|--------|----------|
 | S1 | Set mode: Select | UX checklist §1 | `setSourceMode("select")` — wired | M2-B runner step 5 | **PROVEN** | M2-B |
 | S2 | Set mode: Draw Box | UX checklist §2 | `setSourceMode("draw_box")` — wired | M2-B runner step 2 | **PROVEN** | M2-B |
-| S3 | Set mode: Drag Row | UX checklist §7 | `setSourceMode("row_select")` — wired | No verifier coverage | WIRED | M2-D |
-| S4 | Set mode: Drag Column | UX checklist §8 | `setSourceMode("col_select")` — wired | No verifier coverage | WIRED | M2-D |
-| S5 | Set mode: Vertical Cut | UX checklist §9 | `setSourceMode("cut_v")` — wired | No verifier coverage | WIRED | M2-D |
-| S6 | Set mode: Delete Box | UX checklist §4 | `deleteSourceBox()` — wired | No verifier coverage | WIRED | M2-D |
+| S3 | Set mode: Drag Row | UX checklist §7 | `setSourceMode("row_select")` — wired | `#rowSelectBtn` click → `sourceMode === 'row_select'` PASS (2026-03-24, `run_m2d_action_proof_test.mjs`) | **PROVEN** | M2-D |
+| S4 | Set mode: Drag Column | UX checklist §8 | `setSourceMode("col_select")` — wired | `#colSelectBtn` click → `sourceMode === 'col_select'` PASS (2026-03-24, `run_m2d_action_proof_test.mjs`) | **PROVEN** | M2-D |
+| S5 | Set mode: Vertical Cut | UX checklist §9 | `setSourceMode("cut_v")` — wired | `#cutVBtn` click → `sourceMode === 'cut_v'` PASS (2026-03-24, `run_m2d_action_proof_test.mjs`) | **PROVEN** | M2-D |
+| S6 | Delete box action | UX checklist §4 | `deleteSourceBox()` — wired | `#deleteBoxBtn` click → `extractedBoxes === 0, anchorBox === null` PASS (2026-03-24, `run_m2d_action_proof_test.mjs`) | **PROVEN** | M2-D |
 | S7 | Draw box (draft → commit) | UX checklist §2 | `onSourceMouseDown/Move/Up` + `commitDraftSource()` | M2-B runner steps 3, 4, 7 | **PROVEN** | M2-B |
 | S8 | Select box | UX checklist §1 | Click handler in source canvas — wired | M2-B runner step 5 | **PROVEN** | M2-B |
 | S9 | Move box (drag) | UX checklist §1 | Drag handler in source canvas — wired | No verifier coverage | WIRED | M2-D |
@@ -99,9 +99,9 @@ Each capability row has five columns:
 | S19 | Source undo/redo participation | SAR blueprint | `pushHistory()` called from findSprites, cut-line | **GAP**: anchor ops (PB-01/03) do NOT pushHistory | PARTIAL | M2-D |
 
 **Source Panel Known Bugs:**
-- PB-01: `setAnchorBox()` via context menu does not call `pushHistory()` (workbench.js ~6592)
+- ~~PB-01~~: **FIXED** (2026-03-24) — `setAnchorFromTarget()` now calls `pushHistory()` before `state.anchorBox` mutation and `saveSessionState()` after. Both draft-anchor and box-anchor paths covered.
 - ~~PB-02~~: **CLOSED** — Implicit anchor override removed from `setDraftBox()` (2026-03-23)
-- PB-03: File upload clears anchor without undo (workbench.js ~6513)
+- PB-03: **RECLASSIFIED as UX hardening** (2026-03-24) — `hydrateLoadedSession()` intentionally clears history at session boundaries (workbench.js:3833-3834). Cross-session undo is architecturally out of scope. Dirty-session confirmation dialog added before `applyTemplate()` (workbench.js:6495). Not classified as a blocking undo bug.
 
 ### Family 4: Context Menu (9 actions)
 
@@ -132,13 +132,13 @@ Each capability row has five columns:
 | G2 | Shift-select (multi) | UI control ref §6 | Shift+click — wired | No verifier | WIRED | M2-D |
 | G3 | Move row up/down | UI control ref §6 | `moveSelectedRow()` — wired | No verifier | WIRED | M2-D |
 | G4 | Move col left/right | UI control ref §6 | `moveSelectedCols()` — wired | No verifier | WIRED | M2-D |
-| G5 | Add frame | UI control ref §6 | `addGridFrameSlot()` — wired | No verifier | WIRED | M2-D |
-| G6 | Delete selected | UI control ref §6 | `deleteSelectedFrames()` — wired | No verifier | WIRED | M2-D |
+| G5 | Add frame | UI control ref §6 | `addGridFrameSlot()` — wired | `#addFrameBtn` click with `selectedRow >= 0` → `gridCols` increased PASS (2026-03-24, `run_m2d_action_proof_test.mjs`) | **PROVEN** | M2-D |
+| G6 | Delete selected | UI control ref §6 | `deleteSelectedFrames()` — wired | `#deleteCellBtn` click on non-empty frame → frame signature changed (content cleared) PASS (2026-03-24, `run_m2d_action_proof_test.mjs`) | **PROVEN** | M2-D |
 | G7 | Copy frame | SAR blueprint | `copySelectedFrame()` — wired | No verifier | WIRED | M2-D |
 | G8 | Paste frame | SAR blueprint | `pasteFrame()` — wired | No verifier | WIRED | M2-D |
-| G9 | Assign row category | UI control ref §8 | `assignRowCategory()` — wired | No verifier | WIRED | M2-D |
-| G10 | Assign frame group | UI control ref §8 | `assignFrameGroup()` — wired | No verifier | WIRED | M2-D |
-| G11 | Apply groups to metadata | UI control ref §8 | `applyGroupsToAnims()` — wired | No verifier | WIRED | M2-D |
+| G9 | Assign row category | UI control ref §8 | `assignRowCategory()` — wired | `#assignAnimCategoryBtn` click → `rowCategories[0]` set PASS (2026-03-24, `run_m2d_action_proof_test.mjs`) | **PROVEN** | M2-D |
+| G10 | Assign frame group | UI control ref §8 | `assignFrameGroup()` — wired | `#assignFrameGroupBtn` click → `frameGroups` contains entry PASS (2026-03-24, `run_m2d_action_proof_test.mjs`) | **PROVEN** | M2-D |
+| G11 | Apply groups to metadata | UI control ref §8 | `applyGroupsToAnims()` — wired | `#applyGroupsToAnimsBtn` click → `anims` array updated PASS (2026-03-24, `run_m2d_action_proof_test.mjs`) | **PROVEN** | M2-D |
 | G12 | Double-click → open WS editor | UI control ref §6 | `openInspectorForSelectedFrame()` — wired | No verifier | WIRED | M2-C |
 | G13 | Grid zoom | UI control ref §6 | `gridZoomInput` → `renderGrid()` — wired | No verifier | WIRED | M2-D |
 | G14 | Drag-select frames | SAR blueprint | Drag handler on grid — wired | No verifier | WIRED | M2-D |
@@ -161,14 +161,14 @@ Each capability row has five columns:
 | W12 | Add layer | SAR blueprint | `_addLayer()` whole-sheet-init.js:1168, `.ws-layer-add-btn` click handler | Layer runner step 4: w12_add PASS (root + /xpedit) | **PROVEN** | M2-C |
 | W13 | Delete layer | SAR blueprint | `_deleteActiveLayer()` whole-sheet-init.js:1178, delete btn click handler | Layer runner step 6: w13_delete PASS (root + /xpedit) | **PROVEN** | M2-C |
 | W14 | Move layer | SAR blueprint | `_moveLayerUp/Down()` whole-sheet-init.js:1189/1198, up/down btn handlers | Layer runner step 5: w14_move PASS (root + /xpedit) | **PROVEN** | M2-C |
-| W15 | Select tool | Implementation checklist | SelectToolAdapter wired, button `#wsToolSelect`, shortcut `S`; visualization hookup connected in `2d9aa30` | Activation path is wired and the canvas selection renderer is connected. End-to-end verifier proof of drag → non-empty bounds → visible selection is still missing. | WIRED | M2-C |
+| W15 | Select tool | Implementation checklist | SelectToolAdapter wired, button `#wsToolSelect`, shortcut `S`; visualization hookup connected in `2d9aa30`; `selectionBounds` added to `getState()` observation surface | Three-part proof (2026-03-24): (1) activeTool='select' after button click, (2) selectionBounds={x:2,y:2,width:4,height:4} after canvas drag, (3) marching-ants screenshot (`step07b_w15_select_drag_marching_ants.png`). 8/8 PASS root-hosted. Runner: `run_whole_sheet_tools_test.mjs` step 7. | **PROVEN** | M2-C |
 | W16 | Oval tool | Implementation checklist | Code exists on disk but NOT wired (PB-05) | No evidence | DEFERRED | M2-C |
 | W17 | Text tool | Implementation checklist | Code exists on disk but NOT wired (PB-07) | No evidence | DEFERRED | M2-C |
 | W18 | Per-stroke undo/redo | SAR blueprint, implementation checklist | Ctrl+Z/Y wired to workbench undo/redo (25dc204, b497090); sidebar buttons already worked | WS tools runner: paint→Ctrl+Z→glyph reverted PASS (root + /xpedit) | **PROVEN** | M2-C |
 
 **Whole-Sheet Known Gaps:**
 - PB-05: OvalTool exists on disk, not wired — DEFERRED
-- PB-06: SelectTool visualization hookup is fixed (`2d9aa30`), but no committed verifier proof yet covers selection drag, non-empty bounds, and visible marching-ants state end-to-end.
+- ~~PB-06~~: **PROVEN** (2026-03-24) — SelectTool visualization fixed (`2d9aa30`), three-part verifier proof committed: activeTool='select', selectionBounds={x:2,y:2,w:4,h:4}, marching-ants screenshot. Runner: `run_whole_sheet_tools_test.mjs` step 7.
 - PB-07: TextTool exists on disk, not wired — DEFERRED
 - ~~W12-W14~~: **CORRECTED + PROVEN** — code exists at whole-sheet-init.js:1168-1204. Now PROVEN via layer runner (7bdab92).
 - ~~W18~~: **PROVEN** — Ctrl+Z/Y keyboard shortcuts wired at 25dc204, sidebar buttons already worked. Proven via tools runner paint→Ctrl+Z→revert at 8f79b35. Note: editor-app.js internal undo stack stubs remain (line 950-960) but workbench snapshot undo works end-to-end.
@@ -256,12 +256,12 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 
 ### By Status
 
-> **Updated 2026-03-23** to reflect M2-B source-panel committed proof (5c67ef2, d12740c).
+> **Updated 2026-03-24** — M2-D proof pass: +11 actions PROVEN (W15, S3-S6, G5-G6, G9-G11). PB-01 fixed, PB-03 reclassified. Slice 5 E2E proven.
 
 | Status | Count | % of 96 SAR actions |
 |--------|-------|---------------------|
-| PROVEN | 20 | 21% |
-| WIRED | 67 | 70% |
+| PROVEN | 31 | 32% |
+| WIRED | 56 | 58% |
 | PARTIAL | 2 | 2% |
 | PLANNED | 4 | 4% |
 | BLOCKED | 1 | 1% |
@@ -287,10 +287,10 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | Slice 1 | PNG Structural Baseline | YES | Ad-hoc proof only (M2-A 9/9 structural gates PASS via `run_structural_baseline_test.mjs`); not a formal unified-architecture slice |
 | Slice 2 | Source-Panel Contract | diagnostic | **YES** — committed runner `run_source_panel_workflow_test.mjs` (5c67ef2), 10/10 PASS; not yet a unified-architecture recipe but committed proof exists |
 | Slice 3 | Source-to-Grid Contract | YES | **YES** — committed runner `run_source_to_grid_workflow_test.mjs` (380edee), 13/13 PASS root + /xpedit; D1/D2/G1 PROVEN |
-| Slice 4 | Whole-Sheet Tools + Layers | YES | **YES** — 15/18 W-actions PROVEN: fidelity rerun (46fe06f) W2/W3/W5/W8/W9; layer runner (7bdab92) W10-W14; tools runner (daf161b→8f79b35) W1/W4/W6/W7/W18. W15 remains WIRED, but the old visualization blocker is fixed (`2d9aa30`) and only verifier proof is missing. W16/W17 DEFERRED. |
-| Slice 5 | Manual Assembly E2E | YES | NO |
+| Slice 4 | Whole-Sheet Tools + Layers | YES | **YES** — 16/18 W-actions PROVEN: fidelity rerun (46fe06f) W2/W3/W5/W8/W9; layer runner (7bdab92) W10-W14; tools runner (daf161b→8f79b35) W1/W4/W6/W7/W18; W15 three-part proof (2026-03-24). W16/W17 DEFERRED. |
+| Slice 5 | Manual Assembly E2E | YES | **YES** — committed UI-driven E2E run (2026-03-24), 13/13 PASS. Runner: `run_manual_assembly_e2e_test.mjs`. Workflow: template→upload→draw→anchor→pad→add-to-row→WS-focus→paint→save→export. |
 
-**4 of 5 slices have committed proof** (Slice 1 structural, Slice 2 source-panel, Slice 3 source-to-grid, Slice 4 whole-sheet). Only Slice 5 (manual assembly E2E) has zero proof. The unified M2 verifier architecture (canonical spec §5) will replace ad-hoc runners with generated recipes.
+**All 5 slices have committed proof** (Slice 1 structural, Slice 2 source-panel, Slice 3 source-to-grid, Slice 4 whole-sheet 16/18, Slice 5 manual assembly E2E). The unified M2 verifier architecture (canonical spec §5) can now focus on recipe generation and automated execution for remaining WIRED actions rather than infrastructure building.
 
 ---
 

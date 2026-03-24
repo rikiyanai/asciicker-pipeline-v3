@@ -40,8 +40,8 @@ Placeholder. No milestone beyond M2 is currently defined.
 |-------|-------|-----------|--------|
 | **M2-A** | Structural PNG baseline (dims, layers, metadata gates) | M1 closed | ESTABLISHED |
 | **M2-B** | Source panel + grid assembly (draw box, find sprites, drag-to-grid) | M2-A | ESTABLISHED — source-panel 10/10 PASS (5c67ef2); source-to-grid 13/13 PASS (380edee) at root + /xpedit. D1, D2/C2, G1 PROVEN. |
-| **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | ESTABLISHED — 15/18 W-actions PROVEN. W15 visualization connected (`2d9aa30`), needs verifier proof of drag→bounds. W16/W17 DEFERRED. |
-| **M2-D** | Full SAR workflow coverage (all remaining WIRED actions get verifier proof) | M2-B, M2-C | IN PROGRESS — registry expanded from 47 → 77 entries (5c2aab1–d7e791c on current master lineage). 14 executable + 16 stubs. 31 WS selectors added. 2 new recipes. |
+| **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | ESTABLISHED — 16/18 W-actions PROVEN. W15 three-part proof committed (2026-03-24): activeTool + bounds + marching-ants screenshot. W16/W17 DEFERRED. |
+| **M2-D** | Full SAR workflow coverage (all remaining WIRED actions get verifier proof) | M2-B, M2-C | ADVANCING — registry 77/77 entries landed (5c2aab1–d7e791c). 14 executable + 16 stubs. 31 WS selectors. 2 new recipes. W15 PROVEN (three-part). S3-S6/G5-G6/G9-G11 PROVEN. PB-01 FIXED. PB-03 reclassified (UX hardening). Slice 5 E2E 13/13 PASS. 31/96 actions now PROVEN (was 20). |
 | **M2-E** | Semantic editing (region-based dictionary-driven edits) | M2-D | NOT STARTED |
 | **M2-F** | Analyze/auto-slice (assistive, not authoritative) | M2-D | NOT STARTED |
 
@@ -54,11 +54,13 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 **Last reviewed:** 2026-03-24
 
 1. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions run `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
-2. **M2-D full SAR workflow coverage** — M2-B and M2-C are established. Remaining WIRED actions outside the whole-sheet blocked/deferred set need committed proof.
-3. **PB-01/02/03 undo gaps** in source panel anchor ops — small fixes that affect M2-D completeness.
-4. **PB-06 SelectTool visualization** — FIXED (`2d9aa30`): `canvas.setSelectionTool()` now called during mount. Marching-ants renderer connected. Needs verifier proof of drag→bounds→visual. W18 (undo) is PROVEN. W16/W17 remain deferred.
+2. **Slice 5 manual assembly E2E** — PROVEN 13/13 (2026-03-24). Covers U1→S12→S7→D1→W1→W2→T3→T4. Demonstrates M2-B/C/D functional end-to-end. Runner: `run_manual_assembly_e2e_test.mjs`.
+3. **M2-D full SAR workflow coverage** — 31/96 actions PROVEN (was 20). 31 WS selectors, 77 registry entries, 2 recipes. W15 three-part proof committed. S3-S6/G5-G6/G9-G11 proven. Remaining 56 WIRED actions need committed proof in future M2-D/E passes.
+4. **PB-03 UX hardening** — confirm dialog on session-boundary loads. Cross-session undo remains architecturally out of scope. Low-priority UX refinement.
 
 This stack is execution priority, not timeless truth. Re-evaluate when any sub-phase status changes.
+
+**Note:** PB-01 (anchor undo) FIXED — `pushHistory()` added to `setAnchorFromTarget()`. PB-02 remains CLOSED. PB-06 (W15 visualization) FIXED and PROVEN (three-part evidence committed 2026-03-24).
 
 ### Active Bugs
 

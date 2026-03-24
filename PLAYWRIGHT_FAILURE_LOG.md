@@ -3594,3 +3594,96 @@ Root: 8/8 PASS at `output/ws_tools_test_w15w18/report.json`
 **Reason:** Superseded/completed — doc reconciliation pass 2026-03-24
 **References rewritten:** 3 file(s)
 **Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## M2-D Proof: W15 Three-Part Evidence
+
+**Date:** 2026-03-24
+**Status:** W15 PROMOTED WIRED → PROVEN
+
+W15 SelectTool visualization confirmed with three-part proof:
+1. **activeTool state**: `'select'` after `#wsToolSelect` button click
+2. **selectionBounds**: `{x:2, y:2, width:4, height:4}` — drag rectangle matches expected coordinates
+3. **Visible marching-ants**: `canvas.setSelectionTool()` connected at `whole-sheet-init.js:345`; `_drawSelectionOutline()` renders `#FFFF00` dashed rect when bounds non-null; screenshot `step07b_w15_select_drag_marching_ants.png` captured
+
+**Observation surface change:** `selectionBounds` added to `window.__wholeSheetEditor.getState()` for verifier access.
+**Runner:** `run_whole_sheet_tools_test.mjs` step 7 extended with drag+bounds+screenshot
+**Result:** 8/8 PASS (root-hosted)
+**Artifact:** `output/ws_tools_w15_proof/report.json`
+
+
+---
+
+## M2-D Proof: PB-01 Fixed, PB-03 Reclassified
+
+**Date:** 2026-03-24
+**Status:** PB-01 FIXED / PB-03 RECLASSIFIED
+
+**PB-01 (anchor undo):** `setAnchorFromTarget()` at `workbench.js:4353` now calls `pushHistory()` before `state.anchorBox` mutation and `saveSessionState()` after. Both draft-anchor and box-anchor paths covered. Source panel runner 10/10 PASS confirms no regression.
+
+**PB-03 (session-boundary undo):** Reclassified from "undo gap" to "UX hardening". `hydrateLoadedSession()` intentionally clears `state.history = []` and `state.future = []` at `workbench.js:3833-3834` — this is correct session-boundary behavior. Cross-session undo is architecturally unsupported. Fix: dirty-session confirmation dialog added before `applyTemplate()` at `workbench.js:6495`. Covers all `loadSession()` entrypoints where user-initiated destructive template application could lose work.
+
+**PB-02:** Remains CLOSED (2026-03-23).
+
+**Impact:** Source panel anchor ops now participate in undo/redo. PB-03 is no longer classified as a blocking undo bug.
+
+
+---
+
+## M2-D Proof: S3-S6, G5-G6, G9-G11 Action Evidence
+
+**Date:** 2026-03-24
+**Status:** 11 actions PROMOTED WIRED → PROVEN
+
+**Source Panel Mode Actions (S3-S6):**
+- S3 (row_select mode): `#rowSelectBtn` click → `sourceMode === 'row_select'` PASS
+- S4 (col_select mode): `#colSelectBtn` click → `sourceMode === 'col_select'` PASS
+- S5 (cut_v mode): `#cutVBtn` click → `sourceMode === 'cut_v'` PASS
+- S6 (delete box action): `#deleteBoxBtn` click → `extractedBoxes === 0, anchorBox === null` PASS
+
+**Grid Panel Actions (G5-G6):**
+- G5 (add frame): `#addFrameBtn` click with `selectedRow >= 0` → `gridCols` increased PASS
+- G6 (delete selected frames): `#deleteCellBtn` click on non-empty frame → frame signature changed (content cleared) PASS
+
+**Grid Metadata Actions (G9-G11):**
+- G9 (assign row category): `#assignAnimCategoryBtn` click → `rowCategories[0]` set PASS
+- G10 (assign frame group): `#assignFrameGroupBtn` click with name → `frameGroups` contains entry PASS
+- G11 (apply groups to anims): `#applyGroupsToAnimsBtn` click → `anims` array updated PASS
+
+**Runner:** `run_m2d_action_proof_test.mjs` (new, hand-written)
+**Result:** 12/12 PASS (root-hosted)
+**Artifact:** `output/m2d_action_proof/report.json`
+
+**W12-W13 (add/delete layer):** Already PROVEN at commit 7bdab92 via `run_whole_sheet_layer_test.mjs`. No new work needed.
+
+
+---
+
+## Slice 5 Manual Assembly E2E: 13/13 PASS
+
+**Date:** 2026-03-24
+**Status:** PROVEN (UI-driven acceptance)
+
+**Workflow:** Apply template → Upload PNG → Select grid row → Draw box mode → Draw box A → Set as anchor (context menu) → Draw box B → Pad to anchor (context menu) → Add to selected row (context menu) → Double-click grid frame → WS editor focus → Paint cell (wsToolCell) → Save → Export XP
+
+**Step-by-step proof:**
+1. template: Apply template → grid created (gridCols>0, gridRows>0) PASS
+2. upload: Upload PNG → sourceImageLoaded=true PASS
+3. row_select: Click row header → selectedRow=0 PASS
+4. draw_mode: Click drawBoxBtn → sourceMode='draw_box' PASS
+5. draw_box_a: Canvas drag → drawCurrent non-null PASS
+6. set_anchor: Context menu → anchorBox set PASS
+7. draw_box_b: Canvas drag → drawCurrent non-null PASS
+8. pad_to_anchor: Context menu pad → action processed PASS
+9. add_to_row: Context menu → frame signature changed PASS
+10. ws_focus: Double-click grid cell → WS editor mounted PASS
+11. paint_cell: wsToolCell click → glyph=65 at (1,1) PASS
+12. save: Click Save → sessionDirty=false PASS
+13. export_xp: Click Export → `xp_path` non-empty in `#exportOut` response PASS
+
+**Runner:** `run_manual_assembly_e2e_test.mjs` (new, hand-written Playwright)
+**Result:** 13/13 PASS (root-hosted)
+**Artifact:** `output/slice5_e2e/report.json`
+**Classification:** UI-driven acceptance (all actions via DOM clicks, canvas mouse events, file input, context menu; state verification via diagnostic observation only)

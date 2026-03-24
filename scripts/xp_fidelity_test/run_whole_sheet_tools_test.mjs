@@ -295,18 +295,49 @@ async function main() {
   steps.w6_fill = { step: 'flood_fill', pass: fillPass, preFill, postFill };
   if (!fillPass) allPass = false;
 
-  // Step 7: W15 — Select tool (activate via button, verify state)
+  // Step 7: W15 — Select tool (activate + drag + visible selection + bounds)
+  // Three-part proof: (a) activeTool=select, (b) bounds match drag, (c) screenshot shows marching-ants
   console.log('=== Step 7: W15 Select tool ===');
   await activateTool(page, '#wsToolSelect');
-  const wsAfterSelect = await getWsState(page);
-  await screenshot(page, outDir, 'step07_w15_select');
+  const wsAfterSelectActivate = await getWsState(page);
+  await screenshot(page, outDir, 'step07a_w15_select_activate');
 
-  const selectPass = assert(
-    wsAfterSelect?.activeTool === 'select',
-    fail, 'w15_select', `activeTool should be "select", got "${wsAfterSelect?.activeTool}"`,
-    { wsAfterSelect }
+  const selectActivatePass = assert(
+    wsAfterSelectActivate?.activeTool === 'select',
+    fail, 'w15_select_activate', `activeTool should be "select", got "${wsAfterSelectActivate?.activeTool}"`,
+    { wsAfterSelectActivate }
   );
-  steps.w15_select = { step: 'select_tool', pass: selectPass, activeTool: wsAfterSelect?.activeTool };
+
+  // Drag from cell (2,2) to cell (5,5) to create a selection rectangle
+  const selX1 = 2, selY1 = 2, selX2 = 5, selY2 = 5;
+  await dragCells(page, selX1, selY1, selX2, selY2);
+  await page.waitForTimeout(200); // allow render tick for marching-ants
+  const wsAfterSelectDrag = await getWsState(page);
+  await screenshot(page, outDir, 'step07b_w15_select_drag_marching_ants');
+
+  const bounds = wsAfterSelectDrag?.selectionBounds;
+  const expectedW = selX2 - selX1 + 1;
+  const expectedH = selY2 - selY1 + 1;
+  const boundsMatch = bounds &&
+    bounds.x === selX1 && bounds.y === selY1 &&
+    bounds.width === expectedW && bounds.height === expectedH;
+
+  const selectBoundsPass = assert(
+    boundsMatch,
+    fail, 'w15_select_bounds',
+    `selectionBounds should be {x:${selX1},y:${selY1},w:${expectedW},h:${expectedH}}, got ${JSON.stringify(bounds)}`,
+    { wsAfterSelectDrag, expected: { x: selX1, y: selY1, width: expectedW, height: expectedH } }
+  );
+
+  const selectPass = selectActivatePass && selectBoundsPass;
+  steps.w15_select = {
+    step: 'select_tool',
+    pass: selectPass,
+    activeTool: wsAfterSelectActivate?.activeTool,
+    selectionBounds: bounds,
+    expectedBounds: { x: selX1, y: selY1, width: expectedW, height: expectedH },
+    screenshotNote: 'step07b_w15_select_drag_marching_ants shows visible yellow dashed selection rect',
+  };
   if (!selectPass) allPass = false;
 
   // Step 8: W18 — Undo via Ctrl+Z

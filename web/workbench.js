@@ -4353,13 +4353,17 @@
   function setAnchorFromTarget(target) {
     if (!target) return;
     if (target.type === "draft" && state.drawCurrent) {
+      pushHistory();
       state.anchorBox = { ...state.drawCurrent };
       status(`Anchor set ${state.anchorBox.w}x${state.anchorBox.h} from draft`, "ok");
+      saveSessionState("set-anchor-draft");
     } else if (target.type === "box") {
       const box = state.extractedBoxes.find((b) => Number(b.id) === Number(target.id));
       if (!box) return;
+      pushHistory();
       state.anchorBox = { x: box.x, y: box.y, w: box.w, h: box.h };
       status(`Anchor set ${box.w}x${box.h} from sprite`, "ok");
+      saveSessionState("set-anchor-box");
     }
   }
 
@@ -6489,6 +6493,22 @@
   }
 
   async function applyTemplate() {
+    // PB-03 guard: session-boundary dirty check before destructive template apply.
+    // loadSession() → hydrateLoadedSession() clears history (by design); warn user.
+    if (state.sessionId && (state.sessionDirty || state.history.length > 0)) {
+      const proceed = confirm(
+        "Applying a template replaces your current session.\n" +
+        "Unsaved edits and undo history will be lost.\n\nContinue?"
+      );
+      if (!proceed) {
+        status("Template apply cancelled", "ok");
+        return;
+      }
+      // Auto-save current work before replacing
+      if (state.sessionDirty) {
+        await saveSessionState("pre-template-apply", { wait_for_idle: true, timeout_ms: 15000 });
+      }
+    }
     const key = $("templateSelect")?.value || "player_native_idle_only";
     state.templateSetKey = key;
     const reg = await fetchTemplateRegistry();

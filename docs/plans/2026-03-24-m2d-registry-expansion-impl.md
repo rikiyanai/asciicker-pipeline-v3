@@ -1,12 +1,15 @@
-# M2-D Registry Expansion Implementation Plan
+# M2-D Registry Expansion Implementation Plan — COMPLETE
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status:** ALL 7 TASKS COMPLETE. Implementation landed on master (5c2aab1–d7e791c). Proof pass completed 2026-03-24: W15 PROVEN (three-part), S3-S6/G5-G6/G9-G11 PROVEN, PB-01 FIXED, Slice 5 E2E 13/13 PASS.
 
 **Goal:** Expand action_registry.json from 47 to 77 entries, add 31 WS selectors, fix W15 SelectTool visualization, and add F3/F6 recipes.
 
 **Architecture:** Pure data expansion — selectors.mjs gets 31 new keys, action_registry.json gets 30 new entries (14 executable + 16 stubs), recipe_generator.mjs gets 2 new fixed recipes, and whole-sheet-init.js gets one line for W15. No schema changes, no runner changes.
 
 **Tech Stack:** ES modules (selectors.mjs, recipe_generator.mjs), JSON (action_registry.json), Playwright (dom_runner.mjs for verification), vanilla JS (whole-sheet-init.js for W15 fix).
+
+**Implementation evidence:** Commits 5c2aab1 (selectors), 8d119ad (F3), 408a5e3 (F6), 757cf74 (F7), 2d9aa30 (W15 fix), 70da189 (recipes), d7e791c (verification).
+**Proof evidence:** `run_m2d_action_proof_test.mjs` 12/12 PASS, `run_whole_sheet_tools_test.mjs` 8/8 PASS (W15), `run_manual_assembly_e2e_test.mjs` 13/13 PASS (Slice 5).
 
 ---
 
