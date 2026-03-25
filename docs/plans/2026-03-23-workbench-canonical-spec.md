@@ -234,6 +234,27 @@ Extracted from committed sprites on 2026-03-24. Full evidence at `/tmp/claude-mo
 - How should the template registry handle wolfie's variable dimensions (two xp_dims entries?
   per-variant layer counts?) and wolack's restricted W range?
 
+### Legacy Runtime Lane Classification
+
+The native TERM++ "run around for 10 seconds" path is an **external diagnostic lane**, not
+acceptance. It depends on an external `game_term` binary and `legacy_verify_e2e.py` script
+that are not committed to this repo.
+
+**Classification:** external diagnostic — visual runtime verification only, never acceptance evidence.
+
+**Preserved wiring (regression-guarded in `test_contracts.py`):**
+
+| Surface | Location |
+|---------|----------|
+| Test This Skin button | `web/workbench.html:313` (canon-proven R1) |
+| `verifyProfile = legacy_verify_e2e` | `web/workbench.html:375`, `web/workbench.js:621` |
+| Command template generation | `src/pipeline_v2/service.py:2496` |
+| `/api/workbench/open-termpp-skin` | `src/pipeline_v2/app.py:638` |
+| `/api/workbench/termpp-stream/start` | `src/pipeline_v2/app.py:673` |
+
+**Canonical in-repo proof lane** for skin testing is the iframe Skin Dock (Test This Skin / R1),
+which requires no external binary.
+
 ---
 
 ## 4. Acceptance vs Diagnostic Boundary

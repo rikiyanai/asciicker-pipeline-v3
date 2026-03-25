@@ -120,3 +120,46 @@ def test_error_contract_hosted(hosted_client):
     data = resp.get_json()
     for k in ("error", "code", "stage", "request_id"):
         assert k in data
+
+
+# --- Legacy runtime lane regression guard ---
+# These tests verify the wiring for the external diagnostic lane
+# (native TERM++ launch + legacy_verify_e2e) still exists. The lane
+# requires an external binary/script and is NOT acceptance-grade, but
+# removing its endpoints would break the shipped UI without warning.
+
+
+def test_legacy_lane_endpoints_registered(client):
+    """Native TERM++ and stream endpoints must be routable."""
+    rules = {r.rule for r in client.application.url_map.iter_rules()}
+    assert "/api/workbench/open-termpp-skin" in rules
+    assert "/api/workbench/termpp-stream/start" in rules
+    assert "/api/workbench/termpp-stream/stop" in rules
+    assert "/api/workbench/termpp-stream/status/<stream_id>" in rules
+    assert "/api/workbench/termpp-stream/frame/<stream_id>" in rules
+
+
+def test_legacy_verify_profile_accepted(client):
+    """Verify function must recognize legacy_verify_e2e profile."""
+    import inspect
+    from pipeline_v2 import service
+    src = inspect.getsource(service.workbench_run_verification)
+    assert "legacy_verify_e2e" in src
+    assert "verify_e2e.py" in src
+
+
+def test_legacy_verify_command_template_in_js():
+    """workbench.js must still contain the legacy_verify_e2e profile handler."""
+    js = Path(__file__).resolve().parents[1] / "web" / "workbench.js"
+    text = js.read_text()
+    assert "legacy_verify_e2e" in text
+    assert "verify_e2e.py" in text
+
+
+def test_skin_dock_test_button_in_html():
+    """The Test This Skin button must remain in the shipped HTML."""
+    html = Path(__file__).resolve().parents[1] / "web" / "workbench.html"
+    text = html.read_text()
+    assert 'id="webbuildQuickTestBtn"' in text
+    assert 'id="verifyProfile"' in text
+    assert 'value="legacy_verify_e2e"' in text
