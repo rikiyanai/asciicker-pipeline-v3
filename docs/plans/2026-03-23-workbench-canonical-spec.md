@@ -58,7 +58,7 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 3. **M2-D full SAR workflow coverage** — 31/96 actions PROVEN (was 20). 31 WS selectors, 77 registry entries, 2 recipes. W15 three-part proof committed. S3-S6/G5-G6/G9-G11 proven. Remaining 56 WIRED actions need committed proof in future M2-D/E passes.
 4. **Workbench UI audit follow-up** — 2026-03-24 audit found 39 user-facing issues after BUG-01 was fixed: 3 critical, 7 high, 14 medium, 15 low. Immediate open-bug focus is silent PNG decode failure, double mouseleave stroke completion, mobile modal clipping, and grid overdraw/perf.
 5. **PB-03 UX hardening** — confirm dialog on session-boundary loads. Cross-session undo remains architecturally out of scope. Low-priority UX refinement.
-6. **Bundle-family expansion roadmap is still under-scoped** — product truth still centers on `player`, `attack`, and `plydie`, while research/runtime surfaces already show a larger player-state family model (`player-nude`, `wolfie`, `wolack`, ternary W states, mounted/unmounted parity). This is a roadmap gap, not just a verifier gap.
+6. **Bundle-family expansion roadmap is still under-scoped** — the 2026-03-24 player-state parity audit confirmed three concrete gaps: (a) non-bundle override paths still miss `W=2` variants, (b) mounted families exist in runtime/debug surfaces but not in bundle templates or native family builders, and (c) the native sandbox overwrite helper is template-agnostic internally while the exposed workbench flow is still session/export driven. This is a roadmap gap, not just a verifier gap.
 
 This stack is execution priority, not timeless truth. Re-evaluate when any sub-phase status changes.
 
@@ -76,6 +76,7 @@ This stack is execution priority, not timeless truth. Re-evaluate when any sub-p
 | BUG-06 | Bug-report known-issue dropdown fails silently when `fetchKnownBugs()` errors | OPEN | `workbench.js:494` swallows the fetch failure. Users only see the default option and may file duplicates without knowing the dropdown failed to load. |
 | BUG-07 | Disabled controls are too visually similar to enabled controls on the dark theme | OPEN | `styles.css:152` uses opacity only. Grid-panel controls and similar disabled buttons look merely dimmed, especially on touch devices with no cursor feedback. |
 | BUG-08 | Legacy Char Grid debug panel is exposed in production UI | OPEN | `workbench.html:233-236` leaves `<details id="legacyGridDetails" class="legacy-grid-debug">` visible to all users even though it is a debug-only surface. |
+| BUG-09 | Non-bundle skin override paths still use binary W encoding and miss `W=2` equipment variants | OPEN | `_termpp_skin_override_names()` in `service.py`, `WEBBUILD_DEFAULT_OVERRIDE_NAMES` in `workbench.js`, and `DEFAULT_OVERRIDE_SETS` in `termpp_skin_lab.js` still generate `0000..1111` binary names. Only the server bundle path (`_action_override_names`) emits ternary `W=0/1/2` names. |
 
 **UI audit note:** the 2026-03-24 workbench UI audit found 39 verified issues total (3 critical, 7 high, 14 medium, 15 low). The active-bug table above promotes the critical issues and highest-signal open production issues into canon; the broader severity breakdown is preserved in `PLAYWRIGHT_FAILURE_LOG.md`.
 
@@ -165,16 +166,47 @@ Research already shows the larger real player-state map and the current missing 
 So the roadmap must explicitly upgrade from a **3-family bundle model** to a
 **full player-state bundle parity model**.
 
+### 2026-03-24 Audit Findings (Evidence-Backed)
+
+The player-state parity audit established these current truths:
+
+1. **Current authoring contract = one PNG per family action, not per AHSW variant.**
+   - The product converts one authored PNG to one exported XP for a given family/action, then
+     broadcasts those same XP bytes to every generated override filename for that family.
+   - Users do not currently author helmet/shield/weapon variants separately.
+
+2. **AHSW is a filename-selection contract in the current product, not a workbench composition system.**
+   - Equipment state is encoded in sprite filenames such as `player-0102.xp`.
+   - The current custom-skin contract flattens equipment visual differentiation by stamping the
+     same XP across those variants.
+
+3. **Mounted families are partially present but not productized.**
+   - `wolfie` and `wolack` exist in committed sprites and in debug/native override name lists.
+   - They are not in `ENABLED_FAMILIES`, not in `template_registry.json`, and have no native
+     layer builders in `_build_native_layers()`.
+
+4. **Template-less native overwrite already exists internally, but not as a first-class user flow.**
+   - `_stage_termpp_skin_sandbox()` copies an exported XP across runtime override filenames
+     without consulting template metadata.
+   - The exposed workbench entrypoint still requires `session_id -> export -> xp_path`, so the
+     user-facing flow remains template/session driven today.
+
+5. **W-encoding parity is currently inconsistent across override paths.**
+   - Server-side bundle payload generation uses ternary `W=0/1/2`.
+   - Native sandbox and browser/debug override lists still use binary `W=0/1`, so custom skins
+     can fall back to native art for `W=2` states outside the bundle path.
+
 ### Open Design Questions (must be audited before implementation planning)
 
-- If a user adds a new PNG sprite, must they manually recreate every mounted/unmounted
-  and equipment-state variant, or can the product derive/reuse some of them?
-- Are helmet/armor/shield/weapon states separate sprite families, or are they encoded
-  as layer/state differences inside the same player-family contract?
-- Which states are mandatory for native-runtime parity, and which can remain deliberate
-  fallback-to-native behavior?
-- What is the minimal “no-template new XP” / template-less runtime apply contract that
-  remains truthful to the original runtime?
+- What are the exact `wolfie` / `wolack` template specs (dims, frame counts, layer patterns,
+  and L0/L1 metadata requirements) needed for truthful template/native-builder expansion?
+- Does the original runtime ever compose equipment visuals dynamically, or are the committed
+  per-AHSW XP files always the whole contract? Current repo evidence only proves filename-level
+  selection in the custom-skin pipeline.
+- Which non-bundle fallback states are acceptable during phased rollout, and which must be
+  treated as blocking parity gaps?
+- What is the minimal lightweight validation contract for a first-class template-less native
+  apply path once session/template coupling is removed from the user flow?
 
 ---
 

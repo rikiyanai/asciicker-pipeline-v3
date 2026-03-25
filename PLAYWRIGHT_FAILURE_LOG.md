@@ -3821,3 +3821,51 @@ Grid toggle overlay drew simple horizontal/vertical lines instead of REXPaint-st
 
 - The worksheet also logged 14 medium and 15 low issues covering save polling, missing progress indicators, slider debounce, nested scrollbars, discoverability, contrast, and other polish gaps.
 - Those are not all elevated into the canon bug table yet; this log preserves the audited counts and the highest-signal open issues.
+
+---
+
+## Player-State Parity Audit: Runtime-Family vs Gameplay-State Gaps
+
+**Date:** 2026-03-24
+**Status:** LOGGED
+**Worksheet:** `docs/plans/2026-03-24-player-state-parity-audit.md`
+
+### Review outcome
+
+- The front half of the worksheet is evidence-backed and suitable for canon updates.
+- The back half turns into UX/product design exploration. That material remains worksheet-only and was not promoted into canon as established truth.
+- One count in the worksheet needed tightening: `sprites/player-*.xp` includes extra non-runtime artifact files (`player-fidelity-pass-rr8-20260223.xp`, `player-workbench-reliability-20260223.xp`), so raw glob counts overstate the true player-family runtime inventory unless those artifacts are excluded.
+
+### Proven current truths
+
+1. **Current custom-skin authoring is one PNG per family action, not per AHSW variant.**
+   - The bundle/server path exports one XP per authored family action and broadcasts those bytes
+     to all generated override filenames for that family.
+   - Result: users do not currently author separate helmet/shield/weapon variants.
+
+2. **AHSW is a filename-selection contract in the current product path.**
+   - Equipment state is represented by filename variants like `player-0102.xp`.
+   - The current custom-skin pipeline stamps the same custom XP over those variants, flattening
+     equipment-specific visual differentiation.
+
+3. **Mounted families are present in runtime/debug override surfaces but missing from the bundle product.**
+   - `wolfie` / `wolack` exist in committed sprites and in native/browser override name lists.
+   - They are absent from `ENABLED_FAMILIES`, `template_registry.json`, and native family builders.
+
+4. **The native sandbox overwrite helper is template-agnostic internally, but the exposed workbench flow is not.**
+   - `_stage_termpp_skin_sandbox()` only needs an exported XP path and copies it across override names.
+   - The user-facing workbench path still requires `session_id -> export -> xp_path`, so “template-less apply”
+     is not yet a first-class product flow.
+
+5. **There is a real W-encoding mismatch bug outside the bundle path.**
+   - `_action_override_names()` emits ternary `W=0/1/2`.
+   - `_termpp_skin_override_names()`, `WEBBUILD_DEFAULT_OVERRIDE_NAMES`, and `termpp_skin_lab.js` still use
+     binary `0000..1111` naming.
+   - Impact: non-bundle override paths can fall back to native sprites for `W=2` states.
+
+### Canon effect
+
+- Canon spec updated to:
+  - elevate the W-encoding mismatch as `BUG-09`
+  - record the mounted-family/template gap more precisely
+  - clarify that template-less native overwrite exists internally but not yet as a first-class user flow
