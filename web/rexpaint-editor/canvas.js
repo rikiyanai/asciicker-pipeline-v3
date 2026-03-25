@@ -611,7 +611,7 @@ export class Canvas {
   _drawGrid() {
     const step = this.gridStep || 1;
     const armLen = Math.max(2, Math.floor(this.cellSizePixels * 0.3));
-    this.ctx.strokeStyle = 'rgba(180,200,220,0.45)';
+    this.ctx.strokeStyle = 'rgba(220,230,240,0.7)';
     this.ctx.lineWidth = 1;
     this.ctx.beginPath();
     for (let x = step; x < this.width; x += step) {
