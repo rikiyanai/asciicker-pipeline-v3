@@ -4072,20 +4072,20 @@ These four operations are a **parity-decision item**: the product must decide wh
 
 ### Inspector demotion status
 
-**PARTIALLY UNBLOCKED** — clipboard parity achieved, transform/bulk-edit still missing.
+**PARTIALLY UNBLOCKED** — clipboard and transform parity achieved, bulk-edit still missing.
 
-W19-W22 (copy/paste/cut/delete) are now **PROVEN** (`431b437`) via UI-driven proof runner `run_whole_sheet_clipboard_test.mjs`. W23 (select all) is WIRED but has a known bounds-update bug when the select tool is already active (non-blocking).
+W19-W22 (copy/paste/cut/delete) are now **PROVEN** (`431b437`) via UI-driven proof runner `run_whole_sheet_clipboard_test.mjs`. W23 (select all) is WIRED but has a known bounds-update bug when the select tool is already active (non-blocking). W24-W27 (selection transforms: rotate CW/CCW, flip H/V) are now **PROVEN** (`1828979`) via UI-driven proof runner `run_whole_sheet_transform_test.mjs` — 9/9 PASS using shipped sidebar buttons and keyboard shortcuts, single undo per transform, bounds update after rotate.
 
 Remaining inspector-only workflows:
 
 - Recoloring a sprite region → requires Replace FG/BG (W29/W30, inspector only)
-- Flipping/rotating a sprite section → requires selection transforms (W24-W27, inspector only)
+- Filling a selection with active glyph → requires Fill Selection (W28, inspector only)
 - Batch-replacing a glyph/color → requires Find & Replace (W31, inspector only)
 
-Phase 1 (collapse inspector to `<details>`) can proceed safely. Phase 2-6 (progressive absorption) unblocked for clipboard. Phase 7 (full demotion) blocked until at minimum:
+Phase 1 (collapse inspector to `<details>`) can proceed safely. Phase 2-6 (progressive absorption) unblocked for clipboard + transforms. Phase 7 (full demotion) blocked until at minimum:
 
 1. ~~Clipboard operations~~ — **DONE** (W19-W22 proven)
-2. Selection transforms (port rotation/flip matrix helpers from inspector — W24-W27)
+2. ~~Selection transforms~~ — **DONE** (W24-W27 proven, `1828979`)
 3. At least one bulk-edit path (fill selection or replace color — W28-W30)
 
 ### Roadmap under-specification finding
@@ -4096,12 +4096,12 @@ The canonical spec states both:
 
 These are not contradictory but need explicit scoping: being a primary correction surface for
 M2 workflows (bundle authoring, PNG manual assembly) does not require full REXPaint parity,
-but it does require clipboard and basic transform operations. W19-W22 (clipboard) are now
-proven (`431b437`). W24-W31 (transforms/bulk-edit) remain planned.
+but it does require clipboard and basic transform operations. W19-W22 (clipboard) are proven
+(`431b437`). W24-W27 (selection transforms) are proven (`1828979`). W28-W31 (bulk-edit) remain planned.
 
 Post-audit parity extension actions (W19-W31) are tracked in the capability canon inventory
-separately from the existing 96-action SAR count. Current status: 4/13 proven (W19-W22),
-1/13 wired (W23), 8/13 planned (W24-W31).
+separately from the existing 96-action SAR count. Current status: 8/13 proven (W19-W22, W24-W27),
+1/13 wired (W23), 4/13 planned (W28-W31).
 
 ### Detailed audit output
 
