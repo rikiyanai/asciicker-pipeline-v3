@@ -6182,11 +6182,17 @@
       return;
     }
     const img = new Image();
+    const objectUrl = URL.createObjectURL(f);
     img.onload = () => {
       state.sourceImage = img;
       renderSourceCanvas();
     };
-    img.src = URL.createObjectURL(f);
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      state.sourceImage = null;
+      status("Image decode failed — file may be corrupted or unsupported", "err");
+    };
+    img.src = objectUrl;
 
     const fd = new FormData();
     fd.append("file", f);
@@ -6738,6 +6744,7 @@
       const f = $("wbFile").files[0];
       if (!f) return;
       const img = new Image();
+      const objectUrl = URL.createObjectURL(f);
       img.onload = () => {
         state.sourceImage = img;
         state.anchorBox = null;
@@ -6749,7 +6756,13 @@
         state.sourceNextId = 1;
         renderSourceCanvas();
       };
-      img.src = URL.createObjectURL(f);
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        state.sourceImage = null;
+        renderSourceCanvas();
+        status("Image decode failed — file may be corrupted or unsupported", "err");
+      };
+      img.src = objectUrl;
     });
 
     $("sourceSelectBtn").addEventListener("click", () => setSourceMode("select"));

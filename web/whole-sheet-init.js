@@ -378,9 +378,8 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
 
   // Stroke-complete detection
   canvasEl.addEventListener('mouseup', _onStrokeEnd);
-  canvasEl.addEventListener('mouseleave', _onStrokeEnd);
 
-  // Mouse tracking
+  // Mouse tracking (mouseleave handles both stroke-end and hover clear)
   canvasEl.addEventListener('mousemove', _onCanvasMouseMove);
   canvasEl.addEventListener('mouseleave', _onCanvasMouseLeave);
 
@@ -1516,6 +1515,7 @@ function _updateInfoApplyModes() {
 }
 
 function _onCanvasMouseLeave() {
+  _onStrokeEnd();
   const posEl = document.getElementById('wsPos');
   if (posEl) posEl.textContent = '-,-';
   const glyphEl = document.getElementById('wsHoverGlyph');
@@ -1634,7 +1634,6 @@ function unmount() {
       canvasEl.removeEventListener('mousemove', _onCanvasMouseMove);
       canvasEl.removeEventListener('mouseleave', _onCanvasMouseLeave);
       canvasEl.removeEventListener('mouseup', _onStrokeEnd);
-      canvasEl.removeEventListener('mouseleave', _onStrokeEnd);
       if (editorState._pasteInterceptor) {
         canvasEl.removeEventListener('mousedown', editorState._pasteInterceptor, true);
       }
