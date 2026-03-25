@@ -796,6 +796,23 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
     if (editorState.canvas) editorState.canvas.setGridVisible(on);
   }));
 
+  const gridStepSel = document.createElement('select');
+  gridStepSel.id = 'wsGridStep';
+  gridStepSel.title = 'Grid cell spacing';
+  gridStepSel.style.cssText = 'width:52px;padding:2px;font-size:11px;background:var(--bg);color:var(--fg);border:1px solid #2a3345;';
+  for (const v of [1, 2, 4, 8, 16]) {
+    const opt = document.createElement('option');
+    opt.value = String(v);
+    opt.textContent = `${v}\u00d7${v}`;
+    gridStepSel.appendChild(opt);
+  }
+  gridStepSel.addEventListener('change', () => {
+    if (editorState.canvas && typeof editorState.canvas.setGridStep === 'function') {
+      editorState.canvas.setGridStep(Number(gridStepSel.value) || 1);
+    }
+  });
+  toolsCol.appendChild(gridStepSel);
+
   // Right column — Apply: G, F, B toggles
   const applyCol = document.createElement('div');
   applyCol.className = 'ws-ta-col';

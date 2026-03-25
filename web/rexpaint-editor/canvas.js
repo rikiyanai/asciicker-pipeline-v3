@@ -47,6 +47,7 @@ export class Canvas {
 
     // Grid visibility state
     this.showGrid = false;
+    this.gridStep = 1;
 
     // Selection visualization state
     this.selectionTool = null;
@@ -604,30 +605,36 @@ export class Canvas {
   }
 
   /**
-   * Draw a 0.5px grid overlay on the canvas
+   * Draw cross-mark grid overlay at cell intersections
    * @private
    */
   _drawGrid() {
-    this.ctx.strokeStyle = '#444444';
-    this.ctx.lineWidth = 0.5;
-
-    // Draw vertical lines
-    for (let x = 1; x < this.width; x++) {
-      const px = x * this.cellSizePixels - this.offsetX;
-      this.ctx.beginPath();
-      this.ctx.moveTo(px, 0);
-      this.ctx.lineTo(px, this.canvasElement.height);
-      this.ctx.stroke();
+    const step = this.gridStep || 1;
+    const armLen = Math.max(2, Math.floor(this.cellSizePixels * 0.3));
+    this.ctx.strokeStyle = 'rgba(180,200,220,0.45)';
+    this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
+    for (let x = step; x < this.width; x += step) {
+      for (let y = step; y < this.height; y += step) {
+        const px = x * this.cellSizePixels - this.offsetX;
+        const py = y * this.cellSizePixels - this.offsetY;
+        this.ctx.moveTo(px, py - armLen);
+        this.ctx.lineTo(px, py + armLen);
+        this.ctx.moveTo(px - armLen, py);
+        this.ctx.lineTo(px + armLen, py);
+      }
     }
+    this.ctx.stroke();
+  }
 
-    // Draw horizontal lines
-    for (let y = 1; y < this.height; y++) {
-      const py = y * this.cellSizePixels - this.offsetY;
-      this.ctx.beginPath();
-      this.ctx.moveTo(0, py);
-      this.ctx.lineTo(this.canvasElement.width, py);
-      this.ctx.stroke();
-    }
+  /**
+   * Set grid step (spacing in cells between cross marks)
+   * @param {number} step - Grid step size (1, 2, 4, 8, or 16)
+   */
+  setGridStep(step) {
+    this.gridStep = [1, 2, 4, 8, 16].includes(step) ? step : 1;
+    this._fullRenderNeeded = true;
+    this.render();
   }
 
   /**

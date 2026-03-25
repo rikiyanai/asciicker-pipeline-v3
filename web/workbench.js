@@ -128,6 +128,7 @@
     inspectorSelectionClipboard: null, // 2D matrix of cells
     inspectorLastInspectCell: null, // {glyph,fg,bg}
     inspectorShowGrid: true,
+    inspectorGridStep: 1,
     inspectorShowChecker: false,
     inspectorFrameClipboard: null,
     history: [],
@@ -2185,6 +2186,8 @@
     const showGrid = $("inspectorShowGrid");
     const showChecker = $("inspectorShowChecker");
     if (showGrid) showGrid.checked = !!state.inspectorShowGrid;
+    const gridStep = $("inspectorGridStep");
+    if (gridStep) gridStep.value = String(state.inspectorGridStep || 1);
     if (showChecker) showChecker.checked = !!state.inspectorShowChecker;
     const pasteBtn = $("inspectorPasteFrameBtn");
     if (pasteBtn) pasteBtn.disabled = !state.inspectorFrameClipboard;
@@ -3515,22 +3518,22 @@
     }
 
     if (state.inspectorShowGrid) {
-      ctx.strokeStyle = "rgba(88,108,136,0.35)";
+      const step = state.inspectorGridStep || 1;
+      const armLen = Math.max(2, Math.floor(zoom * 0.25));
+      ctx.strokeStyle = "rgba(88,108,136,0.45)";
       ctx.lineWidth = 1;
-      for (let x = 0; x <= pixW; x++) {
-        const px = x * zoom + 0.5;
-        ctx.beginPath();
-        ctx.moveTo(px, 0);
-        ctx.lineTo(px, canvas.height);
-        ctx.stroke();
+      ctx.beginPath();
+      for (let x = 0; x <= pixW; x += step) {
+        for (let y = 0; y <= pixH; y += step) {
+          const px = x * zoom + 0.5;
+          const py = y * zoom + 0.5;
+          ctx.moveTo(px, py - armLen);
+          ctx.lineTo(px, py + armLen);
+          ctx.moveTo(px - armLen, py);
+          ctx.lineTo(px + armLen, py);
+        }
       }
-      for (let y = 0; y <= pixH; y++) {
-        const py = y * zoom + 0.5;
-        ctx.beginPath();
-        ctx.moveTo(0, py);
-        ctx.lineTo(canvas.width, py);
-        ctx.stroke();
-      }
+      ctx.stroke();
     }
 
     const sel = normalizeInspectorSelection(state.inspectorSelection);
@@ -6993,6 +6996,11 @@
     $("inspectorFrScope").addEventListener("change", updateInspectorToolUI);
     $("inspectorShowGrid").addEventListener("change", () => {
       state.inspectorShowGrid = !!$("inspectorShowGrid").checked;
+      renderInspector();
+    });
+    $("inspectorGridStep").addEventListener("change", () => {
+      const v = Number($("inspectorGridStep").value);
+      state.inspectorGridStep = [1, 2, 4, 8, 16].includes(v) ? v : 1;
       renderInspector();
     });
     $("inspectorShowChecker").addEventListener("change", () => {
