@@ -329,6 +329,7 @@ Project-specific narrowing:
 |--------|------------|-------------|----------------|
 | `run_fidelity_test.mjs` | XP import via file input; painting via canvas mouse events (acceptance mode) | Cell reads via `readFrameCell()`/`frameSignature()` | UI-driven with diagnostic observation layer |
 | `run_bundle_fidelity_test.mjs` | Tab switch via DOM click; painting via canvas mouse events | State waits via `_state()`, readiness via `getState()` | Mixed — UI actions + diagnostic observation. M1 historical evidence only. |
+| `run_randomized_bundle_test.mjs` | Tab switch, 3 authoring methods (new_xp draw, upload_xp import, upload_png pipeline), WS random actions (paint/fill/rect/line/erase), Skin Dock test, 10s runaround crash detection | `_state()` for actionStates, `__ak_diag` for crash/RAF probes | Mixed — UI actions + diagnostic observation. Randomized smoke gate. |
 | `run_edge_workflow_test.mjs` | Tab switch via DOM click; button clicks; DOM waits | Core state via `getState()` + `_state()` | Mixed — UI actions + diagnostic observation. M1 historical evidence only. |
 | `run_structural_baseline_test.mjs` | ALL actions via `fetch()` API calls — zero DOM interaction | API response JSON | Structural-contract only (per `PNG_STRUCTURAL_BASELINE_CONTRACT.md`). NOT UI proof. |
 | `run_source_panel_workflow_test.mjs` | ALL actions via DOM clicks, canvas drags, file input, context menu | State reads via `getState()` | UI-driven with diagnostic observation layer |
@@ -345,6 +346,24 @@ Project-specific narrowing:
 3. **`fetch()` / API action driving is not acceptance for workflow slices** unless a live structural contract (e.g., `PNG_STRUCTURAL_BASELINE_CONTRACT.md`) explicitly defines that API-backed path for a narrow structural-safety purpose.
 
 **Rule:** Only runners classified as "UI-driven" may produce evidence labeled as acceptance. Structural-contract runners prove API/gate contracts only. Mixed runners are M1 historical evidence — not pure UI-driven acceptance going forward.
+
+### Verification Gates
+
+These gates must pass before any milestone closeout or deployment.
+
+| Gate | Runner | Pass Criteria | Classification |
+|------|--------|---------------|----------------|
+| G-BUNDLE | `run_bundle.sh` | Deterministic 3-action bundle (idle/attack/death) passes with fidelity + Skin Dock playable + 10s runaround 0 crashes | Regression — fixed inputs |
+| G-RANDOM | `run_randomized_bundle.sh` | Randomized 3-action bundle passes with all 3 authoring methods (new_xp/upload_xp/upload_png), Skin Dock playable, 10s runaround 0 crashes. Must pass on at least 3 different seeds. | Smoke — randomized inputs |
+
+**G-RANDOM details:**
+- Each run randomly permutes 3 authoring methods across 3 actions (6 possible combinations)
+- `new_xp`: random WS editor scribbles with action-specific glyph (I/A/D), random colors, random tools (paint/fill/rect/line/erase)
+- `upload_xp`: imports reference XP via UI file input
+- `upload_png`: uploads PNG from baseline pool → server pipeline conversion
+- Seeded RNG (`--seed`) for reproducibility. Failing seed must be recorded.
+- Stubbed actions (copy/paste, select, undo/redo) are excluded until WS editor supports them
+- **First proven seed:** 42 (idle=upload_png, attack=upload_xp, death=new_xp) at commit `7ce9d72`
 
 ---
 

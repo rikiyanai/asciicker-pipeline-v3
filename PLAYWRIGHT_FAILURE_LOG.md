@@ -4111,3 +4111,50 @@ rebaselined.
 Full per-function audit with line numbers: `/tmp/claude-rexpaint-parity-audit-legacy-inspector.md`
 Full whole-sheet tool inventory: `/tmp/claude-rexpaint-parity-audit-whole-sheet.md`
 
+
+---
+
+## Randomized Bundle Smoke Test — G-RANDOM Gate Established
+
+**Date:** 2026-03-25
+**Commit:** `7ce9d72`
+**Runner:** `scripts/xp_fidelity_test/run_randomized_bundle_test.mjs`
+**Wrapper:** `scripts/xp_fidelity_test/run_randomized_bundle.sh`
+
+### What it tests
+
+Each run randomly permutes 3 authoring methods across the 3 bundle actions (idle/attack/death):
+
+| Method | Flow | Key steps |
+|--------|------|-----------|
+| `new_xp` | Draw random scribbles in WS editor | Set glyph to action letter (I/A/D), random fg/bg colors, 20-40 random tool actions (paint, fill, rect, line, erase) |
+| `upload_xp` | Import reference XP via UI | `#xpImportFile` → `#xpImportBtn` → wait for session hydration → export to promote to converted |
+| `upload_png` | Upload PNG → full server pipeline | `#wbFile` → `#wbUpload` → `#wbRun` (Convert to XP) → session auto-promoted to converted |
+
+After all 3 actions are converted: Skin Dock test (Test Bundle Skin) + 10-second headed runaround with crash detection (rafCount/renderCrashes probing).
+
+### Gate pass criteria (G-RANDOM)
+
+- All 3 actions reach "converted" status
+- Bundle shows "3/3 actions ready"
+- Skin Dock reaches playable state
+- 10-second runaround: 0 crashes, rafCount strictly increasing
+
+### Proven seeds
+
+| Seed | Assignment | Result |
+|------|-----------|--------|
+| 42 | idle=upload_png, attack=upload_xp, death=new_xp | PASS — raf 308→1429, 0 crashes |
+
+### Stubbed actions (future slots)
+
+`WS_RANDOM_ACTIONS` array has `enabled:false` stubs for: copy_selection, paste_selection,
+select_region, undo, redo. Each stub slots in by setting `enabled:true` and implementing
+the `exec(page, ctx)` function. No structural changes needed to add new action types.
+
+### Stubbed authoring paths (future slots)
+
+upload_png currently uses the server pipeline conversion (`#wbRun`). A future "Find Sprites +
+extract" path (using `#extractBtn` → anchor → drag to row) is documented as a stub in the
+runner code. It exercises the manual assembly path instead of the pipeline path.
+
