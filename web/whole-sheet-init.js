@@ -205,11 +205,13 @@ let editorState = {
 
 // ── mount ──
 
-async function mount({ container, gridCols, gridRows, layers, layerNames, activeLayer, visibleLayers, onCellEdited, onStrokeStart, onStrokeComplete, onActiveLayerChanged, onLayerVisibilityChanged, onAddLayer, onDeleteLayer, onMoveLayer, onSave, onExport, onUndo, onRedo }) {
+async function mount({ container, gridCols, gridRows, frameW, frameH, layers, layerNames, activeLayer, visibleLayers, onCellEdited, onStrokeStart, onStrokeComplete, onActiveLayerChanged, onLayerVisibilityChanged, onAddLayer, onDeleteLayer, onMoveLayer, onSave, onExport, onUndo, onRedo }) {
   if (editorState.mounted) unmount();
 
   editorState.gridCols = gridCols;
   editorState.gridRows = gridRows;
+  editorState.frameW = frameW || gridCols;
+  editorState.frameH = frameH || gridRows;
   editorState.containerEl = container;
   editorState.onCellEdited = onCellEdited || null;
   editorState.onStrokeStart = onStrokeStart || null;
@@ -793,22 +795,41 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   toolsCol.appendChild(redoBtn);
 
   toolsCol.appendChild(_buildToggle('Grid', 'wsGridToggle', false, (on) => {
-    if (editorState.canvas) editorState.canvas.setGridVisible(on);
+    if (editorState.canvas) {
+      // Apply current step selection before showing
+      if (on) {
+        const sel = document.getElementById('wsGridStep');
+        if (sel && sel.value === 'frame') {
+          editorState.canvas.setGridStep(editorState.frameW, editorState.frameH);
+        }
+      }
+      editorState.canvas.setGridVisible(on);
+    }
   }));
 
   const gridStepSel = document.createElement('select');
   gridStepSel.id = 'wsGridStep';
   gridStepSel.title = 'Grid cell spacing';
-  gridStepSel.style.cssText = 'width:52px;padding:2px;font-size:11px;background:var(--bg);color:var(--fg);border:1px solid #2a3345;';
+  gridStepSel.style.cssText = 'width:62px;padding:2px;font-size:11px;background:var(--bg);color:var(--fg);border:1px solid #2a3345;';
+  const frameOpt = document.createElement('option');
+  frameOpt.value = 'frame';
+  frameOpt.textContent = 'Frame';
+  gridStepSel.appendChild(frameOpt);
   for (const v of [1, 2, 4, 8, 16]) {
     const opt = document.createElement('option');
     opt.value = String(v);
     opt.textContent = `${v}\u00d7${v}`;
     gridStepSel.appendChild(opt);
   }
+  gridStepSel.value = 'frame';
   gridStepSel.addEventListener('change', () => {
     if (editorState.canvas && typeof editorState.canvas.setGridStep === 'function') {
-      editorState.canvas.setGridStep(Number(gridStepSel.value) || 1);
+      if (gridStepSel.value === 'frame') {
+        editorState.canvas.setGridStep(editorState.frameW, editorState.frameH);
+      } else {
+        const v = Number(gridStepSel.value) || 1;
+        editorState.canvas.setGridStep(v, v);
+      }
     }
   });
   toolsCol.appendChild(gridStepSel);

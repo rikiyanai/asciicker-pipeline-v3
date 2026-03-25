@@ -47,7 +47,8 @@ export class Canvas {
 
     // Grid visibility state
     this.showGrid = false;
-    this.gridStep = 1;
+    this.gridStepX = 1;
+    this.gridStepY = 1;
 
     // Selection visualization state
     this.selectionTool = null;
@@ -609,13 +610,14 @@ export class Canvas {
    * @private
    */
   _drawGrid() {
-    const step = this.gridStep || 1;
+    const sx = this.gridStepX || 1;
+    const sy = this.gridStepY || 1;
     const armLen = Math.max(2, Math.floor(this.cellSizePixels * 0.3));
     this.ctx.strokeStyle = 'rgba(220,230,240,0.7)';
     this.ctx.lineWidth = 1;
     this.ctx.beginPath();
-    for (let x = step; x < this.width; x += step) {
-      for (let y = step; y < this.height; y += step) {
+    for (let x = sx; x < this.width; x += sx) {
+      for (let y = sy; y < this.height; y += sy) {
         const px = x * this.cellSizePixels - this.offsetX;
         const py = y * this.cellSizePixels - this.offsetY;
         this.ctx.moveTo(px, py - armLen);
@@ -629,10 +631,12 @@ export class Canvas {
 
   /**
    * Set grid step (spacing in cells between cross marks)
-   * @param {number} step - Grid step size (1, 2, 4, 8, or 16)
+   * @param {number} stepX - Horizontal step in cells
+   * @param {number} [stepY] - Vertical step in cells (defaults to stepX)
    */
-  setGridStep(step) {
-    this.gridStep = [1, 2, 4, 8, 16].includes(step) ? step : 1;
+  setGridStep(stepX, stepY) {
+    this.gridStepX = Math.max(1, Math.floor(stepX)) || 1;
+    this.gridStepY = Math.max(1, Math.floor(stepY != null ? stepY : stepX)) || 1;
     this._fullRenderNeeded = true;
     this.render();
   }

@@ -5687,6 +5687,8 @@
       container: mount,
       gridCols: state.gridCols,
       gridRows: state.gridRows,
+      frameW: state.frameWChars,
+      frameH: state.frameHChars,
       layers: state.layers,
       layerNames: state.layerNames,
       activeLayer: state.activeLayer,
