@@ -201,6 +201,9 @@ let editorState = {
   _strokeDirty: false,
   _originalGridParent: null,
   _originalGridNextSibling: null,
+  // Clipboard state (W19-W22 parity)
+  clipboard: null,       // {cells: [{x, y, glyph, fg, bg}, ...], bounds: {x, y, w, h}}
+  pasteMode: false,
 };
 
 // ── mount ──
@@ -384,6 +387,19 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
   // Keyboard shortcuts
   document.addEventListener('keydown', _onKeyDown);
 
+  // Paste-mode interceptor (capturing phase fires before Canvas's own mousedown)
+  editorState._pasteInterceptor = (e) => {
+    if (!editorState.pasteMode) return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    const rect = canvasEl.getBoundingClientRect();
+    const pixelsPerCell = canvas.cellSize || CELL_SIZE;
+    const cx = Math.floor((e.clientX - rect.left) / pixelsPerCell);
+    const cy = Math.floor((e.clientY - rect.top) / pixelsPerCell);
+    _pasteAt(cx, cy);
+  };
+  canvasEl.addEventListener('mousedown', editorState._pasteInterceptor, true);
+
   editorState.mounted = true;
   canvas.render();
   _updateToolUI();
@@ -409,6 +425,115 @@ function _onStrokeEnd() {
     editorState._strokeDirty = false;
     if (editorState.onStrokeComplete) editorState.onStrokeComplete();
   }
+}
+
+// ── Clipboard operations (W19-W22) ──
+
+/**
+ * W19: Copy current selection to clipboard.
+ * Stores cell data with positions relative to selection origin.
+ * @returns {boolean} true if copied
+ */
+function _copySelection() {
+  const tool = editorState.selectTool;
+  if (!tool) return false;
+  const bounds = tool.getSelectionBounds();
+  if (!bounds) return false;
+  const canvas = editorState.canvas;
+  if (!canvas) return false;
+
+  const cells = [];
+  for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
+    for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
+      const cell = canvas.getCell(x, y);
+      if (cell) {
+        cells.push({ x: x - bounds.x, y: y - bounds.y, glyph: cell.glyph, fg: [...cell.fg], bg: [...cell.bg] });
+      }
+    }
+  }
+  if (cells.length === 0) return false;
+
+  editorState.clipboard = { cells, bounds: { x: bounds.x, y: bounds.y, w: bounds.width, h: bounds.height } };
+  return true;
+}
+
+/**
+ * W22: Delete/clear cells inside current selection (glyph→0, transparent).
+ * Triggers stroke callbacks for workbench-level undo.
+ * @returns {boolean} true if cleared
+ */
+function _deleteSelection() {
+  const tool = editorState.selectTool;
+  if (!tool) return false;
+  const bounds = tool.getSelectionBounds();
+  if (!bounds) return false;
+  const canvas = editorState.canvas;
+  if (!canvas) return false;
+
+  // setCell proxy fires onStrokeStart on first cell edit and sets _strokeDirty
+  for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
+    for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
+      canvas.setCell(x, y, 0, [255, 255, 255], [0, 0, 0]);
+    }
+  }
+  // Force stroke-complete for workbench undo snapshot
+  editorState._strokeDirty = false;
+  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
+  canvas.render();
+  return true;
+}
+
+/**
+ * W21: Cut = copy then delete.
+ * @returns {boolean} true if cut succeeded
+ */
+function _cutSelection() {
+  if (!_copySelection()) return false;
+  return _deleteSelection();
+}
+
+/**
+ * W20: Enter paste mode. Next mousedown on the canvas places clipboard contents.
+ * Escape or tool switch cancels.
+ * @returns {boolean} true if paste mode entered
+ */
+function _enterPasteMode() {
+  if (!editorState.clipboard || editorState.clipboard.cells.length === 0) return false;
+  editorState.pasteMode = true;
+  const canvasEl = editorState.canvas && editorState.canvas.canvasElement;
+  if (canvasEl) canvasEl.style.cursor = 'copy';
+  return true;
+}
+
+function _cancelPasteMode() {
+  if (!editorState.pasteMode) return;
+  editorState.pasteMode = false;
+  const canvasEl = editorState.canvas && editorState.canvas.canvasElement;
+  if (canvasEl) canvasEl.style.cursor = 'crosshair';
+}
+
+/**
+ * Place clipboard contents at cell (cx, cy).
+ * Triggers stroke callbacks for undo.
+ */
+function _pasteAt(cx, cy) {
+  const clip = editorState.clipboard;
+  if (!clip || !clip.cells.length) return;
+  const canvas = editorState.canvas;
+  if (!canvas) return;
+
+  // setCell proxy fires onStrokeStart on first cell edit
+  for (const c of clip.cells) {
+    const nx = cx + c.x;
+    const ny = cy + c.y;
+    if (nx >= 0 && nx < canvas.width && ny >= 0 && ny < canvas.height) {
+      canvas.setCell(nx, ny, c.glyph, c.fg, c.bg);
+    }
+  }
+  editorState._strokeDirty = false;
+  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
+  canvas.render();
+  _cancelPasteMode();
 }
 
 // ── Eyedropper sample ──
@@ -438,6 +563,7 @@ function _applyEyedropperSample(glyph, fg, bg) {
 
 function _switchTool(name) {
   if (!editorState.mounted || !editorState.canvas) return;
+  _cancelPasteMode();
   // Deactivate select tool when switching away (clears stale selection)
   if (editorState.activeTool === 'select' && name !== 'select' && editorState.selectTool) {
     editorState.selectTool.deactivate();
@@ -499,7 +625,7 @@ function _onKeyDown(e) {
   const tag = e.target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-  // Ctrl/Cmd+key shortcuts (undo/redo) before tool shortcuts
+  // Ctrl/Cmd+key shortcuts before tool shortcuts
   if (e.ctrlKey || e.metaKey) {
     switch (e.key.toLowerCase()) {
       case 'z':
@@ -512,8 +638,51 @@ function _onKeyDown(e) {
         e.preventDefault();
         e.stopPropagation();
         return;
+      case 'c':   // W19 — copy selection
+        _copySelection();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      case 'v':   // W20 — paste (enter paste mode)
+        _enterPasteMode();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      case 'x':   // W21 — cut selection
+        _cutSelection();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      case 'a':   // W23 — select all (bonus, trivial)
+        if (editorState.selectTool && editorState.canvas) {
+          _switchTool('select');
+          const st = editorState.selectTool;
+          st.startSelection(0, 0);
+          st.updateSelection(editorState.canvas.width - 1, editorState.canvas.height - 1);
+          st.endSelection();
+          editorState.canvas.render();
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        return;
     }
-    // Let all other Ctrl/Cmd combos (Ctrl+C, Ctrl+R, etc.) pass through
+    // Let other Ctrl/Cmd combos pass through
+    return;
+  }
+
+  // Escape — cancel paste mode
+  if (e.key === 'Escape') {
+    if (editorState.pasteMode) {
+      _cancelPasteMode();
+      e.preventDefault();
+      return;
+    }
+  }
+
+  // Delete — W22 delete/clear selection
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    _deleteSelection();
+    e.preventDefault();
     return;
   }
 
@@ -1458,6 +1627,7 @@ function _onCanvasMouseMove(e) {
 function unmount() {
   document.removeEventListener('keydown', _onKeyDown);
 
+  _cancelPasteMode();
   if (editorState.canvas) {
     const canvasEl = editorState.canvas.canvasElement;
     if (canvasEl) {
@@ -1465,6 +1635,9 @@ function unmount() {
       canvasEl.removeEventListener('mouseleave', _onCanvasMouseLeave);
       canvasEl.removeEventListener('mouseup', _onStrokeEnd);
       canvasEl.removeEventListener('mouseleave', _onStrokeEnd);
+      if (editorState._pasteInterceptor) {
+        canvasEl.removeEventListener('mousedown', editorState._pasteInterceptor, true);
+      }
     }
     if (typeof editorState.canvas.dispose === 'function') editorState.canvas.dispose();
   }
@@ -1518,6 +1691,9 @@ function unmount() {
     _strokeDirty: false,
     _originalGridParent: null,
     _originalGridNextSibling: null,
+    clipboard: null,
+    pasteMode: false,
+    _pasteInterceptor: null,
   };
 }
 
@@ -1578,6 +1754,9 @@ function getState() {
     hasFontLoaded: !!(editorState.cp437Font && editorState.cp437Font.spriteSheet),
     activeTool: editorState.activeTool,
     selectionBounds: editorState.selectTool ? editorState.selectTool.getSelectionBounds() : null,
+    hasClipboard: !!(editorState.clipboard && editorState.clipboard.cells.length > 0),
+    clipboardCellCount: editorState.clipboard ? editorState.clipboard.cells.length : 0,
+    pasteMode: editorState.pasteMode,
     drawGlyph: editorState.drawGlyph,
     drawFg: editorState.drawFg,
     drawBg: editorState.drawBg,
