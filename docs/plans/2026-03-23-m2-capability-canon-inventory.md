@@ -1,8 +1,8 @@
 # M2 Capability Canon Inventory
 
 **Created:** 2026-03-23
-**Last updated:** 2026-03-24
-**Branch:** master @ 01f6e72
+**Last updated:** 2026-03-25
+**Branch:** master @ 0a8a49c
 **Purpose:** Canonical answer to "what user-reachable workbench behaviors should be possible right now?" — distinguishing intent, code wiring, and verified proof.
 **Supersedes:** No prior canonical capability inventory existed. This doc synthesizes claims from the full doc set and measures them against code and failure-log reality.
 
@@ -143,7 +143,7 @@ Each capability row has five columns:
 | G13 | Grid zoom | UI control ref §6 | `gridZoomInput` → `renderGrid()` — wired | No verifier | WIRED | M2-D |
 | G14 | Drag-select frames | SAR blueprint | Drag handler on grid — wired | No verifier | WIRED | M2-D |
 
-### Family 7: Whole-Sheet Editor (18 actions)
+### Family 7: Whole-Sheet Editor (18 actions in SAR baseline + 13 planned parity extension)
 
 | # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
 |---|--------|-------------|---------------|----------------|--------|----------|
@@ -172,6 +172,50 @@ Each capability row has five columns:
 - PB-07: TextTool exists on disk, not wired — DEFERRED
 - ~~W12-W14~~: **CORRECTED + PROVEN** — code exists at whole-sheet-init.js:1168-1204. Now PROVEN via layer runner (7bdab92).
 - ~~W18~~: **PROVEN** — Ctrl+Z/Y keyboard shortcuts wired at 25dc204, sidebar buttons already worked. Proven via tools runner paint→Ctrl+Z→revert at 8f79b35. Note: editor-app.js internal undo stack stubs remain (line 950-960) but workbench snapshot undo works end-to-end.
+
+#### Post-Audit Parity Extension (2026-03-25 REXPaint parity audit)
+
+> **Scope note:** The 13 actions below are a post-audit parity extension discovered by the 2026-03-25 audit. They are tracked separately from the existing 96-action SAR count to avoid silently inflating the denominator. They will be folded into the SAR denominator at the next canon rebaseline. Until then, aggregate statistics reference "31/96 SAR + 0/13 parity extension."
+
+**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly and manages them via its own adapter layer. EditorApp (editor-app.js) contains copy/paste/deleteSelection implementations, but these are not wired into the shipped whole-sheet keyboard or UI path — whole-sheet-init.js:516 explicitly passes Ctrl+C/V through to the browser.
+
+**Planned whole-sheet actions:**
+
+| # | Action | Code Basis | Status | Priority | M2 Scope |
+|---|--------|-----------|--------|----------|----------|
+| W19 | Copy selection (Ctrl+C) | `EditorApp.copy()` exists at editor-app.js:735; WS does not use EditorApp — port or integrate logic into whole-sheet-init.js | PLANNED | HIGH | Post-M2-C parity |
+| W20 | Paste selection (Ctrl+V) | `EditorApp.startPaste()/paste()` exist at editor-app.js:766/852; WS does not use EditorApp — port or integrate logic into whole-sheet-init.js | PLANNED | HIGH | Post-M2-C parity |
+| W21 | Cut selection (Ctrl+X) | No cut method in EditorApp; implement copy + clear in whole-sheet-init.js | PLANNED | HIGH | Post-M2-C parity |
+| W22 | Delete/clear selection (Del) | `EditorApp.deleteSelection()` exists at editor-app.js; WS does not use EditorApp — port or integrate logic into whole-sheet-init.js | PLANNED | HIGH | Post-M2-C parity |
+| W23 | Select all (Ctrl+A) | No equivalent exists; implement as selection bounds → full canvas dims | PLANNED | MEDIUM | Post-M2-C parity |
+| W24 | Rotate selection CW | Port `selectionMatrixRotate(src, true)` from workbench.js:3019 | PLANNED | MEDIUM | Post-M2-C parity |
+| W25 | Rotate selection CCW | Port `selectionMatrixRotate(src, false)` from workbench.js:3019 | PLANNED | MEDIUM | Post-M2-C parity |
+| W26 | Flip selection H | Port `selectionMatrixFlipH()` from workbench.js:3011 | PLANNED | MEDIUM | Post-M2-C parity |
+| W27 | Flip selection V | Port `selectionMatrixFlipV()` from workbench.js:3015 | PLANNED | MEDIUM | Post-M2-C parity |
+| W28 | Fill selection | Port `fillInspectorSelectionWithGlyph()` logic from workbench.js:3199 | PLANNED | MEDIUM | Post-M2-C parity |
+| W29 | Replace FG in selection | Port `replaceInspectorSelectionColor('fg')` logic from workbench.js:3236 | PLANNED | MEDIUM | Post-M2-C parity |
+| W30 | Replace BG in selection | Port `replaceInspectorSelectionColor('bg')` logic from workbench.js:3236 | PLANNED | MEDIUM | Post-M2-C parity |
+| W31 | Find & Replace | Port `applyInspectorFindReplace()` from workbench.js:3285; needs dialog UI | PLANNED | LOW | Post-M2-C parity |
+
+**Parity decision items (ownership undecided):**
+
+These inspector operations work at the frame level, not the whole-sheet canvas level. Product must decide whether they become grid-panel actions, whole-sheet actions, or remain inspector-only residuals:
+
+| Operation | Inspector Function | Notes |
+|-----------|-------------------|-------|
+| Copy frame | `copyInspectorFrame()` workbench.js:3374 | Operates on single sprite frame, not canvas region |
+| Paste frame | `pasteInspectorFrame()` workbench.js:3384 | Same |
+| Flip frame H | `flipInspectorFrameHorizontal()` workbench.js:3402 | Same |
+| Clear frame | `clearInspectorFrame()` workbench.js:3419 | Same |
+
+**Inspector-only residuals (intentionally not ported):**
+
+| Operation | Reason |
+|-----------|--------|
+| Half-cell paint (top/bottom) | Inspector-specific rendering; not a REXPaint or whole-sheet concept |
+| Cell inspect tool (hover readout) | Replaced by WS Info panel |
+
+**Inspector demotion status:** BLOCKED on clipboard/transform/bulk-edit parity. See canonical spec §3 "Whole-Sheet Parity Gap" for the full blocking analysis. Phase 1 (collapse to `<details>`) can proceed; Phase 7 (full demotion) blocked until at minimum W19-W22 + W24-W27 are shipped.
 
 ### Family 8: Jitter/Alignment (6 actions)
 
@@ -233,6 +277,8 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 
 **Proof:** No specific verifier coverage for inspector-level actions. The inspector was the primary editing surface during M1, but verification focused on the save/export/runtime loop, not individual editing operations.
 
+**2026-03-25 parity audit finding:** Inspector demotion is **BLOCKED** on whole-sheet clipboard/transform/bulk-edit parity. The shipped whole-sheet surface (whole-sheet-init.js) lacks 13 editing capabilities that the inspector provides (W19-W31 above). EditorApp contains copy/paste/deleteSelection code, but it is not wired into the shipped whole-sheet keyboard or UI path. Until at minimum W19-W22 (clipboard) and W24-W27 (transforms) are absorbed, the inspector must remain accessible. Phase 1 demotion (collapse to `<details>`) can proceed safely. See canonical spec §3 "Whole-Sheet Parity Gap" for full analysis.
+
 ---
 
 ## Part 3: Workflow Proof Summary
@@ -254,9 +300,9 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 
 ## Part 4: Aggregate Statistics
 
-### By Status
+### By Status (96-action SAR baseline)
 
-> **Updated 2026-03-24** — M2-D proof pass: +11 actions PROVEN (W15, S3-S6, G5-G6, G9-G11). PB-01 fixed, PB-03 reclassified. Slice 5 E2E proven.
+> **Updated 2026-03-25** — 2026-03-25 REXPaint parity audit added 13 planned whole-sheet parity actions (W19-W31) as a post-audit extension. These are tracked separately and NOT included in the 96-action SAR denominator below. They will be folded in at the next canon rebaseline.
 
 | Status | Count | % of 96 SAR actions |
 |--------|-------|---------------------|
@@ -267,8 +313,10 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | BLOCKED | 1 | 1% |
 | DEFERRED | 2 | 2% |
 | *Outside SAR 96* | ~36 | (inspector, preview, recorder, bug report) |
+| *Post-audit parity extension* | 13 | (W19-W31: all PLANNED, tracked separately) |
+| *Parity decision items* | 4 | (frame copy/paste/flip/clear: ownership undecided) |
 
-### By M2 Sub-Phase
+### By M2 Sub-Phase (96-action SAR baseline only)
 
 | Sub-Phase | Total Actions | Proven | Wired | Partial/Blocked/Planned |
 |-----------|---------------|--------|-------|-------------------------|
@@ -279,6 +327,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | M2-D (full SAR coverage) | 45 | 0 | 43 | 2 (1 PARTIAL, 1 PLANNED) |
 | M2-E (semantic dicts) | 0 | 0 | 0 | 0 (workflow-level, not action-level) |
 | M2-F (analyze assistive) | 1 | 0 | 1 | 0 |
+| *Post-M2-C parity (W19-W31)* | 13 | 0 | 0 | 13 (all PLANNED) |
 
 ### Verifier Slice Readiness (from M2 verifier design)
 

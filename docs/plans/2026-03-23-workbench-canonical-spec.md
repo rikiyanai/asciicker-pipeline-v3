@@ -2,8 +2,8 @@
 
 **Authority:** This is one of the 3 canonical authority docs for this repo. See Section 6 below.
 
-**Last updated:** 2026-03-24
-**Branch:** master @ 01f6e72
+**Last updated:** 2026-03-25
+**Branch:** master @ 0a8a49c
 
 ---
 
@@ -51,7 +51,7 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 ## 3. Current Priority Stack
 
-**Last reviewed:** 2026-03-24
+**Last reviewed:** 2026-03-25
 
 1. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions run `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
 2. **Slice 5 manual assembly E2E** — PROVEN 13/13 (2026-03-24). Covers U1→S12→S7→D1→W1→W2→T3→T4. Demonstrates M2-B/C/D functional end-to-end. Runner: `run_manual_assembly_e2e_test.mjs`.
@@ -79,6 +79,61 @@ This stack is execution priority, not timeless truth. Re-evaluate when any sub-p
 | BUG-09 | Non-bundle skin override paths still use binary W encoding and miss `W=2` equipment variants | FIXED | Non-bundle override generators now align with current product family semantics: shared `FAMILY_W_RANGE` rule applies `all_16` (W∈{0,1,2}) to player/plydie/wolfie and `weapon_gte_1` (W∈{1,2}) to attack/wolack. One rule concept used by all four generators (`_termpp_skin_override_names`, `WEBBUILD_DEFAULT_OVERRIDE_NAMES`, both `DEFAULT_OVERRIDE_SETS`). Override count: 81→105 (full parity), 49→65 (mounted mode). For enabled bundle families (player/attack/plydie), non-bundle names exactly equal bundle-path names. Tests pass. **Open residual:** committed native attack/wolack sprite inventory on disk (W=1 only) is narrower than the generated override contract (W∈{1,2}); this is an inherited runtime-truth question, not a naming bug. |
 
 **UI audit note:** the 2026-03-24 workbench UI audit found 39 verified issues total (3 critical, 7 high, 14 medium, 15 low). The active-bug table above promotes the critical issues and highest-signal open production issues into canon; the broader severity breakdown is preserved in `PLAYWRIGHT_FAILURE_LOG.md`.
+
+### Whole-Sheet Parity Gap (2026-03-25 audit)
+
+The 2026-03-25 REXPaint parity audit identified that the shipped whole-sheet editor surface (whole-sheet-init.js) lacks clipboard, selection-transform, and bulk-edit operations that exist in the legacy XP Frame Inspector (workbench.js). These gaps block inspector demotion beyond Phase 1 (collapse to `<details>`).
+
+**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. EditorApp (editor-app.js) contains copy/paste/deleteSelection code, but the shipped whole-sheet keyboard handler passes Ctrl+C/V through to the browser. Classification: exists in underlying editor layer, not wired/exposed in shipped whole-sheet surface.
+
+#### Planned Whole-Sheet Actions (post-audit parity extension)
+
+These are tracked as a planned parity extension outside the existing 96-action SAR count (see `m2-capability-canon-inventory.md` Family 7 post-audit section). They will be folded into the SAR denominator at the next canon rebaseline.
+
+| ID | Action | Code Basis | Priority | Notes |
+|----|--------|-----------|----------|-------|
+| W19 | Copy selection (Ctrl+C) | Port or integrate EditorApp.copy() logic into whole-sheet-init.js | HIGH | EditorApp method exists but WS does not use EditorApp |
+| W20 | Paste selection (Ctrl+V) | Port or integrate EditorApp.startPaste()/paste() logic into whole-sheet-init.js | HIGH | EditorApp method exists but WS does not use EditorApp |
+| W21 | Cut selection (Ctrl+X) | Implement copy + clear in whole-sheet-init.js | HIGH | No cut method in EditorApp; WS needs its own |
+| W22 | Delete/clear selection (Del) | Port or integrate EditorApp.deleteSelection() logic into whole-sheet-init.js | HIGH | EditorApp method exists but WS does not use EditorApp |
+| W23 | Select all (Ctrl+A) | New: set selection bounds to full canvas dimensions | MEDIUM | No equivalent exists |
+| W24 | Rotate selection CW | Port `selectionMatrixRotate(src, true)` from inspector | MEDIUM | Inspector helper at workbench.js:3019 |
+| W25 | Rotate selection CCW | Port `selectionMatrixRotate(src, false)` from inspector | MEDIUM | Same helper |
+| W26 | Flip selection H | Port `selectionMatrixFlipH()` from inspector | MEDIUM | Inspector helper at workbench.js:3011 |
+| W27 | Flip selection V | Port `selectionMatrixFlipV()` from inspector | MEDIUM | Inspector helper at workbench.js:3015 |
+| W28 | Fill selection | Port `fillInspectorSelectionWithGlyph()` logic | MEDIUM | Inspector at workbench.js:3199 |
+| W29 | Replace FG in selection | Port `replaceInspectorSelectionColor('fg')` logic | MEDIUM | Inspector at workbench.js:3236 |
+| W30 | Replace BG in selection | Port `replaceInspectorSelectionColor('bg')` logic | MEDIUM | Inspector at workbench.js:3236 |
+| W31 | Find & Replace | Port `applyInspectorFindReplace()` logic + UI | LOW | Inspector at workbench.js:3285; needs dialog UI |
+
+#### Parity Decision Items (ownership undecided)
+
+These inspector operations work at the frame level, not the whole-sheet canvas level. The product must decide whether they become grid-panel actions, whole-sheet actions, or remain inspector-only residuals.
+
+| Operation | Inspector Function | Decision Needed |
+|-----------|-------------------|----------------|
+| Copy frame | `copyInspectorFrame()` | Grid panel action? Inspector-only residual? |
+| Paste frame | `pasteInspectorFrame()` | Same |
+| Flip frame H | `flipInspectorFrameHorizontal()` | Same |
+| Clear frame | `clearInspectorFrame()` | Same |
+
+#### Inspector-Only Residuals (intentionally not ported)
+
+| Operation | Reason |
+|-----------|--------|
+| Half-cell paint (top/bottom color) | Inspector-specific; not a REXPaint or whole-sheet concept |
+| Cell inspect tool (hover readout) | Replaced by WS Info panel |
+| Per-cell glyph/color hover preview | WS Eyedropper covers the sampling use case |
+
+#### Inspector Demotion Status
+
+**BLOCKED** on clipboard/transform/bulk-edit parity. Current state:
+
+- Phase 1 (collapse inspector to `<details>` tag): **can proceed** — inspector remains accessible
+- Phase 2-6 (progressive capability absorption): **requires W19-W31 implementation**
+- Phase 7 (full demotion — never auto-open inspector): **blocked** until at minimum W19-W22 (clipboard) and W24-W27 (transforms) are in the shipped whole-sheet surface
+
+The canon claim "whole-sheet editor should become the primary correction surface" remains the intended direction. Being a primary correction surface for M2 workflows (bundle authoring, PNG manual assembly) does not require full REXPaint parity, but it does require clipboard and basic transform operations that are currently missing from the shipped whole-sheet surface.
 
 ---
 

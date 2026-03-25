@@ -3994,3 +3994,120 @@ path (R1), which requires no external TERM++ binary. The legacy native lane requ
 in `.run/` and is useful for visual runtime verification but should not be treated as acceptance
 evidence.
 
+---
+
+## 2026-03-25: REXPaint Parity Audit — Whole-Sheet Missing-Feature Surface
+
+**Branch:** master @ 0a8a49c
+**Type:** Audit / gap discovery — not a failure, but a durable record of missing parity surface
+**Trigger:** Handoff request for full REXPaint parity audit before further M2-D / bug-fix work
+
+### Audit scope
+
+Compared the full legacy XP Frame Inspector editing surface (workbench.js) against the shipped
+whole-sheet editor (whole-sheet-init.js + rexpaint-editor/tools/*) to identify capabilities that:
+
+- exist in the legacy inspector but not in the whole-sheet editor
+- are required for truthful "whole-sheet as primary correction surface" claims
+- are true REXPaint-parity expectations vs project-specific inspector extras
+
+### Key structural finding
+
+The whole-sheet editor (whole-sheet-init.js) does NOT use EditorApp — it imports tool classes
+directly and manages them via its own adapter layer. EditorApp (editor-app.js) contains
+copy/paste/deleteSelection implementations, but these are **not wired** into the shipped
+whole-sheet keyboard or UI path:
+
+- whole-sheet-init.js:516 explicitly passes Ctrl+C/V through to the browser
+- EditorApp.copy(), .startPaste(), .paste(), .deleteSelection() exist in code
+- Classification: **exists in underlying editor layer, not wired/exposed in shipped whole-sheet surface**
+
+### Missing whole-sheet capabilities (vs legacy inspector)
+
+#### Clipboard operations (exists in EditorApp, not wired in whole-sheet)
+
+| Operation | Inspector Function | EditorApp Method | Whole-Sheet Wiring |
+|-----------|-------------------|-----------------|-------------------|
+| Copy selection | `copyInspectorSelection()` workbench.js:3106 | `EditorApp.copy()` editor-app.js:735 | NOT wired — Ctrl+C passes through |
+| Paste selection | `pasteInspectorSelection()` workbench.js:3121 | `EditorApp.startPaste()/paste()` editor-app.js:766/852 | NOT wired — Ctrl+V passes through |
+| Delete/clear selection | `clearInspectorSelectionCells()` workbench.js:3157 | `EditorApp.deleteSelection()` editor-app.js | NOT wired — no Delete key handler in WS |
+
+#### Clipboard operations (no implementation anywhere in whole-sheet path)
+
+| Operation | Inspector Function | Whole-Sheet Status |
+|-----------|-------------------|-------------------|
+| Cut selection | `cutInspectorSelection()` workbench.js:3194 | No equivalent — neither EditorApp nor whole-sheet-init.js |
+| Select All | `inspectorSelectAll()` workbench.js:3041 | No equivalent |
+
+#### Selection transforms (no implementation in whole-sheet path)
+
+| Operation | Inspector Function | Whole-Sheet Status |
+|-----------|-------------------|-------------------|
+| Rotate CW | `transformInspectorSelection('rot_cw')` workbench.js:3054 | Not implemented |
+| Rotate CCW | `transformInspectorSelection('rot_ccw')` workbench.js:3054 | Not implemented |
+| Flip H | `transformInspectorSelection('flip_h')` workbench.js:3054 | Not implemented |
+| Flip V | `transformInspectorSelection('flip_v')` workbench.js:3054 | Not implemented |
+
+Helpers exist in inspector: `selectionMatrixRotate()` (line 3019), `selectionMatrixFlipH()` (line 3011), `selectionMatrixFlipV()` (line 3015). These are portable to the whole-sheet path.
+
+#### Bulk-edit operations (no implementation in whole-sheet path)
+
+| Operation | Inspector Function | Whole-Sheet Status |
+|-----------|-------------------|-------------------|
+| Fill selection | `fillInspectorSelectionWithGlyph()` workbench.js:3199 | Not implemented |
+| Replace FG in selection | `replaceInspectorSelectionColor('fg')` workbench.js:3236 | Not implemented |
+| Replace BG in selection | `replaceInspectorSelectionColor('bg')` workbench.js:3236 | Not implemented |
+| Find & Replace | `applyInspectorFindReplace()` workbench.js:3285 | Not implemented (glyph+FG/BG matching with scope control) |
+
+#### Frame-level operations (ownership undecided)
+
+| Operation | Inspector Function | Ownership Question |
+|-----------|-------------------|-------------------|
+| Copy frame | `copyInspectorFrame()` workbench.js:3374 | Operates at frame level — may belong to grid panel, not whole-sheet |
+| Paste frame | `pasteInspectorFrame()` workbench.js:3384 | Same — grid/frame scope |
+| Flip frame H | `flipInspectorFrameHorizontal()` workbench.js:3402 | Same — grid/frame scope |
+| Clear frame | `clearInspectorFrame()` workbench.js:3419 | Same — grid/frame scope |
+
+These four operations are a **parity-decision item**: the product must decide whether they become grid-panel actions, whole-sheet actions, or remain inspector-only residuals.
+
+### Inspector demotion status
+
+**BLOCKED** on clipboard/transform/bulk-edit parity.
+
+Without clipboard operations (copy/paste/cut/delete), selection transforms (rotate/flip), and
+bulk-edit operations (fill selection, replace color, find & replace) in the shipped whole-sheet
+surface, users must fall back to the legacy inspector for production sprite editing workflows:
+
+- Recoloring a sprite region → requires Replace FG/BG (inspector only)
+- Flipping/rotating a sprite section → requires selection transforms (inspector only)
+- Batch-replacing a glyph/color → requires Find & Replace (inspector only)
+- Cut-and-move → requires cut (inspector only)
+
+The retirement checklist's Phase 1 (collapse inspector to `<details>`) can proceed safely since
+the inspector remains accessible. Full demotion (Phase 7: never auto-open inspector) is blocked
+until the whole-sheet editor absorbs at minimum:
+
+1. Clipboard operations (wire existing EditorApp methods + implement cut)
+2. Selection transforms (port rotation/flip matrix helpers from inspector)
+3. At least one bulk-edit path (fill selection or replace color)
+
+### Roadmap under-specification finding
+
+The canonical spec states both:
+- "whole-sheet editor should become the primary correction surface" (INDEX.md, AGENT_PROTOCOL.md)
+- "M2 is NOT full REXPaint parity" (canonical spec §1)
+
+These are not contradictory but need explicit scoping: being a primary correction surface for
+M2 workflows (bundle authoring, PNG manual assembly) does not require full REXPaint parity,
+but it does require clipboard and basic transform operations. Current roadmap W1-W18 covers
+drawing tools and layers but not the clipboard/transform/bulk-edit surface.
+
+New planned actions (W19-W31) are added to the capability canon inventory as a post-audit
+parity extension, tracked separately from the existing 96-action SAR count until canon is
+rebaselined.
+
+### Detailed audit output
+
+Full per-function audit with line numbers: `/tmp/claude-rexpaint-parity-audit-legacy-inspector.md`
+Full whole-sheet tool inventory: `/tmp/claude-rexpaint-parity-audit-whole-sheet.md`
+
