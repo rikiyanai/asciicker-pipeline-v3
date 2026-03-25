@@ -277,7 +277,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 
 **Proof:** No specific verifier coverage for inspector-level actions. The inspector was the primary editing surface during M1, but verification focused on the save/export/runtime loop, not individual editing operations.
 
-**2026-03-25 parity audit finding:** Inspector demotion is **BLOCKED** on whole-sheet clipboard/transform/bulk-edit parity. The shipped whole-sheet surface (whole-sheet-init.js) lacks 13 editing capabilities that the inspector provides (W19-W31 above). EditorApp contains copy/paste/deleteSelection code, but it is not wired into the shipped whole-sheet keyboard or UI path. Until at minimum W19-W22 (clipboard) and W24-W27 (transforms) are absorbed, the inspector must remain accessible. Phase 1 demotion (collapse to `<details>`) can proceed safely. See canonical spec §3 "Whole-Sheet Parity Gap" for full analysis.
+**2026-03-25 parity audit finding (updated):** W19-W22 (clipboard) now **PROVEN** (`431b437`). Inspector demotion remains blocked on W24-W27 (transforms) and W28-W31 (bulk-edit). Phase 1 (collapse to `<details>`) can proceed. Phase 2-6 unblocked for clipboard. Phase 7 blocked until at minimum W24-W27 are shipped. See canonical spec §3 and capability inventory §Family 7 demotion status for current state.
 
 ---
 
