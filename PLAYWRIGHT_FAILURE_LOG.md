@@ -3719,22 +3719,19 @@ That repository-boundary claim was not established from this repo's contents and
 ## BUG-01 FIX: Grid Overlay — Cross Marks + Grid-Step Control
 
 **Date:** 2026-03-24
-**Commit:** `6fb3375`
+**Commits:** `6fb3375`..`fef0e78` (4 commits)
 **Status:** FIXED, UI-PROVEN
 
 ### Bug
 
 Grid toggle overlay drew simple horizontal/vertical lines instead of REXPaint-style cross marks at cell intersections. No user-facing control for grid cell spacing.
 
-### Fix
+### Fix (4 commits)
 
-Replaced full-line grid rendering with cross marks at cell intersections in both:
-- **Whole-sheet editor** (`canvas.js:_drawGrid()`) — the primary shipped surface
-- **Legacy inspector** (`workbench.js:3518`) — fallback inspector surface
-
-Added grid-step `<select>` control (1×1 through 16×16) to both surfaces:
-- Whole-sheet toolbar: `#wsGridStep` (whole-sheet-init.js)
-- Legacy inspector row: `#inspectorGridStep` (workbench.html + workbench.js)
+1. `6fb3375` — Core fix: cross marks at intersections + grid-step select (1×1–16×16) on both whole-sheet editor (`canvas.js`) and legacy inspector (`workbench.js`). Batched single-path rendering.
+2. `9859f54` — Proof entry + canonical spec BUG-01 OPEN→FIXED.
+3. `34ee245` — Opacity bump from `rgba(180,200,220,0.45)` to `rgba(220,230,240,0.7)` for visibility.
+4. `fef0e78` — Frame-boundary default: `Canvas.setGridStep(x, y)` supports separate X/Y steps. Whole-sheet editor passes `frameW`/`frameH` from workbench state. Grid-step dropdown defaults to "Frame" which shows crosses at sprite frame edges.
 
 ### Proof (UI-driven, screenshots only)
 
@@ -3742,24 +3739,15 @@ Added grid-step `<select>` control (1×1 through 16×16) to both surfaces:
 
 **Observation:** Screenshots only (no page.evaluate action-driving).
 
-**Evidence directory:** `/tmp/bug01-grid-proof/`
-
-| Screenshot | State | Observation |
-|------------|-------|-------------|
-| `01b-grid-off-detail.png` | Grid OFF | Clean canvas, no overlay marks |
-| `02b-grid-on-step1-detail.png` | Grid ON, step=1 | Dense cross marks at every cell intersection |
-| `03-grid-off-toggle-detail.png` | Grid OFF (toggled back) | Clean canvas — toggle round-trip confirmed |
-| `04b-grid-step4-detail.png` | Grid ON, step=4 | Visibly sparser crosses every 4 cells |
-| `05-grid-step16.png` | Grid ON, step=16 | Only a few crosses visible, dropdown shows "16×16" |
-| `07-grid-step2-detail.png` | Grid ON, step=2 | Medium density, clearly different from step=1 |
-
 ### Acceptance checklist
 
 - [x] Crosses render only at intersections (not continuous lines)
-- [x] Step selector visibly changes spacing
+- [x] Step selector visibly changes spacing (1×1 / Frame / 4×4 / 16×16 all verified)
+- [x] Default "Frame" step shows crosses at sprite frame boundaries
 - [x] Toggle on/off works correctly
 - [x] No canvas offset/alignment drift between grid states
 - [x] Both whole-sheet editor and legacy inspector surfaces fixed
+- [x] Separate X/Y step for non-square frames
 
 **User correction to preserve:** "It should not live in the upstream repo. I thought it was copied over."
 
