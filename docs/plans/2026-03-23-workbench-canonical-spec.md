@@ -56,7 +56,9 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 1. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions run `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
 2. **Slice 5 manual assembly E2E** — PROVEN 13/13 (2026-03-24). Covers U1→S12→S7→D1→W1→W2→T3→T4. Demonstrates M2-B/C/D functional end-to-end. Runner: `run_manual_assembly_e2e_test.mjs`.
 3. **M2-D full SAR workflow coverage** — 31/96 actions PROVEN (was 20). 31 WS selectors, 77 registry entries, 2 recipes. W15 three-part proof committed. S3-S6/G5-G6/G9-G11 proven. Remaining 56 WIRED actions need committed proof in future M2-D/E passes.
-4. **PB-03 UX hardening** — confirm dialog on session-boundary loads. Cross-session undo remains architecturally out of scope. Low-priority UX refinement.
+4. **Workbench UI audit follow-up** — 2026-03-24 audit found 39 user-facing issues after BUG-01 was fixed: 3 critical, 7 high, 14 medium, 15 low. Immediate open-bug focus is silent PNG decode failure, double mouseleave stroke completion, mobile modal clipping, and grid overdraw/perf.
+5. **PB-03 UX hardening** — confirm dialog on session-boundary loads. Cross-session undo remains architecturally out of scope. Low-priority UX refinement.
+6. **Bundle-family expansion roadmap is still under-scoped** — product truth still centers on `player`, `attack`, and `plydie`, while research/runtime surfaces already show a larger player-state family model (`player-nude`, `wolfie`, `wolack`, ternary W states, mounted/unmounted parity). This is a roadmap gap, not just a verifier gap.
 
 This stack is execution priority, not timeless truth. Re-evaluate when any sub-phase status changes.
 
@@ -67,6 +69,112 @@ This stack is execution priority, not timeless truth. Re-evaluate when any sub-p
 | ID | Summary | Status | Notes |
 |----|---------|--------|-------|
 | BUG-01 | Grid toggle overlay is incorrect — uses simple lines instead of cross marks at intersections; grid size is not user-customizable | FIXED | Fixed in `6fb3375`. Cross marks at intersections + grid-step select (1×1–16×16) on both whole-sheet editor and legacy inspector. UI-proven via screenshots (see PLAYWRIGHT_FAILURE_LOG.md). |
+| BUG-02 | PNG upload silently fails on decode/load error because the source-image path has no `img.onerror` handler | OPEN | `workbench.js:6177-6182` wires `img.onload` only. Corrupted/unsupported images can leave the source canvas blank with no user-visible error even though upload/post succeeded. |
+| BUG-03 | Whole-sheet canvas binds `mouseleave` twice, allowing spurious stroke-complete callbacks and empty undo entries | OPEN | `whole-sheet-init.js:375-380` binds both `_onStrokeEnd` and `_onCanvasMouseLeave` to `mouseleave`. This can fire stroke-complete even when no active stroke exists. |
+| BUG-04 | Overlay modal clips content on mobile/tablet because `.overlay-card` relies on `100vh` and a weak internal scrollbar | OPEN | `styles.css:97-106`. On iOS Safari and short viewports, the submit button can fall below the visible viewport and the scrollbar is hard to discover. |
+| BUG-05 | Whole-sheet/REXPaint grid draws every cross mark for the entire sheet even when most cells are off-screen | OPEN | `canvas.js:617-625` loops full sheet dimensions with no viewport culling. Large sheets at high zoom can incur visible frame drops. |
+| BUG-06 | Bug-report known-issue dropdown fails silently when `fetchKnownBugs()` errors | OPEN | `workbench.js:494` swallows the fetch failure. Users only see the default option and may file duplicates without knowing the dropdown failed to load. |
+| BUG-07 | Disabled controls are too visually similar to enabled controls on the dark theme | OPEN | `styles.css:152` uses opacity only. Grid-panel controls and similar disabled buttons look merely dimmed, especially on touch devices with no cursor feedback. |
+| BUG-08 | Legacy Char Grid debug panel is exposed in production UI | OPEN | `workbench.html:233-236` leaves `<details id="legacyGridDetails" class="legacy-grid-debug">` visible to all users even though it is a debug-only surface. |
+
+**UI audit note:** the 2026-03-24 workbench UI audit found 39 verified issues total (3 critical, 7 high, 14 medium, 15 low). The active-bug table above promotes the critical issues and highest-signal open production issues into canon; the broader severity breakdown is preserved in `PLAYWRIGHT_FAILURE_LOG.md`.
+
+---
+
+## 3a. Player-State Bundle Expansion Goals
+
+These are roadmap goals, not current completion claims. They exist because current
+product truth still targets only `player`, `attack`, and `plydie`, while the runtime
+and research surfaces already require broader player-state coverage.
+
+### Expansion Axis 1: Runtime Families
+
+The family-expansion roadmap must explicitly cover:
+
+- `player-nude`
+- `player`
+- `attack`
+- `plydie`
+- `wolfie`
+- `wolack`
+
+This axis is about **which filename families are authorable and overridable at all**.
+It is distinct from gameplay-state coverage.
+
+### Expansion Axis 2: Gameplay / State Coverage
+
+The gameplay/state roadmap must explicitly cover:
+
+- unmounted vs mounted
+- nude/spawn vs equipped
+- weapon/no-weapon and ternary weapon states where they exist
+- attack / death transitions
+- wearable/equipment state transitions across AHSW
+- item/world/inventory visuals as a separate non-player track
+
+This axis is about **when the engine switches between families/variants during play**.
+It is distinct from family-count expansion.
+
+### Required Roadmap Goals
+
+1. **Full player-state bundle parity**
+   - expand from the current 3-family product truth to the full player-state set:
+     `player-nude`, `player`, `attack`, `plydie`, `wolfie`, `wolack`
+   - include ternary `W=0/1/2` coverage anywhere the runtime actually distinguishes it
+   - remove remaining binary-only debug assumptions from browser override lists
+
+2. **Mounted/unmounted parity as a first-class milestone goal**
+   - mounted idle/walk and mounted attack must not fall back to native defaults
+   - transitions between unmounted and mounted states must preserve skin identity
+
+3. **Equipment/wearable state parity**
+   - AHSW transitions must map cleanly through the bundle/runtime contract
+   - equipping armor/helmet/shield/weapon must not expose fallback-native frames
+
+4. **Template-less native-runtime apply**
+   - support applying a skin/session to the native runtime without forcing a template-shaped
+     workbench action model first
+   - this is a distinct product goal from browser/webbuild debug injection
+
+5. **Separate non-player family track**
+   - `item-*`, `grid-*`, and similar non-player assets must be tracked separately from
+     player-skin bundle expansion
+   - do not blur item/UI family work into player-state parity claims
+
+6. **Native-runtime parity over browser-debug parity**
+   - browser/webbuild override modes are useful diagnostics
+   - native runtime behavior is the authority for “does the skin system actually work”
+
+### Current Gap Statement
+
+Current config still exposes only:
+
+- `player`
+- `attack`
+- `plydie`
+
+via `ENABLED_FAMILIES` in `src/pipeline_v2/config.py`.
+
+Research already shows the larger real player-state map and the current missing areas:
+
+- `player-nude`
+- `wolfie`
+- `wolack`
+- browser override parity gaps for ternary weapon state coverage
+
+So the roadmap must explicitly upgrade from a **3-family bundle model** to a
+**full player-state bundle parity model**.
+
+### Open Design Questions (must be audited before implementation planning)
+
+- If a user adds a new PNG sprite, must they manually recreate every mounted/unmounted
+  and equipment-state variant, or can the product derive/reuse some of them?
+- Are helmet/armor/shield/weapon states separate sprite families, or are they encoded
+  as layer/state differences inside the same player-family contract?
+- Which states are mandatory for native-runtime parity, and which can remain deliberate
+  fallback-to-native behavior?
+- What is the minimal “no-template new XP” / template-less runtime apply contract that
+  remains truthful to the original runtime?
 
 ---
 

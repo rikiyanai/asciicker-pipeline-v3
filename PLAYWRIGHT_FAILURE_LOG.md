@@ -3762,3 +3762,74 @@ Added grid-step `<select>` control (1×1 through 16×16) to both surfaces:
 - [x] Both whole-sheet editor and legacy inspector surfaces fixed
 
 **User correction to preserve:** "It should not live in the upstream repo. I thought it was copied over."
+
+---
+
+## Workbench UI Audit: 39 Verified Issues
+
+**Date:** 2026-03-24
+**Status:** LOGGED
+**Source worksheet:** `/tmp/claude-workbench-ui-audit-2026-03-24.md` (ephemeral; durable findings copied here)
+
+### Canon reconciliation
+
+- The audit worksheet correctly identified that the old BUG-01 wording was stale.
+- Canon already reflects the grid fix: BUG-01 is `FIXED` in `docs/plans/2026-03-23-workbench-canonical-spec.md`, and the proof entry above documents commit `6fb3375`.
+- This entry preserves the remaining open UI findings so the `/tmp` worksheet is not the only record.
+
+### Severity summary
+
+- Critical: 3
+- High: 7
+- Medium: 14
+- Low: 15
+- Total: 39
+
+### Critical findings promoted to canon
+
+1. **BUG-02 — silent PNG decode/load failure**
+   - `workbench.js:6177-6182` wires `img.onload` only; there is no `img.onerror`.
+   - Result: corrupted or unsupported images can leave the source canvas blank with no user-facing error.
+
+2. **BUG-03 — duplicate `mouseleave` stroke-end path**
+   - `whole-sheet-init.js:375-380` binds both `_onStrokeEnd` and `_onCanvasMouseLeave` to `mouseleave`.
+   - Result: empty or spurious undo history entries when `mouseleave` triggers stroke-complete without an active stroke.
+
+3. **BUG-04 — overlay modal clips on mobile/tablet**
+   - `styles.css:97-106` uses `max-height: calc(100vh - 24px)` with internal overflow.
+   - Result: iOS Safari / short viewports can hide the bottom action area and make the scrollbar hard to discover.
+
+### High-signal open production issues
+
+4. **BUG-05 — grid overdraw / perf**
+   - `canvas.js:617-625` draws every grid cross for the full sheet rather than the visible viewport.
+   - Result: avoidable frame drops on large sheets or high zoom.
+
+5. **BUG-06 — known-bug dropdown fails silently**
+   - `workbench.js:494` swallows `fetchKnownBugs()` errors.
+   - Result: users see only the default option and may submit duplicate reports.
+
+6. **BUG-07 — disabled controls lack clear inactive styling**
+   - `styles.css:152` uses opacity only for `button:disabled`.
+   - Result: disabled buttons remain visually too close to enabled controls on the dark theme.
+
+7. **BUG-08 — legacy debug panel exposed**
+   - `workbench.html:233-236` keeps `#legacyGridDetails` visible in production.
+   - Result: users see a debug-only surface with no product value.
+
+8. **Responsive/layout gap at tablet widths**
+   - `styles.css:192-196` with only a `max-width: 1100px` wrap breakpoint.
+   - Result: Source + Grid panels are squeezed into an awkward in-between layout on tablets and narrow desktop windows.
+
+9. **Upload parameter fields are unexplained**
+   - `workbench.html:94-99` exposes `Angles`, `Frames CSV`, `Source Projs`, and `Render Res` with no help text.
+   - Result: new users cannot infer what these fields control.
+
+10. **Potential whole-sheet remount listener retention**
+    - `whole-sheet-init.js:661-937` installs many anonymous listeners; teardown depends on DOM destruction and GC.
+    - Result: long sessions may retain stale closures / old editor state after repeated remounts.
+
+### Remaining audit scope
+
+- The worksheet also logged 14 medium and 15 low issues covering save polling, missing progress indicators, slider debounce, nested scrollbars, discoverability, contrast, and other polish gaps.
+- Those are not all elevated into the canon bug table yet; this log preserves the audited counts and the highest-signal open issues.
