@@ -29,8 +29,8 @@ Max combinations per family: 2 x 2 x 2 x 3 = 24 variants.
 | `player` | Idle/walk | 24 (W=0,1,2) | 126x80 | 8 | [1,8] | 4 | All equipment combos |
 | `attack` | Attack swing | 8 (W=1 only) | 144x80 | 8 | [8] | 4 | Only exists when W>=1 (need weapon to attack) |
 | `plydie` | Death | 24 (W=0,1,2) | 110x88 | 8 | [5] | 3 | All equipment combos |
-| `wolfie` | Mount idle/walk | 24 (W=0,1,2) | 180x96-104 | 8 | varies | 4 | Mounted player on wolf |
-| `wolack` | Mount attack | 8 (W=1 only) | 160x104 | 8 | varies | 5-6 | Mounted attack (need weapon) |
+| `wolfie` | Mount idle/walk | 24 (W=0,1,2) | 180x96(H=0)/104(H=1) | 8 | [1,8] | 3–7 | Mounted on wolf. cell 10×(12\|13). Layers vary by equip. |
+| `wolack` | Mount attack | 8 (W=1 only) | 160x104 | 8 | [8] | 5–8 | Mounted attack. cell 10×13. Layers vary by equip. |
 
 ### NPC Families (also in sprites/)
 
@@ -75,52 +75,55 @@ weapon equipped.
 | `player-nude` | Not in any bundle template | Undressed player (before equipping anything) not customizable |
 | `wolfie` | Not in bundle | Mounted idle — player rides wolf with default skin when mounted |
 | `wolack` | Not in bundle | Mounted attack — same as above |
-| Browser debug override parity | `?overridemode=` lists are still binary `0000..1111` | Debug-only override paths still miss ternary W=2 coverage |
+| ~~Browser debug override parity~~ | ~~`?overridemode=` lists are still binary `0000..1111`~~ | **FIXED** (BUG-09) — all override paths now use ternary AHSW (W∈{0,1,2}) |
 | `bigbee` | Not in bundle | NPC enemy — would need a separate NPC skin system |
 
 ## Override Modes in Code
 
-There are now two distinct override-generation paths, and they do not match:
+All override-generation paths now use per-family AHSW semantics (BUG-09 fixed 2026-03-24).
+Shared rule: `FAMILY_W_RANGE` — player/plydie/wolfie get W∈{0,1,2} (`all_16`),
+attack/wolack get W∈{1,2} (`weapon_gte_1`).
 
 ### 1. Browser debug override modes in `web/workbench.js`
 
-These are query-param driven debug lists for the webbuild iframe (`?overridemode=`). They
-are still legacy binary loops.
+Query-param driven lists for the webbuild iframe (`?overridemode=`). Uses
+`_ahswNamesForFamilies()` helper with per-family W ranges.
 
-### Default "mounted" mode (49 names)
+### Default "mounted" mode (65 names)
 ```
 player-nude.xp
-player-{0000..1111}.xp   (16)
-wolfie-{0000..1111}.xp   (16)
-wolack-{0000..1111}.xp   (16)
+player-{AHSW}.xp   (24, W∈{0,1,2})
+wolfie-{AHSW}.xp   (24, W∈{0,1,2})
+wolack-{AHSW}.xp   (16, W∈{1,2})
 ```
 Excludes attack/plydie to avoid destabilizing NPCs that share those filenames.
 
-### `full_parity` mode (81 names)
+### `full_parity` mode (105 names)
 ```
 player-nude.xp
-player-{0000..1111}.xp   (16)
-attack-{0000..1111}.xp   (16)
-plydie-{0000..1111}.xp   (16)
-wolfie-{0000..1111}.xp   (16)
-wolack-{0000..1111}.xp   (16)
+player-{AHSW}.xp   (24, W∈{0,1,2})
+attack-{AHSW}.xp   (16, W∈{1,2})
+plydie-{AHSW}.xp   (24, W∈{0,1,2})
+wolfie-{AHSW}.xp   (24, W∈{0,1,2})
+wolack-{AHSW}.xp   (16, W∈{1,2})
 ```
 WARNING: FS-global — NPCs sharing attack/plydie filenames inherit the custom skin.
-
-### These browser debug modes still do NOT cover W=2 variants
-Both loops use binary encoding (i=0..15 → `0000..1111`), so they still miss the 8 W=2
-variants per family.
 
 ### 2. Server-side bundle payload override names in `service.py`
 
 This is the path used by the current bundle-native workbench acceptance flow:
 
-- `all_16` emits ternary W values (`0/1/2`) for enabled families
-- `weapon_gte_1` emits W values `1` and `2`
-- this is the current product-truth path for bundle payload injection
+- `all_16` emits W∈{0,1,2} for player/plydie (wolfie not yet in ENABLED_FAMILIES)
+- `weapon_gte_1` emits W∈{1,2} for attack (wolack not yet in ENABLED_FAMILIES)
+- Non-bundle generators now exactly match these semantics per-family
 
-So the W=2 gap now applies to the browser debug override lists, not the server-side bundle
-payload path.
+### 3. Native sandbox + termpp skin lab
+
+`_termpp_skin_override_names()` and `DEFAULT_OVERRIDE_SETS` in `termpp_skin_lab.js` use
+the same per-family rule (105 names). All paths are now at parity.
+
+**Open residual:** Committed native attack/wolack sprites on disk have W=1 only, while the
+generated override contract includes W∈{1,2}. This is an inherited runtime-truth question.
 
 ## Gameplay Trigger Map
 
@@ -155,16 +158,16 @@ These are related, but not interchangeable. A bundle can include more families
 without yet covering all gameplay transitions, and vice versa.
 
 ### Priority 1: Mount support (wolfie + wolack)
-- Already in the default override set
+- Already in the default override set (65 names in mounted mode: 24 wolfie + 16 wolack + player)
 - Gives full coverage for mounted gameplay
-- 32 additional XP files (16 wolfie + 16 wolack)
-- Different dimensions from player (180x96-104 and 160x104)
-- Would need new template entries in `config/template_registry.json`
+- 32 committed sprites (24 wolfie + 8 wolack); override names cover 40 per-family-semantic slots
+- Different dimensions from player: wolfie 180×(96|104), wolack 160×104
+- Variable layer counts: wolfie 3–7, wolack 5–8 (driven by equipment overlays)
+- Would need new template entries in `config/template_registry.json` with per-variant dimension/layer handling
 
-### Priority 2: Browser debug override parity
-- Extend `web/workbench.js` debug override loops to ternary W coverage
-- Align browser debug override names with current server-side bundle payload behavior
-- Removes the remaining W=2 mismatch between debug injection and bundle payload injection
+### ~~Priority 2: Browser debug override parity~~ — DONE (BUG-09 fixed 2026-03-24)
+- All override paths now use ternary AHSW (W∈{0,1,2})
+- Browser debug, native sandbox, and termpp skin lab all match bundle payload behavior
 
 ### Priority 3: player-nude
 - Single file, simple addition

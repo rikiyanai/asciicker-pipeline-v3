@@ -56,11 +56,25 @@ _TERM_STREAM_LOCK = threading.Lock()
 _TERM_STREAMS: dict[str, dict[str, Any]] = {}
 
 
+_FAMILY_W_RANGE: dict[str, tuple[int, ...]] = {
+    "player": (0, 1, 2),
+    "attack": (1, 2),
+    "plydie": (0, 1, 2),
+    "wolfie": (0, 1, 2),
+    "wolack": (1, 2),
+}
+"""Per-family weapon-digit range matching product contract (all_16 vs weapon_gte_1)."""
+
+
 def _termpp_skin_override_names() -> list[str]:
+    """Override names using per-family AHSW semantics."""
     out = ["player-nude.xp"]
-    for prefix in ("player", "attack", "plydie", "wolfie", "wolack"):
-        for i in range(16):
-            out.append(f"{prefix}-{i:04b}.xp")
+    for prefix, w_range in _FAMILY_W_RANGE.items():
+        for a in range(2):
+            for h in range(2):
+                for s in range(2):
+                    for w in w_range:
+                        out.append(f"{prefix}-{a}{h}{s}{w}.xp")
     return out
 
 

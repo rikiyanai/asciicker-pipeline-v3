@@ -26,29 +26,34 @@
     [128, 64, 0],
   ];
   const OVERRIDE_MODE = String(params.get("overridemode") || "mounted").trim().toLowerCase();
-  const WEBBUILD_DEFAULT_OVERRIDE_NAMES = (() => {
-    if (OVERRIDE_MODE === "full_parity") {
-      // Full ASCIIID parity: player-nude + [player|attack|plydie|wolfie|wolack]-[0000..1111]
-      // WARNING: FS-global — NPCs sharing these filenames inherit the custom skin (B1).
-      // Use only for explicit debug via ?overridemode=full_parity.
-      const out = ["player-nude.xp"];
-      for (const prefix of ["player", "attack", "plydie", "wolfie", "wolack"]) {
-        for (let i = 0; i < 16; i++) {
-          out.push(`${prefix}-${i.toString(2).padStart(4, "0")}.xp`);
-        }
-      }
-      return out;
-    }
-    // Default "mounted": player + wolfie + wolack (49 names).
-    // Mounted player spawn loads all three families at startup.
-    // Excludes attack/plydie to avoid destabilizing NPCs that share those.
+  // Per-family weapon-digit range matching product contract (all_16 vs weapon_gte_1).
+  const FAMILY_W_RANGE = {
+    player: [0, 1, 2], attack: [1, 2], plydie: [0, 1, 2],
+    wolfie: [0, 1, 2], wolack: [1, 2],
+  };
+  function _ahswNamesForFamilies(families) {
     const out = ["player-nude.xp"];
-    for (const prefix of ["player", "wolfie", "wolack"]) {
-      for (let i = 0; i < 16; i++) {
-        out.push(`${prefix}-${i.toString(2).padStart(4, "0")}.xp`);
-      }
+    for (const prefix of families) {
+      const wRange = FAMILY_W_RANGE[prefix] || [0, 1, 2];
+      for (let a = 0; a < 2; a++)
+        for (let h = 0; h < 2; h++)
+          for (let s = 0; s < 2; s++)
+            for (const w of wRange)
+              out.push(`${prefix}-${a}${h}${s}${w}.xp`);
     }
     return out;
+  }
+  const WEBBUILD_DEFAULT_OVERRIDE_NAMES = (() => {
+    if (OVERRIDE_MODE === "full_parity") {
+      // Full ASCIIID parity: player-nude + all 5 families with per-family W range.
+      // WARNING: FS-global — NPCs sharing these filenames inherit the custom skin (B1).
+      // Use only for explicit debug via ?overridemode=full_parity.
+      return _ahswNamesForFamilies(["player", "attack", "plydie", "wolfie", "wolack"]);
+    }
+    // Default "mounted": player + wolfie + wolack.
+    // Mounted player spawn loads all three families at startup.
+    // Excludes attack/plydie to avoid destabilizing NPCs that share those.
+    return _ahswNamesForFamilies(["player", "wolfie", "wolack"]);
   })();
   const WEBBUILD_READY_TIMEOUT_MS = 180000;
   const DEFAULT_FLATMAP_NAME = "game_map_y8_original_game_map.a3d";

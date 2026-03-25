@@ -3857,11 +3857,16 @@ Grid toggle overlay drew simple horizontal/vertical lines instead of REXPaint-st
    - The user-facing workbench path still requires `session_id -> export -> xp_path`, so “template-less apply”
      is not yet a first-class product flow.
 
-5. **There is a real W-encoding mismatch bug outside the bundle path.**
-   - `_action_override_names()` emits ternary `W=0/1/2`.
-   - `_termpp_skin_override_names()`, `WEBBUILD_DEFAULT_OVERRIDE_NAMES`, and `termpp_skin_lab.js` still use
-     binary `0000..1111` naming.
-   - Impact: non-bundle override paths can fall back to native sprites for `W=2` states.
+5. **W-encoding mismatch bug (BUG-09) — FIXED.**
+   - `_action_override_names()` used per-family W ranges: `all_16` (W∈{0,1,2}) vs `weapon_gte_1` (W∈{1,2}).
+   - `_termpp_skin_override_names()`, `WEBBUILD_DEFAULT_OVERRIDE_NAMES`, and `termpp_skin_lab.js` used
+     binary `0000..1111` naming — now fixed to per-family AHSW semantics matching the bundle contract.
+   - Fix: shared `FAMILY_W_RANGE` rule applied to all four generators. player/plydie/wolfie get W∈{0,1,2},
+     attack/wolack get W∈{1,2}.
+   - Before: 81 override names (1+5×16). After: 105 names (per-family). Mounted mode: 49→65.
+   - For enabled bundle families, non-bundle names exactly equal bundle-path names. 83/83 tests pass.
+   - **Open residual:** committed native attack/wolack sprite inventory has W=1 only, while the generated
+     override contract includes W=2. This is an inherited runtime-truth question, not a naming bug.
 
 ### Canon effect
 
@@ -3916,4 +3921,76 @@ Grid toggle overlay drew simple horizontal/vertical lines instead of REXPaint-st
 **Reason:** audit findings logged at afa03b2, absorbed into canon
 **References rewritten:** 2 file(s)
 **Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## BUG-09 FIXED: Non-Bundle Override Naming Parity with Product Contract
+
+**Date:** 2026-03-24
+**Bug:** Non-bundle skin override generators used binary AHSW encoding (0000–1111), missing all W=2 equipment variants and ignoring per-family weapon semantics.
+**Root cause:** `_termpp_skin_override_names()` used `range(16)` with `{i:04b}` binary formatting; browser-side generators used `i.toString(2).padStart(4,"0")` or hardcoded binary name lists. All families got the same flat 16-name set.
+
+### Fix
+
+Extracted a shared per-family W-range rule (`FAMILY_W_RANGE`) matching the product contract:
+- player, plydie, wolfie: `all_16` → W∈{0,1,2} (24 names each)
+- attack, wolack: `weapon_gte_1` → W∈{1,2} (16 names each)
+
+Applied the same rule to all four generators without duplicating ad-hoc loops.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `src/pipeline_v2/service.py:59` | Added `_FAMILY_W_RANGE` dict; `_termpp_skin_override_names()` iterates per-family W range |
+| `web/workbench.js:29` | Added `FAMILY_W_RANGE` + `_ahswNamesForFamilies()` helper; both override modes use it |
+| `runtime/termpp-skin-lab-static/termpp_skin_lab.js:4` | Added `FAMILY_W_RANGE` + `_ahswNames()` helper; `DEFAULT_OVERRIDE_SETS.player_common` uses it |
+| `web/termpp_skin_lab.js:4` | Same as above (identical copy) |
+
+### Before/after counts
+
+| Path | Before | After |
+|------|--------|-------|
+| `_termpp_skin_override_names()` | 81 (1+5×16) | 105 (per-family) |
+| `WEBBUILD_DEFAULT_OVERRIDE_NAMES` (full_parity) | 81 | 105 |
+| `WEBBUILD_DEFAULT_OVERRIDE_NAMES` (mounted) | 49 (1+3×16) | 65 |
+| `DEFAULT_OVERRIDE_SETS.player_common` | 81 | 105 |
+
+### Parity proof
+
+- For enabled bundle families (player/attack/plydie), non-bundle names exactly equal bundle-path names.
+- wolfie/wolack non-bundle names follow the same `all_16`/`weapon_gte_1` semantics.
+- All 89 committed sprite filenames (excluding 2 verifier artifacts) covered.
+- 83/83 unit tests pass.
+
+### Open residual
+
+Committed native attack/wolack sprite inventory on disk has W=1 only (8 files each), while the generated override contract includes W∈{1,2} (16 names each). This is an inherited runtime-truth question — the bundle path's `weapon_gte_1` already generates W=2 names for attack, and the non-bundle path now matches. Whether W=2 sprites should exist on disk is a separate investigation.
+
+### Mounted family specs extracted (evidence-backed)
+
+wolfie: 180×(96|104) px, cell 10×(12|13), 8 angles, projs 2, anims [1,8], 3–7 layers (variable).
+wolack: 160×104 px, cell 10×13, 8 angles, projs 2, anims [8], 5–8 layers (variable).
+Full spec evidence at `/tmp/claude-mounted-family-specs.md`.
+
+### Legacy "run around for 10 sec" runtime lane
+
+The native TERM++ launch-and-observe path still exists as wiring. It is an **external diagnostic
+lane**, not an in-repo acceptance lane. Preserving it intentionally requires preserving:
+
+| Surface | Location |
+|---------|----------|
+| `verifyProfile = legacy_verify_e2e` | `web/workbench.html:372`, `web/workbench.js:620` |
+| Command template text | `src/pipeline_v2/service.py:2495` |
+| `/api/workbench/open-termpp-skin` | `src/pipeline_v2/app.py:638` |
+| `/api/workbench/termpp-stream/start` | `src/pipeline_v2/app.py:673` |
+| `_stage_termpp_skin_sandbox()` | `src/pipeline_v2/service.py:2587` |
+| TERM++ embed-stream logic | `src/pipeline_v2/service.py:2649` |
+| `webbuildQuickTestBtn` / Test This Skin | `web/workbench.html:313` (canon-proven as R1) |
+
+The **in-repo canonical proof lane** for skin testing is the iframe Test This Skin / Skin Dock
+path (R1), which requires no external TERM++ binary. The legacy native lane requires `game_term`
+in `.run/` and is useful for visual runtime verification but should not be treated as acceptance
+evidence.
 

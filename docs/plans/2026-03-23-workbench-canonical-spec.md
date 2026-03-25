@@ -58,7 +58,7 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 3. **M2-D full SAR workflow coverage** — 31/96 actions PROVEN (was 20). 31 WS selectors, 77 registry entries, 2 recipes. W15 three-part proof committed. S3-S6/G5-G6/G9-G11 proven. Remaining 56 WIRED actions need committed proof in future M2-D/E passes.
 4. **Workbench UI audit follow-up** — 2026-03-24 audit found 39 user-facing issues after BUG-01 was fixed: 3 critical, 7 high, 14 medium, 15 low. Immediate open-bug focus is silent PNG decode failure, double mouseleave stroke completion, mobile modal clipping, and grid overdraw/perf.
 5. **PB-03 UX hardening** — confirm dialog on session-boundary loads. Cross-session undo remains architecturally out of scope. Low-priority UX refinement.
-6. **Bundle-family expansion roadmap is still under-scoped** — the 2026-03-24 player-state parity audit confirmed three concrete gaps: (a) non-bundle override paths still miss `W=2` variants, (b) mounted families exist in runtime/debug surfaces but not in bundle templates or native family builders, and (c) the native sandbox overwrite helper is template-agnostic internally while the exposed workbench flow is still session/export driven. This is a roadmap gap, not just a verifier gap.
+6. **Bundle-family expansion roadmap is still under-scoped** — the 2026-03-24 player-state parity audit confirmed three concrete gaps: (a) non-bundle override naming mismatch — **FIXED** (BUG-09: all override paths now use per-family W semantics matching the bundle contract), (b) mounted families exist in runtime/debug surfaces but not in bundle templates or native family builders, and (c) the native sandbox overwrite helper is template-agnostic internally while the exposed workbench flow is still session/export driven. Gaps (b) and (c) remain roadmap work.
 
 This stack is execution priority, not timeless truth. Re-evaluate when any sub-phase status changes.
 
@@ -76,7 +76,7 @@ This stack is execution priority, not timeless truth. Re-evaluate when any sub-p
 | BUG-06 | Bug-report known-issue dropdown fails silently when `fetchKnownBugs()` errors | OPEN | `workbench.js:494` swallows the fetch failure. Users only see the default option and may file duplicates without knowing the dropdown failed to load. |
 | BUG-07 | Disabled controls are too visually similar to enabled controls on the dark theme | OPEN | `styles.css:152` uses opacity only. Grid-panel controls and similar disabled buttons look merely dimmed, especially on touch devices with no cursor feedback. |
 | BUG-08 | Legacy Char Grid debug panel is exposed in production UI | OPEN | `workbench.html:233-236` leaves `<details id="legacyGridDetails" class="legacy-grid-debug">` visible to all users even though it is a debug-only surface. |
-| BUG-09 | Non-bundle skin override paths still use binary W encoding and miss `W=2` equipment variants | OPEN | `_termpp_skin_override_names()` in `service.py`, `WEBBUILD_DEFAULT_OVERRIDE_NAMES` in `workbench.js`, and `DEFAULT_OVERRIDE_SETS` in `termpp_skin_lab.js` still generate `0000..1111` binary names. Only the server bundle path (`_action_override_names`) emits ternary `W=0/1/2` names. |
+| BUG-09 | Non-bundle skin override paths still use binary W encoding and miss `W=2` equipment variants | FIXED | Non-bundle override generators now align with current product family semantics: shared `FAMILY_W_RANGE` rule applies `all_16` (W∈{0,1,2}) to player/plydie/wolfie and `weapon_gte_1` (W∈{1,2}) to attack/wolack. One rule concept used by all four generators (`_termpp_skin_override_names`, `WEBBUILD_DEFAULT_OVERRIDE_NAMES`, both `DEFAULT_OVERRIDE_SETS`). Override count: 81→105 (full parity), 49→65 (mounted mode). For enabled bundle families (player/attack/plydie), non-bundle names exactly equal bundle-path names. Tests pass. **Open residual:** committed native attack/wolack sprite inventory on disk (W=1 only) is narrower than the generated override contract (W∈{1,2}); this is an inherited runtime-truth question, not a naming bug. |
 
 **UI audit note:** the 2026-03-24 workbench UI audit found 39 verified issues total (3 critical, 7 high, 14 medium, 15 low). The active-bug table above promotes the critical issues and highest-signal open production issues into canon; the broader severity breakdown is preserved in `PLAYWRIGHT_FAILURE_LOG.md`.
 
@@ -122,7 +122,7 @@ It is distinct from family-count expansion.
    - expand from the current 3-family product truth to the full player-state set:
      `player-nude`, `player`, `attack`, `plydie`, `wolfie`, `wolack`
    - include ternary `W=0/1/2` coverage anywhere the runtime actually distinguishes it
-   - remove remaining binary-only debug assumptions from browser override lists
+   - ~~remove remaining binary-only debug assumptions from browser override lists~~ **DONE** (BUG-09)
 
 2. **Mounted/unmounted parity as a first-class milestone goal**
    - mounted idle/walk and mounted attack must not fall back to native defaults
@@ -191,15 +191,39 @@ The player-state parity audit established these current truths:
    - The exposed workbench entrypoint still requires `session_id -> export -> xp_path`, so the
      user-facing flow remains template/session driven today.
 
-5. **W-encoding parity is currently inconsistent across override paths.**
-   - Server-side bundle payload generation uses ternary `W=0/1/2`.
-   - Native sandbox and browser/debug override lists still use binary `W=0/1`, so custom skins
-     can fall back to native art for `W=2` states outside the bundle path.
+5. **W-encoding parity now aligns with product family semantics (BUG-09 FIXED).**
+   - All override generators use a shared per-family W-range rule: `all_16` (W∈{0,1,2}) for
+     player/plydie/wolfie, `weapon_gte_1` (W∈{1,2}) for attack/wolack.
+   - Non-bundle names exactly equal bundle-path names for enabled families.
+   - **Open residual:** committed native attack/wolack sprite inventory on disk has W=1 only,
+     while the generated override contract includes W=2. This is an inherited runtime-truth
+     question, not a naming bug.
 
-### Open Design Questions (must be audited before implementation planning)
+### Wolfie / Wolack Template Specs (Proven from Committed XP)
 
-- What are the exact `wolfie` / `wolack` template specs (dims, frame counts, layer patterns,
-  and L0/L1 metadata requirements) needed for truthful template/native-builder expansion?
+Extracted from committed sprites on 2026-03-24. Full evidence at `/tmp/claude-mounted-family-specs.md`.
+
+| Property | wolfie (mounted idle) | wolack (mounted attack) |
+|----------|----------------------|------------------------|
+| Files | 24 (all_16, W=0/1/2) | 8 (W=1 only) |
+| Width | 180 | 160 |
+| Height | 96 (H=0) / 104 (H=1) | 104 (fixed) |
+| Angles | 8 | 8 |
+| Projs | 2 | 2 |
+| Anims | [1,8] | [8] |
+| cell_w | 10 | 10 |
+| cell_h | 12 (H=0) / 13 (H=1) | 13 |
+| Layers | 3–7 (variable by equip) | 5–8 (variable by equip) |
+| L0 metadata | "8","1","8" | "8","8" |
+| ahsw_range | all_16 | weapon_gte_1 |
+
+**Key structural differences from player/attack/plydie:**
+- Variable layer counts driven by equipment overlay complexity (player=4, attack=4, plydie=3 — all fixed).
+- wolfie height depends on helmet state (H digit), requiring two dimension variants.
+- wolack has no W=2 variants (same as attack).
+
+### Remaining Open Design Questions
+
 - Does the original runtime ever compose equipment visuals dynamically, or are the committed
   per-AHSW XP files always the whole contract? Current repo evidence only proves filename-level
   selection in the custom-skin pipeline.
@@ -207,6 +231,8 @@ The player-state parity audit established these current truths:
   treated as blocking parity gaps?
 - What is the minimal lightweight validation contract for a first-class template-less native
   apply path once session/template coupling is removed from the user flow?
+- How should the template registry handle wolfie's variable dimensions (two xp_dims entries?
+  per-variant layer counts?) and wolack's restricted W range?
 
 ---
 

@@ -1,90 +1,26 @@
 (() => {
   "use strict";
 
+  // Per-family weapon-digit range matching product contract (all_16 vs weapon_gte_1).
+  const FAMILY_W_RANGE = {
+    player: [0, 1, 2], attack: [1, 2], plydie: [0, 1, 2],
+    wolfie: [0, 1, 2], wolack: [1, 2],
+  };
+  function _ahswNames(families) {
+    const out = ["player-nude.xp"];
+    for (const prefix of families) {
+      const wRange = FAMILY_W_RANGE[prefix] || [0, 1, 2];
+      for (let a = 0; a < 2; a++)
+        for (let h = 0; h < 2; h++)
+          for (let s = 0; s < 2; s++)
+            for (const w of wRange)
+              out.push(`${prefix}-${a}${h}${s}${w}.xp`);
+    }
+    return out;
+  }
+
   const DEFAULT_OVERRIDE_SETS = {
-    player_common: [
-      "player-nude.xp",
-      "player-0000.xp",
-      "player-0001.xp",
-      "player-0010.xp",
-      "player-0011.xp",
-      "player-0100.xp",
-      "player-0101.xp",
-      "player-0110.xp",
-      "player-0111.xp",
-      "player-1000.xp",
-      "player-1001.xp",
-      "player-1010.xp",
-      "player-1011.xp",
-      "player-1100.xp",
-      "player-1101.xp",
-      "player-1110.xp",
-      "player-1111.xp",
-      "attack-0000.xp",
-      "attack-0001.xp",
-      "attack-0010.xp",
-      "attack-0011.xp",
-      "attack-0100.xp",
-      "attack-0101.xp",
-      "attack-0110.xp",
-      "attack-0111.xp",
-      "attack-1000.xp",
-      "attack-1001.xp",
-      "attack-1010.xp",
-      "attack-1011.xp",
-      "attack-1100.xp",
-      "attack-1101.xp",
-      "attack-1110.xp",
-      "attack-1111.xp",
-      "plydie-0000.xp",
-      "plydie-0001.xp",
-      "plydie-0010.xp",
-      "plydie-0011.xp",
-      "plydie-0100.xp",
-      "plydie-0101.xp",
-      "plydie-0110.xp",
-      "plydie-0111.xp",
-      "plydie-1000.xp",
-      "plydie-1001.xp",
-      "plydie-1010.xp",
-      "plydie-1011.xp",
-      "plydie-1100.xp",
-      "plydie-1101.xp",
-      "plydie-1110.xp",
-      "plydie-1111.xp",
-      "wolfie-0000.xp",
-      "wolfie-0001.xp",
-      "wolfie-0010.xp",
-      "wolfie-0011.xp",
-      "wolfie-0100.xp",
-      "wolfie-0101.xp",
-      "wolfie-0110.xp",
-      "wolfie-0111.xp",
-      "wolfie-1000.xp",
-      "wolfie-1001.xp",
-      "wolfie-1010.xp",
-      "wolfie-1011.xp",
-      "wolfie-1100.xp",
-      "wolfie-1101.xp",
-      "wolfie-1110.xp",
-      "wolfie-1111.xp",
-      "wolack-0000.xp",
-      "wolack-0001.xp",
-      "wolack-0010.xp",
-      "wolack-0011.xp",
-      "wolack-0100.xp",
-      "wolack-0101.xp",
-      "wolack-0110.xp",
-      "wolack-0111.xp",
-      "wolack-1000.xp",
-      "wolack-1001.xp",
-      "wolack-1010.xp",
-      "wolack-1011.xp",
-      "wolack-1100.xp",
-      "wolack-1101.xp",
-      "wolack-1110.xp",
-      "wolack-1111.xp",
-    ],
+    player_common: _ahswNames(["player", "attack", "plydie", "wolfie", "wolack"]),
     single_player_nude: ["player-nude.xp"],
     all_visible_test: [
       "player-nude.xp",
