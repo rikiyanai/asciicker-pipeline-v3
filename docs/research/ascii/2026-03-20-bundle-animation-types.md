@@ -140,6 +140,20 @@ it falls back to the built-in WASM data package version.
 
 ## Recommended Future Bundle Expansions
 
+This research note separates two different planning axes that should not be collapsed:
+
+1. **Runtime-family expansion**
+   - which filename families are authorable/overrideable at all
+   - e.g. `player-nude`, `player`, `attack`, `plydie`, `wolfie`, `wolack`
+
+2. **Gameplay/state coverage**
+   - when the runtime switches between those families/variants
+   - e.g. mounted vs unmounted, nude/spawn vs equipped, attack/death,
+     AHSW equipment transitions, and separate non-player item/UI tracks
+
+These are related, but not interchangeable. A bundle can include more families
+without yet covering all gameplay transitions, and vice versa.
+
 ### Priority 1: Mount support (wolfie + wolack)
 - Already in the default override set
 - Gives full coverage for mounted gameplay
@@ -161,6 +175,19 @@ it falls back to the built-in WASM data package version.
 - Would need a separate template family and NPC-aware override system
 - Risk: FS-global overrides affect all entities sharing a filename
 - Lower priority — player skin is the core use case
+
+## Explicit Product/Roadmap Questions Still Open
+
+- If a user adds a new PNG sprite, must they manually recreate every mounted/unmounted
+  and equipment-state variant, or can some runtime states legally reuse/derive from
+  a smaller authored subset?
+- Are helmet/armor/shield/weapon states effectively layer/state differences inside
+  the player-family contract, or do some equipment classes require distinct authored
+  families/assets?
+- What is the minimum truthful contract for template-less native-runtime apply, as
+  distinct from browser/webbuild debug injection?
+- Which missing family/state combinations are blocking for “full player-state parity,”
+  and which are acceptable fallback-to-native behavior?
 
 ## Source Files
 

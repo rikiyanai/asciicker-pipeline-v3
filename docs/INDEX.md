@@ -293,7 +293,7 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
 ## Bundle & Animation Research
 
 - `docs/research/ascii/2026-03-20-bundle-animation-types.md`
-  - complete map of all 5 player sprite families (player, attack, plydie, wolfie, wolack), AHSW equipment encoding, current bundle-template coverage, gameplay trigger states, and remaining expansion priorities; note the browser debug override lists still lag the server-side ternary W generation
+  - complete map of all 5 player sprite families (player, attack, plydie, wolfie, wolack), AHSW equipment encoding, current bundle-template coverage, gameplay trigger states, and the two planning axes that must stay separate: runtime-family expansion vs gameplay/state coverage; also records the open audit questions for template-less native-runtime apply, mounted/unmounted parity, and equipment-state coverage
 - `docs/research/ascii/2026-03-21-player-sprite-semantic-dictionary-seed.md`
   - seed semantic dictionary for `player-0100.xp` L2 with verified glyph inventory, face/shirt/pants/boots region labels, palette-role mapping, and a proposed machine-readable schema for future agent-driven sprite edits
 - `docs/research/ascii/semantic_maps/` — machine-readable JSON semantic dictionaries

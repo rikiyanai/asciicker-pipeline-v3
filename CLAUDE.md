@@ -74,6 +74,44 @@ Short version:
 - If the verifier cannot express a UI workflow, that is a verifier gap — fix the verifier, do not bypass it with API calls.
 - Citations: AGENTS.md:29,46; AGENT_PROTOCOL.md:305-354; workbench-canonical-spec.md:67-74.
 
+### Acceptance Rules (Explicit)
+
+- A workflow may be called `PROVEN` only if the user-facing actions are performed through the shipped DOM/UI surface.
+- Read-only observation after a UI action is allowed:
+  - `getState()`
+  - `readFrameCell()`
+  - `frameSignature()`
+  - screenshots
+- Action-driving through these paths is NOT acceptance:
+  - `fetch()`
+  - `page.evaluate(...)` that clicks, mutates state, dispatches actions, or calls app methods
+  - `window.__wb_debug`
+  - `window.__wholeSheetEditor.*`
+- If a runner uses diagnostic-only action driving, its result must be labeled `diagnostic`, `structural-contract`, or `unverified`, never `PASS`, `PROVEN`, or acceptance.
+- A green runner is not enough by itself. Promotion to `PROVEN` requires:
+  1. UI-driven action path
+  2. diagnostic verification of the expected outcome
+  3. committed artifact or failure-log evidence
+  4. canon/docs updated to match the real proof state
+- If any step in a claimed acceptance workflow is action-driven through `page.evaluate(...)`, the acceptance claim is invalid until that step is replaced with a real UI gesture.
+
+## Anti-Overclaiming Contract
+
+- Separate **code state**, **proof state**, and **canon/doc state**. Do not collapse them.
+- Do not use celebratory, amplified, or completion-signaling language unless the claim is fully evidenced.
+- Never say `done`, `complete`, `fixed`, `working`, `ready`, `resolved`, or `verified` without exact evidence.
+- Prefer these labels: `PROVEN`, `WIRED`, `PARTIAL`, `BLOCKED`, `DEFERRED`, `PLANNED`.
+- If something is implemented but unproven, say `implemented, unproven`.
+- If something is wired but not verified, say `wired, unverified`.
+- If docs and code disagree, say so explicitly.
+- Do not infer closure from green local behavior alone.
+- Lead with blockers, contradictions, and residual risk, not optimistic summary language.
+- Before any conclusion, state:
+  1. what is strictly proven
+  2. what is only implemented
+  3. what is still assumed
+  4. what would make the claim false
+
 ## Current High-Signal Truths
 
 - `PLAYWRIGHT_FAILURE_LOG.md` is the current log of record for M1 closeout and verifier fixes.
