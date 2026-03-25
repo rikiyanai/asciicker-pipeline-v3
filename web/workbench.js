@@ -6349,6 +6349,7 @@
     if (typeof j.job_id === "string") state.actionStates[actionKey].jobId = j.job_id;
     renderBundleActionTabs();
     updateBundleUI();
+    updateWebbuildUI();
     return { ok: true, response: j };
   }
 

@@ -535,6 +535,126 @@ function _pasteAt(cx, cy) {
   _cancelPasteMode();
 }
 
+// ── Selection transforms (W24-W27) ──
+
+/**
+ * Flip a 2D cell matrix horizontally (reverse each row).
+ * Ported from workbench.js selectionMatrixFlipH.
+ */
+function _selectionMatrixFlipH(matrix) {
+  return (Array.isArray(matrix) ? matrix : []).map(row =>
+    Array.isArray(row) ? [...row].reverse().map(c => ({ ...c })) : []
+  );
+}
+
+/**
+ * Flip a 2D cell matrix vertically (reverse row order).
+ * Ported from workbench.js selectionMatrixFlipV.
+ */
+function _selectionMatrixFlipV(matrix) {
+  return [...(Array.isArray(matrix) ? matrix : [])].reverse().map(row =>
+    Array.isArray(row) ? row.map(c => ({ ...c })) : []
+  );
+}
+
+/**
+ * Rotate a 2D cell matrix 90 degrees.
+ * Ported from workbench.js selectionMatrixRotate.
+ * @param {boolean} clockwise — true for CW, false for CCW
+ */
+function _selectionMatrixRotate(matrix, clockwise) {
+  const src = Array.isArray(matrix) ? matrix : [];
+  const h = src.length;
+  const w = h > 0 && Array.isArray(src[0]) ? src[0].length : 0;
+  if (!h || !w) return [];
+  const out = [];
+  if (clockwise) {
+    for (let y = 0; y < w; y++) {
+      const row = [];
+      for (let x = 0; x < h; x++) row.push({ ...(src[h - 1 - x]?.[y] || { glyph: 0, fg: [255, 255, 255], bg: [0, 0, 0] }) });
+      out.push(row);
+    }
+  } else {
+    for (let y = 0; y < w; y++) {
+      const row = [];
+      for (let x = 0; x < h; x++) row.push({ ...(src[x]?.[w - 1 - y] || { glyph: 0, fg: [255, 255, 255], bg: [0, 0, 0] }) });
+      out.push(row);
+    }
+  }
+  return out;
+}
+
+/**
+ * Apply a transform to the current whole-sheet selection.
+ * One undoable operation: triggers onStrokeStart once at the beginning,
+ * writes all cells, then triggers onStrokeComplete once at the end.
+ * For rotate, updates selection bounds to reflect width/height swap.
+ * @param {'rot_cw'|'rot_ccw'|'flip_h'|'flip_v'} kind
+ * @returns {boolean} true if transform applied
+ */
+function _transformSelection(kind) {
+  const tool = editorState.selectTool;
+  if (!tool) return false;
+  const bounds = tool.getSelectionBounds();
+  if (!bounds) return false;
+  const canvas = editorState.canvas;
+  if (!canvas) return false;
+
+  // Read source matrix from canvas
+  const srcMatrix = [];
+  for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
+    const row = [];
+    for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
+      const cell = canvas.getCell(x, y);
+      row.push(cell ? { glyph: cell.glyph, fg: [...cell.fg], bg: [...cell.bg] } : { glyph: 0, fg: [255, 255, 255], bg: [0, 0, 0] });
+    }
+    srcMatrix.push(row);
+  }
+
+  // Apply transform
+  let dstMatrix;
+  if (kind === 'flip_h') dstMatrix = _selectionMatrixFlipH(srcMatrix);
+  else if (kind === 'flip_v') dstMatrix = _selectionMatrixFlipV(srcMatrix);
+  else if (kind === 'rot_cw') dstMatrix = _selectionMatrixRotate(srcMatrix, true);
+  else if (kind === 'rot_ccw') dstMatrix = _selectionMatrixRotate(srcMatrix, false);
+  else return false;
+
+  const dstH = dstMatrix.length;
+  const dstW = dstH > 0 ? dstMatrix[0].length : 0;
+  if (!dstH || !dstW) return false;
+
+  // Check that rotated result fits on canvas
+  if (bounds.x + dstW > canvas.width || bounds.y + dstH > canvas.height) return false;
+
+  // setCell proxy fires onStrokeStart on first cell edit — one undo snapshot.
+  // Clear source region first
+  for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
+    for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
+      canvas.setCell(x, y, 0, [255, 255, 255], [0, 0, 0]);
+    }
+  }
+
+  // Write transformed cells
+  for (let dy = 0; dy < dstH; dy++) {
+    for (let dx = 0; dx < dstW; dx++) {
+      const c = dstMatrix[dy][dx];
+      canvas.setCell(bounds.x + dx, bounds.y + dy, c.glyph, c.fg, c.bg);
+    }
+  }
+
+  // Force stroke-complete for workbench undo snapshot
+  editorState._strokeDirty = false;
+  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
+
+  // Update selection bounds to match transformed dimensions
+  tool.startSelection(bounds.x, bounds.y);
+  tool.updateSelection(bounds.x + dstW - 1, bounds.y + dstH - 1);
+  tool.endSelection();
+
+  canvas.render();
+  return true;
+}
+
 // ── Eyedropper sample ──
 
 function _applyEyedropperSample(glyph, fg, bg) {
@@ -681,6 +801,18 @@ function _onKeyDown(e) {
   // Delete — W22 delete/clear selection
   if (e.key === 'Delete' || e.key === 'Backspace') {
     _deleteSelection();
+    e.preventDefault();
+    return;
+  }
+
+  // W24/W25 — rotate selection CW/CCW (matches inspector [ ] keys)
+  if (e.key === ']') {
+    _transformSelection('rot_cw');
+    e.preventDefault();
+    return;
+  }
+  if (e.key === '[') {
+    _transformSelection('rot_ccw');
     e.preventDefault();
     return;
   }
@@ -1124,6 +1256,45 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   toolSelectBtn.title = 'Selection tool (S)';
   toolSelectBtn.addEventListener('click', () => _switchTool('select'));
   drawCol.appendChild(toolSelectBtn);
+
+  // W24-W27: Selection transform buttons (shipped UI triggers)
+  const transformGroup = document.createElement('div');
+  transformGroup.className = 'ws-tool-group';
+  transformGroup.style.cssText = 'margin-top:4px; gap:2px;';
+
+  const rotCwBtn = document.createElement('button');
+  rotCwBtn.id = 'wsRotateCW';
+  rotCwBtn.textContent = 'Rot CW';
+  rotCwBtn.className = 'ws-tool-btn';
+  rotCwBtn.title = 'Rotate selection clockwise (])';
+  rotCwBtn.addEventListener('click', () => _transformSelection('rot_cw'));
+  transformGroup.appendChild(rotCwBtn);
+
+  const rotCcwBtn = document.createElement('button');
+  rotCcwBtn.id = 'wsRotateCCW';
+  rotCcwBtn.textContent = 'Rot CCW';
+  rotCcwBtn.className = 'ws-tool-btn';
+  rotCcwBtn.title = 'Rotate selection counter-clockwise ([)';
+  rotCcwBtn.addEventListener('click', () => _transformSelection('rot_ccw'));
+  transformGroup.appendChild(rotCcwBtn);
+
+  const flipHBtn = document.createElement('button');
+  flipHBtn.id = 'wsFlipH';
+  flipHBtn.textContent = 'Flip H';
+  flipHBtn.className = 'ws-tool-btn';
+  flipHBtn.title = 'Flip selection horizontally';
+  flipHBtn.addEventListener('click', () => _transformSelection('flip_h'));
+  transformGroup.appendChild(flipHBtn);
+
+  const flipVBtn = document.createElement('button');
+  flipVBtn.id = 'wsFlipV';
+  flipVBtn.textContent = 'Flip V';
+  flipVBtn.className = 'ws-tool-btn';
+  flipVBtn.title = 'Flip selection vertically';
+  flipVBtn.addEventListener('click', () => _transformSelection('flip_v'));
+  transformGroup.appendChild(flipVBtn);
+
+  drawCol.appendChild(transformGroup);
 
   idCols.appendChild(imageCol);
   idCols.appendChild(drawCol);
