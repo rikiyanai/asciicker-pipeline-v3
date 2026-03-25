@@ -97,12 +97,41 @@ body {
 .overlay-card {
   width: min(680px, calc(100vw - 24px));
   max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   background: #121722;
   border: 1px solid #2a3448;
   border-radius: 0;
   padding: 16px;
+  box-sizing: border-box;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+@media (max-width: 600px) {
+  .overlay {
+    padding: 8px;
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+  .overlay-card {
+    max-height: none;
+    padding: 12px;
+    flex-shrink: 0;
+  }
+}
+
+@media (max-height: 500px) {
+  .overlay {
+    padding: 8px;
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+  .overlay-card {
+    max-height: none;
+    padding: 12px;
+    flex-shrink: 0;
+  }
 }
 
 textarea {

@@ -204,6 +204,11 @@ let editorState = {
   // Clipboard state (W19-W22 parity)
   clipboard: null,       // {cells: [{x, y, glyph, fg, bg}, ...], bounds: {x, y, w, h}}
   pasteMode: false,
+  // Match-source cell for Replace FG/BG (W29/W30 parity).
+  // Set only from explicit sample actions (eyedropper).
+  // Contract: lastSampledCell.fg is the match target for Replace FG,
+  //           lastSampledCell.bg is the match target for Replace BG.
+  lastSampledCell: null,  // {glyph, fg: [r,g,b], bg: [r,g,b]}
 };
 
 // ── mount ──
@@ -655,12 +660,149 @@ function _transformSelection(kind) {
   return true;
 }
 
+// ── Bulk-edit operations (W28-W30) ──
+
+/**
+ * W28: Fill selection with active glyph/fg/bg.
+ * One undoable operation via stroke pattern.
+ * @returns {boolean} true if any cells changed
+ */
+function _fillSelection() {
+  const tool = editorState.selectTool;
+  if (!tool) return false;
+  const bounds = tool.getSelectionBounds();
+  if (!bounds) return false;
+  const canvas = editorState.canvas;
+  if (!canvas) return false;
+
+  const { drawGlyph, drawFg, drawBg } = editorState;
+  let changed = 0;
+  for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
+    for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
+      canvas.setCell(x, y, drawGlyph, drawFg, drawBg);
+      changed++;
+    }
+  }
+  if (!changed) return false;
+  editorState._strokeDirty = false;
+  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
+  canvas.render();
+  return true;
+}
+
+/**
+ * W29/W30: Replace FG or BG color in selection.
+ * Match source: editorState.lastSampledCell (set by eyedropper).
+ * Replacement: current drawFg (for 'fg') or drawBg (for 'bg').
+ * @param {'fg'|'bg'} channel
+ * @returns {boolean} true if any cells changed
+ */
+function _replaceSelectionColor(channel) {
+  const tool = editorState.selectTool;
+  if (!tool) return false;
+  const bounds = tool.getSelectionBounds();
+  if (!bounds) return false;
+  const canvas = editorState.canvas;
+  if (!canvas) return false;
+  const sample = editorState.lastSampledCell;
+  if (!sample) return false;
+
+  const matchColor = channel === 'bg' ? sample.bg : sample.fg;
+  const replColor = channel === 'bg' ? editorState.drawBg : editorState.drawFg;
+  let changed = 0;
+  for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
+    for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
+      const cell = canvas.getCell(x, y);
+      if (!cell) continue;
+      const curColor = channel === 'bg' ? cell.bg : cell.fg;
+      if (!_colorsEqual(curColor, matchColor)) continue;
+      if (channel === 'bg') {
+        canvas.setCell(x, y, cell.glyph, [...cell.fg], [...replColor]);
+      } else {
+        canvas.setCell(x, y, cell.glyph, [...replColor], [...cell.bg]);
+      }
+      changed++;
+    }
+  }
+  if (!changed) return false;
+  editorState._strokeDirty = false;
+  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
+  canvas.render();
+  return true;
+}
+
+/**
+ * W31: Find & Replace in selection or whole-sheet canvas.
+ * Scope semantics (whole-sheet contract):
+ *   - 'selection': operates on current selection bounds only
+ *   - 'canvas': operates on entire canvas (all cells)
+ * @returns {boolean} true if any cells changed
+ */
+function _findReplace() {
+  const canvas = editorState.canvas;
+  if (!canvas) return false;
+
+  const matchGlyph = !!document.getElementById('wsFrMatchGlyph')?.checked;
+  const matchFg = !!document.getElementById('wsFrMatchFg')?.checked;
+  const matchBg = !!document.getElementById('wsFrMatchBg')?.checked;
+  if (!matchGlyph && !matchFg && !matchBg) return false;
+
+  const replGlyphOn = !!document.getElementById('wsFrReplGlyph')?.checked;
+  const replFgOn = !!document.getElementById('wsFrReplFg')?.checked;
+  const replBgOn = !!document.getElementById('wsFrReplBg')?.checked;
+  if (!replGlyphOn && !replFgOn && !replBgOn) return false;
+
+  const findGlyph = Math.max(0, Math.min(255, Number(document.getElementById('wsFrFindGlyphVal')?.value) || 0));
+  const findFg = _hexToRgb(document.getElementById('wsFrFindFgVal')?.value || '#ffffff');
+  const findBg = _hexToRgb(document.getElementById('wsFrFindBgVal')?.value || '#000000');
+  const replGlyph = Math.max(0, Math.min(255, Number(document.getElementById('wsFrReplGlyphVal')?.value) || 0));
+  const replFg = _hexToRgb(document.getElementById('wsFrReplFgVal')?.value || '#ffffff');
+  const replBg = _hexToRgb(document.getElementById('wsFrReplBgVal')?.value || '#000000');
+
+  const scope = document.getElementById('wsFrScope')?.value || 'selection';
+
+  let x1, y1, x2, y2;
+  if (scope === 'canvas') {
+    x1 = 0; y1 = 0; x2 = canvas.width - 1; y2 = canvas.height - 1;
+  } else {
+    const tool = editorState.selectTool;
+    if (!tool) return false;
+    const bounds = tool.getSelectionBounds();
+    if (!bounds) return false;
+    x1 = bounds.x; y1 = bounds.y;
+    x2 = bounds.x + bounds.width - 1; y2 = bounds.y + bounds.height - 1;
+  }
+
+  let changed = 0;
+  for (let y = y1; y <= y2; y++) {
+    for (let x = x1; x <= x2; x++) {
+      const cell = canvas.getCell(x, y);
+      if (!cell) continue;
+      if (matchGlyph && (cell.glyph & 0xFF) !== findGlyph) continue;
+      if (matchFg && !_colorsEqual(cell.fg || [0, 0, 0], findFg)) continue;
+      if (matchBg && !_colorsEqual(cell.bg || [0, 0, 0], findBg)) continue;
+      const ng = replGlyphOn ? replGlyph : (cell.glyph & 0xFF);
+      const nf = replFgOn ? [...replFg] : [...(cell.fg || [0, 0, 0])];
+      const nb = replBgOn ? [...replBg] : [...(cell.bg || [0, 0, 0])];
+      canvas.setCell(x, y, ng, nf, nb);
+      changed++;
+    }
+  }
+  if (!changed) return false;
+  editorState._strokeDirty = false;
+  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
+  canvas.render();
+  return true;
+}
+
 // ── Eyedropper sample ──
 
 function _applyEyedropperSample(glyph, fg, bg) {
   editorState.drawGlyph = glyph & 0xFF;
   editorState.drawFg = [...fg];
   editorState.drawBg = [...bg];
+  // W29/W30 match-source contract: eyedropper is the explicit sample action.
+  editorState.lastSampledCell = { glyph: glyph & 0xFF, fg: [...fg], bg: [...bg] };
 
   _forEachTool(t => { t.setGlyph(editorState.drawGlyph); t.setColors(editorState.drawFg, editorState.drawBg); });
 
@@ -1296,10 +1438,120 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
 
   drawCol.appendChild(transformGroup);
 
+  // W28-W30: Bulk-edit buttons (shipped UI triggers)
+  const bulkGroup = document.createElement('div');
+  bulkGroup.className = 'ws-tool-group';
+  bulkGroup.style.cssText = 'margin-top:4px; gap:2px;';
+
+  const fillSelBtn = document.createElement('button');
+  fillSelBtn.id = 'wsFillSel';
+  fillSelBtn.textContent = 'Fill Sel';
+  fillSelBtn.className = 'ws-tool-btn';
+  fillSelBtn.title = 'Fill selection with active glyph/fg/bg (W28)';
+  fillSelBtn.addEventListener('click', () => _fillSelection());
+  bulkGroup.appendChild(fillSelBtn);
+
+  const replaceFgBtn = document.createElement('button');
+  replaceFgBtn.id = 'wsReplaceFg';
+  replaceFgBtn.textContent = 'Repl FG';
+  replaceFgBtn.className = 'ws-tool-btn';
+  replaceFgBtn.title = 'Replace FG color in selection (eyedropper match → current FG) (W29)';
+  replaceFgBtn.addEventListener('click', () => _replaceSelectionColor('fg'));
+  bulkGroup.appendChild(replaceFgBtn);
+
+  const replaceBgBtn = document.createElement('button');
+  replaceBgBtn.id = 'wsReplaceBg';
+  replaceBgBtn.textContent = 'Repl BG';
+  replaceBgBtn.className = 'ws-tool-btn';
+  replaceBgBtn.title = 'Replace BG color in selection (eyedropper match → current BG) (W30)';
+  replaceBgBtn.addEventListener('click', () => _replaceSelectionColor('bg'));
+  bulkGroup.appendChild(replaceBgBtn);
+
+  drawCol.appendChild(bulkGroup);
+
   idCols.appendChild(imageCol);
   idCols.appendChild(drawCol);
   imageDrawSection.appendChild(idCols);
   sidebar.appendChild(imageDrawSection);
+
+  // W31: Find & Replace sidebar section (collapsible)
+  const frSection = document.createElement('div');
+  frSection.className = 'ws-sidebar-section';
+  const frDetails = document.createElement('details');
+  const frSummary = document.createElement('summary');
+  frSummary.textContent = 'Find & Replace';
+  frSummary.style.cssText = 'cursor:pointer;font-size:10px;color:#5a6a7a;text-transform:uppercase;letter-spacing:0.06em;';
+  frDetails.appendChild(frSummary);
+
+  const frWrap = document.createElement('div');
+  frWrap.style.cssText = 'margin-top:6px;display:flex;flex-direction:column;gap:4px;font-size:10px;';
+
+  // Match criteria row
+  const frMatchLabel = document.createElement('span');
+  frMatchLabel.textContent = 'Match';
+  frMatchLabel.style.cssText = 'font-size:9px;color:#4a5a6a;text-transform:uppercase;letter-spacing:0.05em;';
+  frWrap.appendChild(frMatchLabel);
+
+  const _frChkRow = (id, label, colorId, defaultColor, isNumber) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:4px;';
+    const chk = document.createElement('input');
+    chk.type = 'checkbox'; chk.id = id;
+    row.appendChild(chk);
+    const lbl = document.createElement('span');
+    lbl.textContent = label; lbl.style.cssText = 'font-size:10px;color:var(--muted);min-width:16px;';
+    row.appendChild(lbl);
+    if (isNumber) {
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.id = colorId; inp.min = '0'; inp.max = '255'; inp.value = '0';
+      inp.style.cssText = 'width:48px;font-size:10px;padding:1px 3px;';
+      row.appendChild(inp);
+    } else {
+      const inp = document.createElement('input');
+      inp.type = 'color'; inp.id = colorId; inp.value = defaultColor;
+      inp.style.cssText = 'width:24px;height:16px;padding:0;border:1px solid #445;cursor:pointer;';
+      row.appendChild(inp);
+    }
+    return row;
+  };
+
+  frWrap.appendChild(_frChkRow('wsFrMatchGlyph', 'G', 'wsFrFindGlyphVal', '', true));
+  frWrap.appendChild(_frChkRow('wsFrMatchFg', 'FG', 'wsFrFindFgVal', '#ffffff', false));
+  frWrap.appendChild(_frChkRow('wsFrMatchBg', 'BG', 'wsFrFindBgVal', '#000000', false));
+
+  // Replace criteria row
+  const frReplLabel = document.createElement('span');
+  frReplLabel.textContent = 'Replace';
+  frReplLabel.style.cssText = 'font-size:9px;color:#4a5a6a;text-transform:uppercase;letter-spacing:0.05em;margin-top:4px;';
+  frWrap.appendChild(frReplLabel);
+
+  frWrap.appendChild(_frChkRow('wsFrReplGlyph', 'G', 'wsFrReplGlyphVal', '', true));
+  frWrap.appendChild(_frChkRow('wsFrReplFg', 'FG', 'wsFrReplFgVal', '#ffffff', false));
+  frWrap.appendChild(_frChkRow('wsFrReplBg', 'BG', 'wsFrReplBgVal', '#000000', false));
+
+  // Scope + Apply button
+  const frActionRow = document.createElement('div');
+  frActionRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:4px;';
+  const frScopeSel = document.createElement('select');
+  frScopeSel.id = 'wsFrScope';
+  frScopeSel.style.cssText = 'font-size:10px;padding:2px;background:var(--bg);color:var(--fg);border:1px solid #2a3345;';
+  const optSel = document.createElement('option'); optSel.value = 'selection'; optSel.textContent = 'Selection';
+  const optCanvas = document.createElement('option'); optCanvas.value = 'canvas'; optCanvas.textContent = 'Canvas';
+  frScopeSel.appendChild(optSel);
+  frScopeSel.appendChild(optCanvas);
+  frActionRow.appendChild(frScopeSel);
+  const frApplyBtn = document.createElement('button');
+  frApplyBtn.id = 'wsFrApply';
+  frApplyBtn.textContent = 'Apply';
+  frApplyBtn.className = 'ws-tool-btn';
+  frApplyBtn.style.cssText = 'font-size:10px;padding:2px 8px;';
+  frApplyBtn.addEventListener('click', () => _findReplace());
+  frActionRow.appendChild(frApplyBtn);
+  frWrap.appendChild(frActionRow);
+
+  frDetails.appendChild(frWrap);
+  frSection.appendChild(frDetails);
+  sidebar.appendChild(frSection);
 
   // 3.6 Layers
   const layersSection = _buildSection('Layers');
@@ -1645,6 +1897,10 @@ function _hexToRgb(hex) {
   const m = hex.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
   if (!m) return [255, 255, 255];
   return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+}
+
+function _colorsEqual(a, b) {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }
 
 function _setDrawColor(channel, rgb) {

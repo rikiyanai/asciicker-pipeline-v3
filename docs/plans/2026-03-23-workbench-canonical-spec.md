@@ -55,8 +55,8 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 1. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions run `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
 2. **Slice 5 manual assembly E2E** — PROVEN 13/13 (2026-03-24). Covers U1→S12→S7→D1→W1→W2→T3→T4. Demonstrates M2-B/C/D functional end-to-end. Runner: `run_manual_assembly_e2e_test.mjs`.
-3. **M2-D full SAR workflow coverage** — 35/96 SAR + 8/13 parity extension PROVEN. W24-W27 selection transforms newly proven (`1828979`, 9/9 PASS via `run_whole_sheet_transform_test.mjs`). W19-W22 clipboard proven (`431b437`). 31 WS selectors, 77 registry entries, 2 recipes. W15 three-part proof committed. S3-S6/G5-G6/G9-G11 proven. Remaining 48 WIRED actions need committed proof in future M2-D/E passes.
-4. **Workbench UI audit follow-up** — 2026-03-24 audit found 39 user-facing issues after BUG-01 was fixed: 3 critical, 7 high, 14 medium, 15 low. BUG-02 (silent PNG decode), BUG-03 (duplicate mouseleave stroke), and BUG-10 (Skin Dock button enablement) now FIXED. Remaining open-bug focus: mobile modal clipping (BUG-04), grid overdraw/perf (BUG-05).
+3. **M2-D full SAR workflow coverage** — 35/96 SAR + 12/13 parity extension PROVEN. W28-W31 bulk-edit newly proven (10/10 PASS via `run_whole_sheet_bulkedit_test.mjs`). W24-W27 selection transforms proven (`1828979`). W19-W22 clipboard proven (`431b437`). Inspector demotion Phase 7 now **unblocked**. 31 WS selectors, 77 registry entries, 2 recipes. W15 three-part proof committed. S3-S6/G5-G6/G9-G11 proven. Remaining 48 WIRED actions need committed proof in future M2-D/E passes.
+4. **Workbench UI audit follow-up** — 2026-03-24 audit found 39 user-facing issues after BUG-01 was fixed: 3 critical, 7 high, 14 medium, 15 low. BUG-02, BUG-03, BUG-04, BUG-10 now FIXED. Remaining open-bug focus: grid overdraw/perf (BUG-05).
 5. **Mobile/touch support is now an explicit roadmap requirement** — current mobile behavior may load but is not yet a truthful supported surface. BUG-04 is one concrete blocking symptom, but the broader requirement is: no milestone closeout or product-language upgrade should imply practical mobile support until touch interactions, modal behavior, viewport fit, and control usability are explicitly audited and improved.
 6. **PB-03 UX hardening** — confirm dialog on session-boundary loads. Cross-session undo remains architecturally out of scope. Low-priority UX refinement.
 7. **Bundle-family expansion roadmap is still under-scoped** — the 2026-03-24 player-state parity audit confirmed three concrete gaps: (a) non-bundle override naming mismatch — **FIXED** (BUG-09: all override paths now use per-family W semantics matching the bundle contract), (b) mounted families exist in runtime/debug surfaces but not in bundle templates or native family builders, and (c) the native sandbox overwrite helper is template-agnostic internally while the exposed workbench flow is still session/export driven. Gaps (b) and (c) remain roadmap work.
@@ -72,7 +72,7 @@ This stack is execution priority, not timeless truth. Re-evaluate when any sub-p
 | BUG-01 | Grid toggle overlay is incorrect — uses simple lines instead of cross marks at intersections; grid size is not user-customizable | FIXED | Fixed in `6fb3375`..`fef0e78` (4 commits). Cross marks at intersections, grid-step select (Frame/1×1–16×16) on both whole-sheet editor and legacy inspector. Default "Frame" shows crosses at sprite frame boundaries. Separate X/Y step for non-square frames. Opacity tuned for visibility. UI-proven via screenshots. |
 | BUG-02 | PNG upload silently fails on decode/load error because the source-image path has no `img.onerror` handler | FIXED | Fixed in `fd6973a`. Added `img.onerror` at both image loading sites (wbUpload + file-change handler). Error clears stale sourceImage, revokes object URL, shows user-visible status message. |
 | BUG-03 | Whole-sheet canvas binds `mouseleave` twice, allowing spurious stroke-complete callbacks and empty undo entries | FIXED | Fixed in `fd6973a`. Removed duplicate mouseleave→_onStrokeEnd binding. _onCanvasMouseLeave now calls _onStrokeEnd() first, then clears hover display. Single handler, no duplicate stroke-complete risk. |
-| BUG-04 | Overlay modal clips content on mobile/tablet because `.overlay-card` relies on `100vh` and a weak internal scrollbar | OPEN | `styles.css:97-106`. On iOS Safari and short viewports, the submit button can fall below the visible viewport and the scrollbar is hard to discover. |
+| BUG-04 | Overlay modal clips content on mobile/tablet because `.overlay-card` relies on `100vh` and a weak internal scrollbar | FIXED | Fixed: `dvh` fallback, `box-sizing: border-box`, `align-items: flex-start` + `overflow-y: auto` on mobile (`@media max-width:600px` and `max-height:500px`). Verified: `run_bug04_mobile_modal_test.mjs` 3/3 PASS (iPhone SE 375x667, iPad 768x1024, phone landscape 667x375). Submit button reachable on all viewports. **Note:** fixing BUG-04 does not solve mobile/touch support broadly — that remains an explicit roadmap requirement per §5. |
 | BUG-05 | Whole-sheet/REXPaint grid draws every cross mark for the entire sheet even when most cells are off-screen | OPEN | `canvas.js:617-625` loops full sheet dimensions with no viewport culling. Large sheets at high zoom can incur visible frame drops. |
 | BUG-06 | Bug-report known-issue dropdown fails silently when `fetchKnownBugs()` errors | OPEN | `workbench.js:494` swallows the fetch failure. Users only see the default option and may file duplicates without knowing the dropdown failed to load. |
 | BUG-07 | Disabled controls are too visually similar to enabled controls on the dark theme | OPEN | `styles.css:152` uses opacity only. Grid-panel controls and similar disabled buttons look merely dimmed, especially on touch devices with no cursor feedback. |
@@ -84,9 +84,15 @@ This stack is execution priority, not timeless truth. Re-evaluate when any sub-p
 
 ### Whole-Sheet Parity Gap (2026-03-25 audit)
 
-The 2026-03-25 REXPaint parity audit identified that the shipped whole-sheet editor surface (whole-sheet-init.js) lacked clipboard, selection-transform, and bulk-edit operations. Clipboard (W19-W22) is now **PROVEN** (`431b437`). Selection transforms (W24-W27) are now **PROVEN** (`1828979`, 9/9 PASS). Remaining gap: bulk-edit (W28-W31). This remaining gap blocks inspector demotion Phase 7.
+The 2026-03-25 REXPaint parity audit identified that the shipped whole-sheet editor surface (whole-sheet-init.js) lacked clipboard, selection-transform, and bulk-edit operations. All gaps are now closed:
 
-**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) is wired but has a known bounds-update bug. W24-W27 (selection transforms) implemented and proven (`6af8b86`, `1828979`): 4 shipped sidebar buttons (Rot CW, Rot CCW, Flip H, Flip V) + keyboard shortcuts `]`/`[` for rotate. Each transform is a single undo operation with bounds update after rotate. W28-W31 (bulk-edit) remain unimplemented.
+- Clipboard (W19-W22): **PROVEN** (`431b437`)
+- Selection transforms (W24-W27): **PROVEN** (`1828979`, 9/9 PASS)
+- Bulk-edit (W28-W31): **PROVEN** (`run_whole_sheet_bulkedit_test.mjs`, 10/10 PASS)
+
+Inspector demotion Phase 7 is **unblocked**.
+
+**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) is wired but has a known bounds-update bug. W24-W27 (selection transforms) implemented and proven (`6af8b86`, `1828979`): 4 shipped sidebar buttons (Rot CW, Rot CCW, Flip H, Flip V) + keyboard shortcuts `]`/`[` for rotate. W28-W31 (bulk-edit) implemented and proven: 3 shipped sidebar buttons (Fill Sel, Repl FG, Repl BG) + collapsible Find & Replace sidebar section. Match-source contract for Replace FG/BG: `lastSampledCell` is set only by the eyedropper tool. W31 Find & Replace scope: 'selection' (current selection) or 'canvas' (entire whole-sheet canvas). Each bulk-edit operation is a single undo operation.
 
 #### Planned Whole-Sheet Actions (post-audit parity extension)
 
@@ -103,10 +109,10 @@ These are tracked as a planned parity extension outside the existing 96-action S
 | W25 | Rotate selection CCW | Implemented in whole-sheet-init.js (`6af8b86`) | MEDIUM | **PROVEN** `1828979` — Button `#wsRotateCCW` + keyboard `[`. Restores original from CW-rotated state. |
 | W26 | Flip selection H | Implemented in whole-sheet-init.js (`6af8b86`) | MEDIUM | **PROVEN** `1828979` — Button `#wsFlipH`. Undo reverts as single operation. |
 | W27 | Flip selection V | Implemented in whole-sheet-init.js (`6af8b86`) | MEDIUM | **PROVEN** `1828979` — Button `#wsFlipV`. Cell positions verified via diagnostic observation. |
-| W28 | Fill selection | Port `fillInspectorSelectionWithGlyph()` logic | MEDIUM | Inspector at workbench.js:3199 |
-| W29 | Replace FG in selection | Port `replaceInspectorSelectionColor('fg')` logic | MEDIUM | Inspector at workbench.js:3236 |
-| W30 | Replace BG in selection | Port `replaceInspectorSelectionColor('bg')` logic | MEDIUM | Inspector at workbench.js:3236 |
-| W31 | Find & Replace | Port `applyInspectorFindReplace()` logic + UI | LOW | Inspector at workbench.js:3285; needs dialog UI |
+| W28 | Fill selection | Implemented in whole-sheet-init.js — `_fillSelection()` | MEDIUM | **PROVEN** — Button `#wsFillSel`. Fills selection with active glyph/fg/bg. Single undo. 10/10 PASS `run_whole_sheet_bulkedit_test.mjs`. |
+| W29 | Replace FG in selection | Implemented in whole-sheet-init.js — `_replaceSelectionColor('fg')` | MEDIUM | **PROVEN** — Button `#wsReplaceFg`. Match source: `lastSampledCell.fg` (eyedropper). Replacement: current `drawFg`. |
+| W30 | Replace BG in selection | Implemented in whole-sheet-init.js — `_replaceSelectionColor('bg')` | MEDIUM | **PROVEN** — Button `#wsReplaceBg`. Match source: `lastSampledCell.bg` (eyedropper). Replacement: current `drawBg`. |
+| W31 | Find & Replace | Implemented in whole-sheet-init.js — `_findReplace()` + sidebar UI | LOW | **PROVEN** — Sidebar collapsible section, button `#wsFrApply`. Scope: 'selection' or 'canvas' (whole-sheet canvas, not inspector "frame"). |
 
 #### Parity Decision Items (ownership undecided)
 
@@ -129,13 +135,13 @@ These inspector operations work at the frame level, not the whole-sheet canvas l
 
 #### Inspector Demotion Status
 
-**Partially unblocked.** Clipboard (W19-W22) and transforms (W24-W27) are now PROVEN. Current state:
+**Fully unblocked.** Clipboard (W19-W22), transforms (W24-W27), and bulk-edit (W28-W31) are now PROVEN.
 
-- Phase 1 (collapse inspector to `<details>` tag): **can proceed** — inspector remains accessible
-- Phase 2-6 (progressive capability absorption): **W19-W22 PROVEN** (`431b437`), **W24-W27 PROVEN** (`1828979`). Remaining: W28-W31 (bulk-edit).
-- Phase 7 (full demotion — never auto-open inspector): **blocked** until at minimum W28-W31 (bulk-edit: fill selection, replace fg/bg, find & replace) are in the shipped whole-sheet surface
+- Phase 1 (collapse inspector to `<details>` tag): **can proceed**
+- Phase 2-6 (progressive capability absorption): **all parity actions PROVEN** — W19-W22 (`431b437`), W24-W27 (`1828979`), W28-W31 (`run_whole_sheet_bulkedit_test.mjs` 10/10 PASS)
+- Phase 7 (full demotion — never auto-open inspector): **unblocked** — all bulk-edit operations are now in the shipped whole-sheet surface
 
-The canon claim "whole-sheet editor should become the primary correction surface" remains the intended direction. The whole-sheet surface now has clipboard and transform parity with the inspector. Remaining gap is bulk-edit operations (fill, replace, find & replace).
+The whole-sheet editor has full parity with the inspector for clipboard, transform, and bulk-edit operations. The "whole-sheet editor should become the primary correction surface" claim is now operationally achievable.
 
 ---
 

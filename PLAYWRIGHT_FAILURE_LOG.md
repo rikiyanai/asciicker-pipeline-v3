@@ -3783,9 +3783,11 @@ Grid toggle overlay drew simple horizontal/vertical lines instead of REXPaint-st
    - Was: `whole-sheet-init.js` bound both `_onStrokeEnd` and `_onCanvasMouseLeave` to `mouseleave`.
    - Fix: removed duplicate binding. `_onCanvasMouseLeave` now calls `_onStrokeEnd()` first, then clears hover display. Single handler, no duplicate stroke-complete risk.
 
-3. **BUG-04 — overlay modal clips on mobile/tablet**
-   - `styles.css:97-106` uses `max-height: calc(100vh - 24px)` with internal overflow.
-   - Result: iOS Safari / short viewports can hide the bottom action area and make the scrollbar hard to discover.
+3. **BUG-04 — overlay modal clips on mobile/tablet** — **FIXED**
+   - Was: `styles.css:97-106` used `max-height: calc(100vh - 24px)` with no mobile-specific handling.
+   - Fix: Added `dvh` unit fallback, `box-sizing: border-box`, mobile media queries (`@media max-width:600px` and `max-height:500px`) with `align-items: flex-start` and `overflow-y: auto` on the overlay. Submit button now reachable on all viewports.
+   - Verified: `run_bug04_mobile_modal_test.mjs` 3/3 PASS (iPhone SE 375x667, iPad 768x1024, phone landscape 667x375).
+   - **Note:** BUG-04 is fixed but mobile/touch support broadly remains an explicit roadmap requirement — not solved by this fix alone.
 
 ### High-signal open production issues
 
@@ -4072,21 +4074,21 @@ These four operations are a **parity-decision item**: the product must decide wh
 
 ### Inspector demotion status
 
-**PARTIALLY UNBLOCKED** — clipboard and transform parity achieved, bulk-edit still missing.
+**FULLY UNBLOCKED** — clipboard, transform, and bulk-edit parity all achieved.
 
 W19-W22 (copy/paste/cut/delete) are now **PROVEN** (`431b437`) via UI-driven proof runner `run_whole_sheet_clipboard_test.mjs`. W23 (select all) is WIRED but has a known bounds-update bug when the select tool is already active (non-blocking). W24-W27 (selection transforms: rotate CW/CCW, flip H/V) are now **PROVEN** (`1828979`) via UI-driven proof runner `run_whole_sheet_transform_test.mjs` — 9/9 PASS using shipped sidebar buttons and keyboard shortcuts, single undo per transform, bounds update after rotate.
 
-Remaining inspector-only workflows:
+All parity-blocking inspector workflows are now in the whole-sheet surface:
 
-- Recoloring a sprite region → requires Replace FG/BG (W29/W30, inspector only)
-- Filling a selection with active glyph → requires Fill Selection (W28, inspector only)
-- Batch-replacing a glyph/color → requires Find & Replace (W31, inspector only)
+- ~~Recoloring a sprite region~~ — **DONE** (W29/W30 Replace FG/BG proven)
+- ~~Filling a selection with active glyph~~ — **DONE** (W28 Fill Selection proven)
+- ~~Batch-replacing a glyph/color~~ — **DONE** (W31 Find & Replace proven)
 
-Phase 1 (collapse inspector to `<details>`) can proceed safely. Phase 2-6 (progressive absorption) unblocked for clipboard + transforms. Phase 7 (full demotion) blocked until at minimum:
+Phase 1 (collapse inspector to `<details>`) can proceed. Phase 2-6 (progressive absorption) unblocked. Phase 7 (full demotion) **unblocked**:
 
-1. ~~Clipboard operations~~ — **DONE** (W19-W22 proven)
+1. ~~Clipboard operations~~ — **DONE** (W19-W22 proven, `431b437`)
 2. ~~Selection transforms~~ — **DONE** (W24-W27 proven, `1828979`)
-3. At least one bulk-edit path (fill selection or replace color — W28-W30)
+3. ~~Bulk-edit operations~~ — **DONE** (W28-W31 proven, `run_whole_sheet_bulkedit_test.mjs` 10/10 PASS)
 
 ### Roadmap under-specification finding
 
@@ -4096,12 +4098,13 @@ The canonical spec states both:
 
 These are not contradictory but need explicit scoping: being a primary correction surface for
 M2 workflows (bundle authoring, PNG manual assembly) does not require full REXPaint parity,
-but it does require clipboard and basic transform operations. W19-W22 (clipboard) are proven
-(`431b437`). W24-W27 (selection transforms) are proven (`1828979`). W28-W31 (bulk-edit) remain planned.
+but it does require clipboard, transform, and bulk-edit operations. W19-W22 (clipboard) are proven
+(`431b437`). W24-W27 (selection transforms) are proven (`1828979`). W28-W31 (bulk-edit) are proven
+(`run_whole_sheet_bulkedit_test.mjs`, 10/10 PASS).
 
 Post-audit parity extension actions (W19-W31) are tracked in the capability canon inventory
-separately from the existing 96-action SAR count. Current status: 8/13 proven (W19-W22, W24-W27),
-1/13 wired (W23), 4/13 planned (W28-W31).
+separately from the existing 96-action SAR count. Current status: 12/13 proven (W19-W22, W24-W31),
+1/13 wired (W23).
 
 ### Detailed audit output
 

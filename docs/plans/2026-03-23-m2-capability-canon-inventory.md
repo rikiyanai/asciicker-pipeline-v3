@@ -175,9 +175,9 @@ Each capability row has five columns:
 
 #### Post-Audit Parity Extension (2026-03-25 REXPaint parity audit)
 
-> **Scope note:** The 13 actions below are a post-audit parity extension discovered by the 2026-03-25 audit. They are tracked separately from the existing 96-action SAR count to avoid silently inflating the denominator. They will be folded into the SAR denominator at the next canon rebaseline. Until then, aggregate statistics reference "35/96 SAR + 8/13 parity extension proven."
+> **Scope note:** The 13 actions below are a post-audit parity extension discovered by the 2026-03-25 audit. They are tracked separately from the existing 96-action SAR count to avoid silently inflating the denominator. They will be folded into the SAR denominator at the next canon rebaseline. Until then, aggregate statistics reference "35/96 SAR + 12/13 parity extension proven."
 
-**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) is wired but has a known bounds-update bug when the select tool is already active. W24-W27 (selection transforms) implemented and PROVEN (`6af8b86`, `1828979`): 4 shipped sidebar buttons + `]`/`[` keyboard shortcuts, single undo per transform, bounds update after rotate. W28-W31 (bulk-edit) remain unimplemented.
+**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) is wired but has a known bounds-update bug when the select tool is already active. W24-W27 (selection transforms) implemented and PROVEN (`6af8b86`, `1828979`): 4 shipped sidebar buttons + `]`/`[` keyboard shortcuts, single undo per transform, bounds update after rotate. W28-W31 (bulk-edit) implemented and PROVEN (`run_whole_sheet_bulkedit_test.mjs`, 10/10 PASS): 3 shipped sidebar buttons (Fill Sel, Repl FG, Repl BG) + collapsible Find & Replace section. Match-source contract for W29/W30: `lastSampledCell` set by eyedropper. W31 scope: 'selection' or 'canvas'.
 
 **Planned whole-sheet actions:**
 
@@ -192,10 +192,10 @@ Each capability row has five columns:
 | W25 | Rotate selection CCW | Implemented in whole-sheet-init.js (`6af8b86`) | **PROVEN** | MEDIUM | Post-M2-C parity | Button `#wsRotateCCW` + keyboard `[`. Verified restores original from CW state. |
 | W26 | Flip selection H | Implemented in whole-sheet-init.js (`6af8b86`) | **PROVEN** | MEDIUM | Post-M2-C parity | Button `#wsFlipH`. Single undo op verified (Ctrl+Z reverts). |
 | W27 | Flip selection V | Implemented in whole-sheet-init.js (`6af8b86`) | **PROVEN** | MEDIUM | Post-M2-C parity | Button `#wsFlipV`. Cell positions verified via diagnostic observation. |
-| W28 | Fill selection | Port `fillInspectorSelectionWithGlyph()` logic from workbench.js:3199 | PLANNED | MEDIUM | Post-M2-C parity |
-| W29 | Replace FG in selection | Port `replaceInspectorSelectionColor('fg')` logic from workbench.js:3236 | PLANNED | MEDIUM | Post-M2-C parity |
-| W30 | Replace BG in selection | Port `replaceInspectorSelectionColor('bg')` logic from workbench.js:3236 | PLANNED | MEDIUM | Post-M2-C parity |
-| W31 | Find & Replace | Port `applyInspectorFindReplace()` from workbench.js:3285; needs dialog UI | PLANNED | LOW | Post-M2-C parity |
+| W28 | Fill selection | Implemented in whole-sheet-init.js — `_fillSelection()`. Button `#wsFillSel`. | **PROVEN** | MEDIUM | Post-M2-C parity | Fills selection bounds with active glyph/fg/bg. Single undo op. 10/10 PASS `run_whole_sheet_bulkedit_test.mjs`. |
+| W29 | Replace FG in selection | Implemented in whole-sheet-init.js — `_replaceSelectionColor('fg')`. Button `#wsReplaceFg`. | **PROVEN** | MEDIUM | Post-M2-C parity | Match source: `lastSampledCell.fg` (set by eyedropper). Replacement: current `drawFg`. Single undo op. |
+| W30 | Replace BG in selection | Implemented in whole-sheet-init.js — `_replaceSelectionColor('bg')`. Button `#wsReplaceBg`. | **PROVEN** | MEDIUM | Post-M2-C parity | Match source: `lastSampledCell.bg` (set by eyedropper). Replacement: current `drawBg`. Single undo op. |
+| W31 | Find & Replace | Implemented in whole-sheet-init.js — `_findReplace()`. Sidebar collapsible section + button `#wsFrApply`. | **PROVEN** | LOW | Post-M2-C parity | Scope: 'selection' or 'canvas' (whole-sheet canvas). Match/replace glyph, FG, BG independently via checkboxes. Single undo op. |
 
 **Parity decision items (ownership undecided):**
 
@@ -215,7 +215,7 @@ These inspector operations work at the frame level, not the whole-sheet canvas l
 | Half-cell paint (top/bottom) | Inspector-specific rendering; not a REXPaint or whole-sheet concept |
 | Cell inspect tool (hover readout) | Replaced by WS Info panel |
 
-**Inspector demotion status:** W19-W22 (clipboard) PROVEN (`431b437`). W24-W27 (transforms) PROVEN (`1828979`). Remaining blocker: W28-W31 (bulk-edit). Phase 1 (collapse to `<details>`) can proceed. Phase 2-6 (progressive absorption) unblocked for clipboard + transforms. Phase 7 (full demotion) blocked until at minimum W28-W31 are shipped.
+**Inspector demotion status:** W19-W22 (clipboard) PROVEN (`431b437`). W24-W27 (transforms) PROVEN (`1828979`). W28-W31 (bulk-edit) **PROVEN** — 10/10 PASS via `run_whole_sheet_bulkedit_test.mjs`. All parity-extension actions now shipped or proven. Phase 1 (collapse to `<details>`) can proceed. Phase 2-6 (progressive absorption) unblocked. Phase 7 (full demotion) **unblocked** — all blocking bulk-edit operations are now in the shipped whole-sheet surface.
 
 ### Family 8: Jitter/Alignment (6 actions)
 
@@ -327,7 +327,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | M2-D (full SAR coverage) | 45 | 0 | 43 | 2 (1 PARTIAL, 1 PLANNED) |
 | M2-E (semantic dicts) | 0 | 0 | 0 | 0 (workflow-level, not action-level) |
 | M2-F (analyze assistive) | 1 | 0 | 1 | 0 |
-| *Post-M2-C parity (W19-W31)* | 13 | 8 | 1 | 4 (W28-W31 PLANNED) |
+| *Post-M2-C parity (W19-W31)* | 13 | 12 | 1 | 0 |
 
 ### Verifier Slice Readiness (from M2 verifier design)
 
