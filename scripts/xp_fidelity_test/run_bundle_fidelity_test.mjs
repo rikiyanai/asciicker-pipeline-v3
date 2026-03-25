@@ -972,6 +972,74 @@ async function main() {
         fail(null, 'skin_dock', 'Bundle Skin Dock never reached playable state');
       } else {
         console.error('[4] Skin Dock reached playable state');
+
+        // ── Step 4b: Runaround crash detection (10 seconds) ──
+        // Send arrow keys into the game iframe and probe each second for
+        // WASM crashes (renderCrashes rising) or render stall (rafCount
+        // not advancing). This catches skins that load but crash on
+        // equipment-state transitions during movement.
+        console.error('[5] Runaround crash detection (10s)...');
+        const RUNAROUND_SECS = 10;
+        const directions = ['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'];
+        let prevRaf = null;
+        let prevCrashes = 0;
+        let runaroundPass = true;
+        const runaroundProbes = [];
+
+        for (let sec = 0; sec < RUNAROUND_SECS; sec++) {
+          // Cycle through directions so the player walks in a square
+          const dir = directions[sec % directions.length];
+          frameHandle = getFrameHandle() || frameHandle;
+          try {
+            // Press and hold the arrow key for ~900ms, release, then probe
+            await frameHandle.locator('body').press(dir, { delay: 100 });
+            // Send repeated keydown events to keep movement going
+            for (let k = 0; k < 4; k++) {
+              await frameHandle.locator('body').press(dir, { delay: 100 });
+            }
+          } catch (_e) {
+            // Frame detachment during key send — try to re-acquire
+            frameHandle = getFrameHandle() || frameHandle;
+          }
+
+          await page.waitForTimeout(500);
+
+          frameHandle = getFrameHandle() || frameHandle;
+          const rProbe = await captureFrameProbe(frameHandle, `runaround_${sec}`);
+          runaroundProbes.push({ sec, dir, probe: rProbe });
+
+          if (rProbe.error && /detach/i.test(rProbe.error)) {
+            // iframe detached = likely crash/reload
+            fail(null, 'runaround', `Frame detached at second ${sec} (likely WASM crash)`);
+            runaroundPass = false;
+            break;
+          }
+
+          const crashes = Number(rProbe.renderCrashes) || 0;
+          const raf = Number(rProbe.rafCount) || 0;
+
+          if (crashes > prevCrashes) {
+            fail(null, 'runaround', `renderCrashes rose from ${prevCrashes} to ${crashes} at second ${sec}`);
+            runaroundPass = false;
+            break;
+          }
+          if (prevRaf !== null && raf <= prevRaf) {
+            fail(null, 'runaround', `rafCount stalled at ${raf} (was ${prevRaf}) at second ${sec}`);
+            runaroundPass = false;
+            break;
+          }
+          prevCrashes = crashes;
+          prevRaf = raf;
+          console.error(`  [${sec + 1}/${RUNAROUND_SECS}] ${dir} raf=${raf} crashes=${crashes}`);
+        }
+
+        report.skin_dock.runaround = { pass: runaroundPass, probes: runaroundProbes };
+        if (runaroundPass) {
+          console.error('[5] Runaround PASS — no crashes in 10s');
+        } else {
+          report.skin_dock_pass = false;
+          console.error('[5] Runaround FAIL');
+        }
       }
     }
 
