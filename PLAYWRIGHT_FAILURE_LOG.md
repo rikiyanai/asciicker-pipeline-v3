@@ -4158,3 +4158,51 @@ upload_png currently uses the server pipeline conversion (`#wbRun`). A future "F
 extract" path (using `#extractBtn` → anchor → drag to row) is documented as a stub in the
 runner code. It exercises the manual assembly path instead of the pipeline path.
 
+---
+
+## BUG-11: G-BUNDLE Deterministic Skin Dock Readiness Failure
+
+**Date:** 2026-03-25
+**Status:** OPEN
+**Classification:** Runner/runtime-lane defect — not an editor/whole-sheet bug.
+
+### Summary
+
+The deterministic G-BUNDLE runner (`run_bundle_fidelity_test.mjs`) fails to reach playable state in the Skin Dock in the majority of runs. The WASM runtime inside the flat iframe never initializes.
+
+### Evidence
+
+**Observation window:** 56 logged G-BUNDLE runs from 2026-03-18 through 2026-03-25.
+- **Skin Dock pass:** 12 of 56 runs
+- **Skin Dock fail:** 44 of 56 runs
+- **Source:** `output/xp-fidelity-test/bundle-run-*/result.json`, scanned programmatically
+
+**Failure probe pattern (consistent across all 44 failures):**
+```json
+{
+  "wasmReady": false,
+  "rafCount": 0,
+  "overlayVisible": true,
+  "renderStage": 0,
+  "gameMainMenu": 1,
+  "worldReady": 0
+}
+```
+WASM never initializes. The overlay never dismisses. `rafCount` stays at 0 for the full 30-second probe window (`run_bundle_fidelity_test.mjs:948-965`).
+
+**Distinction from BUG-10:** BUG-10 was about the Skin Dock *button* staying disabled despite actions being ready. BUG-11 is about the *runtime* inside the iframe never reaching playable state after the button is clicked and the iframe loads.
+
+**G-RANDOM is not a substitute:** G-RANDOM (`run_randomized_bundle_test.mjs`) uses a different authoring flow and a separate browser session. It can pass Skin Dock (e.g., seed 42 PASS). But a G-RANDOM pass does not clear the G-BUNDLE gate. The two runners must be independently healthy.
+
+### Likely investigation area
+
+The failure occurs in the iframe WASM load path at `run_bundle_fidelity_test.mjs:877-972`. Possible root causes:
+- Resource loading stall (WASM binary, font files, or other assets) inside the flat iframe
+- iframe lifecycle issue (src assignment, force_restart injection, frame detachment/reattachment)
+- Probe timing or frame handle acquisition failing silently
+- Server-side state from prior action conversions interfering with the runtime load
+
+### Impact on gates
+
+G-BUNDLE is defined as a milestone closeout gate (`workbench-canonical-spec.md` §Verification Gates). Until BUG-11 is resolved, G-BUNDLE cannot serve as a reliable deterministic closeout gate. The gate table has been annotated accordingly.
+
