@@ -3687,3 +3687,78 @@ W15 SelectTool visualization confirmed with three-part proof:
 **Result:** 13/13 PASS (root-hosted)
 **Artifact:** `output/slice5_e2e/report.json`
 **Classification:** UI-driven acceptance (all actions via DOM clicks, canvas mouse events, file input, context menu; state verification via diagnostic observation only)
+
+
+---
+
+## Process Failure: Incorrect Repo-Boundary Claim About Engine/Menu Source
+
+**Date:** 2026-03-24
+**Status:** LOGGED
+
+An assistant response incorrectly claimed that restyling the in-game menu would require modifying C++ engine files such as `font1.cpp` / `render.cpp` and recompiling WASM in the "upstream asciicker-Y9-2 repo".
+
+That repository-boundary claim was not established from this repo's contents and contradicted explicit user correction that the relevant engine/runtime code was expected to be copied into this repo rather than treated as upstream-owned.
+
+**Failure type:** unsupported architecture claim / wrong repository-boundary assumption
+
+**What was wrong:**
+- It treated `asciicker-Y9-2` as the authoritative upstream location for engine-render changes without proving that from the current repo.
+- It answered from an inferred multi-repo architecture instead of the actual repo boundary the user had specified repeatedly.
+- It converted uncertainty about menu-render ownership into a definitive claim.
+
+**Corrective rule going forward:**
+- Do not say a required change "lives in another repo" unless the current repo contents prove that boundary.
+- When discussing runtime/menu rendering here, distinguish between:
+  - what is proven from files present in `/Users/r/Downloads/asciicker-pipeline-v2`
+  - what is only inferred from older research or adjacent repos
+- If the repo boundary is disputed, log the uncertainty and inspect this repo first instead of asserting an upstream dependency.
+
+---
+
+## BUG-01 FIX: Grid Overlay — Cross Marks + Grid-Step Control
+
+**Date:** 2026-03-24
+**Commit:** `6fb3375`
+**Status:** FIXED, UI-PROVEN
+
+### Bug
+
+Grid toggle overlay drew simple horizontal/vertical lines instead of REXPaint-style cross marks at cell intersections. No user-facing control for grid cell spacing.
+
+### Fix
+
+Replaced full-line grid rendering with cross marks at cell intersections in both:
+- **Whole-sheet editor** (`canvas.js:_drawGrid()`) — the primary shipped surface
+- **Legacy inspector** (`workbench.js:3518`) — fallback inspector surface
+
+Added grid-step `<select>` control (1×1 through 16×16) to both surfaces:
+- Whole-sheet toolbar: `#wsGridStep` (whole-sheet-init.js)
+- Legacy inspector row: `#inspectorGridStep` (workbench.html + workbench.js)
+
+### Proof (UI-driven, screenshots only)
+
+**Action path:** XP import via file input → whole-sheet editor auto-mount → Grid toggle click → grid-step select change. All actions are DOM-driven shipped UI gestures.
+
+**Observation:** Screenshots only (no page.evaluate action-driving).
+
+**Evidence directory:** `/tmp/bug01-grid-proof/`
+
+| Screenshot | State | Observation |
+|------------|-------|-------------|
+| `01b-grid-off-detail.png` | Grid OFF | Clean canvas, no overlay marks |
+| `02b-grid-on-step1-detail.png` | Grid ON, step=1 | Dense cross marks at every cell intersection |
+| `03-grid-off-toggle-detail.png` | Grid OFF (toggled back) | Clean canvas — toggle round-trip confirmed |
+| `04b-grid-step4-detail.png` | Grid ON, step=4 | Visibly sparser crosses every 4 cells |
+| `05-grid-step16.png` | Grid ON, step=16 | Only a few crosses visible, dropdown shows "16×16" |
+| `07-grid-step2-detail.png` | Grid ON, step=2 | Medium density, clearly different from step=1 |
+
+### Acceptance checklist
+
+- [x] Crosses render only at intersections (not continuous lines)
+- [x] Step selector visibly changes spacing
+- [x] Toggle on/off works correctly
+- [x] No canvas offset/alignment drift between grid states
+- [x] Both whole-sheet editor and legacy inspector surfaces fixed
+
+**User correction to preserve:** "It should not live in the upstream repo. I thought it was copied over."

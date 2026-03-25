@@ -66,7 +66,7 @@ This stack is execution priority, not timeless truth. Re-evaluate when any sub-p
 
 | ID | Summary | Status | Notes |
 |----|---------|--------|-------|
-| BUG-01 | Grid toggle overlay is incorrect — uses simple lines instead of cross marks at intersections; grid size is not user-customizable | OPEN | Original REXPaint grid toggle renders cross marks (`+`) at cell intersections and allows the user to change grid cell size. Current implementation is a simplified approximation that does not match the original behavior. |
+| BUG-01 | Grid toggle overlay is incorrect — uses simple lines instead of cross marks at intersections; grid size is not user-customizable | FIXED | Fixed in `6fb3375`. Cross marks at intersections + grid-step select (1×1–16×16) on both whole-sheet editor and legacy inspector. UI-proven via screenshots (see PLAYWRIGHT_FAILURE_LOG.md). |
 
 ---
 
