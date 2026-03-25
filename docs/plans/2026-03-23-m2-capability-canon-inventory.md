@@ -175,19 +175,19 @@ Each capability row has five columns:
 
 #### Post-Audit Parity Extension (2026-03-25 REXPaint parity audit)
 
-> **Scope note:** The 13 actions below are a post-audit parity extension discovered by the 2026-03-25 audit. They are tracked separately from the existing 96-action SAR count to avoid silently inflating the denominator. They will be folded into the SAR denominator at the next canon rebaseline. Until then, aggregate statistics reference "31/96 SAR + 0/13 parity extension."
+> **Scope note:** The 13 actions below are a post-audit parity extension discovered by the 2026-03-25 audit. They are tracked separately from the existing 96-action SAR count to avoid silently inflating the denominator. They will be folded into the SAR denominator at the next canon rebaseline. Until then, aggregate statistics reference "35/96 SAR + 4/13 parity extension proven."
 
-**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly and manages them via its own adapter layer. EditorApp (editor-app.js) contains copy/paste/deleteSelection implementations, but these are not wired into the shipped whole-sheet keyboard or UI path — whole-sheet-init.js:516 explicitly passes Ctrl+C/V through to the browser.
+**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) is wired but has a known bounds-update bug when the select tool is already active. W24-W31 (transforms/bulk-edit) remain unimplemented.
 
 **Planned whole-sheet actions:**
 
 | # | Action | Code Basis | Status | Priority | M2 Scope |
 |---|--------|-----------|--------|----------|----------|
-| W19 | Copy selection (Ctrl+C) | `EditorApp.copy()` exists at editor-app.js:735; WS does not use EditorApp — port or integrate logic into whole-sheet-init.js | PLANNED | HIGH | Post-M2-C parity |
-| W20 | Paste selection (Ctrl+V) | `EditorApp.startPaste()/paste()` exist at editor-app.js:766/852; WS does not use EditorApp — port or integrate logic into whole-sheet-init.js | PLANNED | HIGH | Post-M2-C parity |
-| W21 | Cut selection (Ctrl+X) | No cut method in EditorApp; implement copy + clear in whole-sheet-init.js | PLANNED | HIGH | Post-M2-C parity |
-| W22 | Delete/clear selection (Del) | `EditorApp.deleteSelection()` exists at editor-app.js; WS does not use EditorApp — port or integrate logic into whole-sheet-init.js | PLANNED | HIGH | Post-M2-C parity |
-| W23 | Select all (Ctrl+A) | No equivalent exists; implement as selection bounds → full canvas dims | PLANNED | MEDIUM | Post-M2-C parity |
+| W19 | Copy selection (Ctrl+C) | Implemented in whole-sheet-init.js (`0383b31`) | **PROVEN** | HIGH | Post-M2-C parity | UI-driven proof `431b437` via `run_whole_sheet_clipboard_test.mjs`. Copies selected cell data to internal clipboard. |
+| W20 | Paste selection (Ctrl+V) | Implemented in whole-sheet-init.js (`0383b31`) | **PROVEN** | HIGH | Post-M2-C parity | UI-driven proof `431b437`. Ctrl+V enters paste mode, click places content at target. |
+| W21 | Cut selection (Ctrl+X) | Implemented in whole-sheet-init.js (`0383b31`) | **PROVEN** | HIGH | Post-M2-C parity | UI-driven proof `431b437`. Copies then clears source region. |
+| W22 | Delete/clear selection (Del) | Implemented in whole-sheet-init.js (`0383b31`) | **PROVEN** | HIGH | Post-M2-C parity | UI-driven proof `431b437`. Delete key clears selected cells to glyph=0. |
+| W23 | Select all (Ctrl+A) | Implemented in whole-sheet-init.js (`0383b31`) | **WIRED** | MEDIUM | Post-M2-C parity | Known bug: bounds not updated when select tool already active. Non-blocking. |
 | W24 | Rotate selection CW | Port `selectionMatrixRotate(src, true)` from workbench.js:3019 | PLANNED | MEDIUM | Post-M2-C parity |
 | W25 | Rotate selection CCW | Port `selectionMatrixRotate(src, false)` from workbench.js:3019 | PLANNED | MEDIUM | Post-M2-C parity |
 | W26 | Flip selection H | Port `selectionMatrixFlipH()` from workbench.js:3011 | PLANNED | MEDIUM | Post-M2-C parity |
@@ -215,7 +215,7 @@ These inspector operations work at the frame level, not the whole-sheet canvas l
 | Half-cell paint (top/bottom) | Inspector-specific rendering; not a REXPaint or whole-sheet concept |
 | Cell inspect tool (hover readout) | Replaced by WS Info panel |
 
-**Inspector demotion status:** BLOCKED on clipboard/transform/bulk-edit parity. See canonical spec §3 "Whole-Sheet Parity Gap" for the full blocking analysis. Phase 1 (collapse to `<details>`) can proceed; Phase 7 (full demotion) blocked until at minimum W19-W22 + W24-W27 are shipped.
+**Inspector demotion status:** W19-W22 (clipboard) now PROVEN (`431b437`). Remaining blocker: W24-W27 (transforms) + W28-W31 (bulk-edit). Phase 1 (collapse to `<details>`) can proceed. Phase 2-6 (progressive absorption) unblocked for clipboard. Phase 7 (full demotion) blocked until at minimum W24-W27 are shipped.
 
 ### Family 8: Jitter/Alignment (6 actions)
 
@@ -313,7 +313,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | BLOCKED | 1 | 1% |
 | DEFERRED | 2 | 2% |
 | *Outside SAR 96* | ~36 | (inspector, preview, recorder, bug report) |
-| *Post-audit parity extension* | 13 | (W19-W31: all PLANNED, tracked separately) |
+| *Post-audit parity extension* | 13 | (4 PROVEN, 1 WIRED, 8 PLANNED — tracked separately) |
 | *Parity decision items* | 4 | (frame copy/paste/flip/clear: ownership undecided) |
 
 ### By M2 Sub-Phase (96-action SAR baseline only)
@@ -327,7 +327,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | M2-D (full SAR coverage) | 45 | 0 | 43 | 2 (1 PARTIAL, 1 PLANNED) |
 | M2-E (semantic dicts) | 0 | 0 | 0 | 0 (workflow-level, not action-level) |
 | M2-F (analyze assistive) | 1 | 0 | 1 | 0 |
-| *Post-M2-C parity (W19-W31)* | 13 | 0 | 0 | 13 (all PLANNED) |
+| *Post-M2-C parity (W19-W31)* | 13 | 4 | 1 | 8 (W24-W31 PLANNED) |
 
 ### Verifier Slice Readiness (from M2 verifier design)
 

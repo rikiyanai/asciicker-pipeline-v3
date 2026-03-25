@@ -41,7 +41,7 @@ Placeholder. No milestone beyond M2 is currently defined.
 | **M2-A** | Structural PNG baseline (dims, layers, metadata gates) | M1 closed | ESTABLISHED |
 | **M2-B** | Source panel + grid assembly (draw box, find sprites, drag-to-grid) | M2-A | ESTABLISHED — source-panel 10/10 PASS (5c67ef2); source-to-grid 13/13 PASS (380edee) at root + /xpedit. D1, D2/C2, G1 PROVEN. |
 | **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | ESTABLISHED — 16/18 W-actions PROVEN. W15 three-part proof committed (2026-03-24): activeTool + bounds + marching-ants screenshot. W16/W17 DEFERRED. |
-| **M2-D** | Full SAR workflow coverage (all remaining WIRED actions get verifier proof) | M2-B, M2-C | ADVANCING — registry 77/77 entries landed (5c2aab1–d7e791c). 14 executable + 16 stubs. 31 WS selectors. 2 new recipes. W15 PROVEN (three-part). S3-S6/G5-G6/G9-G11 PROVEN. PB-01 FIXED. PB-03 reclassified (UX hardening). Slice 5 E2E 13/13 PASS. 31/96 actions now PROVEN (was 20). |
+| **M2-D** | Full SAR workflow coverage (all remaining WIRED actions get verifier proof) | M2-B, M2-C | ADVANCING — registry 77/77 entries landed (5c2aab1–d7e791c). 14 executable + 16 stubs. 31 WS selectors. 2 new recipes. W15 PROVEN (three-part). S3-S6/G5-G6/G9-G11 PROVEN. W19-W22 clipboard PROVEN (`431b437`). PB-01 FIXED. PB-03 reclassified (UX hardening). Slice 5 E2E 13/13 PASS. 35/96 actions now PROVEN (was 31). |
 | **M2-E** | Semantic editing (region-based dictionary-driven edits) | M2-D | NOT STARTED |
 | **M2-F** | Analyze/auto-slice (assistive, not authoritative) | M2-D | NOT STARTED |
 
@@ -84,7 +84,7 @@ This stack is execution priority, not timeless truth. Re-evaluate when any sub-p
 
 ### Whole-Sheet Parity Gap (2026-03-25 audit)
 
-The 2026-03-25 REXPaint parity audit identified that the shipped whole-sheet editor surface (whole-sheet-init.js) lacks clipboard, selection-transform, and bulk-edit operations that exist in the legacy XP Frame Inspector (workbench.js). These gaps block inspector demotion beyond Phase 1 (collapse to `<details>`).
+The 2026-03-25 REXPaint parity audit identified that the shipped whole-sheet editor surface (whole-sheet-init.js) lacked clipboard, selection-transform, and bulk-edit operations. Clipboard (W19-W22) is now **PROVEN** (`431b437`). Remaining gaps: selection-transform (W24-W27) and bulk-edit (W28-W31). These remaining gaps block inspector demotion beyond Phase 2-6.
 
 **Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) is wired but has a known bounds-update bug. W24-W31 (transforms/bulk-edit) remain unimplemented.
 

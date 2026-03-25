@@ -3775,13 +3775,13 @@ Grid toggle overlay drew simple horizontal/vertical lines instead of REXPaint-st
 
 ### Critical findings promoted to canon
 
-1. **BUG-02 — silent PNG decode/load failure**
-   - `workbench.js:6177-6182` wires `img.onload` only; there is no `img.onerror`.
-   - Result: corrupted or unsupported images can leave the source canvas blank with no user-facing error.
+1. **BUG-02 — silent PNG decode/load failure** — **FIXED** (`fd6973a`)
+   - Was: `workbench.js` wired `img.onload` only with no `img.onerror`.
+   - Fix: added `img.onerror` at both image loading sites (wbUpload + file-change handler). Error clears stale sourceImage, revokes object URL, shows user-visible status message.
 
-2. **BUG-03 — duplicate `mouseleave` stroke-end path**
-   - `whole-sheet-init.js:375-380` binds both `_onStrokeEnd` and `_onCanvasMouseLeave` to `mouseleave`.
-   - Result: empty or spurious undo history entries when `mouseleave` triggers stroke-complete without an active stroke.
+2. **BUG-03 — duplicate `mouseleave` stroke-end path** — **FIXED** (`fd6973a`)
+   - Was: `whole-sheet-init.js` bound both `_onStrokeEnd` and `_onCanvasMouseLeave` to `mouseleave`.
+   - Fix: removed duplicate binding. `_onCanvasMouseLeave` now calls `_onStrokeEnd()` first, then clears hover display. Single handler, no duplicate stroke-complete risk.
 
 3. **BUG-04 — overlay modal clips on mobile/tablet**
    - `styles.css:97-106` uses `max-height: calc(100vh - 24px)` with internal overflow.
@@ -4072,24 +4072,21 @@ These four operations are a **parity-decision item**: the product must decide wh
 
 ### Inspector demotion status
 
-**BLOCKED** on clipboard/transform/bulk-edit parity.
+**PARTIALLY UNBLOCKED** — clipboard parity achieved, transform/bulk-edit still missing.
 
-Without clipboard operations (copy/paste/cut/delete), selection transforms (rotate/flip), and
-bulk-edit operations (fill selection, replace color, find & replace) in the shipped whole-sheet
-surface, users must fall back to the legacy inspector for production sprite editing workflows:
+W19-W22 (copy/paste/cut/delete) are now **PROVEN** (`431b437`) via UI-driven proof runner `run_whole_sheet_clipboard_test.mjs`. W23 (select all) is WIRED but has a known bounds-update bug when the select tool is already active (non-blocking).
 
-- Recoloring a sprite region → requires Replace FG/BG (inspector only)
-- Flipping/rotating a sprite section → requires selection transforms (inspector only)
-- Batch-replacing a glyph/color → requires Find & Replace (inspector only)
-- Cut-and-move → requires cut (inspector only)
+Remaining inspector-only workflows:
 
-The retirement checklist's Phase 1 (collapse inspector to `<details>`) can proceed safely since
-the inspector remains accessible. Full demotion (Phase 7: never auto-open inspector) is blocked
-until the whole-sheet editor absorbs at minimum:
+- Recoloring a sprite region → requires Replace FG/BG (W29/W30, inspector only)
+- Flipping/rotating a sprite section → requires selection transforms (W24-W27, inspector only)
+- Batch-replacing a glyph/color → requires Find & Replace (W31, inspector only)
 
-1. Clipboard operations (wire existing EditorApp methods + implement cut)
-2. Selection transforms (port rotation/flip matrix helpers from inspector)
-3. At least one bulk-edit path (fill selection or replace color)
+Phase 1 (collapse inspector to `<details>`) can proceed safely. Phase 2-6 (progressive absorption) unblocked for clipboard. Phase 7 (full demotion) blocked until at minimum:
+
+1. ~~Clipboard operations~~ — **DONE** (W19-W22 proven)
+2. Selection transforms (port rotation/flip matrix helpers from inspector — W24-W27)
+3. At least one bulk-edit path (fill selection or replace color — W28-W30)
 
 ### Roadmap under-specification finding
 
@@ -4099,12 +4096,12 @@ The canonical spec states both:
 
 These are not contradictory but need explicit scoping: being a primary correction surface for
 M2 workflows (bundle authoring, PNG manual assembly) does not require full REXPaint parity,
-but it does require clipboard and basic transform operations. Current roadmap W1-W18 covers
-drawing tools and layers but not the clipboard/transform/bulk-edit surface.
+but it does require clipboard and basic transform operations. W19-W22 (clipboard) are now
+proven (`431b437`). W24-W31 (transforms/bulk-edit) remain planned.
 
-New planned actions (W19-W31) are added to the capability canon inventory as a post-audit
-parity extension, tracked separately from the existing 96-action SAR count until canon is
-rebaselined.
+Post-audit parity extension actions (W19-W31) are tracked in the capability canon inventory
+separately from the existing 96-action SAR count. Current status: 4/13 proven (W19-W22),
+1/13 wired (W23), 8/13 planned (W24-W31).
 
 ### Detailed audit output
 
