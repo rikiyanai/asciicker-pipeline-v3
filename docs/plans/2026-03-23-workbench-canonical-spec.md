@@ -55,8 +55,8 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 1. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions run `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
 2. **Slice 5 manual assembly E2E** — PROVEN 13/13 (2026-03-24). Covers U1→S12→S7→D1→W1→W2→T3→T4. Demonstrates M2-B/C/D functional end-to-end. Runner: `run_manual_assembly_e2e_test.mjs`.
-3. **M2-D full SAR workflow coverage** — 31/96 actions PROVEN (was 20). 31 WS selectors, 77 registry entries, 2 recipes. W15 three-part proof committed. S3-S6/G5-G6/G9-G11 proven. Remaining 56 WIRED actions need committed proof in future M2-D/E passes.
-4. **Workbench UI audit follow-up** — 2026-03-24 audit found 39 user-facing issues after BUG-01 was fixed: 3 critical, 7 high, 14 medium, 15 low. Immediate open-bug focus is silent PNG decode failure, double mouseleave stroke completion, mobile modal clipping, and grid overdraw/perf.
+3. **M2-D full SAR workflow coverage** — 35/96 actions PROVEN (was 31). W19-W22 clipboard ops newly proven (`431b437`). 31 WS selectors, 77 registry entries, 2 recipes. W15 three-part proof committed. S3-S6/G5-G6/G9-G11 proven. Remaining 52 WIRED actions need committed proof in future M2-D/E passes.
+4. **Workbench UI audit follow-up** — 2026-03-24 audit found 39 user-facing issues after BUG-01 was fixed: 3 critical, 7 high, 14 medium, 15 low. BUG-02 (silent PNG decode) and BUG-03 (duplicate mouseleave stroke) now FIXED (`fd6973a`). Remaining open-bug focus: mobile modal clipping (BUG-04), grid overdraw/perf (BUG-05), and G-BUNDLE Skin Dock button enablement race (pre-existing, see BUG-10 below).
 5. **Mobile/touch support is now an explicit roadmap requirement** — current mobile behavior may load but is not yet a truthful supported surface. BUG-04 is one concrete blocking symptom, but the broader requirement is: no milestone closeout or product-language upgrade should imply practical mobile support until touch interactions, modal behavior, viewport fit, and control usability are explicitly audited and improved.
 6. **PB-03 UX hardening** — confirm dialog on session-boundary loads. Cross-session undo remains architecturally out of scope. Low-priority UX refinement.
 7. **Bundle-family expansion roadmap is still under-scoped** — the 2026-03-24 player-state parity audit confirmed three concrete gaps: (a) non-bundle override naming mismatch — **FIXED** (BUG-09: all override paths now use per-family W semantics matching the bundle contract), (b) mounted families exist in runtime/debug surfaces but not in bundle templates or native family builders, and (c) the native sandbox overwrite helper is template-agnostic internally while the exposed workbench flow is still session/export driven. Gaps (b) and (c) remain roadmap work.
@@ -70,14 +70,15 @@ This stack is execution priority, not timeless truth. Re-evaluate when any sub-p
 | ID | Summary | Status | Notes |
 |----|---------|--------|-------|
 | BUG-01 | Grid toggle overlay is incorrect — uses simple lines instead of cross marks at intersections; grid size is not user-customizable | FIXED | Fixed in `6fb3375`..`fef0e78` (4 commits). Cross marks at intersections, grid-step select (Frame/1×1–16×16) on both whole-sheet editor and legacy inspector. Default "Frame" shows crosses at sprite frame boundaries. Separate X/Y step for non-square frames. Opacity tuned for visibility. UI-proven via screenshots. |
-| BUG-02 | PNG upload silently fails on decode/load error because the source-image path has no `img.onerror` handler | OPEN | `workbench.js:6177-6182` wires `img.onload` only. Corrupted/unsupported images can leave the source canvas blank with no user-visible error even though upload/post succeeded. |
-| BUG-03 | Whole-sheet canvas binds `mouseleave` twice, allowing spurious stroke-complete callbacks and empty undo entries | OPEN | `whole-sheet-init.js:375-380` binds both `_onStrokeEnd` and `_onCanvasMouseLeave` to `mouseleave`. This can fire stroke-complete even when no active stroke exists. |
+| BUG-02 | PNG upload silently fails on decode/load error because the source-image path has no `img.onerror` handler | FIXED | Fixed in `fd6973a`. Added `img.onerror` at both image loading sites (wbUpload + file-change handler). Error clears stale sourceImage, revokes object URL, shows user-visible status message. |
+| BUG-03 | Whole-sheet canvas binds `mouseleave` twice, allowing spurious stroke-complete callbacks and empty undo entries | FIXED | Fixed in `fd6973a`. Removed duplicate mouseleave→_onStrokeEnd binding. _onCanvasMouseLeave now calls _onStrokeEnd() first, then clears hover display. Single handler, no duplicate stroke-complete risk. |
 | BUG-04 | Overlay modal clips content on mobile/tablet because `.overlay-card` relies on `100vh` and a weak internal scrollbar | OPEN | `styles.css:97-106`. On iOS Safari and short viewports, the submit button can fall below the visible viewport and the scrollbar is hard to discover. |
 | BUG-05 | Whole-sheet/REXPaint grid draws every cross mark for the entire sheet even when most cells are off-screen | OPEN | `canvas.js:617-625` loops full sheet dimensions with no viewport culling. Large sheets at high zoom can incur visible frame drops. |
 | BUG-06 | Bug-report known-issue dropdown fails silently when `fetchKnownBugs()` errors | OPEN | `workbench.js:494` swallows the fetch failure. Users only see the default option and may file duplicates without knowing the dropdown failed to load. |
 | BUG-07 | Disabled controls are too visually similar to enabled controls on the dark theme | OPEN | `styles.css:152` uses opacity only. Grid-panel controls and similar disabled buttons look merely dimmed, especially on touch devices with no cursor feedback. |
 | BUG-08 | Legacy Char Grid debug panel is exposed in production UI | OPEN | `workbench.html:233-236` leaves `<details id="legacyGridDetails" class="legacy-grid-debug">` visible to all users even though it is a debug-only surface. |
 | BUG-09 | Non-bundle skin override paths still use binary W encoding and miss `W=2` equipment variants | FIXED | Non-bundle override generators now align with current product family semantics: shared `FAMILY_W_RANGE` rule applies `all_16` (W∈{0,1,2}) to player/plydie/wolfie and `weapon_gte_1` (W∈{1,2}) to attack/wolack. One rule concept used by all four generators (`_termpp_skin_override_names`, `WEBBUILD_DEFAULT_OVERRIDE_NAMES`, both `DEFAULT_OVERRIDE_SETS`). Override count: 81→105 (full parity), 49→65 (mounted mode). For enabled bundle families (player/attack/plydie), non-bundle names exactly equal bundle-path names. Tests pass. **Open residual:** committed native attack/wolack sprite inventory on disk (W=1 only) is narrower than the generated override contract (W∈{1,2}); this is an inherited runtime-truth question, not a naming bug. |
+| BUG-10 | G-BUNDLE Skin Dock button stays disabled despite "3/3 actions ready" — `areAllEnabledBundleActionsReady()` returns false when action statuses show "converted" | OPEN | Pre-existing. Confirmed reproducibly on `ba4b201` and `fd6973a`. Button tooltip says "not all required bundle actions are ready" while DOM status text says "3/3 actions ready" and `_state().actionStates` shows all "converted". Likely mismatch between `getEnabledActions(templateSet)` keys and `state.actionStates` keys. G-RANDOM gate passes (uses different bundle-test path). |
 
 **UI audit note:** the 2026-03-24 workbench UI audit found 39 verified issues total (3 critical, 7 high, 14 medium, 15 low). The active-bug table above promotes the critical issues and highest-signal open production issues into canon; the broader severity breakdown is preserved in `PLAYWRIGHT_FAILURE_LOG.md`.
 
@@ -85,7 +86,7 @@ This stack is execution priority, not timeless truth. Re-evaluate when any sub-p
 
 The 2026-03-25 REXPaint parity audit identified that the shipped whole-sheet editor surface (whole-sheet-init.js) lacks clipboard, selection-transform, and bulk-edit operations that exist in the legacy XP Frame Inspector (workbench.js). These gaps block inspector demotion beyond Phase 1 (collapse to `<details>`).
 
-**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. EditorApp (editor-app.js) contains copy/paste/deleteSelection code, but the shipped whole-sheet keyboard handler passes Ctrl+C/V through to the browser. Classification: exists in underlying editor layer, not wired/exposed in shipped whole-sheet surface.
+**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) is wired but has a known bounds-update bug. W24-W31 (transforms/bulk-edit) remain unimplemented.
 
 #### Planned Whole-Sheet Actions (post-audit parity extension)
 
@@ -93,11 +94,11 @@ These are tracked as a planned parity extension outside the existing 96-action S
 
 | ID | Action | Code Basis | Priority | Notes |
 |----|--------|-----------|----------|-------|
-| W19 | Copy selection (Ctrl+C) | Port or integrate EditorApp.copy() logic into whole-sheet-init.js | HIGH | EditorApp method exists but WS does not use EditorApp |
-| W20 | Paste selection (Ctrl+V) | Port or integrate EditorApp.startPaste()/paste() logic into whole-sheet-init.js | HIGH | EditorApp method exists but WS does not use EditorApp |
-| W21 | Cut selection (Ctrl+X) | Implement copy + clear in whole-sheet-init.js | HIGH | No cut method in EditorApp; WS needs its own |
-| W22 | Delete/clear selection (Del) | Port or integrate EditorApp.deleteSelection() logic into whole-sheet-init.js | HIGH | EditorApp method exists but WS does not use EditorApp |
-| W23 | Select all (Ctrl+A) | New: set selection bounds to full canvas dimensions | MEDIUM | No equivalent exists |
+| W19 | Copy selection (Ctrl+C) | Implemented in whole-sheet-init.js | HIGH | **PROVEN** `431b437` — UI-driven proof via `run_whole_sheet_clipboard_test.mjs`. Copies selected cell data to internal clipboard. |
+| W20 | Paste selection (Ctrl+V) | Implemented in whole-sheet-init.js | HIGH | **PROVEN** `431b437` — Ctrl+V enters paste mode, click places clipboard content at target position. Paste mode exits after placement. |
+| W21 | Cut selection (Ctrl+X) | Implemented in whole-sheet-init.js | HIGH | **PROVEN** `431b437` — Copies selection to clipboard, clears source region. Both clipboard population and source clearing verified. |
+| W22 | Delete/clear selection (Del) | Implemented in whole-sheet-init.js | HIGH | **PROVEN** `431b437` — Delete key clears selected cells to glyph=0. Undo integration via stroke-complete callback. |
+| W23 | Select all (Ctrl+A) | Implemented in whole-sheet-init.js | MEDIUM | **WIRED, unproven** — implementation exists but bounds not updated correctly when select tool already active (non-blocking known issue). |
 | W24 | Rotate selection CW | Port `selectionMatrixRotate(src, true)` from inspector | MEDIUM | Inspector helper at workbench.js:3019 |
 | W25 | Rotate selection CCW | Port `selectionMatrixRotate(src, false)` from inspector | MEDIUM | Same helper |
 | W26 | Flip selection H | Port `selectionMatrixFlipH()` from inspector | MEDIUM | Inspector helper at workbench.js:3011 |
@@ -131,8 +132,8 @@ These inspector operations work at the frame level, not the whole-sheet canvas l
 **BLOCKED** on clipboard/transform/bulk-edit parity. Current state:
 
 - Phase 1 (collapse inspector to `<details>` tag): **can proceed** — inspector remains accessible
-- Phase 2-6 (progressive capability absorption): **requires W19-W31 implementation**
-- Phase 7 (full demotion — never auto-open inspector): **blocked** until at minimum W19-W22 (clipboard) and W24-W27 (transforms) are in the shipped whole-sheet surface
+- Phase 2-6 (progressive capability absorption): **W19-W22 now PROVEN** (`431b437`). Remaining: W24-W31 (transforms/bulk-edit).
+- Phase 7 (full demotion — never auto-open inspector): **blocked** until at minimum W24-W27 (transforms) are in the shipped whole-sheet surface
 
 The canon claim "whole-sheet editor should become the primary correction surface" remains the intended direction. Being a primary correction surface for M2 workflows (bundle authoring, PNG manual assembly) does not require full REXPaint parity, but it does require clipboard and basic transform operations that are currently missing from the shipped whole-sheet surface.
 
