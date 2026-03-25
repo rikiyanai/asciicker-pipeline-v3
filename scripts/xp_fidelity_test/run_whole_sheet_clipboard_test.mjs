@@ -398,19 +398,18 @@ async function main() {
   const canvasH = selectAllState?.gridRows;
 
   const selectAllPass = saBounds && saBounds.x === 0 && saBounds.y === 0 &&
-    saBounds.width > 0 && saBounds.height > 0;
+    saBounds.width === canvasW && saBounds.height === canvasH;
   if (!selectAllPass) {
-    console.warn(`  [W23 KNOWN ISSUE] Select-all bounds not updated when already in select mode. Got ${JSON.stringify(saBounds)}`);
+    console.warn(`  [W23 FAIL] Select-all bounds mismatch. Got ${JSON.stringify(saBounds)}, expected ${canvasW}x${canvasH}`);
   }
   steps.w23_select_all = {
     step: 'select_all',
     pass: selectAllPass,
-    blocking: false,
-    note: selectAllPass ? null : 'Product bug: Ctrl+A does not reset bounds when select tool already active',
+    blocking: true,
     selectionBounds: saBounds,
     canvasDimensions: { w: canvasW, h: canvasH },
   };
-  // W23 does NOT block allPass — it is non-blocking/bonus
+  if (!selectAllPass) allPass = false;
   await screenshot(page, outDir, 'step09_w23_select_all');
 
   // ── Summary ──

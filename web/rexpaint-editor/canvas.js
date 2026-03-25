@@ -612,14 +612,40 @@ export class Canvas {
   _drawGrid() {
     const sx = this.gridStepX || 1;
     const sy = this.gridStepY || 1;
-    const armLen = Math.max(2, Math.floor(this.cellSizePixels * 0.3));
+    const cs = this.cellSizePixels;
+    const armLen = Math.max(2, Math.floor(cs * 0.3));
+
+    // Viewport culling: determine visible pixel region
+    let vpX = this.offsetX;
+    let vpY = this.offsetY;
+    let vpW = this.canvasElement.width;
+    let vpH = this.canvasElement.height;
+    const par = this.canvasElement.parentElement;
+    if (par && (par.scrollWidth > par.clientWidth || par.scrollHeight > par.clientHeight)) {
+      vpX = par.scrollLeft;
+      vpY = par.scrollTop;
+      vpW = par.clientWidth;
+      vpH = par.clientHeight;
+    }
+
+    // Visible cell range with 1-cell safety margin
+    const margin = cs + armLen;
+    let startX = Math.floor((vpX - margin) / cs);
+    startX = Math.max(sx, Math.ceil(startX / sx) * sx);
+    let endX = Math.ceil((vpX + vpW + margin) / cs);
+    endX = Math.min(this.width, endX);
+    let startY = Math.floor((vpY - margin) / cs);
+    startY = Math.max(sy, Math.ceil(startY / sy) * sy);
+    let endY = Math.ceil((vpY + vpH + margin) / cs);
+    endY = Math.min(this.height, endY);
+
     this.ctx.strokeStyle = 'rgba(220,230,240,0.7)';
     this.ctx.lineWidth = 1;
     this.ctx.beginPath();
-    for (let x = sx; x < this.width; x += sx) {
-      for (let y = sy; y < this.height; y += sy) {
-        const px = x * this.cellSizePixels - this.offsetX;
-        const py = y * this.cellSizePixels - this.offsetY;
+    for (let x = startX; x < endX; x += sx) {
+      for (let y = startY; y < endY; y += sy) {
+        const px = x * cs - this.offsetX;
+        const py = y * cs - this.offsetY;
         this.ctx.moveTo(px, py - armLen);
         this.ctx.lineTo(px, py + armLen);
         this.ctx.moveTo(px - armLen, py);

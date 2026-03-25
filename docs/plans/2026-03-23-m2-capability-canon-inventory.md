@@ -175,7 +175,7 @@ Each capability row has five columns:
 
 #### Post-Audit Parity Extension (2026-03-25 REXPaint parity audit)
 
-> **Scope note:** The 13 actions below are a post-audit parity extension discovered by the 2026-03-25 audit. They are tracked separately from the existing 96-action SAR count to avoid silently inflating the denominator. They will be folded into the SAR denominator at the next canon rebaseline. Until then, aggregate statistics reference "35/96 SAR + 12/13 parity extension proven."
+> **Scope note:** The 13 actions below are a post-audit parity extension discovered by the 2026-03-25 audit. They are tracked separately from the existing 96-action SAR count to avoid silently inflating the denominator. They will be folded into the SAR denominator at the next canon rebaseline. Until then, aggregate statistics reference "35/96 SAR + 13/13 parity extension proven."
 
 **Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) is wired but has a known bounds-update bug when the select tool is already active. W24-W27 (selection transforms) implemented and PROVEN (`6af8b86`, `1828979`): 4 shipped sidebar buttons + `]`/`[` keyboard shortcuts, single undo per transform, bounds update after rotate. W28-W31 (bulk-edit) implemented and PROVEN (`run_whole_sheet_bulkedit_test.mjs`, 10/10 PASS): 3 shipped sidebar buttons (Fill Sel, Repl FG, Repl BG) + collapsible Find & Replace section. Match-source contract for W29/W30: `lastSampledCell` set by eyedropper. W31 scope: 'selection' or 'canvas'.
 
@@ -187,7 +187,7 @@ Each capability row has five columns:
 | W20 | Paste selection (Ctrl+V) | Implemented in whole-sheet-init.js (`0383b31`) | **PROVEN** | HIGH | Post-M2-C parity | UI-driven proof `431b437`. Ctrl+V enters paste mode, click places content at target. |
 | W21 | Cut selection (Ctrl+X) | Implemented in whole-sheet-init.js (`0383b31`) | **PROVEN** | HIGH | Post-M2-C parity | UI-driven proof `431b437`. Copies then clears source region. |
 | W22 | Delete/clear selection (Del) | Implemented in whole-sheet-init.js (`0383b31`) | **PROVEN** | HIGH | Post-M2-C parity | UI-driven proof `431b437`. Delete key clears selected cells to glyph=0. |
-| W23 | Select all (Ctrl+A) | Implemented in whole-sheet-init.js (`0383b31`) | **WIRED** | MEDIUM | Post-M2-C parity | Known bug: bounds not updated when select tool already active. Non-blocking. |
+| W23 | Select all (Ctrl+A) | Implemented in whole-sheet-init.js (`0383b31`) | **PROVEN** | MEDIUM | Post-M2-C parity | Root cause: `SelectToolAdapter` lacked `startSelection`/`updateSelection`/`endSelection` proxy methods. Fix: 3 proxy methods added. 8/8 PASS `run_whole_sheet_clipboard_test.mjs` (W23 now blocking). Bounds verified: `{x:0, y:0, w:gridCols, h:gridRows}`. |
 | W24 | Rotate selection CW | Implemented in whole-sheet-init.js (`6af8b86`) | **PROVEN** | MEDIUM | Post-M2-C parity | Button `#wsRotateCW` + keyboard `]`. Single undo op, bounds update. 9/9 PASS `run_whole_sheet_transform_test.mjs` (`1828979`). |
 | W25 | Rotate selection CCW | Implemented in whole-sheet-init.js (`6af8b86`) | **PROVEN** | MEDIUM | Post-M2-C parity | Button `#wsRotateCCW` + keyboard `[`. Verified restores original from CW state. |
 | W26 | Flip selection H | Implemented in whole-sheet-init.js (`6af8b86`) | **PROVEN** | MEDIUM | Post-M2-C parity | Button `#wsFlipH`. Single undo op verified (Ctrl+Z reverts). |
@@ -215,7 +215,7 @@ These inspector operations work at the frame level, not the whole-sheet canvas l
 | Half-cell paint (top/bottom) | Inspector-specific rendering; not a REXPaint or whole-sheet concept |
 | Cell inspect tool (hover readout) | Replaced by WS Info panel |
 
-**Inspector demotion status:** W19-W22 (clipboard) PROVEN (`431b437`). W24-W27 (transforms) PROVEN (`1828979`). W28-W31 (bulk-edit) **PROVEN** — 10/10 PASS via `run_whole_sheet_bulkedit_test.mjs`. All parity-extension actions now shipped or proven. Phase 1 (collapse to `<details>`) can proceed. Phase 2-6 (progressive absorption) unblocked. Phase 7 (full demotion) **unblocked** — all blocking bulk-edit operations are now in the shipped whole-sheet surface.
+**Inspector demotion status:** W19-W23 (clipboard + select-all) PROVEN. W24-W27 (transforms) PROVEN (`1828979`). W28-W31 (bulk-edit) **PROVEN** — 10/10 PASS via `run_whole_sheet_bulkedit_test.mjs`. 13/13 parity-extension actions now proven. Phase 1 (collapse to `<details>`) can proceed. Phase 2-6 (progressive absorption) unblocked. Phase 7 (full demotion) **unblocked** — all blocking bulk-edit operations are now in the shipped whole-sheet surface.
 
 ### Family 8: Jitter/Alignment (6 actions)
 

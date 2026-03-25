@@ -155,6 +155,9 @@ class SelectToolAdapter {
   startDrag(x, y) { this._tool.startSelection(x, y); }
   drag(x, y) { this._tool.updateSelection(x, y); }
   endDrag() { this._tool.endSelection(); }
+  startSelection(x, y) { this._tool.startSelection(x, y); }
+  updateSelection(x, y) { this._tool.updateSelection(x, y); }
+  endSelection() { this._tool.endSelection(); }
   getSelectionBounds() { return this._tool.getSelectionBounds(); }
   clearSelection() { this._tool.clearSelection(); }
   deactivate() { this._tool.deactivate(); }
