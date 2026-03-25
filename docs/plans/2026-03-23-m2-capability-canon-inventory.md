@@ -2,7 +2,7 @@
 
 **Created:** 2026-03-23
 **Last updated:** 2026-03-25
-**Branch:** master @ 0a8a49c
+**Branch:** master @ 1828979
 **Purpose:** Canonical answer to "what user-reachable workbench behaviors should be possible right now?" — distinguishing intent, code wiring, and verified proof.
 **Supersedes:** No prior canonical capability inventory existed. This doc synthesizes claims from the full doc set and measures them against code and failure-log reality.
 
@@ -175,9 +175,9 @@ Each capability row has five columns:
 
 #### Post-Audit Parity Extension (2026-03-25 REXPaint parity audit)
 
-> **Scope note:** The 13 actions below are a post-audit parity extension discovered by the 2026-03-25 audit. They are tracked separately from the existing 96-action SAR count to avoid silently inflating the denominator. They will be folded into the SAR denominator at the next canon rebaseline. Until then, aggregate statistics reference "35/96 SAR + 4/13 parity extension proven."
+> **Scope note:** The 13 actions below are a post-audit parity extension discovered by the 2026-03-25 audit. They are tracked separately from the existing 96-action SAR count to avoid silently inflating the denominator. They will be folded into the SAR denominator at the next canon rebaseline. Until then, aggregate statistics reference "35/96 SAR + 8/13 parity extension proven."
 
-**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) is wired but has a known bounds-update bug when the select tool is already active. W24-W31 (transforms/bulk-edit) remain unimplemented.
+**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) is wired but has a known bounds-update bug when the select tool is already active. W24-W27 (selection transforms) implemented and PROVEN (`6af8b86`, `1828979`): 4 shipped sidebar buttons + `]`/`[` keyboard shortcuts, single undo per transform, bounds update after rotate. W28-W31 (bulk-edit) remain unimplemented.
 
 **Planned whole-sheet actions:**
 
@@ -188,10 +188,10 @@ Each capability row has five columns:
 | W21 | Cut selection (Ctrl+X) | Implemented in whole-sheet-init.js (`0383b31`) | **PROVEN** | HIGH | Post-M2-C parity | UI-driven proof `431b437`. Copies then clears source region. |
 | W22 | Delete/clear selection (Del) | Implemented in whole-sheet-init.js (`0383b31`) | **PROVEN** | HIGH | Post-M2-C parity | UI-driven proof `431b437`. Delete key clears selected cells to glyph=0. |
 | W23 | Select all (Ctrl+A) | Implemented in whole-sheet-init.js (`0383b31`) | **WIRED** | MEDIUM | Post-M2-C parity | Known bug: bounds not updated when select tool already active. Non-blocking. |
-| W24 | Rotate selection CW | Port `selectionMatrixRotate(src, true)` from workbench.js:3019 | PLANNED | MEDIUM | Post-M2-C parity |
-| W25 | Rotate selection CCW | Port `selectionMatrixRotate(src, false)` from workbench.js:3019 | PLANNED | MEDIUM | Post-M2-C parity |
-| W26 | Flip selection H | Port `selectionMatrixFlipH()` from workbench.js:3011 | PLANNED | MEDIUM | Post-M2-C parity |
-| W27 | Flip selection V | Port `selectionMatrixFlipV()` from workbench.js:3015 | PLANNED | MEDIUM | Post-M2-C parity |
+| W24 | Rotate selection CW | Implemented in whole-sheet-init.js (`6af8b86`) | **PROVEN** | MEDIUM | Post-M2-C parity | Button `#wsRotateCW` + keyboard `]`. Single undo op, bounds update. 9/9 PASS `run_whole_sheet_transform_test.mjs` (`1828979`). |
+| W25 | Rotate selection CCW | Implemented in whole-sheet-init.js (`6af8b86`) | **PROVEN** | MEDIUM | Post-M2-C parity | Button `#wsRotateCCW` + keyboard `[`. Verified restores original from CW state. |
+| W26 | Flip selection H | Implemented in whole-sheet-init.js (`6af8b86`) | **PROVEN** | MEDIUM | Post-M2-C parity | Button `#wsFlipH`. Single undo op verified (Ctrl+Z reverts). |
+| W27 | Flip selection V | Implemented in whole-sheet-init.js (`6af8b86`) | **PROVEN** | MEDIUM | Post-M2-C parity | Button `#wsFlipV`. Cell positions verified via diagnostic observation. |
 | W28 | Fill selection | Port `fillInspectorSelectionWithGlyph()` logic from workbench.js:3199 | PLANNED | MEDIUM | Post-M2-C parity |
 | W29 | Replace FG in selection | Port `replaceInspectorSelectionColor('fg')` logic from workbench.js:3236 | PLANNED | MEDIUM | Post-M2-C parity |
 | W30 | Replace BG in selection | Port `replaceInspectorSelectionColor('bg')` logic from workbench.js:3236 | PLANNED | MEDIUM | Post-M2-C parity |
@@ -215,7 +215,7 @@ These inspector operations work at the frame level, not the whole-sheet canvas l
 | Half-cell paint (top/bottom) | Inspector-specific rendering; not a REXPaint or whole-sheet concept |
 | Cell inspect tool (hover readout) | Replaced by WS Info panel |
 
-**Inspector demotion status:** W19-W22 (clipboard) now PROVEN (`431b437`). Remaining blocker: W24-W27 (transforms) + W28-W31 (bulk-edit). Phase 1 (collapse to `<details>`) can proceed. Phase 2-6 (progressive absorption) unblocked for clipboard. Phase 7 (full demotion) blocked until at minimum W24-W27 are shipped.
+**Inspector demotion status:** W19-W22 (clipboard) PROVEN (`431b437`). W24-W27 (transforms) PROVEN (`1828979`). Remaining blocker: W28-W31 (bulk-edit). Phase 1 (collapse to `<details>`) can proceed. Phase 2-6 (progressive absorption) unblocked for clipboard + transforms. Phase 7 (full demotion) blocked until at minimum W28-W31 are shipped.
 
 ### Family 8: Jitter/Alignment (6 actions)
 
@@ -277,7 +277,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 
 **Proof:** No specific verifier coverage for inspector-level actions. The inspector was the primary editing surface during M1, but verification focused on the save/export/runtime loop, not individual editing operations.
 
-**2026-03-25 parity audit finding (updated):** W19-W22 (clipboard) now **PROVEN** (`431b437`). Inspector demotion remains blocked on W24-W27 (transforms) and W28-W31 (bulk-edit). Phase 1 (collapse to `<details>`) can proceed. Phase 2-6 unblocked for clipboard. Phase 7 blocked until at minimum W24-W27 are shipped. See canonical spec §3 and capability inventory §Family 7 demotion status for current state.
+**2026-03-25 parity audit finding (updated):** W19-W22 (clipboard) **PROVEN** (`431b437`). W24-W27 (transforms) **PROVEN** (`1828979`). Inspector demotion remains blocked on W28-W31 (bulk-edit) only. Phase 1 (collapse to `<details>`) can proceed. Phase 2-6 unblocked for clipboard + transforms. Phase 7 blocked until W28-W31 are shipped.
 
 ---
 
@@ -327,7 +327,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | M2-D (full SAR coverage) | 45 | 0 | 43 | 2 (1 PARTIAL, 1 PLANNED) |
 | M2-E (semantic dicts) | 0 | 0 | 0 | 0 (workflow-level, not action-level) |
 | M2-F (analyze assistive) | 1 | 0 | 1 | 0 |
-| *Post-M2-C parity (W19-W31)* | 13 | 4 | 1 | 8 (W24-W31 PLANNED) |
+| *Post-M2-C parity (W19-W31)* | 13 | 8 | 1 | 4 (W28-W31 PLANNED) |
 
 ### Verifier Slice Readiness (from M2 verifier design)
 

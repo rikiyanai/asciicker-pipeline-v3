@@ -55,8 +55,8 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 1. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions run `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
 2. **Slice 5 manual assembly E2E** — PROVEN 13/13 (2026-03-24). Covers U1→S12→S7→D1→W1→W2→T3→T4. Demonstrates M2-B/C/D functional end-to-end. Runner: `run_manual_assembly_e2e_test.mjs`.
-3. **M2-D full SAR workflow coverage** — 35/96 actions PROVEN (was 31). W19-W22 clipboard ops newly proven (`431b437`). 31 WS selectors, 77 registry entries, 2 recipes. W15 three-part proof committed. S3-S6/G5-G6/G9-G11 proven. Remaining 52 WIRED actions need committed proof in future M2-D/E passes.
-4. **Workbench UI audit follow-up** — 2026-03-24 audit found 39 user-facing issues after BUG-01 was fixed: 3 critical, 7 high, 14 medium, 15 low. BUG-02 (silent PNG decode) and BUG-03 (duplicate mouseleave stroke) now FIXED (`fd6973a`). Remaining open-bug focus: mobile modal clipping (BUG-04), grid overdraw/perf (BUG-05), and G-BUNDLE Skin Dock button enablement race (pre-existing, see BUG-10 below).
+3. **M2-D full SAR workflow coverage** — 35/96 SAR + 8/13 parity extension PROVEN. W24-W27 selection transforms newly proven (`1828979`, 9/9 PASS via `run_whole_sheet_transform_test.mjs`). W19-W22 clipboard proven (`431b437`). 31 WS selectors, 77 registry entries, 2 recipes. W15 three-part proof committed. S3-S6/G5-G6/G9-G11 proven. Remaining 48 WIRED actions need committed proof in future M2-D/E passes.
+4. **Workbench UI audit follow-up** — 2026-03-24 audit found 39 user-facing issues after BUG-01 was fixed: 3 critical, 7 high, 14 medium, 15 low. BUG-02 (silent PNG decode), BUG-03 (duplicate mouseleave stroke), and BUG-10 (Skin Dock button enablement) now FIXED. Remaining open-bug focus: mobile modal clipping (BUG-04), grid overdraw/perf (BUG-05).
 5. **Mobile/touch support is now an explicit roadmap requirement** — current mobile behavior may load but is not yet a truthful supported surface. BUG-04 is one concrete blocking symptom, but the broader requirement is: no milestone closeout or product-language upgrade should imply practical mobile support until touch interactions, modal behavior, viewport fit, and control usability are explicitly audited and improved.
 6. **PB-03 UX hardening** — confirm dialog on session-boundary loads. Cross-session undo remains architecturally out of scope. Low-priority UX refinement.
 7. **Bundle-family expansion roadmap is still under-scoped** — the 2026-03-24 player-state parity audit confirmed three concrete gaps: (a) non-bundle override naming mismatch — **FIXED** (BUG-09: all override paths now use per-family W semantics matching the bundle contract), (b) mounted families exist in runtime/debug surfaces but not in bundle templates or native family builders, and (c) the native sandbox overwrite helper is template-agnostic internally while the exposed workbench flow is still session/export driven. Gaps (b) and (c) remain roadmap work.
@@ -78,15 +78,15 @@ This stack is execution priority, not timeless truth. Re-evaluate when any sub-p
 | BUG-07 | Disabled controls are too visually similar to enabled controls on the dark theme | OPEN | `styles.css:152` uses opacity only. Grid-panel controls and similar disabled buttons look merely dimmed, especially on touch devices with no cursor feedback. |
 | BUG-08 | Legacy Char Grid debug panel is exposed in production UI | OPEN | `workbench.html:233-236` leaves `<details id="legacyGridDetails" class="legacy-grid-debug">` visible to all users even though it is a debug-only surface. |
 | BUG-09 | Non-bundle skin override paths still use binary W encoding and miss `W=2` equipment variants | FIXED | Non-bundle override generators now align with current product family semantics: shared `FAMILY_W_RANGE` rule applies `all_16` (W∈{0,1,2}) to player/plydie/wolfie and `weapon_gte_1` (W∈{1,2}) to attack/wolack. One rule concept used by all four generators (`_termpp_skin_override_names`, `WEBBUILD_DEFAULT_OVERRIDE_NAMES`, both `DEFAULT_OVERRIDE_SETS`). Override count: 81→105 (full parity), 49→65 (mounted mode). For enabled bundle families (player/attack/plydie), non-bundle names exactly equal bundle-path names. Tests pass. **Open residual:** committed native attack/wolack sprite inventory on disk (W=1 only) is narrower than the generated override contract (W∈{1,2}); this is an inherited runtime-truth question, not a naming bug. |
-| BUG-10 | G-BUNDLE Skin Dock button stays disabled despite "3/3 actions ready" — `areAllEnabledBundleActionsReady()` returns false when action statuses show "converted" | OPEN | Pre-existing. Confirmed reproducibly on `ba4b201` and `fd6973a`. Button tooltip says "not all required bundle actions are ready" while DOM status text says "3/3 actions ready" and `_state().actionStates` shows all "converted". Likely mismatch between `getEnabledActions(templateSet)` keys and `state.actionStates` keys. G-RANDOM gate passes (uses different bundle-test path). |
+| BUG-10 | G-BUNDLE Skin Dock button stays disabled despite "3/3 actions ready" | FIXED | Root cause: `persistBundleActionStatus()` called `updateBundleUI()` (text only) but not `updateWebbuildUI()` (which manages button disabled state). Fix: added `updateWebbuildUI()` call in `persistBundleActionStatus()` (`6af8b86`). Verified: `quickBtnDisabled: false` in bundle test snapshot, G-RANDOM seed 42 PASS with skin_dock=true. |
 
 **UI audit note:** the 2026-03-24 workbench UI audit found 39 verified issues total (3 critical, 7 high, 14 medium, 15 low). The active-bug table above promotes the critical issues and highest-signal open production issues into canon; the broader severity breakdown is preserved in `PLAYWRIGHT_FAILURE_LOG.md`.
 
 ### Whole-Sheet Parity Gap (2026-03-25 audit)
 
-The 2026-03-25 REXPaint parity audit identified that the shipped whole-sheet editor surface (whole-sheet-init.js) lacked clipboard, selection-transform, and bulk-edit operations. Clipboard (W19-W22) is now **PROVEN** (`431b437`). Remaining gaps: selection-transform (W24-W27) and bulk-edit (W28-W31). These remaining gaps block inspector demotion beyond Phase 2-6.
+The 2026-03-25 REXPaint parity audit identified that the shipped whole-sheet editor surface (whole-sheet-init.js) lacked clipboard, selection-transform, and bulk-edit operations. Clipboard (W19-W22) is now **PROVEN** (`431b437`). Selection transforms (W24-W27) are now **PROVEN** (`1828979`, 9/9 PASS). Remaining gap: bulk-edit (W28-W31). This remaining gap blocks inspector demotion Phase 7.
 
-**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) is wired but has a known bounds-update bug. W24-W31 (transforms/bulk-edit) remain unimplemented.
+**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) is wired but has a known bounds-update bug. W24-W27 (selection transforms) implemented and proven (`6af8b86`, `1828979`): 4 shipped sidebar buttons (Rot CW, Rot CCW, Flip H, Flip V) + keyboard shortcuts `]`/`[` for rotate. Each transform is a single undo operation with bounds update after rotate. W28-W31 (bulk-edit) remain unimplemented.
 
 #### Planned Whole-Sheet Actions (post-audit parity extension)
 
@@ -99,10 +99,10 @@ These are tracked as a planned parity extension outside the existing 96-action S
 | W21 | Cut selection (Ctrl+X) | Implemented in whole-sheet-init.js | HIGH | **PROVEN** `431b437` — Copies selection to clipboard, clears source region. Both clipboard population and source clearing verified. |
 | W22 | Delete/clear selection (Del) | Implemented in whole-sheet-init.js | HIGH | **PROVEN** `431b437` — Delete key clears selected cells to glyph=0. Undo integration via stroke-complete callback. |
 | W23 | Select all (Ctrl+A) | Implemented in whole-sheet-init.js | MEDIUM | **WIRED, unproven** — implementation exists but bounds not updated correctly when select tool already active (non-blocking known issue). |
-| W24 | Rotate selection CW | Port `selectionMatrixRotate(src, true)` from inspector | MEDIUM | Inspector helper at workbench.js:3019 |
-| W25 | Rotate selection CCW | Port `selectionMatrixRotate(src, false)` from inspector | MEDIUM | Same helper |
-| W26 | Flip selection H | Port `selectionMatrixFlipH()` from inspector | MEDIUM | Inspector helper at workbench.js:3011 |
-| W27 | Flip selection V | Port `selectionMatrixFlipV()` from inspector | MEDIUM | Inspector helper at workbench.js:3015 |
+| W24 | Rotate selection CW | Implemented in whole-sheet-init.js (`6af8b86`) | MEDIUM | **PROVEN** `1828979` — Button `#wsRotateCW` + keyboard `]`. Single undo op, bounds updated after rotate. 9/9 PASS via `run_whole_sheet_transform_test.mjs`. |
+| W25 | Rotate selection CCW | Implemented in whole-sheet-init.js (`6af8b86`) | MEDIUM | **PROVEN** `1828979` — Button `#wsRotateCCW` + keyboard `[`. Restores original from CW-rotated state. |
+| W26 | Flip selection H | Implemented in whole-sheet-init.js (`6af8b86`) | MEDIUM | **PROVEN** `1828979` — Button `#wsFlipH`. Undo reverts as single operation. |
+| W27 | Flip selection V | Implemented in whole-sheet-init.js (`6af8b86`) | MEDIUM | **PROVEN** `1828979` — Button `#wsFlipV`. Cell positions verified via diagnostic observation. |
 | W28 | Fill selection | Port `fillInspectorSelectionWithGlyph()` logic | MEDIUM | Inspector at workbench.js:3199 |
 | W29 | Replace FG in selection | Port `replaceInspectorSelectionColor('fg')` logic | MEDIUM | Inspector at workbench.js:3236 |
 | W30 | Replace BG in selection | Port `replaceInspectorSelectionColor('bg')` logic | MEDIUM | Inspector at workbench.js:3236 |
@@ -129,13 +129,13 @@ These inspector operations work at the frame level, not the whole-sheet canvas l
 
 #### Inspector Demotion Status
 
-**BLOCKED** on clipboard/transform/bulk-edit parity. Current state:
+**Partially unblocked.** Clipboard (W19-W22) and transforms (W24-W27) are now PROVEN. Current state:
 
 - Phase 1 (collapse inspector to `<details>` tag): **can proceed** — inspector remains accessible
-- Phase 2-6 (progressive capability absorption): **W19-W22 now PROVEN** (`431b437`). Remaining: W24-W31 (transforms/bulk-edit).
-- Phase 7 (full demotion — never auto-open inspector): **blocked** until at minimum W24-W27 (transforms) are in the shipped whole-sheet surface
+- Phase 2-6 (progressive capability absorption): **W19-W22 PROVEN** (`431b437`), **W24-W27 PROVEN** (`1828979`). Remaining: W28-W31 (bulk-edit).
+- Phase 7 (full demotion — never auto-open inspector): **blocked** until at minimum W28-W31 (bulk-edit: fill selection, replace fg/bg, find & replace) are in the shipped whole-sheet surface
 
-The canon claim "whole-sheet editor should become the primary correction surface" remains the intended direction. Being a primary correction surface for M2 workflows (bundle authoring, PNG manual assembly) does not require full REXPaint parity, but it does require clipboard and basic transform operations that are currently missing from the shipped whole-sheet surface.
+The canon claim "whole-sheet editor should become the primary correction surface" remains the intended direction. The whole-sheet surface now has clipboard and transform parity with the inspector. Remaining gap is bulk-edit operations (fill, replace, find & replace).
 
 ---
 
