@@ -40,8 +40,8 @@ This repo uses a 3-doc canonical authority model. Agents must treat ONLY these 3
 - Audit date: 2026-03-24
 - Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
 - Audited branch: `master`
-- Audited HEAD: `01f6e72`
-- Current branch role: active M2 acceptance and verifier architecture line; MVP deployment live at `rikiworld.com/xpedit`; M2-D registry expansion landed (77 entries)
+- Audited HEAD: `87ab20d`
+- Current branch role: active M2 acceptance and verifier architecture line; MVP deployment live at `rikiworld.com/xpedit`; M2-D registry expansion landed (77 entries); login reskin shipped; BUG-01 grid overlay fixed; player-state parity audit complete
 - **Self-containment**: This repo must be 100% self-contained. No runtime, test, or build-time dependency on external folders (e.g. `/Users/r/Downloads/asciicker-Y9-2`, `/Users/r/Downloads/n`). Run `python3 scripts/self_containment_audit.py` at startup.
 
 Do not assume `master` is the canonical restore/bundle line. For bundle/runtime issues, read the branch-history handoff below before making fix claims.
@@ -242,14 +242,18 @@ Summary:
 - `docs/research/ascii/2026-03-20-bundle-animation-types.md` — bundle/animation type map
 - `docs/research/ascii/2026-03-21-player-sprite-semantic-dictionary-seed.md` — semantic dictionary seed
 
-### Worksheets — Retired (2026-03-23)
+### Worksheets — Retired
 
-4 superseded worksheets archived via `scripts/doc_lifecycle_stitch.sh`:
+8 superseded worksheets archived via `scripts/doc_lifecycle_stitch.sh`:
 
 - [claude-workbench-ui-inventory (ARCHIVED)](WORKBENCH_DOCS_ARCHIVE.md#claude-workbench-ui-inventory) — superseded by COMPLETE_UI_CONTROL_REFERENCE
 - [workbench-verifier-sar-model (ARCHIVED)](WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-workbench-verifier-sar-model) — architecture absorbed into canonical spec §5
 - [M2 PNG verifier design handoff (ARCHIVED)](WORKBENCH_DOCS_ARCHIVE.md#2026-03-21-claude-handoff-m2-png-verifier-design) — handoff for completed verifier design
 - [edge-case-verifier-impl-plan (ARCHIVED)](WORKBENCH_DOCS_ARCHIVE.md#2026-03-22-edge-case-verifier-impl-plan) — M1 closed, implementation details no longer active
+- [login-screen-reskin-handoff (ARCHIVED)](WORKBENCH_DOCS_ARCHIVE.md#2026-03-24-login-screen-reskin-handoff) — reskin shipped at `fe9a9b3`
+- [m2d-registry-expansion-impl (ARCHIVED)](WORKBENCH_DOCS_ARCHIVE.md#2026-03-24-m2d-registry-expansion-impl) — all 7 tasks complete, proof at `324e892`
+- [mvp-deploy-cloud-run (ARCHIVED)](WORKBENCH_DOCS_ARCHIVE.md#2026-03-24-mvp-deploy-cloud-run) — MVP deployed, info in INDEX.md
+- [player-state-parity-audit (ARCHIVED)](WORKBENCH_DOCS_ARCHIVE.md#2026-03-24-player-state-parity-audit) — findings logged at `afa03b2`
 
 ### Historical Handoffs (worksheet — batch retirement candidate)
 
@@ -367,7 +371,7 @@ No distinct palette asset files (`.pal`, `palette.json`, etc.) exist in the repo
 
 > A canonical M2 capability inventory exists at `docs/plans/2026-03-23-m2-capability-canon-inventory.md`. It cross-references every doc in this index against current code wiring and failure-log proof to classify each user-reachable behavior as PROVEN, WIRED, PARTIAL, PLANNED, BLOCKED, or DEFERRED.
 >
-> Key findings (updated 2026-03-24, HEAD 01f6e72):
+> Key findings (updated 2026-03-24, HEAD 87ab20d):
 > - M1 is closed (see status correction above)
 > - 96 SAR-enumerated actions: **23 PROVEN** on committed code (B1/B2/B3 promoted via live Cloud Run browser test), 64 WIRED, 2 PARTIAL, 4 PLANNED, 1 BLOCKED, 2 DEFERRED
 > - M2-B source-panel proof is **committed** (5c67ef2, d12740c): 10/10 PASS at root + /xpedit

@@ -3828,7 +3828,7 @@ Grid toggle overlay drew simple horizontal/vertical lines instead of REXPaint-st
 
 **Date:** 2026-03-24
 **Status:** LOGGED
-**Worksheet:** `docs/plans/2026-03-24-player-state-parity-audit.md`
+**Worksheet:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-24-player-state-parity-audit`
 
 ### Review outcome
 
@@ -3869,3 +3869,51 @@ Grid toggle overlay drew simple horizontal/vertical lines instead of REXPaint-st
   - elevate the W-encoding mismatch as `BUG-09`
   - record the mounted-family/template gap more precisely
   - clarify that template-less native overwrite exists internally but not yet as a first-class user flow
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-24
+**Worksheet:** `docs/plans/2026-03-24-login-screen-reskin-handoff.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-24-login-screen-reskin-handoff`
+**Reason:** reskin shipped at fe9a9b3
+**References rewritten:** 0 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-24
+**Worksheet:** `docs/plans/2026-03-24-m2d-registry-expansion-impl.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-24-m2d-registry-expansion-impl`
+**Reason:** all 7 tasks complete, proof landed at 324e892
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-24
+**Worksheet:** `docs/plans/2026-03-24-mvp-deploy-cloud-run.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-24-mvp-deploy-cloud-run`
+**Reason:** MVP deployed, info captured in INDEX.md
+**References rewritten:** 1 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+
+
+---
+
+## Doc Lifecycle: Worksheet Retired
+
+**Date:** 2026-03-24
+**Worksheet:** `docs/plans/2026-03-24-player-state-parity-audit.md`
+**Archive anchor:** `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-24-player-state-parity-audit`
+**Reason:** audit findings logged at afa03b2, absorbed into canon
+**References rewritten:** 2 file(s)
+**Script:** `scripts/doc_lifecycle_stitch.sh`
+

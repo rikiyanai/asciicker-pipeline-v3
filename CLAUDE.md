@@ -121,7 +121,7 @@ Short version:
 - M2-B source-panel workflow: **committed proof** at `5c67ef2`. 10/10 PASS on both hosting modes on committed code. UI-driven actions with read-only diagnostic observation layer. PB-02 + Delete Box UX fixed.
 - `window.__wb_debug.getState()` is the preferred verifier state surface; `_state()` fallback should be treated as a temporary exception, not the long-term contract.
 - Any doc still referencing `feat/base-path-support` as a live branch is stale — that branch was merged and retired on 2026-03-23.
-- MVP deployment is live at `https://rikiworld.com/xpedit` on Google Cloud Run (single instance, ephemeral storage) behind a Cloudflare Worker route. Deploy via GitHub Actions `deploy-cloudrun.yml`. See `docs/plans/2026-03-24-mvp-deploy-cloud-run.md`.
+- MVP deployment is live at `https://rikiworld.com/xpedit` on Google Cloud Run (single instance, ephemeral storage) behind a Cloudflare Worker route. Deploy via GitHub Actions `deploy-cloudrun.yml`. See `docs/WORKBENCH_DOCS_ARCHIVE.md#2026-03-24-mvp-deploy-cloud-run`.
 - Bug report → GitHub Issue delivery is live. Token in GCP Secret Manager (`bug-report-github-token`), mounted as `BUG_REPORT_GITHUB_TOKEN` on Cloud Run. Verified: Issues #6, #7 created via API and browser UI. Any visitor can file bugs.
 - Pipeline run on Cloud Run free tier is very slow (>5 min for a single cat_sheet.png). Verifier tests that require full pipeline runs are impractical against the live deployment without increased resources. Smoke tests and UI-only flows work fine.
 
