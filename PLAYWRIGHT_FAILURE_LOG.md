@@ -4231,3 +4231,58 @@ Files changed:
 ### Evidence
 
 Reported as GitHub Issue #8. Fix confirmed by code inspection; no dedicated Playwright runner (visual regression on Safari is not easily testable headlessly).
+
+---
+
+## G-RANDOM Gate: Visual Fidelity Gap (2026-04-13)
+
+**Date:** 2026-04-13
+**Status:** KNOWN GAP — gate passes but does NOT prove visual fidelity of custom skin in Skin Dock
+**Classification:** Smoke gate false positive — stability smoke test only, not visual proof
+
+### Summary
+
+G-RANDOM seeds 2 and 3 were run and passed (bundle built 3/3, Skin Dock playable, 10s runaround 0 crashes). However, the character appeared **invisible** in the Skin Dock during both runs. The test passes because it only measures:
+- RAF counter incrementing (runtime is alive)
+- No crash events
+
+It does NOT verify that the custom skin XP data is visually rendered on the character.
+
+### Root Cause of Invisibility (under investigation)
+
+Observed: Skin Dock showed the character walking but the custom skin was not visually distinguishable from an invisible/default state.
+
+Confirmed via `scripts/xp_cat.py` inspection:
+- `sprites/player-0100.xp` (reference used by `upload_xp`) — has real content: yellow `#ffff55` background cells at sprite frame positions
+- Exported idle XP (`session-dd4fac46.xp`) — byte-for-byte visually identical to the reference (diff confirmed, only filename lines differ)
+- The XP data roundtrip (import → workbench → export) is clean
+
+Possible explanations (not yet diagnosed):
+1. The Skin Dock iframe may not be receiving the custom skin bundle — it may be loading default/native sprites instead of the custom XP
+2. The game's renderer may not be applying the custom skin override at the session used in the runaround
+3. The reference sprites (`player-0100.xp`) may render as visually sparse in the game's own font/rendering — producing a character that is technically present but visually hard to see
+
+### Impact on Gate Status
+
+**G-RANDOM gate status must be DOWNGRADED:**
+
+| Prior claim | Corrected claim |
+|-------------|----------------|
+| Gate MET: 3/3 seeds proven (seeds 42, 2, 3) | Gate PARTIALLY MET: pipeline stability proven, custom skin visual fidelity NOT proven |
+
+The gate proves the pipeline does not crash. It does NOT prove the custom skin is visible in the Skin Dock.
+
+A passing G-RANDOM result is **misleading** as-is because it implies the skin is working when the Skin Dock may be showing the native sprite (or nothing) instead of the authored XP content.
+
+### Required Fix
+
+The G-RANDOM gate needs a visual fidelity check step:
+- After the runaround, capture a screenshot of the Skin Dock
+- Verify that cells at known sprite positions match the authored XP content (e.g., expected `#ffff55` bg cells at idle frame positions)
+- OR verify via `xp_cat.py` + frame-cell inspection that the loaded skin in the runtime matches the exported XP
+
+Until this check exists, G-RANDOM is a **stability smoke gate only** and must not be cited as proof that custom skin authoring produces a visible runtime result.
+
+### Tool Added
+
+`scripts/xp_cat.py` + `scripts/xp_core.py` + `scripts/sprite_errors.py` copied from `asciicker-Y9-2/scripts/asset_gen/` for XP visual inspection in this repo. Use `python3 scripts/xp_cat.py <file.xp>` to render any XP file in the terminal.

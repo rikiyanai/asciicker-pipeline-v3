@@ -3,7 +3,7 @@
 **Authority:** This is one of the 3 canonical authority docs for this repo. See Section 6 below.
 
 **Last updated:** 2026-04-13
-**Branch:** master @ 8b8b496
+**Branch:** master @ 9693d8a
 
 ---
 
@@ -364,17 +364,21 @@ These gates must pass before any milestone closeout or deployment.
 | Gate | Runner | Pass Criteria | Classification |
 |------|--------|---------------|----------------|
 | G-BUNDLE | `run_bundle.sh` | Deterministic 3-action bundle (idle/attack/death) passes with fidelity + Skin Dock playable + 10s runaround 0 crashes | Regression — fixed inputs. BUG-11 FIXED: 3/3 consecutive PASS (2026-03-25). |
-| G-RANDOM | `run_randomized_bundle.sh` | Randomized 3-action bundle passes with all 3 authoring methods (new_xp/upload_xp/upload_png), Skin Dock playable, 10s runaround 0 crashes. Must pass on at least 3 different seeds. | Smoke — randomized inputs. **PARTIALLY MET: 1/3 seeds proven** (seed 42 only). Seeds 2 and 3 required but not yet proven. Gate is not cleared. |
+| G-RANDOM | `run_randomized_bundle.sh` | Randomized 3-action bundle passes with all 3 authoring methods (new_xp/upload_xp/upload_png), Skin Dock playable, 10s runaround 0 crashes. Must pass on at least 3 different seeds. | Smoke — randomized inputs. **PARTIALLY MET: stability proven on 3/3 seeds, visual fidelity NOT proven.** Custom skin appeared invisible in Skin Dock during seeds 2+3. Gate proves pipeline does not crash; does NOT prove the custom skin is visually rendered. See PLAYWRIGHT_FAILURE_LOG.md § "G-RANDOM Gate: Visual Fidelity Gap". |
 
 **G-RANDOM details:**
 - Each run randomly permutes 3 authoring methods across 3 actions (6 possible combinations)
-- `new_xp`: random WS editor scribbles with action-specific glyph (I/A/D), random colors, random tools (paint/fill/rect/line/erase)
+- `new_xp`: random WS editor scribbles with action-specific glyph (I/A/D), random colors, random tools (paint/fill/rect/line/erase). Render suppressed during rapid drawing (performance optimization — cells are painted, visual update deferred until unsuppress).
 - `upload_xp`: imports reference XP via UI file input
 - `upload_png`: uploads PNG from baseline pool → server pipeline conversion
 - Seeded RNG (`--seed`) for reproducibility. Failing seed must be recorded.
 - Stubbed actions (copy/paste, select, undo/redo) are excluded until WS editor supports them
-- **Proven seeds:** seed 42 (idle=upload_png, attack=upload_xp, death=new_xp) at commit `7ce9d72` — **1/3 required seeds**
-- **Seeds 2 and 3:** REQUIRED but NOT YET PROVEN. Gate remains PARTIALLY MET until all 3 seeds pass.
+- **Stability runs (3/3):**
+  - seed 42 (idle=upload_png, attack=upload_xp, death=new_xp) — commit `7ce9d72`
+  - seed 2 (idle=upload_xp, attack=upload_png, death=new_xp) — PASS 2026-04-13 (stability only)
+  - seed 3 (idle=upload_xp, attack=upload_png, death=new_xp) — PASS 2026-04-13 (stability only)
+- **Visual fidelity:** NOT PROVEN. Custom skin invisible in Skin Dock — root cause under investigation.
+- **Gate: PARTIALLY MET** — stability proven, visual fidelity gap unresolved. Gate cannot be fully cleared until Skin Dock visual check is added.
 
 ---
 
