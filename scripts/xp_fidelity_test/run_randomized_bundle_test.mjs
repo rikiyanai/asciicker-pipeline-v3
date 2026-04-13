@@ -19,6 +19,7 @@
  *   node run_randomized_bundle_test.mjs --out-dir <dir> [--headed] [--hold] [--seed <n>]
  */
 import { chromium } from 'playwright';
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -64,6 +65,38 @@ function rngShuffle(arr) {
 function rngColor() {
   return '#' + [rngInt(0, 255), rngInt(0, 255), rngInt(0, 255)]
     .map(c => c.toString(16).padStart(2, '0')).join('');
+}
+
+// ── Oracle helpers ──
+
+// Extract the most common non-background glyph from layer 2 of an XP file.
+// Used to determine expected_glyph for upload_xp and upload_png oracle checks.
+// Returns a number (glyph code) or null on failure.
+function extractDominantGlyph(xpPath) {
+  if (!xpPath) return null;
+  try {
+    const absPath = path.isAbsolute(xpPath) ? xpPath : path.resolve(repoRoot, xpPath);
+    const script = [
+      'import sys,os',
+      "sys.path.insert(0,'scripts')",
+      'from xp_core import XPFile',
+      'from collections import Counter',
+      "xp=XPFile(os.environ['XP_PATH'])",
+      "layer=xp.layers[min(2,len(xp.layers)-1)]",
+      "g=Counter(cell[0] for row in layer.data for cell in row if cell[0] not in (0,32))",
+      "print(g.most_common(1)[0][0] if g else 0)",
+    ].join(';');
+    const raw = execSync(`python3 -c "${script}"`, {
+      encoding: 'utf8',
+      cwd: repoRoot,
+      env: { ...process.env, XP_PATH: absPath },
+      timeout: 15000,
+    });
+    // xp_core.XPFile prints loading messages to stdout; extract only the numeric glyph line
+    const numericLine = raw.split('\n').find(l => /^\d+$/.test(l.trim()));
+    const g = numericLine ? parseInt(numericLine.trim(), 10) : 0;
+    return Number.isFinite(g) && g > 0 ? g : null;
+  } catch (_) { return null; }
 }
 
 // ── Constants ──
@@ -271,6 +304,13 @@ for (const key of ACTION_KEYS) {
     failures: [],
   };
 }
+
+// ── Oracle state ──
+// oracleExpectedGlyph: glyph code to scan for during Skin Dock runaround.
+// For new_xp idle: known statically (ACTION_GLYPHS.idle).
+// For upload_xp / upload_png idle: extracted from reference/exported XP after export.
+let oracleExpectedGlyph = methodAssignment.idle === 'new_xp' ? ACTION_GLYPHS.idle : null;
+let oracleSamples = [];
 
 function fail(actionKey, cls, message) {
   const rec = { action: actionKey || 'bundle', class: cls, message };
@@ -545,14 +585,15 @@ async function authorUploadPng(page, actionKey) {
   await runBtn.click();
   console.error(`  [upload_png] Convert to XP clicked, waiting for pipeline...`);
 
-  // Wait for conversion to complete — the session transitions from blank→converted
-  // and wbRunOut gets populated with the result JSON.
+  // Wait for conversion to complete or for a pipeline error response.
+  // Check for both session_id (success) and error (pipeline failure) so we
+  // don't wait the full 120 s timeout when the server returns an immediate error.
   await page.waitForFunction(() => {
     const out = String(document.getElementById('wbRunOut')?.textContent || '').trim();
     if (!out || out.length < 5) return false;
     try {
       const j = JSON.parse(out);
-      return !!j.session_id;
+      return !!j.session_id || !!j.error;
     } catch (_) { return false; }
   }, null, { timeout: 120000 }); // pipeline can be slow
   await page.waitForTimeout(1000);
@@ -561,6 +602,10 @@ async function authorUploadPng(page, actionKey) {
     try { return JSON.parse(document.getElementById('wbRunOut')?.textContent || '{}'); }
     catch (_) { return {}; }
   });
+  if (convResult.error) {
+    fail(actionKey, 'upload_png', `pipeline error: ${convResult.error} (${convResult.code || 'unknown'})`);
+    return;
+  }
   console.error(`  [upload_png] Conversion done: session=${convResult.session_id}, grid=${convResult.grid_cols}x${convResult.grid_rows}`);
 
   // Step 3 (future): Find Sprites + drag flow for manual sprite extraction
@@ -628,6 +673,14 @@ async function main() {
       const method = methodAssignment[actionKey];
       const actionReport = report.actions[actionKey];
       console.error(`[3:${actionKey}] method=${method}`);
+
+      // For idle action with upload_xp: extract expected glyph from reference XP now
+      // (reference XP is known before authoring; glyph used by oracle in Skin Dock test)
+      if (actionKey === 'idle' && method === 'upload_xp' && oracleExpectedGlyph === null) {
+        const refXp = path.resolve(repoRoot, REFERENCE_XPS.idle);
+        oracleExpectedGlyph = extractDominantGlyph(refXp);
+        console.error(`  [Oracle] idle expected_glyph=${oracleExpectedGlyph} (upload_xp reference=${path.basename(refXp)})`);
+      }
 
       // Switch to action tab — wait for the UI state to reflect the new active action
       _bboxCache.selector = null;
@@ -883,6 +936,19 @@ async function main() {
       } else {
         console.error('[4] Skin Dock playable');
 
+        // ── Oracle initialization (Phase 2) ──
+        // Load oracle script into iframe and initialize with expected glyph for idle action.
+        // The oracle scans window.ak_buf (exposed by runtime patch) around screen center.
+        const oracleSrc = fs.readFileSync(path.resolve(repoRoot, 'scripts/skin_dock_oracle.js'), 'utf8');
+        try {
+          await frameHandle.evaluate(oracleSrc);
+          // suppress=2: skip first 2 samples for cold-start; world is already confirmed playable
+          await frameHandle.evaluate((g) => window._sdk_oracle_init({ expected_glyph: g, suppress: 2 }), oracleExpectedGlyph);
+          console.error(`  [Oracle] initialized expected_glyph=${oracleExpectedGlyph}`);
+        } catch (e) {
+          console.error(`  [Oracle] init failed: ${e.message}`);
+        }
+
         // ── Step 4b: 10-second runaround crash detection ──
         console.error('[5] Runaround crash detection (10s)...');
         const directions = ['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'];
@@ -916,10 +982,98 @@ async function main() {
           prevCrashes = crashes;
           prevRaf = raf;
           console.error(`  [${sec + 1}/10] ${dir} raf=${raf} crashes=${crashes}`);
+
+          // ── Oracle sample (Phase 2) ──
+          const oSample = await frameHandle.evaluate(() => {
+            try {
+              return typeof window._sdk_oracle_sample === 'function' ? window._sdk_oracle_sample() : null;
+            } catch (_) { return null; }
+          }).catch(() => null);
+          if (oSample) oracleSamples.push(oSample);
+          console.error(`  [Oracle:${sec + 1}] ready=${oSample?.oracle_ready} body_ok=${oSample?.body_ok} hits=${oSample?.glyph_hits} reason=${oSample?.oracle_ready_reason || ''}`);
         }
 
         if (!runaroundPass) report.skin_dock_pass = false;
         console.error(runaroundPass ? '[5] Runaround PASS' : '[5] Runaround FAIL');
+
+        // ── Phase 0: Injection diagnostics ──
+        // Read #webbuildOut (written by applyCurrentXpAsWebSkin) for per-action inject bytes.
+        // Then fetch live bundle payload for override_names validation.
+        // Classification: diagnostic. Uses fetch() in page.evaluate — not acceptance-grade.
+        console.error('[6] Phase 0: Injection diagnostics...');
+        const injectDiag = await page.evaluate(() => {
+          try {
+            const text = document.getElementById('webbuildOut')?.textContent;
+            return text ? JSON.parse(text) : null;
+          } catch (_) { return null; }
+        });
+
+        const phase0 = { inject_ok: true, bytes_by_action: {}, payload_fetch_ok: false, override_names_by_action: {} };
+        if (injectDiag) {
+          const injectActions = injectDiag.inject?.actions || {};
+          for (const key of ACTION_KEYS) {
+            const bytes = injectActions[key]?.bytes ?? -1;
+            phase0.bytes_by_action[key] = bytes;
+            if (bytes === 0) {
+              phase0.inject_ok = false;
+              fail(null, 'injection_diag', `Phase 0: action ${key} injected 0 bytes`);
+            }
+            console.error(`  [Phase0:${key}] inject.bytes=${bytes}`);
+          }
+
+          // Fetch live bundle payload for override_names (diagnostic fetch, not acceptance)
+          try {
+            const payloadData = await page.evaluate(async () => {
+              const s = window.__wb_debug?._state?.();
+              const bid = s?.bundleId;
+              if (!bid) return { ok: false, reason: 'no_bundle_id' };
+              const r = await fetch('/api/workbench/web-skin-bundle-payload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bundle_id: bid }),
+              });
+              const j = await r.json();
+              return {
+                ok: r.ok,
+                actions: Object.fromEntries(Object.entries(j.actions || {}).map(
+                  ([k, v]) => [k, { override_names: v.override_names || [] }]
+                )),
+              };
+            });
+            if (payloadData && payloadData.ok) {
+              phase0.payload_fetch_ok = true;
+              phase0.override_names_by_action = payloadData.actions;
+              console.error(`  [Phase0] override_names: ${JSON.stringify(payloadData.actions)}`);
+            }
+          } catch (e) {
+            console.error(`  [Phase0] payload fetch error: ${e.message}`);
+          }
+        } else {
+          console.error('  [Phase0] #webbuildOut empty or missing');
+        }
+        report.phase0 = phase0;
+
+        // ── Oracle results gate ──
+        // render_skin_visual_ok is true/false only when >= 3 ready samples exist.
+        // null = indeterminate (not enough ready samples — suppressed, no glyph, or no buf).
+        // Gate blocks overall_pass only when explicitly false (skin provably absent).
+        const readySamples = oracleSamples.filter(s => s && s.oracle_ready);
+        const bodyOkCount = oracleSamples.filter(s => s && s.body_ok === true).length;
+        const bodyFailCount = readySamples.filter(s => s.body_ok === false).length;
+        const hasEnoughReadySamples = readySamples.length >= 3;
+        const renderSkinVisible = hasEnoughReadySamples ? (bodyOkCount >= 3) : null;
+        report.oracle_samples = oracleSamples;
+        report.render_skin_visible = renderSkinVisible;
+        report.gates = { render_skin_visual_ok: renderSkinVisible };
+
+        console.error(`[6] Oracle summary: ${readySamples.length} ready samples, body_ok=${bodyOkCount}, body_fail=${bodyFailCount}, gate=${renderSkinVisible}`);
+        if (hasEnoughReadySamples && renderSkinVisible === false) {
+          fail(null, 'render_oracle', `Oracle: expected_glyph=${oracleExpectedGlyph} not found in >=3 ready samples (body_ok=${bodyOkCount}/${readySamples.length})`);
+        } else if (oracleSamples.length === 0) {
+          console.error('[6] Oracle: no samples collected (oracle may not have initialized)');
+        } else if (!hasEnoughReadySamples) {
+          console.error(`[6] Oracle: only ${readySamples.length} ready samples — gate indeterminate`);
+        }
       }
     }
 
@@ -929,14 +1083,15 @@ async function main() {
     for (const key of ACTION_KEYS) {
       report[`${key}_pass`] = report.actions[key].execute_pass && report.actions[key].export_pass;
     }
-    report.overall_pass = report.idle_pass && report.attack_pass && report.death_pass && report.skin_dock_pass;
+    const oracleGatePassed = !report.gates || report.gates.render_skin_visual_ok !== false;
+    report.overall_pass = report.idle_pass && report.attack_pass && report.death_pass && report.skin_dock_pass && oracleGatePassed;
 
     const resultPath = path.join(outDir, 'result.json');
     fs.writeFileSync(resultPath, JSON.stringify(report, null, 2));
 
     const passStr = report.overall_pass ? 'PASS' : 'FAIL';
     console.error(`\n[RANDOMIZED BUNDLE] ${passStr} (seed=${seed})`);
-    console.error(`  idle=${report.idle_pass}(${methodAssignment.idle}) attack=${report.attack_pass}(${methodAssignment.attack}) death=${report.death_pass}(${methodAssignment.death}) skin_dock=${report.skin_dock_pass}`);
+    console.error(`  idle=${report.idle_pass}(${methodAssignment.idle}) attack=${report.attack_pass}(${methodAssignment.attack}) death=${report.death_pass}(${methodAssignment.death}) skin_dock=${report.skin_dock_pass} oracle=${report.render_skin_visible}`);
     console.error(`  failures: ${failures.length}`);
     console.error(`  report: ${resultPath}`);
 

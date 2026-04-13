@@ -56,7 +56,7 @@
     return _ahswNamesForFamilies(["player", "wolfie", "wolack"]);
   })();
   const WEBBUILD_READY_TIMEOUT_MS = 180000;
-  const DEFAULT_FLATMAP_NAME = "game_map_y8_original_game_map.a3d";
+  const DEFAULT_FLATMAP_NAME = "minimal_2x2.a3d";
   const WEBBUILD_BASE_SRC = (() => {
     const u = new URL(bp("/termpp-web-flat/index.html?solo=1&player=player"), window.location.origin);
     if (SERVER_BOOT_NONCE) u.searchParams.set("_srv", SERVER_BOOT_NONCE);
@@ -6451,6 +6451,10 @@
       }
     }
     state.activeActionKey = actionKey;
+    // Clear source panel state so previous action's upload doesn't bleed through
+    state.sourcePath = "";
+    const wbRunOutEl = $("wbRunOut"); if (wbRunOutEl) wbRunOutEl.textContent = "";
+    const wbFileEl = $("wbFile"); if (wbFileEl) wbFileEl.value = "";
     const actState = state.actionStates[actionKey];
     if (actState && actState.sessionId) {
       await loadSession(actState.sessionId, { reason: `Loading ${actionKey} authoring session...` });

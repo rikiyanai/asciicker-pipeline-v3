@@ -2,7 +2,7 @@
 
 **Created:** 2026-03-23
 **Last updated:** 2026-04-13
-**Branch:** master @ b697493
+**Branch:** master @ 02c6d07
 **Purpose:** Canonical answer to "what user-reachable workbench behaviors should be possible right now?" — distinguishing intent, code wiring, and verified proof.
 **Supersedes:** No prior canonical capability inventory existed. This doc synthesizes claims from the full doc set and measures them against code and failure-log reality.
 
@@ -277,7 +277,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 
 **Proof:** No specific verifier coverage for inspector-level actions. The inspector was the primary editing surface during M1, but verification focused on the save/export/runtime loop, not individual editing operations.
 
-**2026-03-25 parity audit finding (updated):** W19-W22 (clipboard) **PROVEN** (`431b437`). W24-W27 (transforms) **PROVEN** (`1828979`). Inspector demotion remains blocked on W28-W31 (bulk-edit) only. Phase 1 (collapse to `<details>`) can proceed. Phase 2-6 unblocked for clipboard + transforms. Phase 7 blocked until W28-W31 are shipped.
+**2026-03-25 parity audit finding (updated):** W19-W22 (clipboard) **PROVEN** (`431b437`). W24-W27 (transforms) **PROVEN** (`1828979`). W28-W31 (bulk-edit) **PROVEN** (`run_whole_sheet_bulkedit_test.mjs`, 10/10 PASS). Inspector demotion is no longer blocked by parity-extension actions. Phase 1 (collapse to `<details>`) can proceed. Phase 2-6 are unblocked. Phase 7 is unblocked from a parity standpoint.
 
 ---
 
@@ -456,7 +456,7 @@ The source panel has 7 of 19 actions PROVEN via committed M2-B runner (`run_sour
 | F4: Context Menu (C1-C9) | 9 | **READY** | 9/9 in registry (85ff3b8) | None |
 | F5: Source-to-Grid (D1-D2) | 2 | **PROVEN** | 0/2 — cross-panel drag abstraction needed | D1 drag and D2/C2 context menu verified but gestureType not in registry model |
 | F6: Grid Panel (G1-G14) | 14 | **MOSTLY READY** | 5/14 in M2-D pass (G5-G6, G9-G11) | G3/G4 dual-button schema gap; G7/G8 deferred alias rows (=C6/C7); G13 needs inputRange; G1/G2/G12/G14 need canvas gestures |
-| F7: Whole-Sheet Editor (W1-W18) | 18 | **PARTIALLY PROVEN** | 2/18 executable (W12-W13) + 16 stubs in M2-D pass | 15/18 PROVEN but most need canvas/keyboard/dynamic-row gesture abstractions. W15 WIRED (visualization connected, proof gap remains). W16-W17 DEFERRED. W18 PROVEN but deferred (dual-button schema gap). |
+| F7: Whole-Sheet Editor (W1-W18) | 18 | **PARTIALLY PROVEN** | 2/18 executable (W12-W13) + 16 stubs in M2-D pass | 16/18 PROVEN; the remaining gaps are W16/W17 only. Most proven actions still need canvas/keyboard/dynamic-row gesture abstractions before clean registry extraction. W15 is PROVEN. W18 is PROVEN. W16-W17 remain DEFERRED. |
 | F8: Jitter/Alignment (J1-J6) | 6 | **READY** | 6/6 in registry (85ff3b8) | None |
 | F9: Lifecycle (L1-L3) | 3 | **READY** | 3/3 in registry (85ff3b8) | None |
 | F10: Runtime Dock (R1-R7) | 7 | **READY** | 7/7 in registry (85ff3b8) | None |

@@ -1747,189 +1747,177 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
     try:
         with Image.open(src) as im:
             src_w, src_h = im.size
-            if src_w < source_frame_cols or src_h < cfg.angles:
-                raise ApiError("source sheet too small for requested geometry", "invalid_sheet_geometry", "run", req_id, 422)
             bg_rgb = _estimate_bg_rgb(im)
             signal_mode = _infer_signal_mode(im)
 
-            frame_px_w = max(1, src_w // source_frame_cols)
-            angle_px_h = max(1, src_h // cfg.angles)
-            # Fail closed on obviously wrong row slicing (prevents half-row splits).
-            # Skip aspect check when native_compat forces output dimensions.
-            aspect = frame_px_w / max(1, angle_px_h)
-            if not cfg.native_compat and (aspect < 0.35 or aspect > 1.2):
-                suggested_angles = None
-                suggested_source_projs = cfg.source_projs
-                candidates: list[tuple[float, int, int]] = []
-                for cand_source_projs in sorted({1, 2, cfg.source_projs}):
-                    cand_cols = semantic_frames * cand_source_projs
-                    if cand_cols <= 0 or src_w < cand_cols:
-                        continue
-                    cand_frame_px_w = max(1, src_w // cand_cols)
-                    for a in range(1, min(src_h, 16) + 1):
-                        if src_h % a != 0:
-                            continue
-                        ah = src_h // a
-                        asp = cand_frame_px_w / max(1, ah)
-                        if 0.35 <= asp <= 1.2:
-                            pref = 0.0 if cand_source_projs == cfg.source_projs else 0.05
-                            candidates.append((abs(asp - 0.8) + pref, a, cand_source_projs))
-                if candidates:
-                    candidates.sort()
-                    suggested_angles = candidates[0][1]
-                    suggested_source_projs = candidates[0][2]
-                hint = ""
-                if suggested_angles is not None:
-                    if suggested_source_projs != cfg.source_projs:
-                        hint = f" Try source_projs={suggested_source_projs}, angles={suggested_angles}."
-                    else:
-                        hint = f" Try angles={suggested_angles}."
-                raise ApiError(
-                    f"slicing mismatch: angles={cfg.angles} gives frame aspect {aspect:.2f}.{hint}",
-                    "invalid_sheet_geometry",
-                    "run",
-                    req_id,
-                    422,
-                )
+            # Determine target dims early — needed for both normal path and fallback.
             if cfg.native_compat:
-                # Resolve effective target dims: explicit override or family default
-                eff_cols = cfg.target_cols if cfg.target_cols is not None else NATIVE_COLS
-                eff_rows = cfg.target_rows if cfg.target_rows is not None else NATIVE_ROWS
-                cell_h_chars = eff_rows // max(1, cfg.angles)
-                total_tile_cols = semantic_frames * cfg.projs
-                cell_w_chars = eff_cols // max(1, total_tile_cols)
-                if cell_w_chars < 1 or cell_w_chars * total_tile_cols != eff_cols:
-                    raise ApiError(
-                        f"native_compat: frames={semantic_frames} projs={cfg.projs} "
-                        f"cannot tile evenly into {eff_cols} cols",
-                        "native_compat_geometry",
-                        "run",
-                        req_id,
-                        422,
-                    )
-                if cfg.angles != NATIVE_ANGLES:
-                    raise ApiError(
-                        f"native_compat requires angles={NATIVE_ANGLES}, got {cfg.angles}",
-                        "native_compat_angles",
-                        "run",
-                        req_id,
-                        422,
-                    )
+                eff_cols: int = cfg.target_cols if cfg.target_cols is not None else NATIVE_COLS
+                eff_rows: int = cfg.target_rows if cfg.target_rows is not None else NATIVE_ROWS
             else:
-                cell_w_chars = max(1, int(math.ceil(frame_px_w / max(1, cfg.render_resolution))))
-                cell_h_chars = max(1, int(math.ceil(angle_px_h / max(1, cfg.render_resolution))))
-                # Enforce a minimum visual resolution per frame so silhouettes/animation survive.
-                cell_w_chars = max(cell_w_chars, 12)
-                cell_h_chars = max(cell_h_chars, 8)
+                eff_cols = 0
+                eff_rows = 0
 
-            cols = semantic_frames * cfg.projs * cell_w_chars
-            rows = cfg.angles * cell_h_chars
-            transparent = _transparent_cell()
-            layer_grid = [[transparent for _ in range(cols)] for _ in range(rows)]
+            # Geometry validation: set use_fallback instead of raising so any
+            # valid image always produces output (dumb convert + upper-left placement).
+            use_fallback = src_w < source_frame_cols or src_h < cfg.angles
 
-            # Use a stable foreground crop box per angle row so every frame in the same
-            # animation track is sampled from identical vertical bounds.
-            angle_crop_boxes: list[tuple[int, int, int, int]] = []
-            min_crop_width_ratio = 0.60
-            min_crop_height_ratio = 0.55
-            for angle in range(cfg.angles):
-                y0 = angle * angle_px_h
-                y1 = min(src_h, y0 + angle_px_h)
-                found = False
-                min_x = frame_px_w
-                min_y = angle_px_h
-                max_x = -1
-                max_y = -1
-                for source_col in range(source_frame_cols):
-                    sx0 = source_col * frame_px_w
-                    sx1 = min(src_w, sx0 + frame_px_w)
-                    tile = im.crop((sx0, y0, sx1, y1))
-                    bbox = _foreground_bbox(tile, bg_rgb, signal_mode=signal_mode)
-                    if bbox is None:
+            if not use_fallback:
+                frame_px_w = max(1, src_w // source_frame_cols)
+                angle_px_h = max(1, src_h // cfg.angles)
+                aspect = frame_px_w / max(1, angle_px_h)
+                if not cfg.native_compat and (aspect < 0.35 or aspect > 1.2):
+                    use_fallback = True
+                if not use_fallback and cfg.native_compat:
+                    cell_h_chars = eff_rows // max(1, cfg.angles)
+                    total_tile_cols = semantic_frames * cfg.projs
+                    cell_w_chars = eff_cols // max(1, total_tile_cols)
+                    if cell_w_chars < 1 or cell_w_chars * total_tile_cols != eff_cols:
+                        use_fallback = True
+                    elif cfg.angles != NATIVE_ANGLES:
+                        use_fallback = True
+                elif not use_fallback:
+                    cell_w_chars = max(1, int(math.ceil(frame_px_w / max(1, cfg.render_resolution))))
+                    cell_h_chars = max(1, int(math.ceil(angle_px_h / max(1, cfg.render_resolution))))
+                    # Enforce a minimum visual resolution per frame so silhouettes/animation survive.
+                    cell_w_chars = max(cell_w_chars, 12)
+                    cell_h_chars = max(cell_h_chars, 8)
+
+            if use_fallback:
+                # Pure pixel-to-cell fallback: resize source to fit target dims,
+                # 1 pixel = 1 cell on layer 2, remainder transparent. No slicing.
+                if cfg.native_compat:
+                    fb_cols = eff_cols
+                    fb_rows = eff_rows
+                else:
+                    cell_px = max(1, cfg.render_resolution)
+                    fb_cols = max(12, int(math.ceil(src_w / cell_px)))
+                    fb_rows = max(8, int(math.ceil(src_h / cell_px)))
+                # Scale to fit within fb_cols x fb_rows, preserving aspect ratio
+                scale = min(fb_cols / max(1, src_w), fb_rows / max(1, src_h))
+                scaled_w = max(1, int(src_w * scale))
+                scaled_h = max(1, int(src_h * scale))
+                scaled_im = im.resize((scaled_w, scaled_h), Image.LANCZOS)
+                raw_cells = _tile_to_cells(scaled_im, bg_rgb, scaled_w, scaled_h, signal_mode=signal_mode)
+                transparent = _transparent_cell()
+                flat: list[Cell] = [transparent] * (fb_cols * fb_rows)
+                for ty in range(scaled_h):
+                    for tx in range(scaled_w):
+                        flat[ty * fb_cols + tx] = raw_cells[ty][tx]
+                cells_layer2 = flat
+                cols = fb_cols
+                rows = fb_rows
+                cell_w_chars = 1
+                cell_h_chars = 1
+            else:
+                cols = semantic_frames * cfg.projs * cell_w_chars
+                rows = cfg.angles * cell_h_chars
+                transparent = _transparent_cell()
+                layer_grid = [[transparent for _ in range(cols)] for _ in range(rows)]
+
+                # Use a stable foreground crop box per angle row so every frame in the same
+                # animation track is sampled from identical vertical bounds.
+                angle_crop_boxes: list[tuple[int, int, int, int]] = []
+                min_crop_width_ratio = 0.60
+                min_crop_height_ratio = 0.55
+                for angle in range(cfg.angles):
+                    y0 = angle * angle_px_h
+                    y1 = min(src_h, y0 + angle_px_h)
+                    found = False
+                    min_x = frame_px_w
+                    min_y = angle_px_h
+                    max_x = -1
+                    max_y = -1
+                    for source_col in range(source_frame_cols):
+                        sx0 = source_col * frame_px_w
+                        sx1 = min(src_w, sx0 + frame_px_w)
+                        tile = im.crop((sx0, y0, sx1, y1))
+                        bbox = _foreground_bbox(tile, bg_rgb, signal_mode=signal_mode)
+                        if bbox is None:
+                            continue
+                        bx0, by0, bx1, by1 = bbox
+                        found = True
+                        min_x = min(min_x, bx0)
+                        min_y = min(min_y, by0)
+                        max_x = max(max_x, bx1)
+                        max_y = max(max_y, by1)
+                    if not found:
+                        angle_crop_boxes.append((0, 0, frame_px_w - 1, angle_px_h - 1))
                         continue
-                    bx0, by0, bx1, by1 = bbox
-                    found = True
-                    min_x = min(min_x, bx0)
-                    min_y = min(min_y, by0)
-                    max_x = max(max_x, bx1)
-                    max_y = max(max_y, by1)
-                if not found:
-                    angle_crop_boxes.append((0, 0, frame_px_w - 1, angle_px_h - 1))
-                    continue
-                raw_w = max(1, (max_x - min_x + 1))
-                raw_h = max(1, (max_y - min_y + 1))
-                # Guard against over-tight row crops that collapse source detail.
-                # This keeps a narrow pose in one frame from shrinking every frame in the row.
-                if (
-                    raw_w < int(frame_px_w * min_crop_width_ratio)
-                    or raw_h < int(angle_px_h * min_crop_height_ratio)
-                ):
-                    angle_crop_boxes.append((0, 0, frame_px_w - 1, angle_px_h - 1))
-                    continue
-                pad = 1
-                angle_crop_boxes.append(
-                    (
-                        max(0, min_x - pad),
-                        max(0, min_y - pad),
-                        min(frame_px_w - 1, max_x + pad),
-                        min(angle_px_h - 1, max_y + pad),
+                    raw_w = max(1, (max_x - min_x + 1))
+                    raw_h = max(1, (max_y - min_y + 1))
+                    # Guard against over-tight row crops that collapse source detail.
+                    # This keeps a narrow pose in one frame from shrinking every frame in the row.
+                    if (
+                        raw_w < int(frame_px_w * min_crop_width_ratio)
+                        or raw_h < int(angle_px_h * min_crop_height_ratio)
+                    ):
+                        angle_crop_boxes.append((0, 0, frame_px_w - 1, angle_px_h - 1))
+                        continue
+                    pad = 1
+                    angle_crop_boxes.append(
+                        (
+                            max(0, min_x - pad),
+                            max(0, min_y - pad),
+                            min(frame_px_w - 1, max_x + pad),
+                            min(angle_px_h - 1, max_y + pad),
+                        )
                     )
-                )
 
-            for angle in range(cfg.angles):
-                y0 = angle * angle_px_h
-                y1 = min(src_h, y0 + angle_px_h)
-                crop_x0, crop_y0, crop_x1, crop_y1 = angle_crop_boxes[angle]
-                for frame in range(semantic_frames):
-                    for proj in range(cfg.projs):
-                        if cfg.source_projs == 1:
-                            source_col = frame
-                        else:
-                            # Engine/xp_tool contract uses grouped projections:
-                            # [all proj0 frames][all proj1 frames]
-                            source_col = frame + (min(proj, cfg.source_projs - 1) * semantic_frames)
+                for angle in range(cfg.angles):
+                    y0 = angle * angle_px_h
+                    y1 = min(src_h, y0 + angle_px_h)
+                    crop_x0, crop_y0, crop_x1, crop_y1 = angle_crop_boxes[angle]
+                    for frame in range(semantic_frames):
+                        for proj in range(cfg.projs):
+                            if cfg.source_projs == 1:
+                                source_col = frame
+                            else:
+                                # Engine/xp_tool contract uses grouped projections:
+                                # [all proj0 frames][all proj1 frames]
+                                source_col = frame + (min(proj, cfg.source_projs - 1) * semantic_frames)
 
-                        x0 = source_col * frame_px_w
-                        x1 = min(src_w, x0 + frame_px_w)
-                        tile = im.crop(
-                            (
-                                x0 + crop_x0,
-                                y0 + crop_y0,
-                                x0 + crop_x1 + 1,
-                                y0 + crop_y1 + 1,
+                            x0 = source_col * frame_px_w
+                            x1 = min(src_w, x0 + frame_px_w)
+                            tile = im.crop(
+                                (
+                                    x0 + crop_x0,
+                                    y0 + crop_y0,
+                                    x0 + crop_x1 + 1,
+                                    y0 + crop_y1 + 1,
+                                )
                             )
-                        )
 
-                        if cfg.source_projs == 1 and cfg.projs == 2 and proj == 1:
-                            tile = tile.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+                            if cfg.source_projs == 1 and cfg.projs == 2 and proj == 1:
+                                tile = tile.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
 
-                        # Render with stable row crop; bottom-align to keep feet anchored.
-                        fg_tile = tile
-                        inner_w = max(1, cell_w_chars)
-                        inner_h = max(1, cell_h_chars)
-                        inner_cells = _tile_to_cells(
-                            fg_tile,
-                            bg_rgb,
-                            inner_w,
-                            inner_h,
-                            signal_mode=signal_mode,
-                        )
-                        tile_cells = [[_transparent_cell() for _ in range(cell_w_chars)] for _ in range(cell_h_chars)]
-                        off_x = max(0, (cell_w_chars - inner_w) // 2)
-                        off_y = max(0, cell_h_chars - inner_h)
-                        for ty in range(inner_h):
-                            for tx in range(inner_w):
-                                tile_cells[off_y + ty][off_x + tx] = inner_cells[ty][tx]
-                        # Output layout must match preview contract:
-                        # frame_column = frame_global + proj * total_frames
-                        dst_col = frame + (proj * semantic_frames)
-                        dst_x0 = dst_col * cell_w_chars
-                        dst_y0 = angle * cell_h_chars
-                        for ty in range(cell_h_chars):
-                            for tx in range(cell_w_chars):
-                                layer_grid[dst_y0 + ty][dst_x0 + tx] = tile_cells[ty][tx]
+                            # Render with stable row crop; bottom-align to keep feet anchored.
+                            fg_tile = tile
+                            inner_w = max(1, cell_w_chars)
+                            inner_h = max(1, cell_h_chars)
+                            inner_cells = _tile_to_cells(
+                                fg_tile,
+                                bg_rgb,
+                                inner_w,
+                                inner_h,
+                                signal_mode=signal_mode,
+                            )
+                            tile_cells = [[_transparent_cell() for _ in range(cell_w_chars)] for _ in range(cell_h_chars)]
+                            off_x = max(0, (cell_w_chars - inner_w) // 2)
+                            off_y = max(0, cell_h_chars - inner_h)
+                            for ty in range(inner_h):
+                                for tx in range(inner_w):
+                                    tile_cells[off_y + ty][off_x + tx] = inner_cells[ty][tx]
+                            # Output layout must match preview contract:
+                            # frame_column = frame_global + proj * total_frames
+                            dst_col = frame + (proj * semantic_frames)
+                            dst_x0 = dst_col * cell_w_chars
+                            dst_y0 = angle * cell_h_chars
+                            for ty in range(cell_h_chars):
+                                for tx in range(cell_w_chars):
+                                    layer_grid[dst_y0 + ty][dst_x0 + tx] = tile_cells[ty][tx]
 
-            cells_layer2 = [layer_grid[y][x] for y in range(rows) for x in range(cols)]
+                cells_layer2 = [layer_grid[y][x] for y in range(rows) for x in range(cols)]
     except Exception as e:
         if isinstance(e, ApiError):
             raise

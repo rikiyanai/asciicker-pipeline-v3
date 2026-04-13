@@ -3,7 +3,7 @@
 **Authority:** This is one of the 3 canonical authority docs for this repo. See Section 6 below.
 
 **Last updated:** 2026-04-13
-**Branch:** master @ 9693d8a
+**Branch:** master @ 02c6d07
 
 ---
 
@@ -30,7 +30,36 @@ M2 is NOT: perfect automatic slicing, full existing-XP parity, or full REXPaint 
 
 ### Future Milestones
 
-Placeholder. No milestone beyond M2 is currently defined.
+#### Milestone 3: Agent-Native Terminal Sprite Tooling
+
+**Status: PLANNED — not started**
+
+A terminal-first XP sprite viewer and editor, drivable by agents via CLI, MCP, and API. Goal: enable automated and human-supervised sprite authoring and inspection workflows without the browser workbench.
+
+**M3 passes when:**
+- An agent can address any cell in any XP file by semantic position (sprite family, animation, angle, frame, layer type) without needing to know raw pixel coordinates
+- An in-terminal viewer renders XP frames navigably in true color with frame/angle/layer context
+- All editing primitives are callable from CLI, MCP tools, and REST API without a browser
+
+**Sub-phases:**
+
+| Sub-phase | Scope | Status |
+|-----------|-------|--------|
+| **M3-A** | Semantic XP indexer: detect frame count, angle count (8-dir isometric), animation names, layer types (metadata/visual/hitbox) per Asciicker sprite conventions. CLI: `python3 scripts/xp_info.py <file.xp>` | NOT STARTED |
+| **M3-B** | Semantic MCP/CLI editing: address cells by frame N, angle K, layer type, relative position (center, edge). Extends existing `mcp__xp-tool__*` surface. | NOT STARTED |
+| **M3-C** | Terminal sprite viewer TUI: in-terminal frame-navigable color renderer. Frame/angle navigation, layer switching, AHSW variant context. | NOT STARTED |
+| **M3-D** | Full TUI editor: semantic cell editing in terminal with sprite-convention enforcement. | NOT STARTED |
+
+**Implementation choice for M3-C/D** (decision deferred to M3 start):
+- **Option A — durdraw vendor**: import `durdraw` into `scripts/vendor/durdraw/`, add XP format plugin + Asciicker semantic layer. Reuses durdraw's TUI infrastructure. Risk: durdraw is freeform ASCII art editor — sprite-convention awareness requires significant plugin work.
+- **Option B — custom Python CLI**: build `scripts/xp_tui.py` using Python `curses` or `rich`. Tailored to Asciicker conventions from day one. No vendor dependency. Risk: higher initial build cost.
+
+**Agent drivability contract:**
+- **CLI**: `python3 scripts/xp_cli.py <verb> <file> [args]` — scriptable from shell agents
+- **MCP**: extend `mcp__xp-tool__*` with semantic methods (`read_frame`, `read_angle`, `write_frame_cell`, `list_frames`, `list_angles`)
+- **API**: REST endpoints under `/api/workbench/xp/` matching existing pipeline API pattern
+
+**Depends on:** M2-A closed, `scripts/xp_core.py` + `scripts/xp_cat.py` (both already in repo)
 
 ---
 
@@ -53,31 +82,39 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 **Last reviewed:** 2026-04-13
 
-1. **G-RANDOM visual fidelity — machine-readable runtime sprite check** — IMMEDIATE BLOCKER on G-RANDOM gate closure. Custom skin appeared invisible in Skin Dock during seeds 2+3 (2026-04-13). The gate currently proves only pipeline stability; it does NOT prove the authored XP is visually rendered by the runtime. Required next work:
+1. **G-RANDOM visual fidelity — render oracle BLOCKED** — **HARD BLOCKER. Nothing proceeds until oracle reliability is resolved.** Custom skin appeared invisible in Skin Dock during seeds 2+3 (2026-04-13). The oracle infrastructure is now wired but produces false positives. Until the oracle can reliably distinguish the custom skin from the native/default sprite, the gate cannot produce valid proof.
 
-   **Goal:** determine programmatically what pixels the TERM++ runtime renders for each angle of the player skin while it runs around, and compare against the expected cell colors from the exported XP.
+   **Goal:** a gate that proves the authored XP content is actually rendered by TERM++ in the Skin Dock, not just that the character model is visible with any sprite.
 
-   **Diagnostic split:**
-   - Branch A — Extract TERM++ runtime standalone: run the same `.wasm`/JS bundle outside the Skin Dock iframe with a known XP injected. If the extracted runtime renders the expected `#ffff55` cells at known sprite frame positions → the editor and pipeline are correct, and the Skin Dock skin injection path is the bug.
-   - Branch B — Skin Dock canvas pixel sampling: inside the existing Playwright runaround test, after arrowing to a known angle, pause movement, call `canvas.getContext('2d').getImageData(x, y, w, h)` on the game canvas at the predicted character position, and compare sampled colors against the XP's visual layer cell colors (derivable via `scripts/xp_cat.py`).
-   - Branch C — Runtime debug API probe: query `window.__ak_diag` or any skin-state surface exposed by the runtime to confirm which XP files are actually loaded into the running skin slot.
+   **What was built (2026-04-13):**
+   - Phase 0 (injection diagnostics): wired in runner. Reads `#webbuildOut` for per-action `inject.bytes`, fetches live bundle payload for per-action `override_names`. Result: injection bytes > 0 for all 3 actions in all 3 seeds; override names contract verified. **Injection is NOT the bug.**
+   - Phase 2 (render oracle): `scripts/skin_dock_oracle.js` created (~150 lines, single-player). `window.ak_buf` exposed in `runtime/termpp-skin-lab-static/termpp-web-flat/index.html` (1-line patch). Oracle wired into randomized-bundle runner: samples cell buffer every second during 10s runaround, gates on `body_ok >= 3 in ready samples`.
+   - Map changed to `minimal_2x2.a3d` (smaller world, helps debugging).
+   - Source panel state now cleared on action tab switch (UI bug fix).
 
-   **Research completed (2026-04-13).** Full plan: `docs/plans/2026-04-13-skin-dock-visual-gate-plan.md`.
+   **Why the oracle is UNRELIABLE — root cause:**
+   - The oracle scans for glyph 222 (right half-block `▐`) near screen center. Glyph 222 is the dominant glyph in `player-0100.xp` (the reference skin), but it also appears in the DEFAULT/NATIVE runtime sprite. Finding glyph 222 near center proves only that the character model is rendering with *some* sprite — not that the *custom* skin is active.
+   - Seed 2 oracle reported 8/8 `body_ok=true` (59–105 hits/sample). This is a **false positive**: the character was visually invisible with custom skin per prior observation; glyph 222 was the native sprite. The oracle cannot distinguish the two.
+   - Oracle is only non-ambiguous when `idle=new_xp` (glyphs I=73, A=65, D=68 are ASCII letters absent from all native sprites). For `upload_xp` and `upload_png`, half-block glyphs 220–223 are shared between custom and native — oracle proof is invalid.
 
-   **Key findings:**
-   - Canvas `#asciicker_canvas` is same-origin, no sandbox. `getImageData()` is callable from `frameHandle.evaluate()` in Playwright — no runtime mod needed for Phase 1.
-   - `window.ak_buf` (WASM cell buffer) is NOT exposed in this repo's runtime. Phase 2 oracle requires 1-line patch to `runtime/termpp-skin-lab-static/termpp-web-flat/index.html`.
-   - `injectBundleIntoWebbuild()` (workbench.js:1314) returns byte counts per action but those are never logged by the Playwright runner — we have zero visibility into whether xp_b64 was non-empty at injection time.
-   - Render oracle from Y9-2 is portable at 3/5 difficulty: isometric math and glyph scanner reuse as-is; ~65-90 lines of adaptation needed for single-player.
+   **Seed run summary (2026-04-13):**
+   | Seed | idle method | inject.bytes | Oracle result | Verdict |
+   |------|------------|--------------|---------------|---------|
+   | 42   | upload_png | 22153        | null (no glyph) | indeterminate |
+   | 2    | upload_xp  | 1148         | 8/8 body_ok=true | **FALSE POSITIVE** — glyph shared with native sprite |
+   | 3    | upload_xp  | 1148         | 0/8 body_ok=false | failure detected but for unreliable reason |
 
-   **Execution order:**
-   1. **Phase 0** (immediate) — add injection diagnostics to runner: log `xp_b64_len` and `override_names` per action before `Load()`. Determines if invisibility is injection bug or rendering bug.
-   2. **Phase 1** (canvas pixel probe) — after runaround, `frameHandle.evaluate()` calls `getImageData()` at canvas center, counts non-background pixels. ~30 lines, no runtime modification. Wire as `render_skin_pixels_ok` gate.
-   3. **Phase 2** (oracle, if Phase 1 insufficient) — expose `ak_buf`, port `scripts/skin_dock_oracle.js` (~150 lines), cell-level glyph verification.
+   **What must happen to unblock:**
+   1. Fix oracle to produce unambiguous proof. Candidate approaches:
+      - **(a) Negative control:** sample cell buffer BEFORE injection and AFTER; compute glyph-distribution delta. If the delta at screen center matches the XP palette, skin was applied.
+      - **(b) Color-based check:** verify the background color of hit cells near center matches the XP's actual palette, not just glyph presence. `ak_buf[offset+1]` is the background color index (not RGB directly — need palette mapping).
+      - **(c) new_xp-only gating:** for oracle reliability, force idle action to `new_xp` in G-RANDOM proof runs (glyph I=73 is absent from all native sprites; finding it proves the custom skin is active). Keep upload_xp/upload_png as non-gated paths.
+   2. Re-run seeds 2, 3, 42 with reliable oracle; all must produce valid (non-ambiguous) `body_ok` verdicts.
+   3. All seeds pass the oracle gate.
 
-   **Tool available:** `scripts/xp_cat.py` — `python3 scripts/xp_cat.py <file.xp>` renders any XP visual layer to ANSI true-color. Use `--info` for dims, `--hb` for half-block pixel mode.
+   **Success criteria (unchanged):** oracle-backed evidence that distinguishes the custom skin from native/default rendering, produced from the cell buffer near the projected player position. Pixel-presence alone is not sufficient. Color-presence is not sufficient. Glyph-presence with shared glyphs is not sufficient.
 
-   **Success criteria:** runner step that samples canvas pixels at character position and passes only when non-background pixels (or specific XP colors) are present. G-RANDOM gate promoted to full visual fidelity proof when this passes.
+   **G-RANDOM gate status: BLOCKED.** Oracle is wired but invalid. No promotion, no milestone progress on G-RANDOM until oracle produces unambiguous proof.
 
 2. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions run `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
 2. **Slice 5 manual assembly E2E** — PROVEN 13/13 (2026-03-24). Covers U1→S12→S7→D1→W1→W2→T3→T4. Demonstrates M2-B/C/D functional end-to-end. Runner: `run_manual_assembly_e2e_test.mjs`.
@@ -404,7 +441,8 @@ These gates must pass before any milestone closeout or deployment.
   - seed 2 (idle=upload_xp, attack=upload_png, death=new_xp) — PASS 2026-04-13 (stability only)
   - seed 3 (idle=upload_xp, attack=upload_png, death=new_xp) — PASS 2026-04-13 (stability only)
 - **Visual fidelity:** NOT PROVEN. Custom skin invisible in Skin Dock — root cause under investigation.
-- **Gate: PARTIALLY MET** — stability proven, visual fidelity gap unresolved. Gate cannot be fully cleared until Skin Dock visual check is added.
+- **Current required proof path:** injection diagnostics + render oracle. A simple pixel-presence probe may be used diagnostically, but it is not sufficient for closure under the current execution directive.
+- **Gate: PARTIALLY MET** — stability proven, visual fidelity gap unresolved. Gate cannot be fully cleared until the oracle-backed render check is added and logged in `PLAYWRIGHT_FAILURE_LOG.md`.
 
 ---
 
