@@ -62,15 +62,22 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
    - Branch B — Skin Dock canvas pixel sampling: inside the existing Playwright runaround test, after arrowing to a known angle, pause movement, call `canvas.getContext('2d').getImageData(x, y, w, h)` on the game canvas at the predicted character position, and compare sampled colors against the XP's visual layer cell colors (derivable via `scripts/xp_cat.py`).
    - Branch C — Runtime debug API probe: query `window.__ak_diag` or any skin-state surface exposed by the runtime to confirm which XP files are actually loaded into the running skin slot.
 
-   **Research questions before implementation:**
-   - Does the game canvas in the Skin Dock iframe use a 2D context (accessible via `getImageData`) or WebGL (requires different pixel readback)?
-   - Does the TERM++ runtime expose a skin-slot query (`__ak_diag.activeSkin()`)?
-   - Is the skin applied per-bundle-session (meaning the iframe URL carries a session token) or via runtime API injection?
-   - What is the pixel coordinate system at the character's on-screen position for angle 0 (facing right) at the default zoom level?
+   **Research completed (2026-04-13).** Full plan: `docs/plans/2026-04-13-skin-dock-visual-gate-plan.md`.
 
-   **Tool available:** `scripts/xp_cat.py` — renders any XP visual layer to ANSI true-color. Use `--info` for layer dims, `--hb` for half-block pixel mode. Provides expected cell colors to target during pixel sampling.
+   **Key findings:**
+   - Canvas `#asciicker_canvas` is same-origin, no sandbox. `getImageData()` is callable from `frameHandle.evaluate()` in Playwright — no runtime mod needed for Phase 1.
+   - `window.ak_buf` (WASM cell buffer) is NOT exposed in this repo's runtime. Phase 2 oracle requires 1-line patch to `runtime/termpp-skin-lab-static/termpp-web-flat/index.html`.
+   - `injectBundleIntoWebbuild()` (workbench.js:1314) returns byte counts per action but those are never logged by the Playwright runner — we have zero visibility into whether xp_b64 was non-empty at injection time.
+   - Render oracle from Y9-2 is portable at 3/5 difficulty: isometric math and glyph scanner reuse as-is; ~65-90 lines of adaptation needed for single-player.
 
-   **Success criteria:** a runner step that (a) knows the expected color signature of the custom skin at ≥1 character position, (b) samples those pixels programmatically from the live runtime canvas, and (c) passes/fails based on match. If that check passes, G-RANDOM gate can be promoted to full visual fidelity proof.
+   **Execution order:**
+   1. **Phase 0** (immediate) — add injection diagnostics to runner: log `xp_b64_len` and `override_names` per action before `Load()`. Determines if invisibility is injection bug or rendering bug.
+   2. **Phase 1** (canvas pixel probe) — after runaround, `frameHandle.evaluate()` calls `getImageData()` at canvas center, counts non-background pixels. ~30 lines, no runtime modification. Wire as `render_skin_pixels_ok` gate.
+   3. **Phase 2** (oracle, if Phase 1 insufficient) — expose `ak_buf`, port `scripts/skin_dock_oracle.js` (~150 lines), cell-level glyph verification.
+
+   **Tool available:** `scripts/xp_cat.py` — `python3 scripts/xp_cat.py <file.xp>` renders any XP visual layer to ANSI true-color. Use `--info` for dims, `--hb` for half-block pixel mode.
+
+   **Success criteria:** runner step that samples canvas pixels at character position and passes only when non-background pixels (or specific XP colors) are present. G-RANDOM gate promoted to full visual fidelity proof when this passes.
 
 2. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions run `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
 2. **Slice 5 manual assembly E2E** — PROVEN 13/13 (2026-03-24). Covers U1→S12→S7→D1→W1→W2→T3→T4. Demonstrates M2-B/C/D functional end-to-end. Runner: `run_manual_assembly_e2e_test.mjs`.
