@@ -496,7 +496,16 @@
             : "Set BUG_REPORT_GITHUB_REPO and BUG_REPORT_GITHUB_TOKEN on the server to enable GitHub delivery.";
         }
       }
-    } catch (_) { /* silent — dropdown stays with default option */ }
+    } catch (_) {
+      // BUG-06 fix: surface the fetch failure so users know the dropdown is stale.
+      if (sel) {
+        const errOpt = document.createElement("option");
+        errOpt.value = "";
+        errOpt.textContent = "(failed to load known issues)";
+        errOpt.disabled = true;
+        sel.appendChild(errOpt);
+      }
+    }
   }
 
   function openBugReportModal() {
@@ -945,7 +954,12 @@
       const hasLegacyFSOps = !!(win.Module && typeof win.Module.FS_createDataFile === "function" && typeof win.Module.FS_unlink === "function");
       const hasWriteFileFS = !!(win.Module && win.Module.FS && typeof win.Module.FS.writeFile === "function");
       const hasFSOps = hasLegacyFSOps || hasWriteFileFS;
-      const ready = hasModule && calledRun && hasLoad && hasFSOps;
+      // Gate on _wasmReady: Emscripten calledRun fires before the game's
+      // async init (font loading, etc.) completes.  Injecting via Load()
+      // before _wasmReady can leave the runtime permanently half-initialized
+      // (BUG-11).  _wasmReady is set by the Asciicker runtime after full init.
+      const wasmGameReady = !!win._wasmReady;
+      const ready = hasModule && calledRun && hasLoad && hasFSOps && wasmGameReady;
       state.webbuild.ready = ready;
       updateWebbuildUI();
       if (ready) {
@@ -955,7 +969,11 @@
         const detail = readWebbuildLoadingDetail(win);
         const elapsedMs = state.webbuild.loadRequestedAt ? Math.max(0, Date.now() - state.webbuild.loadRequestedAt) : 0;
         const elapsedTxt = elapsedMs > 0 ? ` (${Math.round(elapsedMs / 1000)}s)` : "";
-        setWebbuildState(detail ? `Webbuild loading... ${detail}${elapsedTxt}` : `Webbuild loading... (first load may take 30-120s)${elapsedTxt}`, "warn");
+        if (calledRun && hasFSOps && !wasmGameReady) {
+          setWebbuildState(`Webbuild WASM loaded, waiting for game init (_wasmReady)...${elapsedTxt}`, "warn");
+        } else {
+          setWebbuildState(detail ? `Webbuild loading... ${detail}${elapsedTxt}` : `Webbuild loading... (first load may take 30-120s)${elapsedTxt}`, "warn");
+        }
       }
       return ready;
     } catch (e) {

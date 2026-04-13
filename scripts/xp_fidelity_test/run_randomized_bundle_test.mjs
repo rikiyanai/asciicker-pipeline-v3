@@ -591,7 +591,10 @@ async function main() {
   console.error(`[0] Method assignment: ${JSON.stringify(methodAssignment)}`);
   if (uploadPngFile) console.error(`[0] PNG for upload: ${uploadPngFile}`);
 
-  const browser = await chromium.launch({ headless: !headed });
+  const browser = await chromium.launch({
+    headless: !headed,
+    args: headed ? [] : ['--enable-webgl', '--use-gl=angle'],
+  });
   const page = await browser.newPage({ viewport: { width: 1500, height: 980 }, acceptDownloads: true });
 
   try {

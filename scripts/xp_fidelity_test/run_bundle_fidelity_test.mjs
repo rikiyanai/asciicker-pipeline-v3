@@ -525,7 +525,12 @@ async function pulseMainMenuAdvance(frameHandle) {
 // ── Main ──
 
 async function main() {
-  const browser = await chromium.launch({ headless: !headed });
+  const browser = await chromium.launch({
+    headless: !headed,
+    // BUG-11 fix: enable WebGL in headless mode so the Asciicker runtime can
+    // create a GL context for font texture upload and reach _wasmReady=true.
+    args: headed ? [] : ['--enable-webgl', '--use-gl=angle'],
+  });
   const page = await browser.newPage({
     viewport: { width: 1500, height: 980 },
     acceptDownloads: true,

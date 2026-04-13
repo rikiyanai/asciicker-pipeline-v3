@@ -4163,46 +4163,71 @@ runner code. It exercises the manual assembly path instead of the pipeline path.
 ## BUG-11: G-BUNDLE Deterministic Skin Dock Readiness Failure
 
 **Date:** 2026-03-25
-**Status:** OPEN
+**Status:** FIXED
 **Classification:** Runner/runtime-lane defect — not an editor/whole-sheet bug.
 
 ### Summary
 
-The deterministic G-BUNDLE runner (`run_bundle_fidelity_test.mjs`) fails to reach playable state in the Skin Dock in the majority of runs. The WASM runtime inside the flat iframe never initializes.
+The deterministic G-BUNDLE runner (`run_bundle_fidelity_test.mjs`) failed to reach playable state in the Skin Dock in the majority of runs. The WASM runtime inside the flat iframe never initialized.
+
+### Root Cause
+
+**Headless Chromium WebGL context failure.** The Asciicker runtime requires WebGL to upload font textures during initialization (`AsciickerInit` → `ak_ctx.texImage2D` per font). In Playwright's default headless mode, `canvas.getContext("webgl")` returns `null`, so the font texture chain stalls, `ShowLoginOverlay()` is never called, and `_wasmReady` stays `false` forever.
+
+Diagnostic evidence (`bug11_diag.mjs`):
+- Direct iframe load (headless, no args): `akCtx: "null"`, `akFonts: "undefined"`, `_wasmReady: false` for 60s
+- Direct iframe load (headed): `akCtx: "ok"`, `akFonts: 13`, `_wasmReady: true` after 1s
+- G-RANDOM always ran headed (its shell script passes `--headed`), which is why it passed while G-BUNDLE (headless) failed
+
+### Fix
+
+Two changes:
+
+1. **Runner WebGL args** (`run_bundle_fidelity_test.mjs`, `run_randomized_bundle_test.mjs`): Added `--enable-webgl --use-gl=angle` to `chromium.launch` args in headless mode, providing a software-rendered WebGL context.
+
+2. **`detectWebbuildReady` safety gate** (`workbench.js`): Added `!!win._wasmReady` to the readiness check. This prevents the workbench from injecting skins into a half-initialized runtime (`Load()` before font textures are uploaded). This is a safety net — the WebGL args fix the actual failure, while this gate prevents silent corruption if `_wasmReady` is ever delayed.
+
+### Evidence (post-fix)
+
+**G-BUNDLE:** 3/3 consecutive PASS runs (2026-03-25).
+- `skin_dock=true`, `rafCount` advancing ~120/s, 0 crashes in 10s runaround
+- Result files: `bundle-run-2026-03-25T12-14-18Z`, `bundle-run-2026-03-25T12-16-37Z`, `bundle-run-2026-03-25T12-18-56Z`
+
+**G-RANDOM seed 42:** PASS (no regression). `randomized-bundle-2026-03-25T12-21-18Z`
+
+### Previous evidence
+
+**Observation window:** 56 logged G-BUNDLE runs from 2026-03-18 through 2026-03-25 (pre-fix).
+- **Skin Dock pass:** 12 of 56 runs (21%) — likely the rare runs where the machine's GPU provided a WebGL context to headless Chromium
+- **Skin Dock fail:** 44 of 56 runs (79%)
+
+
+---
+
+## BUG-12: Drag-Paint Glyph Shifts Left on Release (Issue #8)
+
+**Date:** 2026-04-13
+**Status:** FIXED
+**Classification:** Canvas renderer defect — gratuitous full redraw on mouseup.
+
+### Summary
+
+On Safari, painted glyphs visually shifted left on mouseup after a drag-paint stroke. The painted content appeared correct during the drag but jumped on release.
+
+### Root Cause
+
+`render()` in `web/rexpaint-editor/canvas.js` fell through to a full clear+redraw when `dirtyCells.size === 0` and `_fullRenderNeeded` was false. On mouseup, after the stroke-complete callback cleared the dirty set, a stray `render()` call triggered this fallthrough path, causing a gratuitous full redraw that recomputed layout and visually displaced painted content.
+
+### Fix
+
+**Commit `c4f1ae5`:** Added early return in `render()` when `!needsFull && dirtyCells.size === 0`. Eliminates the no-op full redraw on mouseup.
+
+**Commit `8b8b496`:** Follow-up: `setFontSize`, `setOffset`, and `syncFromState` called `render()` without setting `_fullRenderNeeded` or dirtying cells — they relied on the old fallthrough to trigger a full redraw. Added explicit `_fullRenderNeeded = true` in those three paths so the early-return guard from `c4f1ae5` does not accidentally skip their intended full redraws.
+
+Files changed:
+- `web/rexpaint-editor/canvas.js` — early return guard + `_fullRenderNeeded` in `setOffset`, `setFontSize`
+- `web/whole-sheet-init.js` — `_fullRenderNeeded` in `syncFromState`
 
 ### Evidence
 
-**Observation window:** 56 logged G-BUNDLE runs from 2026-03-18 through 2026-03-25.
-- **Skin Dock pass:** 12 of 56 runs
-- **Skin Dock fail:** 44 of 56 runs
-- **Source:** `output/xp-fidelity-test/bundle-run-*/result.json`, scanned programmatically
-
-**Failure probe pattern (consistent across all 44 failures):**
-```json
-{
-  "wasmReady": false,
-  "rafCount": 0,
-  "overlayVisible": true,
-  "renderStage": 0,
-  "gameMainMenu": 1,
-  "worldReady": 0
-}
-```
-WASM never initializes. The overlay never dismisses. `rafCount` stays at 0 for the full 30-second probe window (`run_bundle_fidelity_test.mjs:948-965`).
-
-**Distinction from BUG-10:** BUG-10 was about the Skin Dock *button* staying disabled despite actions being ready. BUG-11 is about the *runtime* inside the iframe never reaching playable state after the button is clicked and the iframe loads.
-
-**G-RANDOM is not a substitute:** G-RANDOM (`run_randomized_bundle_test.mjs`) uses a different authoring flow and a separate browser session. It can pass Skin Dock (e.g., seed 42 PASS). But a G-RANDOM pass does not clear the G-BUNDLE gate. The two runners must be independently healthy.
-
-### Likely investigation area
-
-The failure occurs in the iframe WASM load path at `run_bundle_fidelity_test.mjs:877-972`. Possible root causes:
-- Resource loading stall (WASM binary, font files, or other assets) inside the flat iframe
-- iframe lifecycle issue (src assignment, force_restart injection, frame detachment/reattachment)
-- Probe timing or frame handle acquisition failing silently
-- Server-side state from prior action conversions interfering with the runtime load
-
-### Impact on gates
-
-G-BUNDLE is defined as a milestone closeout gate (`workbench-canonical-spec.md` §Verification Gates). Until BUG-11 is resolved, G-BUNDLE cannot serve as a reliable deterministic closeout gate. The gate table has been annotated accordingly.
-
+Reported as GitHub Issue #8. Fix confirmed by code inspection; no dedicated Playwright runner (visual regression on Safari is not easily testable headlessly).

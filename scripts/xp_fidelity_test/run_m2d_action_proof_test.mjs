@@ -67,6 +67,18 @@ function assert(condition, failFn, cls, message, extra = {}) {
   return true;
 }
 
+async function dragSourceBox(page, x1, y1, x2, y2) {
+  const canvas = page.locator('#sourceCanvas');
+  const box = await canvas.boundingBox();
+  if (!box) {
+    throw new Error('sourceCanvas not found');
+  }
+  await page.mouse.move(box.x + x1, box.y + y1);
+  await page.mouse.down();
+  await page.mouse.move(box.x + x2, box.y + y2, { steps: 4 });
+  await page.mouse.up();
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -136,22 +148,36 @@ try {
   if (!s5Pass) allPass = false;
 
   // ── S6: Delete box (action button, not mode switch) ──
-  // deleteBoxBtn clears all source overlays (boxes, cuts, anchor, draft).
-  // It does NOT change sourceMode — it's a destructive action.
+  // First create an actual draft box so the action has something real to clear.
   console.log('=== Step 4: S6 Delete box ===');
+  await page.click('#drawBoxBtn');
+  await page.waitForTimeout(200);
+  await dragSourceBox(page, 24, 24, 72, 72);
+  await page.waitForTimeout(300);
   const preS6 = await captureState(page, 'pre_s6');
+  const hadOverlayBeforeDelete = !!preS6.drawCurrent || preS6.extractedBoxes > 0 || preS6.anchorBox !== null;
   await page.click('#deleteBoxBtn');
   await page.waitForTimeout(200);
   const postS6 = await captureState(page, 'post_s6');
   await screenshot(page, outDir, 'step04_s6_delete_box');
   // After delete-all: extractedBoxes=0, anchorBox=null, drawCurrent=null
   const s6Pass = assert(
-    postS6.extractedBoxes === 0 && postS6.anchorBox === null,
+    hadOverlayBeforeDelete &&
+      postS6.extractedBoxes === 0 &&
+      postS6.anchorBox === null &&
+      postS6.drawCurrent === null,
     fail, 's6_delete_box',
-    `After delete: extractedBoxes should be 0 (got ${postS6.extractedBoxes}), anchorBox should be null (got ${JSON.stringify(postS6.anchorBox)})`,
+    `Delete must clear a real prior overlay. beforeHadOverlay=${hadOverlayBeforeDelete}, extractedBoxes=${postS6.extractedBoxes}, anchorBox=${JSON.stringify(postS6.anchorBox)}, drawCurrent=${JSON.stringify(postS6.drawCurrent)}`,
     { preS6, postS6 }
   );
-  steps.s6_delete_box = { step: 'delete_box_action', pass: s6Pass, extractedBoxes: postS6.extractedBoxes, anchorBox: postS6.anchorBox };
+  steps.s6_delete_box = {
+    step: 'delete_box_action',
+    pass: s6Pass,
+    hadOverlayBeforeDelete,
+    extractedBoxes: postS6.extractedBoxes,
+    anchorBox: postS6.anchorBox,
+    drawCurrent: postS6.drawCurrent,
+  };
   if (!s6Pass) allPass = false;
 
   // ── Setup for grid tests: Import XP to get a session with grid ──
@@ -259,21 +285,38 @@ try {
     const catSelect = page.locator('#animCategorySelect');
     const catSelectVisible = await catSelect.isVisible().catch(() => false);
     if (catSelectVisible) {
-      // Select first available option
-      await catSelect.selectOption({ index: 1 }).catch(async () => {
-        // If no index 1, try setting a value
-        await catSelect.selectOption({ index: 0 });
-      });
+      const preG9 = await captureState(page, 'pre_g9');
+      const preRowCategory = preG9.rowCategories?.[0] ?? null;
+      const optionCount = await catSelect.locator('option').count();
+      let chosenValue = null;
+      for (let i = 0; i < optionCount; i += 1) {
+        const value = await catSelect.locator('option').nth(i).getAttribute('value');
+        if (value !== null && String(value) !== String(preRowCategory)) {
+          chosenValue = String(value);
+          break;
+        }
+      }
+      if (chosenValue === null && optionCount > 0) {
+        chosenValue = String(await catSelect.locator('option').nth(0).getAttribute('value'));
+      }
+      if (chosenValue !== null) {
+        await catSelect.selectOption(chosenValue);
+      }
       await page.click('#assignAnimCategoryBtn');
       await page.waitForTimeout(300);
       const postG9 = await captureState(page, 'post_g9');
       await screenshot(page, outDir, 'step07_g9_assign_row_category');
-      // Check that rowCategories has been set for row 0
       const rowCats = postG9.rowCategories || {};
-      const g9Pass = rowCats[0] !== undefined && rowCats[0] !== null;
-      steps.g9_assign_row_category = { step: 'assign_row_category', pass: g9Pass, rowCategories: rowCats };
+      const g9Pass = chosenValue !== null && String(rowCats[0]) === chosenValue && String(preRowCategory) !== chosenValue;
+      steps.g9_assign_row_category = {
+        step: 'assign_row_category',
+        pass: g9Pass,
+        before: preRowCategory,
+        chosenValue,
+        after: rowCats[0],
+      };
       if (!g9Pass) {
-        fail('g9_assign_row_category', 'rowCategories[0] not set after assignAnimCategoryBtn click', { postG9 });
+        fail('g9_assign_row_category', `rowCategories[0] must change to chosen value. before=${preRowCategory} chosen=${chosenValue} after=${rowCats[0]}`, { preG9, postG9 });
         allPass = false;
       }
     } else {

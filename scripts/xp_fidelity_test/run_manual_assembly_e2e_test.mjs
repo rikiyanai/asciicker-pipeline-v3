@@ -301,11 +301,6 @@ try {
   await glyphInput.dispatchEvent('change');
   await page.waitForTimeout(100);
 
-  // Set fg color via color input (UI-driven)
-  const fgInput = page.locator('#wsFgColor');
-  await fgInput.evaluate(el => { el.value = '#ff0000'; el.dispatchEvent(new Event('input', { bubbles: true })); });
-  await page.waitForTimeout(100);
-
   const paintX = 1, paintY = 1;
   const prePaint = await readFrameCell(page, 0, 0, paintX, paintY);
   await clickWsCell(page, paintX, paintY);
