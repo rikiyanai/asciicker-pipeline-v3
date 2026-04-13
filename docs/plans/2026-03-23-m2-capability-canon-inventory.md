@@ -1,8 +1,8 @@
 # M2 Capability Canon Inventory
 
 **Created:** 2026-03-23
-**Last updated:** 2026-03-25
-**Branch:** master @ 1828979
+**Last updated:** 2026-04-13
+**Branch:** master @ b697493
 **Purpose:** Canonical answer to "what user-reachable workbench behaviors should be possible right now?" — distinguishing intent, code wiring, and verified proof.
 **Supersedes:** No prior canonical capability inventory existed. This doc synthesizes claims from the full doc set and measures them against code and failure-log reality.
 
@@ -89,11 +89,11 @@ Each capability row has five columns:
 | S9 | Move box (drag) | UX checklist §1 | Drag handler in source canvas — wired | No verifier coverage | WIRED | M2-D |
 | S10 | Resize box (handles) | UX checklist §1 | Resize handles in source canvas — wired | No verifier coverage | WIRED | M2-D |
 | S11 | Delete box | UX checklist §4 | `deleteSourceBox()` — wired | No verifier coverage | WIRED | M2-D |
-| S12 | Find Sprites | UX checklist §6 | `extractSprites()` — wired | M2-B runner step 8 | **PROVEN** | M2-B |
+| S12 | Find Sprites | UX checklist §6 | `findSprites()` — wired (workbench.js:4717) | M2-B runner step 8 | **PROVEN** | M2-B |
 | S13 | Drag row borders | UX checklist §7 | Row drag in source canvas — wired | No verifier coverage | WIRED | M2-D |
 | S14 | Drag column borders | UX checklist §8 | Column drag in source canvas — wired | No verifier coverage | WIRED | M2-D |
-| S15 | Set anchor | UX checklist §5 | `setAnchorBox()` — wired | M2-B runner step 6 | **PROVEN** | M2-B |
-| S16 | Pad box to anchor size | UX checklist §5 | `padBoxToAnchorSize()` — wired | M2-B runner step 7 (PB-02 fixed) | **PROVEN** | M2-B |
+| S15 | Set anchor | UX checklist §5 | `setAnchorFromTarget()` — wired (workbench.js:4379; alias of C3) | M2-B runner step 6 | **PROVEN** | M2-B |
+| S16 | Pad box to anchor size | UX checklist §5 | `applyPadToContextTarget()` → `padRectToAnchor()` — wired (workbench.js:4411; alias of C4) | M2-B runner step 7 (PB-02 fixed) | **PROVEN** | M2-B |
 | S17 | Vertical cut insert | UX checklist §9 | Cut-v mode in source canvas — wired | No verifier coverage | WIRED | M2-D |
 | S18 | Source zoom | UX checklist §10 | `sourceZoomInput` → `renderSourceCanvas()` | No verifier coverage | WIRED | M2-D |
 | S19 | Source undo/redo participation | SAR blueprint | `pushHistory()` called from findSprites, cut-line | **GAP**: anchor ops (PB-01/03) do NOT pushHistory | PARTIAL | M2-D |
@@ -107,10 +107,10 @@ Each capability row has five columns:
 
 | # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
 |---|--------|-------------|---------------|----------------|--------|----------|
-| C1 | Add as 1 sprite | SAR blueprint | `addSpriteFromSelectedBox()` — wired | M2-B runner step 4 | **PROVEN** | M2-B |
-| C2 | Add to selected row sequence | SAR blueprint | `addSpriteToRowSequence()` — wired | Source-to-grid runner steps 6, 8: add_to_row PASS (root + /xpedit) | **PROVEN** | M2-B |
-| C3 | Set as anchor for Find Sprites | SAR blueprint | `setAnchorBox()` — wired | M2-B runner step 6; PB-01 undo gap remains | **PROVEN** | M2-B |
-| C4 | Pad this bbox to anchor size | SAR blueprint | `padBoxToAnchorSize()` — wired | M2-B runner step 7; PB-02 CLOSED | **PROVEN** | M2-B |
+| C1 | Add as 1 sprite | SAR blueprint | `commitDraftToSource()` — wired (workbench.js:4463) | M2-B runner step 4 | **PROVEN** | M2-B |
+| C2 | Add to selected row sequence | SAR blueprint | `addSourceBoxToSelectedRowSequence()` — wired (workbench.js:5401) | Source-to-grid runner steps 6, 8: add_to_row PASS (root + /xpedit) | **PROVEN** | M2-B |
+| C3 | Set as anchor for Find Sprites | SAR blueprint | `setAnchorFromTarget()` — wired (workbench.js:4379) | M2-B runner step 6; PB-01 undo gap remains | **PROVEN** | M2-B |
+| C4 | Pad this bbox to anchor size | SAR blueprint | `applyPadToContextTarget()` → `padRectToAnchor()` — wired (workbench.js:4411) | M2-B runner step 7; PB-02 CLOSED | **PROVEN** | M2-B |
 | C5 | Delete (source context) | SAR blueprint | `deleteSourceBox()` — wired | No verifier | WIRED | M2-D |
 | C6 | Copy frame (grid context) | SAR blueprint | `copySelectedFrame()` — wired | No verifier | WIRED | M2-D |
 | C7 | Paste frame (grid context) | SAR blueprint | `pasteFrame()` — wired | No verifier | WIRED | M2-D |
@@ -122,7 +122,7 @@ Each capability row has five columns:
 | # | Action | Canon Source | Code Evidence | Proof Evidence | Status | M2 Scope |
 |---|--------|-------------|---------------|----------------|--------|----------|
 | D1 | Drag source to grid | UX checklist §11, M2 plan | Drag/drop handler — wired | Source-to-grid runner step 12: d1_drag PASS (root + /xpedit) | **PROVEN** | M2-B |
-| D2 | Add to row sequence | UX checklist §12, M2 plan | `addSpriteToRowSequence()` — wired | Source-to-grid runner steps 6, 8: add_to_row PASS (root + /xpedit) | **PROVEN** | M2-B |
+| D2 | Add to row sequence | UX checklist §12, M2 plan | `addSourceBoxToSelectedRowSequence()` — wired (workbench.js:5401; alias of C2) | Source-to-grid runner steps 6, 8: add_to_row PASS (root + /xpedit) | **PROVEN** | M2-B |
 
 ### Family 6: Grid Panel (14 actions)
 
@@ -302,12 +302,12 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 
 ### By Status (96-action SAR baseline)
 
-> **Updated 2026-03-25** — 2026-03-25 REXPaint parity audit added 13 planned whole-sheet parity actions (W19-W31) as a post-audit extension. These are tracked separately and NOT included in the 96-action SAR denominator below. They will be folded in at the next canon rebaseline.
+> **Updated 2026-04-13** — 2026-03-25 REXPaint parity audit added 13 planned whole-sheet parity actions (W19-W31) as a post-audit extension. These are tracked separately and NOT included in the 96-action SAR denominator below. They will be folded in at the next canon rebaseline. M2-D proof runs (S3-S6, G5-G6, G9-G11 = 9 actions) updated count from 31 to 35 per canonical spec §3.
 
 | Status | Count | % of 96 SAR actions |
 |--------|-------|---------------------|
-| PROVEN | 31 | 32% |
-| WIRED | 56 | 58% |
+| PROVEN | 35 | 36% |
+| WIRED | 52 | 54% |
 | PARTIAL | 2 | 2% |
 | PLANNED | 4 | 4% |
 | BLOCKED | 1 | 1% |
@@ -324,7 +324,7 @@ The legacy XP Frame Inspector is fully wired with complete implementations for a
 | M2-A (structural baseline) | 2 | 2 | 0 | 0 |
 | M2-B (source-panel assembly) | 13 | 10 | 3 | 0 |
 | M2-C (WS primary) | 20 | 14 | 2 | 4 (1 BLOCKED, 2 DEFERRED, 1 PARTIAL) |
-| M2-D (full SAR coverage) | 45 | 0 | 43 | 2 (1 PARTIAL, 1 PLANNED) |
+| M2-D (full SAR coverage) | 45 | 9 | 34 | 2 (1 PARTIAL, 1 PLANNED) |
 | M2-E (semantic dicts) | 0 | 0 | 0 | 0 (workflow-level, not action-level) |
 | M2-F (analyze assistive) | 1 | 0 | 1 | 0 |
 | *Post-M2-C parity (W19-W31)* | 13 | 12 | 1 | 0 |

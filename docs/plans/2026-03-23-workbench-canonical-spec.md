@@ -364,7 +364,7 @@ These gates must pass before any milestone closeout or deployment.
 | Gate | Runner | Pass Criteria | Classification |
 |------|--------|---------------|----------------|
 | G-BUNDLE | `run_bundle.sh` | Deterministic 3-action bundle (idle/attack/death) passes with fidelity + Skin Dock playable + 10s runaround 0 crashes | Regression — fixed inputs. BUG-11 FIXED: 3/3 consecutive PASS (2026-03-25). |
-| G-RANDOM | `run_randomized_bundle.sh` | Randomized 3-action bundle passes with all 3 authoring methods (new_xp/upload_xp/upload_png), Skin Dock playable, 10s runaround 0 crashes. Must pass on at least 3 different seeds. | Smoke — randomized inputs |
+| G-RANDOM | `run_randomized_bundle.sh` | Randomized 3-action bundle passes with all 3 authoring methods (new_xp/upload_xp/upload_png), Skin Dock playable, 10s runaround 0 crashes. Must pass on at least 3 different seeds. | Smoke — randomized inputs. **PARTIALLY MET: 1/3 seeds proven** (seed 42 only). Seeds 2 and 3 required but not yet proven. Gate is not cleared. |
 
 **G-RANDOM details:**
 - Each run randomly permutes 3 authoring methods across 3 actions (6 possible combinations)
@@ -373,7 +373,8 @@ These gates must pass before any milestone closeout or deployment.
 - `upload_png`: uploads PNG from baseline pool → server pipeline conversion
 - Seeded RNG (`--seed`) for reproducibility. Failing seed must be recorded.
 - Stubbed actions (copy/paste, select, undo/redo) are excluded until WS editor supports them
-- **First proven seed:** 42 (idle=upload_png, attack=upload_xp, death=new_xp) at commit `7ce9d72`
+- **Proven seeds:** seed 42 (idle=upload_png, attack=upload_xp, death=new_xp) at commit `7ce9d72` — **1/3 required seeds**
+- **Seeds 2 and 3:** REQUIRED but NOT YET PROVEN. Gate remains PARTIALLY MET until all 3 seeds pass.
 
 ---
 
