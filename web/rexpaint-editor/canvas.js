@@ -500,6 +500,13 @@ export class Canvas {
     const needsFull = this._fullRenderNeeded || this.showGrid ||
       (this.selectionTool && this.selectionTool.getSelectionBounds());
 
+    // Nothing to do: no dirty cells and no reason for a full pass.
+    // Without this guard, mouseup triggers a gratuitous clear+redraw
+    // that visually shifts painted content (Issue #8).
+    if (!needsFull && this._dirtyCells.size === 0) {
+      return;
+    }
+
     if (!needsFull && this._dirtyCells.size > 0 && this._dirtyCells.size < 500) {
       // Incremental: only redraw changed cells
       for (const key of this._dirtyCells) {
