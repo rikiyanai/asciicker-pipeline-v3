@@ -51,9 +51,28 @@ Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
 
 ## 3. Current Priority Stack
 
-**Last reviewed:** 2026-03-25
+**Last reviewed:** 2026-04-13
 
-1. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions run `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
+1. **G-RANDOM visual fidelity — machine-readable runtime sprite check** — IMMEDIATE BLOCKER on G-RANDOM gate closure. Custom skin appeared invisible in Skin Dock during seeds 2+3 (2026-04-13). The gate currently proves only pipeline stability; it does NOT prove the authored XP is visually rendered by the runtime. Required next work:
+
+   **Goal:** determine programmatically what pixels the TERM++ runtime renders for each angle of the player skin while it runs around, and compare against the expected cell colors from the exported XP.
+
+   **Diagnostic split:**
+   - Branch A — Extract TERM++ runtime standalone: run the same `.wasm`/JS bundle outside the Skin Dock iframe with a known XP injected. If the extracted runtime renders the expected `#ffff55` cells at known sprite frame positions → the editor and pipeline are correct, and the Skin Dock skin injection path is the bug.
+   - Branch B — Skin Dock canvas pixel sampling: inside the existing Playwright runaround test, after arrowing to a known angle, pause movement, call `canvas.getContext('2d').getImageData(x, y, w, h)` on the game canvas at the predicted character position, and compare sampled colors against the XP's visual layer cell colors (derivable via `scripts/xp_cat.py`).
+   - Branch C — Runtime debug API probe: query `window.__ak_diag` or any skin-state surface exposed by the runtime to confirm which XP files are actually loaded into the running skin slot.
+
+   **Research questions before implementation:**
+   - Does the game canvas in the Skin Dock iframe use a 2D context (accessible via `getImageData`) or WebGL (requires different pixel readback)?
+   - Does the TERM++ runtime expose a skin-slot query (`__ak_diag.activeSkin()`)?
+   - Is the skin applied per-bundle-session (meaning the iframe URL carries a session token) or via runtime API injection?
+   - What is the pixel coordinate system at the character's on-screen position for angle 0 (facing right) at the default zoom level?
+
+   **Tool available:** `scripts/xp_cat.py` — renders any XP visual layer to ANSI true-color. Use `--info` for layer dims, `--hb` for half-block pixel mode. Provides expected cell colors to target during pixel sampling.
+
+   **Success criteria:** a runner step that (a) knows the expected color signature of the custom skin at ≥1 character position, (b) samples those pixels programmatically from the live runtime canvas, and (c) passes/fails based on match. If that check passes, G-RANDOM gate can be promoted to full visual fidelity proof.
+
+2. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions run `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
 2. **Slice 5 manual assembly E2E** — PROVEN 13/13 (2026-03-24). Covers U1→S12→S7→D1→W1→W2→T3→T4. Demonstrates M2-B/C/D functional end-to-end. Runner: `run_manual_assembly_e2e_test.mjs`.
 3. **M2-D full SAR workflow coverage** — 35/96 SAR + 13/13 parity extension PROVEN. W23 select-all now proven (adapter proxy fix + 8/8 PASS). W28-W31 bulk-edit proven (10/10 PASS via `run_whole_sheet_bulkedit_test.mjs`). W24-W27 selection transforms proven (`1828979`). W19-W22 clipboard proven (`431b437`). Inspector demotion Phase 7 now **unblocked**. 31 WS selectors, 77 registry entries, 2 recipes. W15 three-part proof committed. S3-S6/G5-G6/G9-G11 proven. Remaining 48 WIRED actions need committed proof in future M2-D/E passes.
 4. **Workbench UI audit follow-up** — 2026-03-24 audit found 39 user-facing issues after BUG-01 was fixed: 3 critical, 7 high, 14 medium, 15 low. BUG-02, BUG-03, BUG-04, BUG-05, BUG-10 now FIXED. Remaining open bugs: BUG-06 (fetch error), BUG-07 (disabled control contrast), BUG-08 (debug panel exposed).
