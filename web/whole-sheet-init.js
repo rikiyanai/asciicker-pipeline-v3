@@ -2170,6 +2170,7 @@ function syncFromState(layers) {
     }
   }
 
+  editorState.canvas._fullRenderNeeded = true;
   editorState.canvas.render();
 }
 

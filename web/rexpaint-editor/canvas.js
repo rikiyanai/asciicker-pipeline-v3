@@ -488,6 +488,7 @@ export class Canvas {
     this.offsetY = Math.max(0, Math.min(y, maxOffsetY));
 
     // Re-render with new offset
+    this._fullRenderNeeded = true;
     this.render();
   }
 
@@ -778,6 +779,7 @@ export class Canvas {
     this.canvasElement.height = this.height * pixelsPerCell;
 
     // Re-render with new size
+    this._fullRenderNeeded = true;
     this.render();
   }
 
