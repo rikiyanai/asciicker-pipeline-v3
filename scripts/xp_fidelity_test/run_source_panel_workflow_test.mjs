@@ -62,11 +62,18 @@ function assert(condition, failFn, cls, message, extra = {}) {
   return true;
 }
 
+async function ensureSourceCanvasVisible(page) {
+  const canvas = page.locator('#sourceCanvas');
+  await canvas.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(100);
+}
+
 /**
  * Click on the source canvas at element-relative coordinates.
  * At zoom=1, element coords map 1:1 to canvas pixel coords.
  */
 async function canvasClick(page, x, y, opts = {}) {
+  await ensureSourceCanvasVisible(page);
   await page.locator('#sourceCanvas').click({
     position: { x, y },
     button: opts.button || 'left',
@@ -78,6 +85,7 @@ async function canvasClick(page, x, y, opts = {}) {
  * Uses Playwright mouse API for precise control.
  */
 async function canvasDrag(page, x1, y1, x2, y2) {
+  await ensureSourceCanvasVisible(page);
   const box = await page.locator('#sourceCanvas').boundingBox();
   if (!box) throw new Error('sourceCanvas not found or not visible');
   const startX = box.x + x1;
@@ -96,6 +104,7 @@ async function canvasDrag(page, x1, y1, x2, y2) {
  * Right-click the source canvas at element-relative (x,y) to open context menu.
  */
 async function canvasRightClick(page, x, y) {
+  await ensureSourceCanvasVisible(page);
   await page.locator('#sourceCanvas').click({
     position: { x, y },
     button: 'right',
