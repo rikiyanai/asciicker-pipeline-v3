@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+from pipeline_v2.xp_codec import read_xp
+
 
 def _upload(client, path: Path, prefix: str = ""):
     with path.open("rb") as f:
@@ -158,6 +160,10 @@ def test_run_to_workbench_to_export(client):
     assert web_skin_data["xp_size_bytes"] > 0
     assert len(web_skin_data["xp_b64"]) > 0
     assert "player-0000.xp" in web_skin_data["override_names"]
+    assert web_skin_data["preview_normalized"] is True
+    preview_xp = read_xp(Path(web_skin_data["xp_path"]))
+    assert preview_xp["width"] == 126
+    assert preview_xp["height"] == 80
 
     runtime_preflight_resp = client.get("/api/workbench/runtime-preflight")
     assert runtime_preflight_resp.status_code == 200

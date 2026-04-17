@@ -8187,3 +8187,79 @@ fix is attempted.
 3. Check whether `Test This Skin` is consuming unsaved/open-session state,
    exported XP state, or stale selection focus in a way that misrepresents the
    authored four-frame result.
+
+---
+
+## Fix Attempt — Single-Session Skin Dock Was Injecting Raw Non-Native Sheets (2026-04-17)
+
+This entry closes the specific runtime misread behind the “blobs of pixels”
+behavior seen after dragging only a subset of frames into the frame nav.
+
+### Root cause
+
+1. **Single-session `web-skin-payload` was exporting the current workbench XP
+   verbatim, even when the session was a non-native direct-authoring sheet such
+   as `72×32`. HIGH.**
+   - Evidence before fix:
+     - `src/pipeline_v2/service.py:3006-3025` called
+       `workbench_export_xp(session_id, req_id)` and then staged that raw XP
+       into the full TERM++ override filename set.
+     - The same payload was used for `player-*.xp`, `attack-*.xp`,
+       `plydie-*.xp`, `wolfie-*.xp`, and `wolack-*.xp`, regardless of whether
+       the current single-session sheet matched the native player runtime
+       contract.
+   - Consequence:
+     - `Test This Skin` could show runtime blobs / garbage for direct non-native
+       sessions even when frame-nav authoring was internally clipped correctly.
+     - This was a runtime preview payload problem, not proof that source-box
+       width was leaking through `writeFrameCellMatrix`.
+
+2. **The saved-session/runtime mismatch was not “open unsaved frame” state.**
+   - Evidence:
+     - `web/workbench.js:1389-1410` saves the current session before requesting
+       `/api/workbench/web-skin-payload`.
+     - Therefore the dock/runtime was consuming saved/exported session state,
+       not an unsaved editor buffer.
+
+### What changed
+
+1. **Non-native single-session player sheets are now normalized into a native
+   player runtime preview XP before Skin Dock injection.**
+   - Landed in `src/pipeline_v2/service.py`:
+     - `_session_visual_cells(...)`
+     - `_build_native_player_runtime_preview_layers(...)`
+     - `workbench_web_skin_payload(...)` now emits a normalized `126×80`
+       preview XP when the session family is `player` but the sheet is not
+       already native-sized.
+   - The normal `Export XP` path remains unchanged; this fix is specific to the
+     runtime preview payload.
+
+2. **The payload now reports whether preview normalization occurred.**
+   - `preview_normalized: true` is returned for this fallback runtime-preview
+     path so the behavior is explicit in inspection/debug output.
+
+### Verification evidence
+
+1. **API regression suite passed with the new payload contract.**
+   - `python3 -m pytest tests/test_workbench_flow.py -q`
+   - Result: `4 passed`
+
+2. **Live payload inspection now returns a native runtime-preview XP for
+   non-native classic sessions.**
+   - Verification:
+     - `POST /api/workbench/web-skin-payload`
+     - returned `preview_normalized: true`
+     - returned XP decodes to `126×80`
+
+### What this does prove
+
+- The Skin Dock/runtime path no longer injects raw `72×32` workbench sheets as
+  if they were already native player runtime files.
+- The previously observed “blob” behavior is no longer explained by the old raw
+  non-native payload path.
+
+### What this does NOT prove
+
+- It does NOT close the separate cross-row `shift+click` selection bug.
+- It does NOT yet prove that the source-box row-grouping behavior matches the
+  intended drag semantics when multiple boxes are dropped at once.

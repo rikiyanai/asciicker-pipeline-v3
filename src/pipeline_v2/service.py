@@ -2280,6 +2280,87 @@ def _expand_visual_cells_for_export(
     return [dst_grid[y][x] for y in range(rows) for x in range(cols)]
 
 
+def _session_visual_cells(sess: dict[str, Any], req_id: str) -> list[Cell]:
+    cols = int(sess["grid_cols"])
+    rows = int(sess["grid_rows"])
+    expected_cells = cols * rows
+    persisted_layers = sess.get("layers")
+    if (
+        isinstance(persisted_layers, list)
+        and len(persisted_layers) >= 3
+        and isinstance(persisted_layers[2], list)
+        and len(persisted_layers[2]) == expected_cells
+    ):
+        return [
+            (int(c["glyph"]), tuple(c["fg"]), tuple(c["bg"]))
+            for c in persisted_layers[2]
+        ]
+    cells = sess.get("cells") or []
+    if len(cells) != expected_cells:
+        raise ApiError("session cell geometry mismatch", "session_geometry_invalid", "workbench", req_id, 422)
+    return [
+        (int(c["glyph"]), tuple(c["fg"]), tuple(c["bg"]))
+        for c in cells
+    ]
+
+
+def _build_native_player_runtime_preview_layers(sess: dict[str, Any], req_id: str) -> list[list[Cell]]:
+    cols = int(sess["grid_cols"])
+    rows = int(sess["grid_rows"])
+    angles = int(sess.get("angles", 1))
+    anims = [int(x) for x in sess.get("anims", [1])]
+    projs = max(1, int(sess.get("projs", 1)))
+    semantic_frames = sum(anims)
+    if semantic_frames <= 0 or angles <= 0:
+        raise ApiError("invalid runtime preview geometry", "invalid_runtime_preview_geometry", "workbench", req_id, 422)
+
+    frame_cols = semantic_frames * projs
+    if cols % frame_cols != 0 or rows % angles != 0:
+        raise ApiError(
+            f"session geometry incompatible with player runtime preview normalization: cols={cols}, rows={rows}, "
+            f"angles={angles}, semantic_frames={semantic_frames}, projs={projs}",
+            "runtime_preview_geometry_incompatible",
+            "workbench",
+            req_id,
+            422,
+        )
+
+    src_frame_w = cols // frame_cols
+    src_frame_h = rows // angles
+    target_semantic_frames = 9  # native player idle/walk contract: [1, 8]
+    target_projs = 2
+    target_frame_w = NATIVE_COLS // (target_semantic_frames * target_projs)
+    target_frame_h = NATIVE_ROWS // NATIVE_ANGLES
+
+    cells_layer2 = _session_visual_cells(sess, req_id)
+    src_grid = [list(cells_layer2[y * cols:(y + 1) * cols]) for y in range(rows)]
+    dst_grid = [[_transparent_cell() for _ in range(NATIVE_COLS)] for _ in range(NATIVE_ROWS)]
+
+    max_angles = min(angles, NATIVE_ANGLES)
+    max_frames = min(semantic_frames, target_semantic_frames)
+    max_projs = min(projs, target_projs)
+    for angle in range(max_angles):
+        sy0 = angle * src_frame_h
+        for frame in range(max_frames):
+            for proj in range(max_projs):
+                sx0 = (frame + (proj * semantic_frames)) * src_frame_w
+                src_matrix = [row[sx0:sx0 + src_frame_w] for row in src_grid[sy0:sy0 + src_frame_h]]
+                dst_matrix = _resample_frame_matrix(src_matrix, target_frame_w, target_frame_h)
+                dx0 = (frame + (proj * target_semantic_frames)) * target_frame_w
+                dy0 = angle * target_frame_h
+                for y in range(target_frame_h):
+                    dst_grid[dy0 + y][dx0:dx0 + target_frame_w] = dst_matrix[y]
+
+    preview_cells = [dst_grid[y][x] for y in range(NATIVE_ROWS) for x in range(NATIVE_COLS)]
+    return _build_native_player_layers(
+        cells_layer2=preview_cells,
+        cols=NATIVE_COLS,
+        rows=NATIVE_ROWS,
+        stage="workbench",
+        req_id=req_id,
+    )
+
+
 def workbench_load_session(session_id: str, req_id: str) -> dict[str, Any]:
     p = _session_path(session_id)
     if not p.exists():
@@ -3007,8 +3088,21 @@ def workbench_web_skin_payload(session_id: str, req_id: str) -> dict[str, Any]:
     p = _session_path(session_id)
     if not p.exists():
         raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
-    export = workbench_export_xp(session_id, req_id)
-    xp_path = Path(export["xp_path"]).expanduser().resolve()
+    sess = load_json(p)
+    family = str(sess.get("family", "player"))
+    cols = int(sess["grid_cols"])
+    rows = int(sess["grid_rows"])
+    preview_normalized = False
+    if family == "player" and (cols, rows) != (NATIVE_COLS, NATIVE_ROWS):
+        layers = _build_native_player_runtime_preview_layers(sess, req_id)
+        xp_path = (EXPORT_DIR / f"session-runtime-preview-{session_id}.xp").resolve()
+        write_xp(xp_path, NATIVE_COLS, NATIVE_ROWS, layers)
+        checksum = _sha256(xp_path)
+        preview_normalized = True
+    else:
+        export = workbench_export_xp(session_id, req_id)
+        xp_path = Path(export["xp_path"]).expanduser().resolve()
+        checksum = export["checksum"]
     try:
         raw = xp_path.read_bytes()
     except Exception as e:
@@ -3018,11 +3112,12 @@ def workbench_web_skin_payload(session_id: str, req_id: str) -> dict[str, Any]:
     return {
         "session_id": session_id,
         "xp_path": str(xp_path),
-        "checksum": export["checksum"],
+        "checksum": checksum,
         "xp_size_bytes": len(raw),
         "xp_b64": base64.b64encode(raw).decode("ascii"),
         "override_names": override_names,
         "reload_player_name": "player",
+        "preview_normalized": preview_normalized,
     }
 
 
