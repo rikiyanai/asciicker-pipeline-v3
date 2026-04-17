@@ -53,7 +53,7 @@ If the self-containment audit fails, the agent must treat that as a blocking rep
 Use sources in this order:
 
 1. `AGENTS.md`
-2. [docs/INDEX.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/INDEX.md)
+2. [docs/INDEX.md](INDEX.md)
 3. this file
 4. `CLAUDE.md`
 5. current live branch/worktree state
@@ -254,8 +254,8 @@ If no handoff was updated, the session is incomplete.
 
 Start with the canonical hub and then pick the task-specific handoff:
 
-- [docs/INDEX.md](/Users/r/Downloads/asciicker-pipeline-v2/docs/INDEX.md)
-- [XP Editor Acceptance Contract](/Users/r/Downloads/asciicker-pipeline-v2/docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md)
+- [docs/INDEX.md](INDEX.md)
+- [XP Editor Acceptance Contract](XP_EDITOR_ACCEPTANCE_CONTRACT.md)
 
 For editor/doc status work on audited `master`, read:
 

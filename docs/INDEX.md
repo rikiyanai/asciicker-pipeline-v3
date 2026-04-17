@@ -1,6 +1,6 @@
 # Docs Index
 
-Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v2`.
+Canonical doc hub for agents working in this repo checkout.
 
 ## Non-Negotiable Constraints
 
@@ -10,19 +10,18 @@ Canonical doc hub for agents working in `/Users/r/Downloads/asciicker-pipeline-v
 
 ## Document Authority Model
 
-This repo uses a 3-doc canonical authority model. Agents must treat ONLY these 3 docs as authority for active execution state:
+This repo uses a 2-doc canonical authority model. Agents must treat ONLY these 2 docs as authority for active execution state:
 
 | # | Doc | Role |
 |---|-----|------|
 | 1 | `PLAYWRIGHT_FAILURE_LOG.md` | Reality/failure/proof log — ground truth for what actually happened |
 | 2 | `docs/plans/2026-03-23-workbench-canonical-spec.md` | Normative requirements, roadmap, bug-priority, active execution truth |
-| 3 | `docs/plans/2026-03-23-m2-capability-canon-inventory.md` | Capability inventory, truth-table, SAR-facing workflow canon |
 
 ### Doc Classifications
 
 | Classification | Examples | Rule |
 |---------------|----------|------|
-| **Canonical** | The 3 docs above | Only source of active truth; update in-place |
+| **Canonical** | The 2 docs above | Only source of active truth; update in-place |
 | **Structural Contract** | `XP_EDITOR_ACCEPTANCE_CONTRACT.md`, `PNG_STRUCTURAL_BASELINE_CONTRACT.md` | Stable normative contracts; update only on milestone boundary |
 | **Reference** | `COMPLETE_UI_CONTROL_REFERENCE.md`, `REXPAINT_MANUAL.txt`, `REXPAINT_UI_COMPLETE_INDEX.md` | Stable reference material; does not claim active state |
 | **Worksheet** | `CLAUDE-HANDOFF-*.md`, most `docs/plans/*.md`, `docs/research/*` | Temporary; must be retired via `scripts/doc_lifecycle_stitch.sh` after completion |
@@ -38,7 +37,7 @@ This repo uses a 3-doc canonical authority model. Agents must treat ONLY these 3
 ## Current Branch Truth
 
 - Audit date: 2026-03-24
-- Audited worktree: `/Users/r/Downloads/asciicker-pipeline-v2`
+- Audited worktree: current repo checkout
 - Audited branch: `master`
 - Audited HEAD: `87ab20d`
 - Current branch role: active M2 acceptance and verifier architecture line; MVP deployment live at `rikiworld.com/xpedit`; M2-D registry expansion landed (77 entries); login reskin shipped; BUG-01 grid overlay fixed; player-state parity audit complete

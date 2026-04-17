@@ -14,7 +14,7 @@ Always run the self-containment audit immediately after conductor status.
 
 - Direct command: `python3 scripts/self_containment_audit.py`
 - Install hooks: `bash scripts/install_self_containment_hooks.sh`
-- Hard rule: this repo must not reference, symlink, or depend on folders outside `/Users/r/Downloads/asciicker-pipeline-v2` for live code, runtime, tests, or build steps.
+- Hard rule: this repo must not reference, symlink, or depend on folders outside the current repo root for live code, runtime, tests, or build steps.
 
 ## Milestone Requirements
 
@@ -68,13 +68,12 @@ Short version:
 
 ## Document Authority Model
 
-This repo uses a 3-doc canonical authority model. Only these docs are authority for active execution state:
+This repo uses a 2-doc canonical authority model. Only these docs are authority for active execution state:
 
 | # | Doc | Role |
 |---|-----|------|
 | 1 | `PLAYWRIGHT_FAILURE_LOG.md` | Reality/failure/proof log |
 | 2 | `docs/plans/2026-03-23-workbench-canonical-spec.md` | Normative requirements / roadmap / bug-priority / policy |
-| 3 | `docs/plans/2026-03-23-m2-capability-canon-inventory.md` | Capability inventory / truth-table / SAR canon |
 
 All other docs are one of:
 - **Structural Contract** — stable normative contracts (update only on milestone boundary)

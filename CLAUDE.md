@@ -11,11 +11,10 @@ Use this file as short-lived repo memory, not as proof over code.
 
 ## Document Authority Model
 
-This repo uses a 3-doc canonical authority model:
+This repo uses a 2-doc canonical authority model:
 
 1. `PLAYWRIGHT_FAILURE_LOG.md` — reality/failure/proof log
 2. `docs/plans/2026-03-23-workbench-canonical-spec.md` — normative requirements / roadmap / bug-priority / policy
-3. `docs/plans/2026-03-23-m2-capability-canon-inventory.md` — capability inventory / SAR canon
 
 All other docs are worksheets or reference. Worksheets must be retired after completion via `scripts/doc_lifecycle_stitch.sh`. See `AGENTS.md` § Document Authority Model for the full policy.
 
@@ -72,7 +71,7 @@ Short version:
 - **Structural contract evidence** = API-backed path explicitly permitted by a structural contract doc (e.g., `PNG_STRUCTURAL_BASELINE_CONTRACT.md`).
 - Runners that use `fetch()` or `page.evaluate(async => fetch(...))` are NEVER acceptance-grade. They are structural-contract or diagnostic.
 - If the verifier cannot express a UI workflow, that is a verifier gap — fix the verifier, do not bypass it with API calls.
-- Citations: AGENTS.md:29,46; AGENT_PROTOCOL.md:305-354; workbench-canonical-spec.md:67-74.
+- Citations: `AGENTS.md`; `docs/AGENT_PROTOCOL.md` §13a-13d; `docs/plans/2026-03-23-workbench-canonical-spec.md`.
 
 ### Acceptance Rules (Explicit)
 
