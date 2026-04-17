@@ -651,7 +651,7 @@ open or are now resolved:
 | Canonical manifest authoring now exists, but it is still JSON-first | `web/workbench.html:133-145`, `web/workbench.js:2196-2377`, `web/workbench.js:3278-3367`, `src/pipeline_v2/app.py:496-525`, `src/pipeline_v2/service.py:3831-3887` | The deleted source overlay owner was replaced with a manifest JSON draft editor, saved-manifest routes, and guide/region rendering on the source canvas. The remaining gap is ergonomic interactive slicer tooling; authoring is still a JSON-first wrapper flow. |
 | Source panel now reloads canonical PNG/manifest without grid geometry | `web/workbench.js:2242-2305`, `web/workbench.js:3278-3367`, `web/workbench.js:4310-4332`, `src/pipeline_v2/app.py:496-525` | The source panel now reads `source_path` / `source_manifest` directly, reloads the PNG through `/api/workbench/source-image`, and can render manifest geometry before the PNG finishes loading. This Step 5 projection dependency is resolved. |
 | Sprite-by-sprite source-to-frame drag coverage is now first-class in the official headed runner | `scripts/xp_fidelity_test/verifier_lib.mjs`, `scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs`, `tests/fixtures/known_good/source_grid_multirow.png`, `PLAYWRIGHT_FAILURE_LOG.md` entries dated `2026-04-17` | The canonical runner now proves all currently visible source-box families through shipped UI actions only: manual single-box, auto-detected single-box, grouped row-select, and grouped column-select drags into `9A`. RESOLVED on `2026-04-17`. |
-| Frame-slot deletion semantics now exist as a separate shipped action | `web/workbench.html:142-146`, `web/workbench.js:3741-3744`, `web/workbench.js:5250-5443`, `scripts/xp_fidelity_test/run_m2d_action_proof_test.mjs` | `Clear Selected` remains the clear-content action. `Delete Frame` now removes semantic frame slots, shrinks geometry, left-shifts surviving frames, repairs selection, and is headed-proven through the official M2-D runner. RESOLVED on `2026-04-17`. |
+| Frame-nav multi-row selection and frame-slot deletion now behave as separate shipped interaction contracts | `web/workbench.html`, `web/workbench.js`, `scripts/xp_fidelity_test/run_m2d_action_proof_test.mjs`, `output/m2d_action_proof_multirow_v1/report.json` | `Clear Selected` remains the clear-content action, `Delete Frame` remains the semantic-slot removal action, and `shift+click` selection now persists across rows instead of collapsing back to one row. The official headed M2-D runner now proves cross-row clear/delete behavior through shipped UI actions only. RESOLVED on `2026-04-17` (`3dd7042`, `2ec2238`, `d689a14`). |
 | Panel identity map and panel topology now exist in code, but public-parity proof is still open | `web/workbench.html`, `web/styles.css`, `web/workbench.js:7984-8099` | The current branch now exposes numbered/named panel badges (`8 source`, `9 grid`, `9A frame-nav`, `9B grid-panel`, `10 whole-sheet`, etc.) and a full clickable-ID overlay toggle (`hide IDs` / `Alt+I`). That closes the raw tagging gap that fueled the three-day refactor confusion, but it is still code-state until it is re-proved against the frozen public workflow grouping. |
 
 These are architectural failures. They are not just missing buttons.
@@ -1895,15 +1895,18 @@ From the current state, the corrected sequence is:
      - delete the reintroduced `enabled_families` authority path and keep template/action metadata as the only client-facing scope owner
      - continue broader mounted-family and wearable/item template follow-through after that authority fix
 
-12. **IMPLEMENT — Interaction completion after UI identity map** — **IMPLEMENTED (2026-04-17, commits `3dd7042`, `2ec2238`)**.
+12. **IMPLEMENT — Interaction completion after UI identity map** — **IMPLEMENTED (2026-04-17, commits `3dd7042`, `2ec2238`, `d689a14`)**.
    - The official source-to-grid runner now proves manual single-box, auto single-box, grouped row-select, and grouped column-select drags through shipped headed UI actions only.
    - The product now has a distinct `Delete Frame` action with semantic-slot removal and left-shift/repack behavior, separate from `Clear Selected`.
-   - The official M2-D runner now proves `clear_selected_contents` and `delete_frame_slot` as separate actions, with artifact evidence for geometry shrink and signature repack.
+   - Cross-row `shift+click` frame-nav selection is now live in product code; it no longer collapses back to the focused row when the user moves to the next row.
+   - The official M2-D runner now proves `clear_selected_contents` and `delete_frame_slot` as separate actions, including the cross-row selection contract, geometry shrink, and signature repack.
    - Current headed evidence:
      - `output/source_panel_after_delete_frame_v1/report.json`
      - `output/source_to_grid_after_delete_frame_v1/report.json`
      - `output/m2d_action_proof_delete_frame_v2/report.json`
      - `output/m2d_action_proof_delete_frame_v2/g6_delete_frame_contract.json`
+     - `output/m2d_action_proof_multirow_v1/report.json`
+     - `output/m2d_action_proof_multirow_v1/g6_delete_frame_contract.json`
 
 13. **IMPLEMENT — MCP/automation support and Y9-2 HTTP API** — **PARTIAL**.
    - Already implemented:

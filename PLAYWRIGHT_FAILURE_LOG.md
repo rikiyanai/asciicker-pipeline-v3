@@ -8401,3 +8401,93 @@ claim.
   - frame nav owns geometry
   - whole-sheet stores the document
   - runtime/template adapt downstream
+
+---
+
+## Fix Attempt — Cross-Row Shift Selection Now Drives Clear/Delete (2026-04-17)
+
+This entry closes the separate frame-nav regression where `shift+click`
+selection collapsed as soon as the user moved to another row.
+
+### Root cause
+
+1. **Grid selection still had a row-local owner. HIGH.**
+   - Live code stored selection as one `selectedRow` plus `selectedCols`.
+   - `selectFrame()` reset selection unless the next `shift+click` stayed on
+     the same row.
+   - Consequence:
+     - cross-row `shift+click` could not persist
+     - `Clear Selected` only cleared the focused row
+     - `Delete Frame` could only repair selection on that one row
+
+2. **Delete semantics were still coupled to the focused row instead of the
+   actual selected frame set. HIGH.**
+   - `deleteSelectedFrames()` iterated `selectedCols` only on `selectedRow`.
+   - `selectedSemanticFrameIndices()` only derived semantic slots from the
+     focused row, so multi-row frame-slot deletion could not be represented
+     honestly.
+
+### What changed
+
+1. **Frame-nav selection is now an explicit frame-set with anchor/focus.**
+   - `web/workbench.js` now stores authoritative grid selection as:
+     - `selectedFrames`
+     - `selectionAnchor`
+     - `selectionFocus`
+   - Legacy `selectedRow` / `selectedCols` remain as derived compatibility
+     fields only, sourced from the focused row in the authoritative set.
+
+2. **`shift+click` now spans rows and columns instead of resetting at row
+   boundaries.**
+   - `selectFrame()` now builds a rectangular selection from anchor to current
+     cell.
+   - Existing single-row drag-select remains intact because it reuses the same
+     anchor on one row.
+
+3. **Clear/Delete now respect the actual selected frame set.**
+   - `deleteSelectedFrames()` clears every selected frame coordinate across rows.
+   - `Delete Frame` now unions selected semantic frame slots across all
+     selected rows, shrinks geometry once, left-shifts surviving columns, and
+     repairs selection back onto the affected rows.
+
+4. **Row-local actions are explicitly gated back to single-row selections.**
+   - row move, column move, jitter, row category, and frame-group assignment now
+     require one selected row rather than silently acting on a partial view of a
+     multi-row selection.
+
+### Verification evidence
+
+1. **Syntax checks passed.**
+   - `node --check web/workbench.js`
+   - `node --check scripts/xp_fidelity_test/run_m2d_action_proof_test.mjs`
+
+2. **The official headed M2-D runner now proves cross-row selection plus clear
+   and Delete Frame behavior.**
+   - Command:
+     - `node scripts/xp_fidelity_test/run_m2d_action_proof_test.mjs --headed --url http://127.0.0.1:5082/workbench --out-dir output/m2d_action_proof_multirow_v1`
+   - Result:
+     - `13/13` steps passed
+     - `g6a_clear_selected_contents` now shift-selects `(row 0, col 0)` plus
+       `(row 1, col 0)` and verifies both rows clear without geometry shrink
+     - `g6b_delete_frame_slot` now shift-selects the same cross-row semantic
+       slot and verifies:
+       - one semantic slot removed
+       - geometry shrink
+       - left-shift signature repair on both rows
+       - repaired multi-row selection after delete
+   - Artifacts:
+     - `output/m2d_action_proof_multirow_v1/report.json`
+     - `output/m2d_action_proof_multirow_v1/g6_delete_frame_contract.json`
+
+### What this does prove
+
+- The separate cross-row `shift+click` selection bug is closed in live code.
+- `Clear Selected` and `Delete Frame` now follow the actual multi-row frame-nav
+  selection instead of acting only on the focused row.
+- The official headed M2-D proof now matches that product behavior.
+
+### What this does NOT prove
+
+- It does NOT change multi-box source-drop grouping semantics.
+- It does NOT by itself prove broader Step 7 public/local workflow grouping
+  parity.
