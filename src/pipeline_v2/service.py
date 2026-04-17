@@ -12,6 +12,7 @@ import threading
 import time
 import uuid
 from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -1063,6 +1064,89 @@ def _bundle_path(bundle_id: str) -> Path:
     return BUNDLES_DIR / f"{bundle_id}.json"
 
 
+def _session_updated_at(path: Path) -> tuple[str, float]:
+    try:
+        ts = float(path.stat().st_mtime)
+    except OSError:
+        ts = 0.0
+    iso = datetime.fromtimestamp(ts, UTC).isoformat().replace("+00:00", "Z")
+    return iso, ts
+
+
+def _session_label(sess_dict: dict[str, Any]) -> str:
+    explicit = str(sess_dict.get("name") or "").strip()
+    if explicit:
+        return explicit
+    action_key = str(sess_dict.get("action_key") or "").strip()
+    template_set_key = str(sess_dict.get("template_set_key") or "").strip()
+    family = str(sess_dict.get("family") or "").strip()
+    if action_key and template_set_key:
+        return f"{template_set_key}:{action_key}"
+    if action_key:
+        return action_key
+    if family == "uploaded":
+        return "Imported XP"
+    if family:
+        return family
+    session_id = str(sess_dict.get("session_id") or "").strip()
+    return f"session-{session_id[:8] or 'unknown'}"
+
+
+def _bundle_session_owners() -> dict[str, dict[str, str]]:
+    owners: dict[str, dict[str, str]] = {}
+    if not BUNDLES_DIR.exists():
+        return owners
+    for bp in BUNDLES_DIR.glob("*.json"):
+        try:
+            data = load_json(bp)
+        except Exception:
+            continue
+        bundle_id = str(data.get("bundle_id") or bp.stem).strip()
+        actions = data.get("actions", {})
+        if not isinstance(actions, dict):
+            continue
+        for action_key, act in actions.items():
+            if not isinstance(act, dict):
+                continue
+            session_id = str(act.get("session_id") or "").strip()
+            if not session_id:
+                continue
+            owners[session_id] = {
+                "bundle_id": bundle_id,
+                "action_key": str(action_key or ""),
+                "status": str(act.get("status") or ""),
+            }
+    return owners
+
+
+def _browse_session_summary(
+    sess_dict: dict[str, Any],
+    path: Path,
+    bundle_owner: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    updated_at, updated_at_epoch = _session_updated_at(path)
+    session_id = str(sess_dict.get("session_id") or "").strip()
+    summary = {
+        "session_id": session_id,
+        "label": _session_label(sess_dict),
+        "name": str(sess_dict.get("name") or "").strip(),
+        "family": str(sess_dict.get("family") or "").strip(),
+        "template_set_key": str(sess_dict.get("template_set_key") or "").strip(),
+        "action_key": str(sess_dict.get("action_key") or "").strip(),
+        "job_id": str(sess_dict.get("job_id") or "").strip(),
+        "grid_cols": int(sess_dict.get("grid_cols") or 0),
+        "grid_rows": int(sess_dict.get("grid_rows") or 0),
+        "angles": int(sess_dict.get("angles") or 1),
+        "anims": [int(x) for x in (sess_dict.get("anims") or [1])],
+        "projs": int(sess_dict.get("projs") or 1),
+        "source_projs": int(sess_dict.get("source_projs") or sess_dict.get("projs") or 1),
+        "updated_at": updated_at,
+        "updated_at_epoch": updated_at_epoch,
+        "bundle_owner": bundle_owner or None,
+    }
+    return summary
+
+
 def create_bundle(template_set_key: str, req_id: str) -> dict[str, Any]:
     ensure_dirs()
     reg = load_template_registry()
@@ -1160,6 +1244,81 @@ def _is_bundle_session(session_id: str) -> bool:
         except Exception:
             continue
     return False
+
+
+def workbench_list_sessions(req_id: str) -> dict[str, Any]:
+    ensure_dirs()
+    owners = _bundle_session_owners()
+    sessions: list[dict[str, Any]] = []
+    for sp in SESSIONS_DIR.glob("*.json"):
+        try:
+            sess_dict = load_json(sp)
+        except Exception:
+            continue
+        session_id = str(sess_dict.get("session_id") or "").strip()
+        if not session_id:
+            continue
+        sessions.append(_browse_session_summary(sess_dict, sp, owners.get(session_id)))
+    sessions.sort(key=lambda item: (-float(item.get("updated_at_epoch") or 0.0), str(item.get("label") or ""), str(item.get("session_id") or "")))
+    return {
+        "sessions": sessions,
+        "count": len(sessions),
+    }
+
+
+def workbench_rename_session(session_id: str, name: str, req_id: str) -> dict[str, Any]:
+    p = _session_path(session_id)
+    if not p.exists():
+        raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+    clean_name = str(name or "").strip()
+    if not clean_name:
+        raise ApiError("name is required", "missing_name", "workbench", req_id, 400)
+    if len(clean_name) > 120:
+        raise ApiError("name must be <= 120 characters", "invalid_name", "workbench", req_id, 422)
+    sess_dict = load_json(p)
+    sess_dict["name"] = clean_name
+    save_json(p, sess_dict)
+    owners = _bundle_session_owners()
+    return _browse_session_summary(sess_dict, p, owners.get(session_id))
+
+
+def workbench_duplicate_session(session_id: str, req_id: str) -> dict[str, Any]:
+    p = _session_path(session_id)
+    if not p.exists():
+        raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+    sess_dict = load_json(p)
+    source_label = _session_label(sess_dict)
+    duplicated = dict(sess_dict)
+    duplicated["session_id"] = str(uuid.uuid4())
+    duplicated["name"] = f"{source_label} copy"
+    out_path = _session_path(duplicated["session_id"])
+    save_json(out_path, duplicated)
+    owners = _bundle_session_owners()
+    return _browse_session_summary(duplicated, out_path, owners.get(str(duplicated["session_id"])))
+
+
+def workbench_delete_session(session_id: str, req_id: str) -> dict[str, Any]:
+    p = _session_path(session_id)
+    if not p.exists():
+        raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+    owners = _bundle_session_owners()
+    if session_id in owners:
+        owner = owners[session_id]
+        raise ApiError(
+            (
+                "bundle-owned session cannot be deleted from browse; "
+                f"bundle_id={owner['bundle_id']} action_key={owner['action_key']}"
+            ),
+            "bundle_session_delete_forbidden",
+            "workbench",
+            req_id,
+            422,
+        )
+    p.unlink()
+    return {
+        "session_id": session_id,
+        "deleted": True,
+    }
 
 
 def _job_path(job_id: str) -> Path:

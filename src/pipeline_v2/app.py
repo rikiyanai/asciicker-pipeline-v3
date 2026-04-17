@@ -46,6 +46,10 @@ from .service import (
     workbench_termpp_stream_frame_path,
     workbench_web_skin_payload,
     load_template_registry,
+    workbench_list_sessions,
+    workbench_rename_session,
+    workbench_duplicate_session,
+    workbench_delete_session,
     create_bundle,
     load_bundle,
     _is_bundle_session,
@@ -531,6 +535,51 @@ def create_app() -> Flask:
             if not session_id:
                 raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
             return jsonify(workbench_load_session(session_id, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @bp.get("/api/workbench/browse/list")
+    def api_wb_browse_list():
+        req_id = str(uuid.uuid4())
+        try:
+            return jsonify(workbench_list_sessions(req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @bp.post("/api/workbench/browse/rename")
+    def api_wb_browse_rename():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            session_id = str(payload.get("session_id", "")).strip()
+            name = str(payload.get("name", ""))
+            if not session_id:
+                raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
+            return jsonify(workbench_rename_session(session_id, name, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @bp.post("/api/workbench/browse/duplicate")
+    def api_wb_browse_duplicate():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            session_id = str(payload.get("session_id", "")).strip()
+            if not session_id:
+                raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
+            return jsonify(workbench_duplicate_session(session_id, req_id)), 201
+        except ApiError as e:
+            return _err(e)
+
+    @bp.post("/api/workbench/browse/delete")
+    def api_wb_browse_delete():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            session_id = str(payload.get("session_id", "")).strip()
+            if not session_id:
+                raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
+            return jsonify(workbench_delete_session(session_id, req_id)), 200
         except ApiError as e:
             return _err(e)
 

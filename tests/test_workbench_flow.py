@@ -222,6 +222,90 @@ def test_termpp_stream_dry_run_works_off_darwin(client):
         assert real_resp.status_code == 422
 
 
+def test_workbench_browse_crud_endpoints(client):
+    create_a = client.post(
+        "/api/workbench/create-blank-session",
+        data=json.dumps({"template_set_key": "player_native_idle_only", "action_key": "idle"}),
+        content_type="application/json",
+    )
+    assert create_a.status_code == 201
+    session_a = create_a.get_json()["session_id"]
+
+    create_b = client.post(
+        "/api/workbench/create-blank-session",
+        data=json.dumps({"template_set_key": "player_native_idle_only", "action_key": "idle"}),
+        content_type="application/json",
+    )
+    assert create_b.status_code == 201
+    session_b = create_b.get_json()["session_id"]
+
+    list_resp = client.get("/api/workbench/browse/list")
+    assert list_resp.status_code == 200
+    sessions = list_resp.get_json()["sessions"]
+    found_ids = {item["session_id"] for item in sessions}
+    assert session_a in found_ids
+    assert session_b in found_ids
+
+    rename_resp = client.post(
+        "/api/workbench/browse/rename",
+        data=json.dumps({"session_id": session_a, "name": "Browse Rename Proof"}),
+        content_type="application/json",
+    )
+    assert rename_resp.status_code == 200
+    renamed = rename_resp.get_json()
+    assert renamed["session_id"] == session_a
+    assert renamed["name"] == "Browse Rename Proof"
+    assert renamed["label"] == "Browse Rename Proof"
+
+    dup_resp = client.post(
+        "/api/workbench/browse/duplicate",
+        data=json.dumps({"session_id": session_a}),
+        content_type="application/json",
+    )
+    assert dup_resp.status_code == 201
+    duplicated = dup_resp.get_json()
+    assert duplicated["session_id"] != session_a
+    assert duplicated["name"] == "Browse Rename Proof copy"
+
+    delete_resp = client.post(
+        "/api/workbench/browse/delete",
+        data=json.dumps({"session_id": duplicated["session_id"]}),
+        content_type="application/json",
+    )
+    assert delete_resp.status_code == 200
+    assert delete_resp.get_json()["deleted"] is True
+
+    list_after = client.get("/api/workbench/browse/list")
+    assert list_after.status_code == 200
+    after_ids = {item["session_id"] for item in list_after.get_json()["sessions"]}
+    assert duplicated["session_id"] not in after_ids
+    assert session_a in after_ids
+
+
+def test_workbench_browse_delete_rejects_bundle_owned_session(client):
+    bundle_resp = client.post(
+        "/api/workbench/bundle/create",
+        data=json.dumps({"template_set_key": "player_native_full"}),
+        content_type="application/json",
+    )
+    assert bundle_resp.status_code == 201
+    bundle = bundle_resp.get_json()
+    first_owned = next(
+        act["session_id"]
+        for act in bundle["actions"].values()
+        if isinstance(act, dict) and act.get("session_id")
+    )
+
+    delete_resp = client.post(
+        "/api/workbench/browse/delete",
+        data=json.dumps({"session_id": first_owned}),
+        content_type="application/json",
+    )
+    assert delete_resp.status_code == 422
+    payload = delete_resp.get_json()
+    assert payload["code"] == "bundle_session_delete_forbidden"
+
+
 # --- Base-path-parameterized test (root + /xpedit) ---
 
 
