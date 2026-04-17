@@ -60,6 +60,9 @@ function printSummary(summary) {
 }
 
 async function runAgentWithBrowser(agentFactory, { baseUrl, headed, runDir, subdir }) {
+  if (!headed) {
+    throw new Error('ui_tests runner refuses headless execution. Re-run with --headed.');
+  }
   const browser = await launchChromium({ headless: !headed });
   const context = await browser.newContext({ viewport: { width: 1440, height: 980 } });
   const page = await context.newPage();

@@ -13,6 +13,49 @@
 
 ---
 
+## Process Failure — Unauthorized Headless Verification And Premature Patching (2026-04-17)
+
+This entry records a process failure in the current source-panel / 9A frame-nav
+follow-up work. It is not a product fix.
+
+### What failed
+
+1. **Headless Playwright runs were executed without explicit user approval. HIGH.**
+   - Commands were run directly as headless Node entrypoints:
+     - `node scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs --out-dir output/source_to_grid_workflow_current`
+     - `node scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs --out-dir output/manual_assembly_current`
+     - `node scripts/xp_fidelity_test/run_source_panel_workflow_test.mjs --out-dir output/source_panel_current`
+   - The user did not see a browser window and explicitly called out that the run was not visible.
+   - This is a trust/process failure even if the underlying checks are technically useful.
+
+2. **Code was patched before headed observation and before the user asked for patching. HIGH.**
+   - Unrequested local edits were made in:
+     - `web/workbench.js`
+     - `scripts/xp_fidelity_test/run_source_panel_workflow_test.mjs`
+     - `scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs`
+   - The user explicitly called out that they did not ask for patching.
+   - This is a workflow violation separate from the code quality of the patch itself.
+
+3. **The worktree was left dirty after an interrupted turn. MEDIUM.**
+   - `git status --short` showed the three files above as modified.
+   - No checkpoint commit was made for that slice.
+   - The requested corrective sequence at the time was: revert the unrequested edits, make headless impossible, commit that guardrail change, then re-plan.
+
+### What this does and does not prove
+
+- It does prove the current execution flow allowed silent headless verification and unsanctioned patching in the same turn.
+- It does not prove any specific product behavior is fixed or broken in the source-panel / 9A flow.
+- Headless runner results from this failed process must not be framed as trusted acceptance evidence.
+
+### Required correction from this state
+
+1. Revert the unrequested local edits.
+2. Add a hard guardrail so the relevant Playwright runner entrypoints fail unless run headed.
+3. Commit that guardrail-only slice.
+4. Re-plan the actual source-panel / 9A work only after the headed-only guardrail is in place.
+
+---
+
 ## Fix Attempt — Verifier Audit / Bundle-Recipe Rigidities (2026-04-17)
 
 This entry records a focused audit of the current `scripts/xp_fidelity_test/`

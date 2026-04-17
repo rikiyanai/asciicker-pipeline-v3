@@ -44,6 +44,10 @@ const TEMPLATE_SET_KEY = 'player_native_full';
 const templateContract = getTemplateSetContract(TEMPLATE_SET_KEY);
 
 if (!outDir) { console.error('Missing --out-dir'); process.exit(1); }
+if (!headed) {
+  console.error('[REFUSE] run_randomized_bundle_test.mjs must be run headed. Re-run with --headed.');
+  process.exit(1);
+}
 fs.mkdirSync(outDir, { recursive: true });
 
 // ── Seeded RNG (xorshift32) ──

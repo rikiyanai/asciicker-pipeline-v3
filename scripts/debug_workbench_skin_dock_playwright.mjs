@@ -37,6 +37,9 @@ async function loadPlaywright() {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (!args.headed) {
+    throw new Error("debug_workbench_skin_dock_playwright.mjs refuses headless execution. Re-run with --headed.");
+  }
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const outDir = path.join(process.cwd(), "output", "playwright", `skin-dock-debug-${ts}`);
   await fs.mkdir(outDir, { recursive: true });
@@ -45,10 +48,6 @@ async function main() {
   const chromium = pwMod?.chromium || pwMod?.default?.chromium;
   if (!chromium) throw new Error("Playwright chromium export not found");
   const launchArgs = [];
-  if (!args.headed) {
-    // Headless WebGL can fail to create a context on this host; force software rendering.
-    launchArgs.push("--use-angle=swiftshader", "--use-gl=angle", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist");
-  }
   const browser = await chromium.launch({ headless: !args.headed, args: launchArgs });
   const context = await browser.newContext({
     viewport: { width: 1400, height: 900 },

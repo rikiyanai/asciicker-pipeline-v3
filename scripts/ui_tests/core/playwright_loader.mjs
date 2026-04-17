@@ -13,6 +13,9 @@ export async function loadPlaywright() {
 }
 
 export async function launchChromium(opts = {}) {
+  if (opts.headless !== false) {
+    throw new Error('Playwright Chromium launches must be headed. Re-run with an explicit headed path.');
+  }
   const mod = await loadPlaywright();
   const chromium = mod?.chromium || mod?.default?.chromium;
   if (!chromium) throw new Error('Playwright chromium export not found');

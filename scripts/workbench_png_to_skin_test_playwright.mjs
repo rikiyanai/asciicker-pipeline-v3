@@ -175,6 +175,9 @@ function extractFirstMoveDiagnostic(consoleLogs = []) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (!args.headed) {
+    throw new Error("workbench_png_to_skin_test_playwright.mjs refuses headless execution. Re-run with --headed.");
+  }
   const xpPath = args.xpPath ? path.resolve(args.xpPath) : "";
   const injectFamily = args.injectFamily || (args.attackXpPath ? "attack" : "");
   const injectXpPath = args.injectXpPath

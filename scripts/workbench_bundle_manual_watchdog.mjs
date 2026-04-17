@@ -78,6 +78,9 @@ function parseFlatMapTraceLine(text) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (!args.headed) {
+    throw new Error("workbench_bundle_manual_watchdog.mjs refuses headless execution. Re-run with --headed.");
+  }
   const idlePng = args.idlePng ? path.resolve(args.idlePng) : "";
   const attackPng = args.attackPng ? path.resolve(args.attackPng) : "";
   const deathPng = args.deathPng ? path.resolve(args.deathPng) : "";

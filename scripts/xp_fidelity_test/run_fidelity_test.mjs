@@ -36,6 +36,11 @@ if (!xpPath || !truthTablePath || !recipePath) {
   process.exit(1);
 }
 
+if (!headed) {
+  console.error('[REFUSE] run_fidelity_test.mjs must be run headed. Re-run with --headed.');
+  process.exit(1);
+}
+
 if (mode !== 'acceptance' && mode !== 'diagnostic') {
   console.error(`Unknown --mode: ${mode}. Use 'acceptance' or 'diagnostic'.`);
   process.exit(1);

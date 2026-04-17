@@ -79,6 +79,11 @@ if (!outDir) {
   process.exit(1);
 }
 
+if (!headed) {
+  console.error('[REFUSE] run_bundle_fidelity_test.mjs must be run headed. Re-run with --headed.');
+  process.exit(1);
+}
+
 // ── Whole-sheet action whitelist ──
 
 const ALLOWED_ACTIONS = new Set([

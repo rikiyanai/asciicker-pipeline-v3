@@ -92,6 +92,12 @@ export function hostingModeTag(workbenchUrl) {
 // C. Browser launch helpers
 // ---------------------------------------------------------------------------
 
+export function requireHeadedRun(label = 'Playwright verifier', headed = false) {
+  if (headed) return;
+  console.error(`[REFUSE] ${label} must be run headed. Re-run with --headed.`);
+  process.exit(1);
+}
+
 /**
  * Launch a Playwright Chromium browser.
  * @param {object} opts
@@ -100,6 +106,7 @@ export function hostingModeTag(workbenchUrl) {
  * @returns {Promise<{browser, context, page}>}
  */
 export async function launchBrowser({ headed = false, timeout = 30000 } = {}) {
+  requireHeadedRun('Playwright verifier', headed);
   const browser = await chromium.launch({ headless: !headed });
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 } });
   context.setDefaultTimeout(timeout);
@@ -450,6 +457,7 @@ export async function setupVerifier(sliceName, { requireOutDir = false, openPage
   const workbenchUrl = resolveWorkbenchUrl(cliArgs);
   const headed = cliArgs.hasFlag('--headed');
   const outDir = cliArgs.getArg('--out-dir', `output/${sliceName}`);
+  requireHeadedRun(sliceName, headed);
 
   if (requireOutDir && !cliArgs.getArg('--out-dir')) {
     console.error(`Missing --out-dir for ${sliceName}`);

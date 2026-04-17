@@ -38,6 +38,11 @@ if (!outDir) {
   process.exit(1);
 }
 
+if (!headed) {
+  console.error('[REFUSE] run_edge_workflow_test.mjs must be run headed. Re-run with --headed.');
+  process.exit(1);
+}
+
 // ---------------------------------------------------------------------------
 // A. State snapshot
 // ---------------------------------------------------------------------------
