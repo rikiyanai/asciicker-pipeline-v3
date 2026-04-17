@@ -3,11 +3,10 @@
  *
  * This test demonstrates the complete pipeline:
  * 1. Upload real PNG sprite
- * 2. Analyze it
- * 3. Convert to XP
- * 4. Click "Test This Skin" to load in game iframe
- * 5. Move player sprite around for 10+ seconds
- * 6. Verify gameplay
+ * 2. Convert to XP (auto-plans via /api/analyze internally)
+ * 3. Click "Test This Skin" to load in game iframe
+ * 4. Move player sprite around for 10+ seconds
+ * 5. Verify gameplay
  */
 
 import { test, expect } from '@playwright/test';
@@ -45,34 +44,21 @@ test.describe('Full Workflow: Upload PNG → Convert → Test in Game', () => {
     await page.waitForTimeout(1500);
     console.log('✓ Upload button clicked\n');
 
-    // ========== STEP 4: Analyze PNG ==========
-    console.log('═ STEP 4: Clicking "Analyze" Button');
-    const analyzeBtn = page.locator('#wbAnalyze');
-    const analyzeEnabled = await analyzeBtn.isEnabled();
-
-    if (!analyzeEnabled) {
-      throw new Error('Analyze button not enabled after upload');
-    }
-
-    await analyzeBtn.click();
-    await page.waitForTimeout(1500);
-    console.log('✓ Analyze button clicked\n');
-
-    // ========== STEP 5: Convert to XP ==========
-    console.log('═ STEP 5: Clicking "Convert to XP" Button');
+    // ========== STEP 4: Convert to XP ==========
+    console.log('═ STEP 4: Clicking "Convert to XP" Button');
     const convertBtn = page.locator('#wbRun');
     const convertEnabled = await convertBtn.isEnabled();
 
     if (!convertEnabled) {
-      throw new Error('Convert button not enabled after analyze');
+      throw new Error('Convert button not enabled after upload');
     }
 
     await convertBtn.click();
     await page.waitForTimeout(2000);
     console.log('✓ Convert button clicked\n');
 
-    // ========== STEP 6: Test This Skin ==========
-    console.log('═ STEP 6: Clicking "Test This Skin" Button');
+    // ========== STEP 5: Test This Skin ==========
+    console.log('═ STEP 5: Clicking "Test This Skin" Button');
     const testSkinBtn = page.locator('#webbuildQuickTestBtn');
     const testSkinEnabled = await testSkinBtn.isEnabled().catch(() => false);
 
@@ -85,8 +71,8 @@ test.describe('Full Workflow: Upload PNG → Convert → Test in Game', () => {
     await page.waitForTimeout(2000);
     console.log('✓ Test This Skin button clicked\n');
 
-    // ========== STEP 7: Wait for Game to Load ==========
-    console.log('═ STEP 7: Waiting for Game Iframe to Load');
+    // ========== STEP 6: Wait for Game to Load ==========
+    console.log('═ STEP 6: Waiting for Game Iframe to Load');
     const gameFrame = page.locator('#webbuildFrame');
 
     // Wait for iframe to become visible
@@ -96,8 +82,8 @@ test.describe('Full Workflow: Upload PNG → Convert → Test in Game', () => {
 
     console.log('✓ Game iframe detected\n');
 
-    // ========== STEP 8: Gameplay Session ==========
-    console.log('═ STEP 8: GAMEPLAY SESSION (10+ seconds)\n');
+    // ========== STEP 7: Gameplay Session ==========
+    console.log('═ STEP 7: GAMEPLAY SESSION (10+ seconds)\n');
     console.log('🎮 Starting movement sequence...\n');
 
     const startTime = Date.now();
@@ -153,8 +139,8 @@ test.describe('Full Workflow: Upload PNG → Convert → Test in Game', () => {
     const totalElapsed = Math.round((Date.now() - startTime) / 1000);
     console.log(`\n✓ Completed ${step} movement commands in ${totalElapsed} seconds\n`);
 
-    // ========== STEP 9: Final State ==========
-    console.log('═ STEP 9: Verification');
+    // ========== STEP 8: Final State ==========
+    console.log('═ STEP 8: Verification');
     console.log(`✓ Game ran for ${totalElapsed} seconds`);
     console.log(`✓ Player moved via ${step} movement commands\n`);
 

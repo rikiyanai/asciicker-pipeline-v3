@@ -87,15 +87,14 @@
     <div class="row">
       <input id="wbFile" type="file" accept=".png">
       <button id="wbUpload" class="primary">Upload PNG</button>
-      <button id="wbAnalyze" class="primary" disabled>Analyze</button>
       <button id="wbRun" class="success" disabled>Convert to XP</button>
     </div>
     <div class="row">
       <div><label>Name</label><input id="wbName" value="wb_sprite"></div>
-      <div><label>Angles</label><input id="wbAngles" value="1"></div>
-      <div><label>Frames CSV</label><input id="wbFrames" value="1"></div>
-      <div><label>Source Projs</label><input id="wbSourceProjs" value="1"></div>
-      <div><label>Render Res</label><input id="wbRenderRes" value="12"></div>
+      <div style="min-width:280px;">
+        <label>Auto Plan</label>
+        <div id="wbAutoPlan" class="small muted">Derived automatically from the uploaded PNG at convert time.</div>
+      </div>
     </div>
     <pre id="wbRunOut"></pre>
   </div>

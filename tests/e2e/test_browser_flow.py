@@ -89,22 +89,17 @@ def test_browser_workbench_direct_flow_records_video_and_populates_workbench(web
             summary["steps"].append("wb_upload_ok")
             shot("02_wb_upload_ok")
 
-            page.click("#wbAnalyze")
-            page.wait_for_function("() => document.getElementById('wbRunOut').textContent.includes('suggested_angles')", timeout=15000)
-            summary["steps"].append("wb_analyze_ok")
-            shot("03_wb_analyze_ok")
-
             page.click("#wbRun")
             page.wait_for_function("() => document.getElementById('wbRunOut').textContent.includes('job_id')", timeout=120000)
             summary["steps"].append("wb_run_ok")
-            shot("04_wb_run_ok")
+            shot("03_wb_run_ok")
 
             page.wait_for_function(
                 "() => document.getElementById('wbStatus').textContent.includes('Session active')",
                 timeout=30000,
             )
             summary["steps"].append("workbench_session_active")
-            shot("05_workbench_session_active")
+            shot("04_workbench_session_active")
             cell_count = page.locator("#grid .cell").count()
             session_json = json.loads(page.locator("#sessionOut").inner_text())
             angles = int(session_json.get("angles", 1))
@@ -120,7 +115,7 @@ def test_browser_workbench_direct_flow_records_video_and_populates_workbench(web
             summary["session_summary"] = session_json
             summary["frame_char_w"] = frame_char_w
             summary["frame_char_h"] = frame_char_h
-            shot("06_workbench_populated")
+            shot("05_workbench_populated")
             if cell_count <= 0:
                 raise AssertionError("Workbench grid has zero cells")
             # Strong geometry guard: do not treat ultra-coarse output as success.
@@ -136,7 +131,7 @@ def test_browser_workbench_direct_flow_records_video_and_populates_workbench(web
                 timeout=30000,
             )
             summary["steps"].append("export_ok")
-            shot("07_export_ok")
+            shot("06_export_ok")
 
             export_json = page.locator("#exportOut").inner_text()
             export_data = json.loads(export_json)
@@ -148,7 +143,7 @@ def test_browser_workbench_direct_flow_records_video_and_populates_workbench(web
             )
             summary["xp_tool_hint"] = page.locator("#xpToolCommandHint").inner_text()
             summary["steps"].append("xp_tool_hint_ok")
-            shot("08_xp_tool_hint")
+            shot("07_xp_tool_hint")
             summary["status"] = "passed"
 
         except PWTimeout as e:

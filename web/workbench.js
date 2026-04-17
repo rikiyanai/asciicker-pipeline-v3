@@ -76,6 +76,7 @@
     latestXpPath: "",
     sourcePath: "",
     sourceImage: null,
+    uploadAnalysis: null,
     drawMode: false,
     drawing: false,
     drawStart: null,
@@ -2719,7 +2720,7 @@
       cell_h: state.cellHChars,
       frame_rows: frameRowsVal,
       frame_cols: frameColsVal,
-      render_resolution: Number($("wbRenderRes").value || 12),
+      render_resolution: Number(state.cellWChars || 0),
       cell_count: (state.layers && state.layers[2]) ? state.layers[2].length : (state.gridCols * state.gridRows),
       source_boxes: state.extractedBoxes.length,
       source_cuts_v: state.sourceCutsV.length,
@@ -6489,33 +6490,45 @@
       return;
     }
     state.sourcePath = j.source_path;
-    $("wbAnalyze").disabled = false;
+    state.uploadAnalysis = null;
+    if ($("wbAutoPlan")) {
+      $("wbAutoPlan").textContent = "Derived automatically from the uploaded PNG at convert time.";
+    }
     $("wbRun").disabled = false;
     status("Upload ready", "ok");
   }
 
-  async function wbAnalyze() {
-    if (!state.sourcePath) return;
+  function describeUploadPlan(plan) {
+    if (!plan) return "Derived automatically from the uploaded PNG at convert time.";
+    const angles = Math.max(1, Number(plan.suggested_angles || 1));
+    const frames = Array.isArray(plan.suggested_frames) && plan.suggested_frames.length
+      ? plan.suggested_frames.map((x) => Number(x)).join(",")
+      : "1";
+    const sourceProjs = Math.max(1, Number(plan.suggested_source_projs || 1));
+    const renderResolution = Math.max(1, Number(plan.suggested_render_resolution || 12));
+    return `${angles} angle${angles === 1 ? "" : "s"} · frames ${frames} · source projs ${sourceProjs} · render ${renderResolution}`;
+  }
+
+  function setUploadPlanSummary(plan) {
+    const el = $("wbAutoPlan");
+    if (el) el.textContent = describeUploadPlan(plan);
+  }
+
+  async function ensureUploadAnalysis({ force = false } = {}) {
+    if (!state.sourcePath) return null;
+    if (state.uploadAnalysis && !force) return state.uploadAnalysis;
     const r = await fetch(bp("/api/analyze"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source_path: state.sourcePath }),
     });
     const j = await r.json();
-    $("wbRunOut").textContent = JSON.stringify(j, null, 2);
     if (!r.ok) {
-      status("Analyze failed", "err");
-      return;
+      throw new Error(j.error || "analyze failed");
     }
-    $("wbAngles").value = String(j.suggested_angles || 1);
-    $("wbFrames").value = (j.suggested_frames || [1]).join(",");
-    if (j.suggested_source_projs) {
-      $("wbSourceProjs").value = String(j.suggested_source_projs);
-    }
-    if (j.suggested_render_resolution) {
-      $("wbRenderRes").value = String(j.suggested_render_resolution);
-    }
-    status("Analyze ready", "ok");
+    state.uploadAnalysis = j;
+    setUploadPlanSummary(j);
+    return j;
   }
 
   // ── Bundle / Template helpers ──
@@ -6720,6 +6733,8 @@
     state.activeActionKey = actionKey;
     // Clear source panel state so previous action's upload doesn't bleed through
     state.sourcePath = "";
+    state.uploadAnalysis = null;
+    setUploadPlanSummary(null);
     const wbRunOutEl = $("wbRunOut"); if (wbRunOutEl) wbRunOutEl.textContent = "";
     const wbFileEl = $("wbFile"); if (wbFileEl) wbFileEl.value = "";
     const actState = state.actionStates[actionKey];
@@ -6927,14 +6942,25 @@
       await wbRunBundleAction();
       return;
     }
+    status("Auto-planning conversion...", "warn");
+    let analysis;
+    try {
+      analysis = await ensureUploadAnalysis();
+    } catch (e) {
+      $("wbRunOut").textContent = JSON.stringify({ error: String(e), stage: "auto_plan" }, null, 2);
+      status("Auto-plan failed", "err");
+      return;
+    }
     status("Running conversion...", "warn");
     const payload = {
       source_path: state.sourcePath,
       name: $("wbName").value || "wb_sprite",
-      angles: parseInt($("wbAngles").value || "1", 10),
-      frames: $("wbFrames").value || "1",
-      source_projs: parseInt($("wbSourceProjs").value || "1", 10),
-      render_resolution: parseInt($("wbRenderRes").value || "12", 10),
+      angles: parseInt(String(analysis?.suggested_angles || 1), 10),
+      frames: Array.isArray(analysis?.suggested_frames) && analysis.suggested_frames.length
+        ? analysis.suggested_frames.join(",")
+        : "1",
+      source_projs: parseInt(String(analysis?.suggested_source_projs || 1), 10),
+      render_resolution: parseInt(String(analysis?.suggested_render_resolution || 12), 10),
     };
     const r = await fetch(bp("/api/run"), {
       method: "POST",
@@ -6942,7 +6968,7 @@
       body: JSON.stringify(payload),
     });
     const j = await r.json();
-    $("wbRunOut").textContent = JSON.stringify(j, null, 2);
+    $("wbRunOut").textContent = JSON.stringify({ auto_plan: analysis, run: j }, null, 2);
     if (!r.ok) {
       status("Run failed", "err");
       return;
@@ -7028,11 +7054,12 @@
 
     $("templateApplyBtn")?.addEventListener("click", applyTemplate);
     $("wbUpload").addEventListener("click", wbUpload);
-    $("wbAnalyze").addEventListener("click", wbAnalyze);
     $("wbRun").addEventListener("click", wbRun);
     $("wbFile").addEventListener("change", () => {
       const f = $("wbFile").files[0];
       if (!f) return;
+      state.uploadAnalysis = null;
+      setUploadPlanSummary(null);
       const img = new Image();
       const objectUrl = URL.createObjectURL(f);
       img.onload = () => {
