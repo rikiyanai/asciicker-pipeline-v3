@@ -39,6 +39,7 @@ import {
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getTemplateSetContract } from './bundle_contract.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -49,27 +50,27 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 // All 3 families live inside `player_native_full` template set as actions
 const TEMPLATE_SET = 'player_native_full';
-
-const FAMILIES = {
-  idle: {
-    fixture: 'tests/fixtures/baseline/player-idle.png',
-    actionKey: 'idle',
-    expectedDims: { cols: 126, rows: 80 },
-    expectedLayers: 4,
-  },
-  attack: {
-    fixture: 'tests/fixtures/baseline/attack.png',
-    actionKey: 'attack',
-    expectedDims: { cols: 144, rows: 80 },
-    expectedLayers: 4,
-  },
-  death: {
-    fixture: 'tests/fixtures/baseline/death.png',
-    actionKey: 'death',
-    expectedDims: { cols: 110, rows: 88 },
-    expectedLayers: 4,
-  },
+const TEMPLATE_CONTRACT = getTemplateSetContract(TEMPLATE_SET);
+const FIXTURE_BY_ACTION = {
+  idle: 'tests/fixtures/baseline/player-idle.png',
+  attack: 'tests/fixtures/baseline/attack.png',
+  death: 'tests/fixtures/baseline/death.png',
 };
+
+const FAMILIES = Object.fromEntries(
+  Object.entries(FIXTURE_BY_ACTION).map(([actionKey, fixture]) => {
+    const spec = TEMPLATE_CONTRACT.actions[actionKey];
+    if (!spec) {
+      throw new Error(`Template contract missing structural baseline action "${actionKey}"`);
+    }
+    return [actionKey, {
+      fixture,
+      actionKey,
+      expectedDims: { cols: spec.xp_dims[0], rows: spec.xp_dims[1] },
+      expectedLayers: 4,
+    }];
+  })
+);
 
 // ---------------------------------------------------------------------------
 // Main

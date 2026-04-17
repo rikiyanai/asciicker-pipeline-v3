@@ -1,5 +1,13 @@
 # Claude Memory
 
+## Commit Discipline (MANDATORY)
+
+- Commit at every meaningful checkpoint before continuing.
+- Do not let multiple implementation chunks stack up uncommitted.
+- After any meaningful verifier, product, or canonical-doc change, stop and commit that slice before starting the next one.
+- If unrelated files are dirty, stage and commit only the intended slice. Do not use unrelated dirt as a reason to skip the checkpoint commit.
+- If commit discipline is missed, treat that as a process failure and correct it immediately.
+
 Use this file as short-lived repo memory, not as proof over code.
 
 ## Startup

@@ -7,7 +7,7 @@
  *
  *   - new_xp:     Draw random scribbles in the whole-sheet editor
  *   - upload_xp:  Import a reference XP via UI
- *   - upload_png:  Upload PNG → Find Sprites → extract → populate grid
+ *   - upload_png:  Upload PNG → direct pipeline convert smoke
  *
  * Foreground glyph is always the action letter: I (idle), A (attack), D (death).
  * Colors, cell positions, tool choices are randomized per run.
@@ -23,6 +23,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getTemplateSetContract } from './bundle_contract.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
@@ -39,6 +40,8 @@ const holdOpen = argv.includes('--hold');
 const url = getArg('--url', DEFAULT_WORKBENCH_URL);
 const outDir = getArg('--out-dir');
 const seed = Number(getArg('--seed', Date.now()));
+const TEMPLATE_SET_KEY = 'player_native_full';
+const templateContract = getTemplateSetContract(TEMPLATE_SET_KEY);
 
 if (!outDir) { console.error('Missing --out-dir'); process.exit(1); }
 fs.mkdirSync(outDir, { recursive: true });
@@ -101,7 +104,7 @@ function extractDominantGlyph(xpPath) {
 
 // ── Constants ──
 
-const ACTION_KEYS = ['idle', 'attack', 'death'];
+const ACTION_KEYS = templateContract.actionKeys.filter((key) => ['idle', 'attack', 'death'].includes(key));
 const ACTION_LABELS = { idle: /Idle \/ Walk/i, attack: /^Attack/i, death: /^Death/i };
 const ACTION_GLYPHS = { idle: 73 /* I */, attack: 65 /* A */, death: 68 /* D */ };
 const METHODS = ['new_xp', 'upload_xp', 'upload_png'];
@@ -282,11 +285,12 @@ function pickWeightedAction() {
 
 const failures = [];
 const report = {
-  workflow_type: 'randomized_bundle',
+  workflow_type: 'randomized_bundle_smoke',
+  evidence_classification: 'mixed_smoke',
   seed,
   method_assignment: methodAssignment,
   upload_png_file: uploadPngFile,
-  template: 'player_native_full',
+  template: TEMPLATE_SET_KEY,
   idle_pass: false,
   attack_pass: false,
   death_pass: false,
@@ -299,6 +303,10 @@ const report = {
 for (const key of ACTION_KEYS) {
   report.actions[key] = {
     method: methodAssignment[key],
+    method_contract:
+      methodAssignment[key] === 'upload_png'
+        ? 'direct_pipeline_convert_smoke_only'
+        : 'ui_authoring_path',
     execute_pass: false,
     export_pass: false,
     failures: [],
@@ -608,12 +616,11 @@ async function authorUploadPng(page, actionKey) {
   }
   console.error(`  [upload_png] Conversion done: session=${convResult.session_id}, grid=${convResult.grid_cols}x${convResult.grid_rows}`);
 
-  // Step 3 (future): Find Sprites + drag flow for manual sprite extraction
-  // This is a more advanced workflow that will be wired when the test
-  // supports source-panel interactions as randomizable actions.
-  // For now, the pipeline conversion handles the full PNG→XP flow.
+  // Step 3 (future): Find Sprites + drag/manual placement flow is still
+  // NOT part of this lane. This remains a direct pipeline-convert smoke
+  // path for PNG uploads, not a true source-panel manual-assembly verifier.
 
-  // ── STUB: Find Sprites + extract flow ──
+  // ── STUB: Find Sprites + manual assembly flow ──
   // When enabled, this would:
   //   1. await page.click('#extractBtn');
   //   2. Read extracted boxes from state

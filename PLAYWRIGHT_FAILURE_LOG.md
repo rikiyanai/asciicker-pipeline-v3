@@ -1,7 +1,116 @@
 # Playwright Test Failure Log
 
+## Commit Discipline (MANDATORY)
+
+- Commit at every meaningful checkpoint before continuing.
+- Do not let multiple implementation chunks pile up uncommitted.
+- After any verifier fix, doc fix, or product fix that changes the repo state in a meaningful way, stop and commit that slice before starting the next one.
+- If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
+- Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
+
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
+
+---
+
+## Fix Attempt — Verifier Audit / Bundle-Recipe Rigidities (2026-04-17)
+
+This entry records a focused audit of the current `scripts/xp_fidelity_test/`
+stack after the semantic-frame-authoring change landed.
+
+### What is rigid right now
+
+1. **Bundle fidelity geometry still assumes export/native frame layout at live authoring time. HIGH.**
+   - `run_bundle_fidelity_test.mjs` compares the live session summary against `recipe.geometry.frame_cols`, which still comes from exported/native XP truth-table geometry.
+   - The workbench session summary now reports authoring `frame_cols` from `source_projs`, while the exported XP and truth-table still use native/export `projs`.
+   - Result: the runner is structurally capable of false geometry/frame-layout failures even when the product is behaving correctly under the new semantic-slot model.
+
+2. **The randomized bundle lane still misstates its PNG path. HIGH.**
+   - `run_randomized_bundle_test.mjs` documents `upload_png` as if it exercises manual sprite extraction and row population.
+   - In reality it still does `Upload PNG -> Convert to XP` and explicitly leaves `Find Sprites` / source-to-grid assembly as a future stub.
+   - Result: the lane is useful smoke coverage, but it is not yet a true manual-assembly verifier.
+
+3. **The verifier family is split across multiple drifting recipe models. HIGH.**
+   - `recipe_generator.mjs` + `dom_runner.mjs` implement a registry/DOM recipe lane with limited gesture support.
+   - `recipe_generator.py` + `run_fidelity_test.mjs` implement a truth-table repaint lane with a different action language.
+   - The bundle/manual/randomized runners add a third layer of hand-written workflow logic.
+   - Result: the harness is hard to keep current because product changes must be reflected in multiple parallel models.
+
+4. **Bundle inventory and geometry are still duplicated across runners. MEDIUM.**
+   - Action keys, template-set assumptions, expected dimensions, and readiness logic are repeated in `run_bundle_fidelity_test.mjs`, `run_randomized_bundle_test.mjs`, `run_structural_baseline_test.mjs`, and shell entrypoints.
+   - Result: changes to template metadata or action inventory will continue to drift unless the verifier reads a single shared contract.
+
+5. **Mixed/debug observation is still embedded in the canonical bundle lanes. MEDIUM.**
+   - The bundle runners rely on `page.evaluate()`, `__wb_debug`, suppression toggles, and DOM-text readiness checks.
+   - Those paths are useful for diagnosis, but they remain a maintenance hazard if treated as the future long-term acceptance architecture.
+
+### Immediate patch plan
+
+1. Add a shared bundle verifier contract helper that reads `config/template_registry.json` and derives per-action authoring/export expectations from one source.
+2. Update `run_bundle_fidelity_test.mjs` to compare:
+   - live authoring geometry against authoring expectations (`source_projs`, semantic frame count, authoring `frame_cols`)
+   - exported XP against native/export truth-table expectations (`projs`, native `frame_cols`)
+3. Update `run_structural_baseline_test.mjs` to stop hard-coding bundle dimensions and instead derive them from the same shared bundle contract.
+4. Reclassify the randomized bundle PNG lane as direct pipeline-convert smoke until it actually performs source-panel extraction / source-to-grid authoring.
+5. Preserve the broader future architecture conclusion:
+   - the registry DOM lane, truth-table repaint lane, and hand-written bundle lanes still need consolidation into one action-graph + artifact-contract model
+   - that larger redesign is NOT part of this immediate patch slice
+
+### Gate rule for this attempt
+
+- Only a **headed human-verification run** counts as the gate for this patch slice.
+- Syntax checks and headless runs may still be used for non-gating sanity, but they do not count as acceptance evidence for this attempt.
+
+### Local code landed in this attempt
+
+1. **Shared bundle-template contract helper added.**
+   - `scripts/xp_fidelity_test/bundle_contract.mjs` now reads `config/template_registry.json` and derives:
+     - action inventory
+     - semantic frame count
+     - authoring `frame_cols`
+     - export/native `frame_cols`
+     - authoring geometry expectations from `source_projs`
+
+2. **Bundle fidelity geometry checks now distinguish authoring geometry from export geometry.**
+   - `run_bundle_fidelity_test.mjs` no longer compares live authoring `frame_cols` and `frame_w` against native/export truth-table geometry.
+   - It now verifies:
+     - `source_projs`
+     - semantic frame count
+     - authoring `frame_cols`
+     - authoring `frame_w`
+     - authoring `frame_h`
+   - Exported XP verification still uses the truth-table/export geometry path.
+
+3. **Structural baseline bundle dimensions now derive from the shared template contract.**
+   - `run_structural_baseline_test.mjs` no longer hard-codes bundle export dimensions separately from the template metadata.
+
+4. **Randomized bundle PNG lane reclassified honestly.**
+   - `run_randomized_bundle_test.mjs` now labels itself as mixed smoke coverage and explicitly marks `upload_png` as direct pipeline-convert smoke, not manual source-panel assembly proof.
+
+### Headed gate result
+
+- Headed run executed:
+  - `bash scripts/xp_fidelity_test/run_bundle.sh --headed --mode manual_review`
+- Result:
+  - `idle=true`
+  - `attack=true`
+  - `death=true`
+  - `skin_dock=true`
+  - `failures=0`
+- Report artifact:
+  - `output/xp-fidelity-test/bundle-run-2026-04-17T09-36-42Z/result.json`
+
+### What this proves
+
+- The immediate bundle-verifier drift caused by semantic authoring geometry is fixed for the headed `manual_review` bundle lane.
+- The bundle runner no longer false-fails geometry merely because authoring `frame_cols` / `frame_w` differ from export/native XP geometry under `source_projs=1`.
+- Skin Dock/runtime remained reachable in this headed run.
+
+### What this does NOT prove
+
+- It does NOT finish the larger action-graph / recipe-architecture consolidation.
+- It does NOT turn the randomized `upload_png` lane into a manual-assembly verifier.
+- It does NOT replace the future need to unify the registry DOM lane, truth-table repaint lane, and bundle/manual lanes under one maintained contract.
 
 ---
 

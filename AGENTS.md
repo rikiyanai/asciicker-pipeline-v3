@@ -1,6 +1,14 @@
 # Agent Entry Point
 Follow this repository rule before doing any task.
 
+## Commit Discipline (MANDATORY)
+
+- Commit at every meaningful checkpoint before continuing.
+- Do not accumulate multiple implementation chunks without a checkpoint commit.
+- After any meaningful verifier, product, or canonical-doc change, stop and commit that slice before starting the next one.
+- If unrelated files are dirty, stage and commit only the intended slice. Do not use unrelated dirt as a reason to skip the checkpoint commit.
+- If commit discipline is missed, treat that as a process failure and correct it immediately.
+
 <!-- codex-conductor:start -->
 ## Conductor Guardrail
 Always run `conductor:status` first.

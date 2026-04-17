@@ -27,6 +27,10 @@ import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import {
+  deriveAuthoringGeometryExpectation,
+  getTemplateSetContract,
+} from './bundle_contract.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
@@ -42,8 +46,10 @@ const headed = argv.includes('--headed');
 const holdOpen = argv.includes('--hold');
 const url = getArg('--url', DEFAULT_WORKBENCH_URL);
 const outDir = getArg('--out-dir');
+const TEMPLATE_SET_KEY = 'player_native_full';
+const templateContract = getTemplateSetContract(TEMPLATE_SET_KEY);
 
-const ACTION_KEYS = ['idle', 'attack', 'death'];
+const ACTION_KEYS = templateContract.actionKeys.filter((key) => ['idle', 'attack', 'death'].includes(key));
 const ACTION_LABELS = { idle: /Idle \/ Walk/i, attack: /^Attack/i, death: /^Death/i };
 
 // --preload idle=/path/to/exported.xp  — skip replay, upload pre-built XP instead.
@@ -86,8 +92,9 @@ const ALLOWED_ACTIONS = new Set([
 const failures = [];
 const report = {
   workflow_type: 'bundle_authoring',
+  evidence_classification: 'mixed_ui_plus_diagnostic_observation',
   mode: 'acceptance',
-  template: 'player_native_full',
+  template: TEMPLATE_SET_KEY,
   idle_pass: false,
   attack_pass: false,
   death_pass: false,
@@ -618,21 +625,31 @@ async function main() {
 
       // Geometry verification against recipe expectations
       const expected = recipe.geometry;
+      const templateAction = templateContract.actions[actionKey];
+      if (!templateAction) {
+        fail(actionKey, 'config', `Template contract missing action "${actionKey}"`);
+        continue;
+      }
+      const expectedAuthoring = deriveAuthoringGeometryExpectation(templateAction, expected);
       const actual = summary.session || {};
       const actualMeta = summary.meta || {};
       let geoFailed = false;
 
-      if (actual.angles !== expected.angles) { fail(actionKey, 'geometry', `angles: expected ${expected.angles}, got ${actual.angles}`); geoFailed = true; }
-      if (JSON.stringify(actual.anims || []) !== JSON.stringify(expected.anims || [])) {
-        fail(actionKey, 'geometry', `anims: expected ${JSON.stringify(expected.anims)}, got ${JSON.stringify(actual.anims)}`); geoFailed = true;
+      if (actual.angles !== expectedAuthoring.angles) { fail(actionKey, 'geometry', `angles: expected ${expectedAuthoring.angles}, got ${actual.angles}`); geoFailed = true; }
+      if (JSON.stringify(actual.anims || []) !== JSON.stringify(expectedAuthoring.anims || [])) {
+        fail(actionKey, 'geometry', `anims: expected ${JSON.stringify(expectedAuthoring.anims)}, got ${JSON.stringify(actual.anims)}`); geoFailed = true;
       }
-      if (actual.projs !== expected.projs) { fail(actionKey, 'geometry', `projs: expected ${expected.projs}, got ${actual.projs}`); geoFailed = true; }
-      if (actualMeta.frame_w_chars !== expected.frame_w) { fail(actionKey, 'geometry', `frame_w: expected ${expected.frame_w}, got ${actualMeta.frame_w_chars}`); geoFailed = true; }
-      if (actualMeta.frame_h_chars !== expected.frame_h) { fail(actionKey, 'geometry', `frame_h: expected ${expected.frame_h}, got ${actualMeta.frame_h_chars}`); geoFailed = true; }
+      if (actual.source_projs !== expectedAuthoring.source_projs) { fail(actionKey, 'geometry', `source_projs: expected ${expectedAuthoring.source_projs}, got ${actual.source_projs}`); geoFailed = true; }
+      if (actual.projs !== expectedAuthoring.projs) { fail(actionKey, 'geometry', `projs: expected ${expectedAuthoring.projs}, got ${actual.projs}`); geoFailed = true; }
+      if (actual.semantic_frame_cols !== expectedAuthoring.semantic_frame_cols) { fail(actionKey, 'geometry', `semantic_frame_cols: expected ${expectedAuthoring.semantic_frame_cols}, got ${actual.semantic_frame_cols}`); geoFailed = true; }
+      if (actualMeta.frame_w_chars !== expectedAuthoring.frame_w) { fail(actionKey, 'geometry', `frame_w: expected ${expectedAuthoring.frame_w}, got ${actualMeta.frame_w_chars}`); geoFailed = true; }
+      if (actualMeta.frame_h_chars !== expectedAuthoring.frame_h) { fail(actionKey, 'geometry', `frame_h: expected ${expectedAuthoring.frame_h}, got ${actualMeta.frame_h_chars}`); geoFailed = true; }
       actionReport.geometry_pass = !geoFailed;
+      actionReport.authoring_geometry = expectedAuthoring;
+      actionReport.export_geometry = expected;
 
-      // Frame layout from session metadata
-      const expectedFrameCount = expected.frame_rows * expected.frame_cols;
+      // Frame layout from session metadata now follows authoring/source projections.
+      const expectedFrameCount = expectedAuthoring.frame_rows * expectedAuthoring.frame_cols;
       const sessionFrameRows = actualMeta.frame_rows ?? actual.frame_rows ?? actual.angles ?? null;
       const sessionFrameCols = actualMeta.frame_cols ?? actual.frame_cols ?? null;
       if (sessionFrameRows !== null && sessionFrameCols !== null) {
