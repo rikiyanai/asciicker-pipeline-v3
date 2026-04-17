@@ -6961,6 +6961,8 @@
         : "1",
       source_projs: parseInt(String(analysis?.suggested_source_projs || 1), 10),
       render_resolution: parseInt(String(analysis?.suggested_render_resolution || 12), 10),
+      // Direct workbench converts must preserve authoring-friendly per-frame geometry.
+      native_compat: false,
     };
     const r = await fetch(bp("/api/run"), {
       method: "POST",

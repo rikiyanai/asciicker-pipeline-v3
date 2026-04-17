@@ -2485,7 +2485,18 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
     # sessions rebuild native layers so semantic-slot authoring can expand
     # source_projs -> projs during export.
     persisted_layers = sess.get("layers")
-    if family == "uploaded" and persisted_layers and isinstance(persisted_layers, list) and len(persisted_layers) >= 1:
+    family_dims = _FAMILY_DIMS.get(family)
+    use_persisted_layer_export = (
+        persisted_layers
+        and isinstance(persisted_layers, list)
+        and len(persisted_layers) >= 1
+        and (
+            family == "uploaded"
+            or family_dims is None
+            or family_dims != (cols, rows)
+        )
+    )
+    if use_persisted_layer_export:
         # Hard-fail: every layer must have exactly cols*rows cells
         layers: list[list[Cell]] = []
         for li, raw_layer in enumerate(persisted_layers):
@@ -2544,7 +2555,7 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
         "xp_path": str(out.resolve()),
         "checksum": _sha256(out),
         "layer_count": len(layers),
-        "source": "persisted_layers" if persisted_layers and isinstance(persisted_layers, list) and len(persisted_layers) >= 1 else "template",
+        "source": "persisted_layers" if use_persisted_layer_export else "template",
     }
 
 
