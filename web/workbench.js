@@ -3741,6 +3741,7 @@
     $("colRightBtn").disabled = readOnly || !hasSelection || maxSel >= maxCol;
     if ($("addFrameBtn")) $("addFrameBtn").disabled = readOnly || !(state.gridCols > 0 && state.gridRows > 0);
     $("deleteCellBtn").disabled = readOnly || !hasSelection;
+    if ($("deleteFrameBtn")) $("deleteFrameBtn").disabled = readOnly || !hasSelection || semanticFrameCount() <= 1;
     if ($("openInspectorBtn")) $("openInspectorBtn").disabled = !hasSelection;
     $("assignAnimCategoryBtn").disabled = readOnly || !hasRow;
     $("assignFrameGroupBtn").disabled = readOnly || !hasSelection;
@@ -5249,6 +5250,107 @@
     return authoringFrameCols();
   }
 
+  function selectedSemanticFrameIndices() {
+    return [...new Set(
+      [...state.selectedCols]
+        .map((col) => frameColInfo(col).frame)
+        .filter((frame) => Number.isFinite(frame))
+    )].sort((a, b) => a - b);
+  }
+
+  function semanticFrameAuthoringCols(frameIndex, semanticFrames = semanticFrameCount(), projections = authoringProjectionCount()) {
+    const cols = [];
+    const frame = Math.max(0, Math.min(Math.max(0, semanticFrames - 1), Number(frameIndex || 0)));
+    const total = Math.max(1, Number(semanticFrames || 1));
+    const projCount = Math.max(1, Number(projections || 1));
+    for (let proj = 0; proj < projCount; proj++) {
+      cols.push((proj * total) + frame);
+    }
+    return cols;
+  }
+
+  function buildBlankLayerCellsForGeometry(cols, rows) {
+    const out = [];
+    const safeCols = Math.max(1, Math.floor(Number(cols) || 1));
+    const safeRows = Math.max(1, Math.floor(Number(rows) || 1));
+    for (let idx = 0; idx < safeCols * safeRows; idx++) out.push(transparentCell(idx));
+    return out;
+  }
+
+  function cloneCellWithIdx(cell, idx) {
+    return {
+      idx,
+      glyph: Number(cell?.glyph || 0),
+      fg: [Number(cell?.fg?.[0] || 0), Number(cell?.fg?.[1] || 0), Number(cell?.fg?.[2] || 0)],
+      bg: [Number(cell?.bg?.[0] || 0), Number(cell?.bg?.[1] || 0), Number(cell?.bg?.[2] || 0)],
+    };
+  }
+
+  function rebuildGridWithAuthoringCols(keepCols) {
+    const nextCols = (keepCols || []).map((col) => Number(col)).filter((col) => Number.isFinite(col) && col >= 0);
+    const nextGridCols = Math.max(1, nextCols.length * Math.max(1, Number(state.frameWChars || 1)));
+    const nextGridRows = Math.max(1, Number(state.gridRows || 1));
+    const oldGridCols = Math.max(1, Number(state.gridCols || 1));
+    const oldGridRows = Math.max(1, Number(state.gridRows || 1));
+    const nextLayers = (Array.isArray(state.layers) && state.layers.length ? state.layers : [buildBlankLayerCells()])
+      .map(() => buildBlankLayerCellsForGeometry(nextGridCols, nextGridRows));
+
+    for (let layerIndex = 0; layerIndex < nextLayers.length; layerIndex++) {
+      const srcLayer = Array.isArray(state.layers?.[layerIndex]) ? state.layers[layerIndex] : buildBlankLayerCellsForGeometry(oldGridCols, oldGridRows);
+      for (let y = 0; y < nextGridRows; y++) {
+        for (let newCol = 0; newCol < nextCols.length; newCol++) {
+          const oldCol = nextCols[newCol];
+          for (let x = 0; x < state.frameWChars; x++) {
+            const srcX = (oldCol * state.frameWChars) + x;
+            const dstX = (newCol * state.frameWChars) + x;
+            const srcIdx = (y * oldGridCols) + srcX;
+            const dstIdx = (y * nextGridCols) + dstX;
+            const srcCell = srcX < oldGridCols ? srcLayer[srcIdx] : null;
+            nextLayers[layerIndex][dstIdx] = cloneCellWithIdx(srcCell, dstIdx);
+          }
+        }
+      }
+    }
+
+    state.gridCols = nextGridCols;
+    state.gridRows = nextGridRows;
+    state.layers = nextLayers;
+    state.layers[0] = applyMetadataRowToLayer(state.layers[0]);
+    state.cells = state.layers[2] ? deepCloneCells(state.layers[2]) : buildBlankLayerCellsForGeometry(nextGridCols, nextGridRows);
+  }
+
+  function removeSemanticFramesFromAnims(removals) {
+    const removeSet = new Set((removals || []).map((frame) => Number(frame)));
+    const nextAnims = [];
+    let cursor = 0;
+    for (const len of state.anims) {
+      let kept = 0;
+      const safeLen = Math.max(0, Number(len || 0));
+      for (let offset = 0; offset < safeLen; offset++) {
+        if (!removeSet.has(cursor + offset)) kept += 1;
+      }
+      if (kept > 0) nextAnims.push(kept);
+      cursor += safeLen;
+    }
+    return nextAnims.length ? nextAnims : [1];
+  }
+
+  function remapFrameGroupsAfterDeletion(removals) {
+    const removed = [...new Set((removals || []).map((frame) => Number(frame)).filter((frame) => Number.isFinite(frame)))].sort((a, b) => a - b);
+    if (!removed.length) return;
+    const removedSet = new Set(removed);
+    state.frameGroups = (state.frameGroups || [])
+      .map((group) => {
+        const cols = [...new Set((group.cols || [])
+          .map((col) => Number(col))
+          .filter((col) => Number.isFinite(col) && !removedSet.has(col))
+          .map((col) => col - removed.filter((removedCol) => removedCol < col).length))]
+          .sort((a, b) => a - b);
+        return cols.length ? { ...group, cols } : null;
+      })
+      .filter(Boolean);
+  }
+
   function addGridFrameSlot() {
     if (!editableLayerActive()) {
       status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
@@ -5276,6 +5378,62 @@
     renderAll();
     saveSessionState("grid-add-frame");
     status(`Added frame slot (frames=${state.anims.reduce((a, b) => a + b, 0)})`, "ok");
+    return true;
+  }
+
+  function deleteSelectedFrameSlots() {
+    if (!editableLayerActive()) {
+      status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
+      return false;
+    }
+    if (state.selectedRow === null || state.selectedCols.size === 0) {
+      status("Select one or more frame tiles first", "warn");
+      return false;
+    }
+    const semanticFrames = semanticFrameCount();
+    if (semanticFrames <= 1) {
+      status("Cannot delete the final semantic frame slot", "warn");
+      return false;
+    }
+    const targetFrames = selectedSemanticFrameIndices();
+    if (!targetFrames.length) {
+      status("No semantic frame slot selected", "warn");
+      return false;
+    }
+    if (targetFrames.length >= semanticFrames) {
+      status("Cannot delete every semantic frame slot", "warn");
+      return false;
+    }
+
+    const beforeDirty = !!state.sessionDirty;
+    pushHistory();
+    const projections = authoringProjectionCount();
+    const keepCols = [];
+    for (let col = 0; col < authoringFrameCols(); col++) {
+      if (!targetFrames.includes(frameColInfo(col).frame)) keepCols.push(col);
+    }
+    if (!keepCols.length) {
+      revertNoopHistory(beforeDirty);
+      status("Delete Frame made no changes", "warn");
+      return false;
+    }
+
+    state.anims = removeSemanticFramesFromAnims(targetFrames);
+    remapFrameGroupsAfterDeletion(targetFrames);
+    rebuildGridWithAuthoringCols(keepCols);
+    recomputeFrameGeometry();
+
+    const nextSemanticFrames = semanticFrameCount();
+    const selectionFrame = Math.max(0, Math.min(nextSemanticFrames - 1, targetFrames[0]));
+    state.selectedCols = new Set(semanticFrameAuthoringCols(selectionFrame, nextSemanticFrames, projections));
+    state.selectedRow = Math.max(0, Math.min(state.angles - 1, Number(state.selectedRow || 0)));
+    if (state.inspectorOpen) {
+      state.inspectorRow = state.selectedRow;
+      state.inspectorCol = Math.min(...state.selectedCols);
+    }
+    renderAll();
+    saveSessionState("grid-delete-frame");
+    status(`Deleted ${targetFrames.length} semantic frame slot(s)`, "ok");
     return true;
   }
 
@@ -6899,6 +7057,7 @@
     });
 
     $("deleteCellBtn").addEventListener("click", deleteSelectedFrames);
+    if ($("deleteFrameBtn")) $("deleteFrameBtn").addEventListener("click", deleteSelectedFrameSlots);
     $("ctxCopy").addEventListener("click", () => {
       copySelectedFrameToClipboard();
       $("gridContextMenu").classList.add("hidden");
