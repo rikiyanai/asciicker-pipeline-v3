@@ -8018,4 +8018,52 @@ This corrected timeline means:
 **Correction to the old gap list:**
 - grouped column-select drag proof is no longer missing
 - `Delete Frame` is no longer design-only
-- the remaining major open item from this area is still the Step 7 UI identity-map / panel-topology pass
+- the remaining major open item from this area is Step 7 public-parity proof and workflow-grouping validation, not raw tagging implementation
+
+---
+
+## 2026-04-17 Canon Re-Audit — Sequence Corrections After The 3-Day Failed Refactor
+
+This entry aligns the failure log with the re-audited canon sequence on the
+current branch.
+
+### Findings
+
+1. **Step 4 was still overclaimed in the canon. HIGH.**
+   - Live code evidence on the current branch:
+     - `web/whole-sheet-init.js:1067-1071` still shows `BROWSE` as disabled with title `Browse mode (deferred)`
+     - `web/workbench.html:89-98` still exposes `wbAnalyze`, `wbAngles`, `wbFrames`, and `wbSourceProjs`
+     - `web/workbench.js:6413-6429` still repopulates those geometry fields from `wbAnalyze()`
+   - Canon consequence:
+     - the old `Step 4 COMPLETE` label was false
+     - Step 4 is reopened as partial/boundary-proven only
+
+2. **Step 7 is no longer the immediate next implementation task. MEDIUM.**
+   - Live code evidence:
+     - `b58e776` landed the panel-number badges and the full ID overlay
+     - `web/workbench.html` now shows numbered/named panel badges through `18 inspector`
+     - `web/workbench.js:7984-8099` now provides `hide IDs` / `Alt+I` / `rebuildWbIdOverlay()`
+   - Canon consequence:
+     - Step 7 is implemented in code, but still needs product/public-parity proof
+
+3. **Step 11 is regressed in the current branch. HIGH.**
+   - Live code evidence:
+     - `src/pipeline_v2/app.py` still emits `enabled_families`
+     - `web/workbench.js:6465-6474` still fail-closes on that alias instead of deriving action scope from `template_set.actions`
+   - Canon consequence:
+     - Step 11 cannot stay treated as closed follow-through
+     - the client authority split must be reopened explicitly
+
+4. **Step 13 is partially complete, not open from zero. MEDIUM.**
+   - Backend endpoints exist.
+   - The remaining gap is launcher / wizard wiring for the `[3] ASSET PIPELINE` path.
+
+### Required sequence correction
+
+From the current branch state, the immediate next tasks are:
+
+1. Reopen and finish Step 4 honestly.
+2. Re-prove Step 7 as product grouping/public workflow, not just code tags.
+3. Keep Step 8 open for manifest-backed source authority.
+4. Re-close Step 11 by deleting the `enabled_families` authority path.
+5. Finish Step 13 launcher/wizard wiring.

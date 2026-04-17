@@ -2,9 +2,9 @@
 
 **Authority:** this file and `PLAYWRIGHT_FAILURE_LOG.md` are the only active canon docs for the browser workbench.
 
-**Last updated:** 2026-04-16
-**Branch baseline:** `master @ 6cb839d`
-**Audit scope:** current master after the root-owner and Section 2 runtime-proof slices, plus local runtime assets, sprites, and archive docs already cloned into this repo
+**Last updated:** 2026-04-17
+**Branch baseline:** `v3-refactor-start @ 0f68fa0`
+**Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the grouped-drag / Delete Frame interaction slice, and the surviving local/browser/runtime assets in this repo
 
 ## Application Statement
 
@@ -611,7 +611,7 @@ open or are now resolved:
 | Source panel now reloads canonical PNG/manifest without grid geometry | `web/workbench.js:2242-2305`, `web/workbench.js:3278-3367`, `web/workbench.js:4310-4332`, `src/pipeline_v2/app.py:496-525` | The source panel now reads `source_path` / `source_manifest` directly, reloads the PNG through `/api/workbench/source-image`, and can render manifest geometry before the PNG finishes loading. This Step 5 projection dependency is resolved. |
 | Sprite-by-sprite source-to-frame drag coverage is now first-class in the official headed runner | `scripts/xp_fidelity_test/verifier_lib.mjs`, `scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs`, `tests/fixtures/known_good/source_grid_multirow.png`, `PLAYWRIGHT_FAILURE_LOG.md` entries dated `2026-04-17` | The canonical runner now proves all currently visible source-box families through shipped UI actions only: manual single-box, auto-detected single-box, grouped row-select, and grouped column-select drags into `9A`. RESOLVED on `2026-04-17`. |
 | Frame-slot deletion semantics now exist as a separate shipped action | `web/workbench.html:142-146`, `web/workbench.js:3741-3744`, `web/workbench.js:5250-5443`, `scripts/xp_fidelity_test/run_m2d_action_proof_test.mjs` | `Clear Selected` remains the clear-content action. `Delete Frame` now removes semantic frame slots, shrinks geometry, left-shifts surviving frames, repairs selection, and is headed-proven through the official M2-D runner. RESOLVED on `2026-04-17`. |
-| Panel topology and panel IDs are not yet canon-stable | `web/workbench.html`, `web/styles.css`, `web/whole-sheet-init.js` | The user needs a stable visual naming system for every visible/clickable UI region. Grid/frame navigation placement is also still under correction: the intended layout is below Source (`8`) and in sequence before Whole Sheet (`10`), while child IDs must follow a documented parent-child numbering convention. |
+| Panel identity map and panel topology now exist in code, but public-parity proof is still open | `web/workbench.html`, `web/styles.css`, `web/workbench.js:7984-8099` | The current branch now exposes numbered/named panel badges (`8 source`, `9 grid`, `9A frame-nav`, `9B grid-panel`, `10 whole-sheet`, etc.) and a full clickable-ID overlay toggle (`hide IDs` / `Alt+I`). That closes the raw tagging gap that fueled the three-day refactor confusion, but it is still code-state until it is re-proved against the frozen public workflow grouping. |
 
 These are architectural failures. They are not just missing buttons.
 
@@ -1305,7 +1305,7 @@ These gates are wrapper safeguards. They do not define the editor root contract.
 
 2. **The quality contract now exists in Section 2.3.4, but it is not yet enforced.** The missing work is implementation: `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()` still do not evaluate the full Step 5 quality report, and there is still no lightweight single-XP validation endpoint for agent loops.
 
-3. **Registry roles are now fixed, and the workbench client no longer depends on `enabled_families`.** `config/template_registry.json` drives workbench bundle authoring (template sets, per-action dims, l0_ref, family scope). The harness action registry seed is fidelity test instrumentation only. The remaining implementation gap is broader mounted-family and item/wearable follow-through, not a separate client-side family gate.
+3. **Registry roles are fixed in design, but the current branch still leaks the old `enabled_families` compatibility path.** `config/template_registry.json` is still the intended authoring authority and the harness action registry seed is still fidelity test instrumentation only. However, `src/pipeline_v2/app.py` still emits `enabled_families` and `web/workbench.js` still reads it, so the implementation side of that authority cleanup is reopened in Step 11.
 
 4. **FL-STEP4-04 resolved on `2026-04-16`: dead `force_fallback` and `crop_box` removed from `RunConfig`.** The live `/api/run` and `/pipeline/run` contracts no longer advertise fields the handlers ignore; legacy callers now get an explicit `unsupported_run_fields` error if they still send those keys.
 
@@ -1318,7 +1318,7 @@ The live wrapper architecture is still misaligned in these exact ways after the
 |---------|------------------|------------------------|
 | Canonical manifest authoring now exists, but it is still JSON-first | `web/workbench.html:133-145`, `web/workbench.js:2196-2377`, `web/workbench.js:3278-3367`, `src/pipeline_v2/app.py:496-525`, `src/pipeline_v2/service.py:3831-3887`, `scripts/workbench_mcp_server.py` | Source guides/regions are now edited through the canonical sidecar and rendered on the source canvas without reviving session-local box/cut ownership, MCP exposes manifest read/write/region-marking tools against the same sidecar contract, and the source panel can now seed a canonical `uniform_grid` draft from the active run/template geometry for the common naked-PNG case. The remaining gap is interactive slicer tooling and richer manifest editing ergonomics. |
 | Source panel now reloads canonical PNG/manifest without grid geometry | `web/workbench.js:2242-2305`, `web/workbench.js:3278-3367`, `web/workbench.js:4310-4332`, `src/pipeline_v2/app.py:496-525` | The source projection can now stand alone from `source_path` / `source_manifest`; it no longer requires pre-populated root grid geometry. RESOLVED. |
-| Primary runtime/template helpers now model explicit `filename_prefix` + `skin_family`, and new outward payloads no longer mirror legacy `family` aliases | `src/pipeline_v2/service.py`, `src/pipeline_v2/app.py` | The core wrapper owner no longer treats prefix as the only family concept, the Playwright proof helper now injects by prefix, and new template/run/session responses no longer emit `family` / `enabled_families` compatibility aliases. Read-only fallback for older persisted records remains. RESOLVED. |
+| Primary runtime/template helpers now model explicit `filename_prefix` + `skin_family`, but the templates API still carries the legacy `enabled_families` compatibility alias | `src/pipeline_v2/service.py`, `src/pipeline_v2/app.py:383-384` | The core wrapper owner no longer treats prefix as the only family concept, but the outward cleanup is not fully closed because the templates API still emits `enabled_families` for compatibility. That keeps a stale client authority path alive until Step 11 deletes it from the browser flow. |
 | MCP override-name validation now accepts engine-valid hyphenated prefixes | `scripts/workbench_mcp_server.py` | `_AHSW_RE` now accepts `player-green-0001.xp`-style names. RESOLVED. |
 | Canonical `0001` representative-file follow-through is now explicit via `preview_xp`, while `l0_ref` preserves the structural layer contract | `config/template_registry.json`, `scripts/xp_fidelity_test/run_bundle.sh`, `scripts/xp_fidelity_test/run_bundle_split.sh`, `scripts/xp_fidelity_test/run_randomized_bundle_test.mjs`, `scripts/xp_fidelity_test/recipe_generator.mjs` | Representative preview ownership now lives in `preview_xp` / `preview_xp_sha256`; structural blank-session/export ownership stays on `l0_ref`. The legacy proof helpers now read their default fixtures from that split. RESOLVED. |
 | Green proof coverage now exists, but green authoring remains deliberately proof-only until green reference assets exist | `src/pipeline_v2/service.py`, `config/template_registry.json`, `scripts/workbench_png_to_skin_test_playwright.mjs`, `web/workbench.js` | Runtime/proof helpers now preserve and inject `player-green` / `attack-green` / `plydie-green`, but the template authoring surface stays human-only by explicit boundary. This is a product-scope limitation, not a missing proof-path owner. |
@@ -1327,7 +1327,8 @@ The live wrapper architecture is still misaligned in these exact ways after the
 | G7/G8/G9 now enforced at export boundary | `src/pipeline_v2/service.py` | G7–G12 all run inside `_build_quality_report()` which is called from `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`. RESOLVED by Steps 6–7. |
 | Agent quality contract implemented as `/api/workbench/validate-xp` | `src/pipeline_v2/app.py`, `src/pipeline_v2/service.py` | `POST /api/workbench/validate-xp` returns a PASS/WARN/FAIL report with per-slot coverage and gate results. The endpoint remains non-exporting, but now returns a predicted `xp_path`, `checksum`, `xp_size_bytes`, and `exported=false` for compatibility; callers that need a real file on disk must still use `/api/workbench/export-xp`. |
 | Agent session inspection is MCP-reachable | `scripts/workbench_mcp_server.py` | MCP now exposes `get_cell(session_id, x, y, layer=2)` for cell-level verification and `validate_session(session_id)` as a session-centric alias to `validate_xp(session_id)`. |
-| Template registry is the documented authoring authority, and the workbench client now derives scope from template actions | `config/template_registry.json`, `src/pipeline_v2/app.py:399-401`, `web/workbench.js` | Step 8 fixed the registry distinction in canon, and the current workbench client no longer fail-closes on `enabled_families`. The remaining gap is broader mounted-family follow-through plus wearable/item coverage, not a separate client-side family gate. |
+| Upload/conversion helper still reintroduces geometry-first wrapper ownership | `web/workbench.html:89-98`, `web/workbench.js:6408-6429`, `web/workbench.js:6847-6852` | The three-day failed refactor was driven by treating the product as conversion-first. The current branch still exposes `Analyze`, `Angles`, `Frames CSV`, and `Source Projs` as visible browser controls and still posts them through `/api/run`, so Step 4's claimed removal of upload-panel geometry ownership is not true in the live tree. |
+| Template registry is the documented authoring authority, but the workbench client still fail-closes on `enabled_families` | `src/pipeline_v2/app.py:383-384`, `web/workbench.js:6465-6474` | The server still emits the legacy `enabled_families` compatibility alias and the client still hides actions when that array is absent. That reintroduces the exact authority split the canon says Step 11 was supposed to delete. |
 | Y9-2 HTTP API contract now exists | `src/pipeline_v2/app.py:317-325`, `src/pipeline_v2/app.py:562-587`, `src/pipeline_v2/service.py:3913-4027` | The server now exposes `GET /health`, `GET /pipeline/templates`, `POST /pipeline/run`, and `POST /pipeline/validate_xp`. The remaining Y9-2 gap is launcher/wizard wiring, not missing backend endpoints. |
 | Y9-2 wizard not wired as launcher sub-action | `Y9-2 scripts/launcher.py`, `Y9-2 scripts/pipeline/wizard/engine.py` | `WizardEngine` exists but has no `_execute_action` branch in `launcher.py`; `[3] ASSET PIPELINE` node is fully absent rather than showing as `[DEFERRED]`. Tracked as Y9-2 DESIGN OPEN B-13. |
 | **GAP: No wearable or item templates in template registry** | `config/template_registry.json` | Character template coverage now includes the player and initial mounted sets, but there are still no template sets for wearable items (armor, helmets, shields, weapons as standalone assets) or item sprites. The authoring surface has no entry point for equipment items as independent assets; only full character+equipment AHSW combos are authorable. Tracked as S2-FAM-04. |
@@ -1696,6 +1697,14 @@ The current repo maps onto this harness model as follows:
    path before new coverage claims are made.
 3. Future verifier work must be described in the Unified Sequence Of Actions as Section 3 harness
    implementation, not as a continuation of the old repaint-fidelity lane.
+4. The `2026-04-14` through `2026-04-17` failure timeline is part of the task
+   sequence contract now:
+   - do not preserve a `COMPLETE` label when live code or the failure log can
+     still falsify it
+   - do not promote boundary proof, structural smoke, or runtime click-only
+     proof into product acceptance
+   - if a later branch reintroduces a supposedly-deleted owner, reopen the step
+     explicitly instead of leaving the earlier closeout text in place
 
 ---
 
@@ -1728,10 +1737,20 @@ From the current state, the corrected sequence is:
    - Zoom/font-scale: zoom levels, persistence, grid alignment
    Do not begin Step 3 until this design output exists.
 
-3. **IMPLEMENT — Section 1 structural cleanup** — **IMPLEMENTED, UNVERIFIED (2026-04-15, commit c836cde)** — `syncRootStateFromWholeSheet()` and all callsites deleted. Old history/future owner deleted. Legacy inspector deleted. Grep confirms no matches for `syncRootStateFromWholeSheet`, `state.history`, `state.future`, `pushHistory`, `renderInspector`, `closeInspector`, `inspectorOpen`. No behavioral proof run yet.
+3. **IMPLEMENT — Section 1 structural cleanup** — **IMPLEMENTED, UNVERIFIED (2026-04-15, commit `c836cde`)** — `syncRootStateFromWholeSheet()` and all callsites deleted. Old history/future owner deleted. Legacy inspector deleted. Grep confirms no matches for `syncRootStateFromWholeSheet`, `state.history`, `state.future`, `pushHistory`, `renderInspector`, `closeInspector`, `inspectorOpen`. No behavioral proof run yet.
 
-4. **IMPLEMENT — Section 1 feature completeness** — **COMPLETE (2026-04-16, commits `51f3a40`–`712735f`, plus local uncommitted completion pass)**.
-   - Wired in live code: keyboard authority, resize, open/import, browse toggle, oval, text, pointer events, zoom/grid viewport persistence.
+4. **IMPLEMENT — Section 1 feature completeness** — **PARTIAL / REOPENED BY 2026-04-17 RE-AUDIT**.
+   - What is strictly proven from the surviving evidence:
+     - boundary/root-owner contract fixes landed in the 2026-04-15/2026-04-16 Step 4 slice
+     - the narrow root-owner regression suite and parser checks listed below passed
+   - Why the old `COMPLETE` label is no longer acceptable:
+     - `BROWSE` is still explicitly deferred in `web/whole-sheet-init.js:1067-1071`
+     - the upload panel still exposes `wbAngles`, `wbFrames`, `wbSourceProjs`, and `wbAnalyze` in `web/workbench.html:89-98`
+     - `wbAnalyze()` still rewrites those geometry fields in `web/workbench.js:6413-6429`
+     - the three-day failed refactor showed that structural green lanes were misread as product acceptance while public/local workflow parity was still wrong
+   - Canon consequence:
+     - keep the verification evidence below as evidence for the Step 4 boundary slice only
+     - do not treat Step 4 as feature-complete until the remaining deferred/reintroduced browser-surface gaps are closed and re-proved
     - The local heavy-contract fix pass closes the highest-risk save/interaction regressions that were still contaminating Step 4:
       - pending whole-sheet debounced saves now flush/checkpoint before `loadSession()` or `loadFromJob()` replace the active session
       - dirty sessions are checkpointed before replacement instead of only clearing the timer
@@ -1748,18 +1767,15 @@ From the current state, the corrected sequence is:
       - `PW_SKIP_WEBSERVER=1 npx playwright test tests/playwright/step4-root-proof.spec.js --reporter=list` — PASS
         - proves root-owner load/save payload translation, session-switch text persistence, touch gesture handoff, pointer-cancel vs lost-capture behavior, resize rollback, and concurrent remount undo single-fire
     - Fixes landed in the CE review pass (`20260415-112338-b515fe54`):
-      - enabled_families fail-close removed — `getEnabledActions` now derives scope from template action entries only (browser-proven: bundle tabs render correctly)
+      - the 2026-04-16 slice removed the then-live `enabled_families` fail-close, but the current branch has since regressed that authority path and reopens it under Step 11
     - Local browser-owner cleanup on `2026-04-16`:
       - the deprecated `/wizard` browser UI is hard-disabled to redirect to `/workbench`; only the external Y9-2 TUI/MCP wizard remains in scope
-      - the workbench Load Source panel no longer owns geometry via `wbAngles` / `wbFrames` / `wbSourceProjs`, and the deleted `wbAnalyze` step is gone from the live browser/harness path
-      - `wbRun` is now the visible `Apply Source` action, and source-image preview loading is fail-open instead of blocking upload/session activation
-      - verification evidence for this cleanup:
-        - `python3 -m pytest tests/e2e/test_browser_flow.py -q` — PASS
-        - `npx playwright test tests/playwright/full-workflow-with-game.spec.js --list` — PASS (spec parses and enumerates the updated template-backed flow)
+      - `wbRun` is the visible conversion action, and source-image preview loading is fail-open instead of blocking upload/session activation
       - concurrent load race closed — `withSessionLoadLock` + `state.sessionLoadInFlight` guard wraps both `loadFromJob` and `loadSession` (browser-proven: overlapping loads return `[true, false]`)
       - partial-state-before-await fixed — `applyLoadedSessionSideState` deferred after root load; `previousRootPayload` rollback wired on mirror-sync failure
       - `_wsDrawSaveTimer` added to state initializer
       - `syncRootOwnerMirrorsFromDocument()` deleted on `2026-04-16` — render/debug read paths now consume whole-sheet snapshots, and the mid-load double-sync path is gone with it
+      - re-audit correction on `2026-04-17`: the stronger claim that upload-panel geometry ownership and `wbAnalyze` were already deleted is false in the current branch and is reopened in Section 2.5 plus this task sequence
     - Completion pass landed on `2026-04-16`:
       - **FL-STEP4-02 fixed:** `_normalize_storage_id()` now preserves integer `0` instead of coercing it to an empty string.
       - **FL-STEP4-03 fixed:** `/api/workbench/create-blank-session` again accepts bare `{}` and explicit `blank_session` payloads for generic root sessions while retaining template-backed creation.
@@ -1796,19 +1812,20 @@ From the current state, the corrected sequence is:
    - the active/legacy file split for `scripts/xp_fidelity_test/` and related watchdog tooling
    Legacy truth-table recipe entrypoints are now explicitly demoted out of the primary acceptance path. Future verifier work must implement this contract rather than extending the old repaint lane.
 
-7. **IMPLEMENT — UI identity map and panel-topology correction** — This is the immediate next task from the 2026-04-17 authoring pass.
-   - Tag every user-visible and user-clickable workbench surface with a stable on-screen identifier.
-   - Use a parent-child naming system for panels, sub-panels, tabs, buttons, mode toggles, context actions, and reusable overlays.
-   - Preserve stable lineage-oriented child labels where useful for user communication, even if the child surface moves visually. Example: `10A wsFrameNav` may remain valid as a child-ID family label if the numbering scheme explicitly documents that lineage.
-   - Reconcile panel topology so the grid/frame-navigation region sits in the intended working order relative to Source (`8`) and Whole Sheet (`10`), rather than drifting as an orphaned layout artifact.
-   - This step is documentation plus visible UI tagging first. Do not fold `Delete Frame` or broader drag-behavior changes into the tagging pass.
+7. **IMPLEMENT — UI identity map and panel-topology correction** — **IMPLEMENTED, UNPROVEN (2026-04-17, commit `b58e776`)**.
+   - Live code now tags visible panels with stable on-screen badges (`1 banner` through `18 inspector`) and child labels like `9A frame-nav` / `9B grid-panel`.
+   - `web/workbench.js` now provides the full ID overlay toggle (`hide IDs` / `Alt+I`) so every visible clickable/typable element with an `id` can be surfaced in-browser.
+   - The grid/frame-navigation region is now visibly sequenced as `8 source` -> `9 grid` -> `9A frame-nav` / `9B grid-panel` -> `10 whole-sheet`.
+   - Remaining gap:
+     - this is implemented in code but not yet re-proved as public-parity workflow grouping, so do not treat it as acceptance-complete
 
 8. **IMPLEMENT — Demote session-local source state** — Once the Step 5 contract exists:
    - Demote session-local `extractedBoxes`, `sourceCutsV`, `sourceCutsH` from ad hoc authority into manifest-backed or clearly-derived overlays
 
-9. **IMPLEMENT — Quality enforcement at export boundary** — Based on Step 5 quality contract:
-   - Move G7/G8/G9 (or their replacement) into `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`
-   - Add a lightweight single-XP validation endpoint for agent loops
+9. **IMPLEMENT — Quality enforcement at export boundary** — **IMPLEMENTED (2026-04-16)**.
+   - G7/G8/G9 replacement gates now run inside `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`
+   - `POST /api/workbench/validate-xp` now provides the lightweight single-XP validation endpoint for agent loops
+   - Keep this step closed unless live code or tests contradict the current Section 2.5 ledger
 
 10. **DESIGN — Family expansion policy** — RESOLVED in Section 2.3.5:
    - main-game `SkinFamilyDefinition` / B-18 schema is the engine authority for base `skin_family` and filename-prefix grouping
@@ -1816,13 +1833,18 @@ From the current state, the corrected sequence is:
    - initial mounted scope here remains `wolfie` idle/walk + `wolack` attack; `bigbee` deferred; green proof-prefix support exists, but green authoring remains proof-only until green reference assets ship in-repo
    - the harness action registry seed remains verifier-only
 
-11. **IMPLEMENT — Engine Family Schema Alignment + Mounted-Family Authoring** — Based on Step 10 policy:
-   - Separate engine `skin_family` truth from filename-prefix authoring in backend, frontend, MCP, and browser/runtime helpers
-   - Update preview/browser assumptions to canonical `{family}-0001.xp`
-   - Then enable supported mounted / proof-family prefixes consistently across backend, frontend, template registry, and runtime proof paths
+11. **IMPLEMENT — Engine Family Schema Alignment + Mounted-Family Authoring** — **PARTIAL / REGRESSED IN CURRENT BRANCH**.
+   - What is still true:
+     - backend/template work for mounted families and `preview_xp` landed
+     - the Y9-2 HTTP surface exists
+   - What is reopened by the current re-audit:
+     - `src/pipeline_v2/app.py` still emits `enabled_families`
+     - `web/workbench.js::getEnabledActions()` still fail-closes on that compatibility alias instead of deriving scope purely from `template_set.actions`
+   - Current task from this step:
+     - delete the reintroduced `enabled_families` authority path and keep template/action metadata as the only client-facing scope owner
+     - continue broader mounted-family and wearable/item template follow-through after that authority fix
 
-12. **IMPLEMENT — Interaction completion after UI identity map** — **IMPLEMENTED OUT OF ORDER (2026-04-17, commits `3dd7042`, `2ec2238`)**.
-   - The Step 7 UI identity-map/topology pass is still open, but the concrete interaction slice requested here has now landed.
+12. **IMPLEMENT — Interaction completion after UI identity map** — **IMPLEMENTED (2026-04-17, commits `3dd7042`, `2ec2238`)**.
    - The official source-to-grid runner now proves manual single-box, auto single-box, grouped row-select, and grouped column-select drags through shipped headed UI actions only.
    - The product now has a distinct `Delete Frame` action with semantic-slot removal and left-shift/repack behavior, separate from `Clear Selected`.
    - The official M2-D runner now proves `clear_selected_contents` and `delete_frame_slot` as separate actions, with artifact evidence for geometry shrink and signature repack.
@@ -1832,15 +1854,43 @@ From the current state, the corrected sequence is:
      - `output/m2d_action_proof_delete_frame_v2/report.json`
      - `output/m2d_action_proof_delete_frame_v2/g6_delete_frame_contract.json`
 
-13. **IMPLEMENT — MCP/automation support and Y9-2 HTTP API** — Only after Steps 5-12 are explicit:
-   - Add MCP tools for region marking, manifest persistence, and quality validation
-   - Implement the Section 2.10 Y9-2 integration HTTP API: `GET /health`, `GET /pipeline/templates`, `POST /pipeline/run`, `POST /pipeline/validate_xp`
-   - The Y9-2 `mcp/wizard_mcp_server.py` is the agent-facing gateway that calls these endpoints; this server exposes the execution surface that gateway calls. Implement the API contract before adding further pipeline-side MCP tools so both surfaces are coherent.
-   - Resolve Section 2.10 design decisions (auth model, error shape, sync vs async execution, config key placement) before writing implementation
+13. **IMPLEMENT — MCP/automation support and Y9-2 HTTP API** — **PARTIAL**.
+   - Already implemented:
+     - MCP tools for region marking, manifest persistence, session validation, and quality validation
+     - Section 2.10 backend API endpoints: `GET /health`, `GET /pipeline/templates`, `POST /pipeline/run`, `POST /pipeline/validate_xp`
+   - Still open:
+     - launcher / wizard wiring for the `[3] ASSET PIPELINE` path
+     - coherent front-door execution so the Y9-2 gateway uses the current backend endpoints instead of leaving the asset-pipeline node absent
 
 14. **IMPLEMENT — Small-screen layout and browser persistence** — Use the Section 1 research decisions:
    - Finish the Pointer Events / touch-action migration
    - Implement the three-tier persistence model (draft / explicit / PWA)
    - Finish the narrow-screen layout contract from Section 1.9.3
+
+### Immediate Next Tasks After The 2026-04-17 Re-Audit
+
+The three-day failed refactor attempt changed what must happen next. From the
+current branch state, the immediate sequence is:
+
+1. **Reopen and finish Step 4 honestly.**
+   - close the still-deferred `BROWSE` mode gap
+   - remove the reintroduced upload-panel geometry/conversion-side owner
+     (`wbAnalyze`, `wbAngles`, `wbFrames`, `wbSourceProjs`) or explicitly
+     redesign it if the product still needs that surface
+   - stop using Step 4 boundary proof as if it were public workflow proof
+2. **Re-prove Step 7 as product grouping, not just code tags.**
+   - the ID overlay and numbered panels exist now
+   - the next proof burden is that the visible grouping/order matches the
+     intended product workflow and does not repeat the 2026-04-16 local/public
+     drift
+3. **Keep Step 8 open.**
+   - finish demoting session-local source authority into manifest-backed or
+     clearly-derived state
+4. **Re-close Step 11 correctly.**
+   - delete the live `enabled_families` compatibility authority path and keep
+     `template_set.actions` as the only client scope owner
+5. **Finish the remaining Step 13 wiring.**
+   - backend endpoints exist; launcher / wizard integration still does not
+6. **Then return to Step 14 small-screen/persistence completion.**
 
 **Ship gate:** Steps 1–2 (housekeeping and Section 1 design) are unblocked and do not require pipeline-v2 server changes. Implementation steps 3–14 are post-release relative to the Y9-2 launcher ship gate. Do not surface the `[3] ASSET PIPELINE` launcher node until Step 3 is at minimum proven complete. FL-813 (asset pipeline lacks a shippable supported surface) blocks launcher promotion and is resolved only when Step 3 is proven, the Section 2.10 HTTP API contract is implemented (Step 13), and the Y9-2 Step 7.12 VERIFY gate passes.
