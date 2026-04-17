@@ -3,7 +3,7 @@
 **Authority:** this file and `PLAYWRIGHT_FAILURE_LOG.md` are the only active canon docs for the browser workbench.
 
 **Last updated:** 2026-04-17
-**Branch baseline:** `v3-refactor-start @ 0f68fa0`
+**Branch baseline:** `v3-refactor-start @ b435ed5`
 **Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the grouped-drag / Delete Frame interaction slice, and the surviving local/browser/runtime assets in this repo
 
 ## Application Statement
@@ -1739,19 +1739,15 @@ From the current state, the corrected sequence is:
 
 3. **IMPLEMENT — Section 1 structural cleanup** — **IMPLEMENTED, UNVERIFIED (2026-04-15, commit `c836cde`)** — `syncRootStateFromWholeSheet()` and all callsites deleted. Old history/future owner deleted. Legacy inspector deleted. Grep confirms no matches for `syncRootStateFromWholeSheet`, `state.history`, `state.future`, `pushHistory`, `renderInspector`, `closeInspector`, `inspectorOpen`. No behavioral proof run yet.
 
-4. **IMPLEMENT — Section 1 feature completeness** — **PARTIAL / REOPENED BY 2026-04-17 RE-AUDIT**.
-   - What is strictly proven from the surviving evidence:
-     - boundary/root-owner contract fixes landed in the 2026-04-15/2026-04-16 Step 4 slice
-     - the narrow root-owner regression suite and parser checks listed below passed
-   - Why the old `COMPLETE` label is no longer acceptable:
-     - `BROWSE` is still explicitly deferred in `web/whole-sheet-init.js:1067-1071`
-     - the upload panel still exposes `wbAngles`, `wbFrames`, `wbSourceProjs`, and `wbAnalyze` in `web/workbench.html:89-98`
-     - `wbAnalyze()` still rewrites those geometry fields in `web/workbench.js:6413-6429`
-     - the three-day failed refactor showed that structural green lanes were misread as product acceptance while public/local workflow parity was still wrong
-   - Canon consequence:
-     - keep the verification evidence below as evidence for the Step 4 boundary slice only
-     - do not treat Step 4 as feature-complete until the remaining deferred/reintroduced browser-surface gaps are closed and re-proved
-    - The local heavy-contract fix pass closes the highest-risk save/interaction regressions that were still contaminating Step 4:
+4. **IMPLEMENT — Section 1 feature completeness** — **IMPLEMENTED (2026-04-17; commits `d60c46b`, `bd69ce2`, `b435ed5`)**.
+   - The earlier Step 4 reopen from the 2026-04-17 re-audit is now resolved in live code:
+     - `BROWSE` is a live whole-sheet owner mode again, with click + `Tab` toggle and saved-session browse actions backed by the new `/api/workbench/browse/*` routes
+     - the upload panel no longer exposes `wbAnalyze`, `wbAngles`, `wbFrames`, `wbSourceProjs`, or `wbRenderRes`
+     - `wbRun()` now derives its conversion plan from `/api/analyze` internally instead of letting the browser own geometry inputs
+   - Boundary-vs-product rule after this closeout:
+     - Step 4 is no longer blocked by the deferred/reintroduced browser surfaces
+     - Step 7 remains the separate public/workflow-grouping proof burden; do not reuse this Step 4 closeout as Step 7 acceptance proof
+   - The local heavy-contract fix pass closes the highest-risk save/interaction regressions that were still contaminating Step 4:
       - pending whole-sheet debounced saves now flush/checkpoint before `loadSession()` or `loadFromJob()` replace the active session
       - dirty sessions are checkpointed before replacement instead of only clearing the timer
       - active text sessions now arm debounced saves while typing and are quiesced before remount/session switch
@@ -1759,31 +1755,33 @@ From the current state, the corrected sequence is:
       - rejected root resize saves now roll the whole-sheet editor back to the prior snapshot instead of leaving client geometry diverged
       - session load/save payload translation now runs through whole-sheet (`loadSessionPayload()` / `buildSessionPayload()`), and `workbench.js` derives mirror state from the root document after load
       - the viewport wire contract (`viewport_x`/`viewport_y` on the API, `scrollLeft`/`scrollTop` in the client) is now explicitly documented at the save/load boundary, and Python zoom normalization now matches client rounding semantics
-    - Verification evidence for this local pass:
+   - Verification evidence from the earlier Step 4 local pass:
       - `python3 -m pytest tests/test_workbench_flow.py -k save_session_round_trips_root_owner_metadata` — PASS
       - `node --check web/workbench.js` — PASS
       - `node --experimental-vm-modules -e "const fs=require('fs'); const vm=require('vm'); new vm.SourceTextModule(fs.readFileSync('web/whole-sheet-init.js','utf8'));"` — PASS
       - `python3 -m py_compile src/pipeline_v2/service.py` — PASS
       - `PW_SKIP_WEBSERVER=1 npx playwright test tests/playwright/step4-root-proof.spec.js --reporter=list` — PASS
         - proves root-owner load/save payload translation, session-switch text persistence, touch gesture handoff, pointer-cancel vs lost-capture behavior, resize rollback, and concurrent remount undo single-fire
-    - Fixes landed in the CE review pass (`20260415-112338-b515fe54`):
+   - Fixes landed in the CE review pass (`20260415-112338-b515fe54`):
       - the 2026-04-16 slice removed the then-live `enabled_families` fail-close, but the current branch has since regressed that authority path and reopens it under Step 11
-    - Local browser-owner cleanup on `2026-04-16`:
+   - Local browser-owner cleanup on `2026-04-16`:
       - the deprecated `/wizard` browser UI is hard-disabled to redirect to `/workbench`; only the external Y9-2 TUI/MCP wizard remains in scope
       - `wbRun` is the visible conversion action, and source-image preview loading is fail-open instead of blocking upload/session activation
       - concurrent load race closed — `withSessionLoadLock` + `state.sessionLoadInFlight` guard wraps both `loadFromJob` and `loadSession` (browser-proven: overlapping loads return `[true, false]`)
       - partial-state-before-await fixed — `applyLoadedSessionSideState` deferred after root load; `previousRootPayload` rollback wired on mirror-sync failure
       - `_wsDrawSaveTimer` added to state initializer
       - `syncRootOwnerMirrorsFromDocument()` deleted on `2026-04-16` — render/debug read paths now consume whole-sheet snapshots, and the mid-load double-sync path is gone with it
-      - re-audit correction on `2026-04-17`: the stronger claim that upload-panel geometry ownership and `wbAnalyze` were already deleted is false in the current branch and is reopened in Section 2.5 plus this task sequence
-    - Completion pass landed on `2026-04-16`:
+   - Reopen correction from `2026-04-17` is now fixed on this branch:
+      - the stronger claim that upload-panel geometry ownership and `wbAnalyze` were already deleted was false at re-audit time
+      - `b435ed5` now removes that surface and moves planning authority behind `wbRun()`
+   - Completion pass landed on `2026-04-16`:
       - **FL-STEP4-02 fixed:** `_normalize_storage_id()` now preserves integer `0` instead of coercing it to an empty string.
       - **FL-STEP4-03 fixed:** `/api/workbench/create-blank-session` again accepts bare `{}` and explicit `blank_session` payloads for generic root sessions while retaining template-backed creation.
       - **FL-STEP4-04 fixed:** dead `force_fallback` / `crop_box` fields were deleted from `RunConfig`, and `/api/run` plus `/pipeline/run` now reject those legacy fields with `unsupported_run_fields` instead of silently ignoring them.
       - **FL-STEP4-05 resolved by contract:** `/api/workbench/validate-xp` is now explicitly documented and tested as a non-exporting checksum/quality endpoint that returns a predicted `xp_path` plus `exported=false` for compatibility, without writing an export artifact.
       - agent-native text parity now exists on the MCP/HTTP path through `save_session(..., text_input={x,y,text})`.
       - inspector edits now execute inside whole-sheet external-edit transactions, so one inspector action creates one whole-sheet undo snapshot and is reversible through the root undo contract.
-    - Verification evidence for the completion pass:
+   - Verification evidence for the completion pass:
       - `python3 -m pytest tests/test_workbench_flow.py -k "root_blank_session_legacy_route_defaults or root_blank_session_rejects_invalid_geometry or save_session_text_input_writes_root_authoritative_text or validate_xp_contract_returns_predictable_path_without_exporting or save_session_rejects_inconsistent_sheet_geometry or normalize_storage_id_preserves_integer_zero or save_session_round_trips_root_owner_metadata" -q` — PASS
       - `python3 -m pytest tests/test_base_path.py -k "create_root_blank_session_under_prefix or save_and_export_root_blank_session_under_prefix" -q` — PASS
       - `python3 -m pytest tests/test_workbench_mcp_server.py -q` — PASS
@@ -1795,6 +1793,12 @@ From the current state, the corrected sequence is:
         - inspector action wrote glyph `65`
         - whole-sheet `canUndo` transitioned `false -> true`
         - undo restored the glyph to `0` and `canUndo` returned to `false`
+   - Verification evidence for the reopened Step 4 blockers:
+      - `python3 -m pytest tests/test_workbench_flow.py -k "browse_crud_endpoints or browse_delete_rejects_bundle_owned_session" -q` — PASS
+      - `node --check web/workbench.js` — PASS
+      - `node --experimental-vm-modules -e "const fs=require('fs'); const vm=require('vm'); new vm.SourceTextModule(fs.readFileSync('web/whole-sheet-init.js','utf8'));"` — PASS
+      - `rg -n "Browse mode \\(deferred\\)|browseBtn\\.disabled|wbAnalyze|wbAngles|wbFrames|wbSourceProjs|wbRenderRes" web/workbench.html web/workbench.js web/whole-sheet-init.js` — no matches
+      - non-gating regression note: `python3 -m pytest tests/test_workbench_flow.py -k run_to_workbench_to_export -q` still fails on the pre-existing `native_compat_dims_gate` (`96x8` vs expected `126x80`); that failure is unrelated to this Step 4 closeout
 
 5. **DESIGN — Section 2 input contract** — **IMPLEMENTED (2026-04-15)** — Section 2.3.1-2.3.4 now define:
    - source-layout modes (`uniform_grid` vs `explicit_regions`)
@@ -1867,30 +1871,25 @@ From the current state, the corrected sequence is:
    - Implement the three-tier persistence model (draft / explicit / PWA)
    - Finish the narrow-screen layout contract from Section 1.9.3
 
-### Immediate Next Tasks After The 2026-04-17 Re-Audit
+### Immediate Next Tasks After The 2026-04-17 Step 4 Closeout
 
-The three-day failed refactor attempt changed what must happen next. From the
-current branch state, the immediate sequence is:
+The three-day failed refactor attempt changed the sequence, and the Step 4
+blockers have now been cleared on this branch. From the current branch state,
+the immediate sequence is:
 
-1. **Reopen and finish Step 4 honestly.**
-   - close the still-deferred `BROWSE` mode gap
-   - remove the reintroduced upload-panel geometry/conversion-side owner
-     (`wbAnalyze`, `wbAngles`, `wbFrames`, `wbSourceProjs`) or explicitly
-     redesign it if the product still needs that surface
-   - stop using Step 4 boundary proof as if it were public workflow proof
-2. **Re-prove Step 7 as product grouping, not just code tags.**
+1. **Re-prove Step 7 as product grouping, not just code tags.**
    - the ID overlay and numbered panels exist now
    - the next proof burden is that the visible grouping/order matches the
      intended product workflow and does not repeat the 2026-04-16 local/public
      drift
-3. **Keep Step 8 open.**
+2. **Keep Step 8 open.**
    - finish demoting session-local source authority into manifest-backed or
      clearly-derived state
-4. **Re-close Step 11 correctly.**
+3. **Re-close Step 11 correctly.**
    - delete the live `enabled_families` compatibility authority path and keep
      `template_set.actions` as the only client scope owner
-5. **Finish the remaining Step 13 wiring.**
+4. **Finish the remaining Step 13 wiring.**
    - backend endpoints exist; launcher / wizard integration still does not
-6. **Then return to Step 14 small-screen/persistence completion.**
+5. **Then return to Step 14 small-screen/persistence completion.**
 
 **Ship gate:** Steps 1–2 (housekeeping and Section 1 design) are unblocked and do not require pipeline-v2 server changes. Implementation steps 3–14 are post-release relative to the Y9-2 launcher ship gate. Do not surface the `[3] ASSET PIPELINE` launcher node until Step 3 is at minimum proven complete. FL-813 (asset pipeline lacks a shippable supported surface) blocks launcher promotion and is resolved only when Step 3 is proven, the Section 2.10 HTTP API contract is implemented (Step 13), and the Y9-2 Step 7.12 VERIFY gate passes.

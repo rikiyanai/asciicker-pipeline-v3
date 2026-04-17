@@ -8067,3 +8067,74 @@ From the current branch state, the immediate next tasks are:
 3. Keep Step 8 open for manifest-backed source authority.
 4. Re-close Step 11 by deleting the `enabled_families` authority path.
 5. Finish Step 13 launcher/wizard wiring.
+
+---
+
+## Fix Attempt — Step 4 Reopen Closure (2026-04-17)
+
+This entry records the follow-through on the exact Step 4 blockers identified in
+the 2026-04-17 canon re-audit.
+
+### What changed
+
+1. **Whole-sheet `BROWSE` mode is now live instead of deferred.**
+   - Backend browse/session routes landed in `d60c46b`:
+     - `GET /api/workbench/browse/list`
+     - `POST /api/workbench/browse/rename`
+     - `POST /api/workbench/browse/duplicate`
+     - `POST /api/workbench/browse/delete`
+   - `bd69ce2` then wired `whole-sheet-init.js` to own `PAINT`/`BROWSE` mode
+     state directly:
+     - mode buttons are clickable
+     - `Tab` toggles the mode
+     - browse renders the saved-session list in the root editor sidebar
+     - open/rename/duplicate/delete/reload go through the new browse routes
+   - Delete is intentionally guarded for bundle-owned sessions and for the
+     currently open session, so browse does not silently corrupt bundle state or
+     orphan the active editor session.
+
+2. **The upload panel no longer owns conversion geometry.**
+   - `b435ed5` removed the visible browser-side geometry controls:
+     - `wbAnalyze`
+     - `wbAngles`
+     - `wbFrames`
+     - `wbSourceProjs`
+     - `wbRenderRes`
+   - `wbRun()` now calls `/api/analyze` internally and passes the derived plan
+     straight into `/api/run`.
+   - The visible upload surface is now:
+     - `Upload PNG`
+     - `Convert to XP`
+     - name field
+     - read-only auto-plan summary
+
+### Verification evidence
+
+1. **Browse CRUD backend checks passed.**
+   - `python3 -m pytest tests/test_workbench_flow.py -k "browse_crud_endpoints or browse_delete_rejects_bundle_owned_session" -q`
+   - Result: `2 passed`
+
+2. **Browser code parses after the mode/UI rewiring.**
+   - `node --check web/workbench.js`
+   - `node --experimental-vm-modules -e "const fs=require('fs'); const vm=require('vm'); new vm.SourceTextModule(fs.readFileSync('web/whole-sheet-init.js','utf8'));" `
+   - Result: PASS
+
+3. **The re-audit blocker strings are gone from the live browser surface.**
+   - `rg -n "Browse mode \\(deferred\\)|browseBtn\\.disabled|wbAnalyze|wbAngles|wbFrames|wbSourceProjs|wbRenderRes" web/workbench.html web/workbench.js web/whole-sheet-init.js`
+   - Result: no matches
+
+### What this does prove
+
+- The specific Step 4 blockers that reopened the step in the 2026-04-17 audit
+  are now removed from live code.
+- Step 7 is now the next product-proof burden again, rather than Step 4 still
+  being blocked by a deferred browse button or browser-owned geometry fields.
+
+### What this does NOT prove
+
+- It does NOT prove Step 7 public/local grouping parity.
+- It does NOT resolve the still-open `enabled_families` authority split from
+  Step 11.
+- It does NOT resolve the unrelated export regression where
+  `tests/test_workbench_flow.py -k run_to_workbench_to_export -q` still fails on
+  `native_compat_dims_gate` (`96x8` vs expected `126x80`).
