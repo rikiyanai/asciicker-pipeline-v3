@@ -8263,3 +8263,57 @@ behavior seen after dragging only a subset of frames into the frame nav.
 - It does NOT close the separate cross-row `shift+click` selection bug.
 - It does NOT yet prove that the source-box row-grouping behavior matches the
   intended drag semantics when multiple boxes are dropped at once.
+
+---
+
+## Fix Attempt — Four-Angle Sessions Were Mapped To Wrong Native Rows In Skin Dock (2026-04-17)
+
+This entry closes the follow-on bug where a `4`-angle direct session could show
+three directions correctly in `Test This Skin` while one authored direction
+appeared missing.
+
+### Root cause
+
+1. **The non-native runtime-preview normalizer was copying authored angle rows
+   `0..3` into native player rows `0..3` by index. HIGH.**
+   - Evidence before fix:
+     - the direct session row names for `angles=4` are
+       `South, West, North, East`
+     - the native player runtime row names for `angles=8` are
+       `South, SouthWest, West, NorthWest, North, NorthEast, East, SouthEast`
+     - therefore a straight `0,1,2,3` mapping places the authored cardinal rows
+       onto `South, SouthWest, West, NorthWest` instead of
+       `South, West, North, East`
+   - Consequence:
+     - the fourth authored row was not unsaved; it was landing on the wrong
+       native angle slot for runtime preview.
+
+### What changed
+
+1. **Four-angle classic sessions now map onto the cardinal native rows.**
+   - `src/pipeline_v2/service.py` now maps:
+     - `4-angle` sessions to native rows `[0, 2, 4, 6]`
+     - `1-angle` sessions to native row `[0]`
+     - `8-angle` sessions remain identity-mapped
+
+### Verification evidence
+
+1. **Regression test added and passing.**
+   - `tests/test_workbench_flow.py::test_web_skin_payload_maps_four_angle_sessions_to_cardinal_native_rows`
+   - Verified native preview XP rows `0,2,4,6` are populated while
+     `1,3,5,7` remain empty for a synthetic `4-angle` direct session.
+
+2. **Workbench flow suite passes after the mapping change.**
+   - `python3 -m pytest tests/test_workbench_flow.py -q`
+   - Result: `5 passed`
+
+### What this does prove
+
+- A missing fourth direction in `Test This Skin` for a `4-angle` direct session
+  is no longer explained by the old cardinal-to-diagonal row mis-mapping.
+
+### What this does NOT prove
+
+- It does NOT close the separate `shift+click` cross-row selection bug.
+- It does NOT prove multi-box drop grouping semantics are correct for all
+  intended authoring workflows.

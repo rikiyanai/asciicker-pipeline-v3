@@ -2336,18 +2336,24 @@ def _build_native_player_runtime_preview_layers(sess: dict[str, Any], req_id: st
     src_grid = [list(cells_layer2[y * cols:(y + 1) * cols]) for y in range(rows)]
     dst_grid = [[_transparent_cell() for _ in range(NATIVE_COLS)] for _ in range(NATIVE_ROWS)]
 
-    max_angles = min(angles, NATIVE_ANGLES)
+    angle_row_map = (
+        [0, 2, 4, 6] if angles == 4 else
+        [0] if angles == 1 else
+        list(range(min(angles, NATIVE_ANGLES)))
+    )
+    max_angles = min(angles, len(angle_row_map))
     max_frames = min(semantic_frames, target_semantic_frames)
     max_projs = min(projs, target_projs)
     for angle in range(max_angles):
         sy0 = angle * src_frame_h
+        dst_angle = angle_row_map[angle]
         for frame in range(max_frames):
             for proj in range(max_projs):
                 sx0 = (frame + (proj * semantic_frames)) * src_frame_w
                 src_matrix = [row[sx0:sx0 + src_frame_w] for row in src_grid[sy0:sy0 + src_frame_h]]
                 dst_matrix = _resample_frame_matrix(src_matrix, target_frame_w, target_frame_h)
                 dx0 = (frame + (proj * target_semantic_frames)) * target_frame_w
-                dy0 = angle * target_frame_h
+                dy0 = dst_angle * target_frame_h
                 for y in range(target_frame_h):
                     dst_grid[dy0 + y][dx0:dx0 + target_frame_w] = dst_matrix[y]
 

@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+from PIL import Image, ImageDraw
+
 from pipeline_v2.xp_codec import read_xp
 
 
@@ -286,6 +288,82 @@ def test_workbench_browse_crud_endpoints(client):
     after_ids = {item["session_id"] for item in list_after.get_json()["sessions"]}
     assert duplicated["session_id"] not in after_ids
     assert session_a in after_ids
+
+
+def test_web_skin_payload_maps_four_angle_sessions_to_cardinal_native_rows(client, tmp_path: Path):
+    fixture = tmp_path / "four_angle_strip.png"
+    tile = 24
+    im = Image.new("RGBA", (tile * 3, tile * 4), (255, 0, 255, 0))
+    draw = ImageDraw.Draw(im)
+    colors = [
+        (255, 80, 80, 255),
+        (80, 255, 80, 255),
+        (80, 160, 255, 255),
+        (255, 220, 80, 255),
+    ]
+    for row, color in enumerate(colors):
+        y0 = row * tile
+        draw.rectangle([4, y0 + 2, 19, y0 + 21], fill=color)
+    im.save(fixture)
+
+    up = _upload(client, fixture).get_json()
+    run_resp = client.post(
+        "/api/run",
+        data=json.dumps({
+            "source_path": up["source_path"],
+            "name": "four_angle_cardinal",
+            "angles": 4,
+            "frames": "3",
+            "source_projs": 2,
+            "render_resolution": 12,
+            "native_compat": False,
+        }),
+        content_type="application/json",
+    )
+    assert run_resp.status_code == 200
+    job_id = run_resp.get_json()["job_id"]
+
+    wb_resp = client.post(
+        "/api/workbench/load-from-job",
+        data=json.dumps({"job_id": job_id}),
+        content_type="application/json",
+    )
+    assert wb_resp.status_code == 201
+    session_id = wb_resp.get_json()["session_id"]
+
+    payload_resp = client.post(
+        "/api/workbench/web-skin-payload",
+        data=json.dumps({"session_id": session_id}),
+        content_type="application/json",
+    )
+    assert payload_resp.status_code == 200
+    payload = payload_resp.get_json()
+    assert payload["preview_normalized"] is True
+
+    preview_xp = read_xp(Path(payload["xp_path"]))
+    assert preview_xp["width"] == 126
+    assert preview_xp["height"] == 80
+    visual = preview_xp["cells"][2]
+    cols = preview_xp["width"]
+    frame_w = 7
+    frame_h = 10
+    row_counts = []
+    for row in range(8):
+        n = 0
+        for y in range(frame_h):
+            for x in range(frame_w):
+                idx = (row * frame_h + y) * cols + x
+                if visual[idx][0] not in (0, 32):
+                    n += 1
+        row_counts.append(n)
+    assert row_counts[0] > 0
+    assert row_counts[2] > 0
+    assert row_counts[4] > 0
+    assert row_counts[6] > 0
+    assert row_counts[1] == 0
+    assert row_counts[3] == 0
+    assert row_counts[5] == 0
+    assert row_counts[7] == 0
 
 
 def test_workbench_browse_delete_rejects_bundle_owned_session(client):
