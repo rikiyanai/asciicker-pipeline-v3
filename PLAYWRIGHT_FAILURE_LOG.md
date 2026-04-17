@@ -5,6 +5,982 @@
 
 ---
 
+## Fix Attempt — Semantic Frame Authoring / Deferred Projection Model (2026-04-17)
+
+This entry records the current fix attempt for the source-to-frame authoring lane after the previous frame-nav edits exposed the wrong product model.
+
+### Corrected target
+
+1. **Authoring geometry must not be rigidly trapped at native export size. HIGH.**
+   - The current `player_native_idle_only` template seeds native geometry (`126x80`, `cell_w=7`, `cell_h=10`) immediately.
+   - That is too rigid for practical authoring. If the imported art is taller/wider or the current conversion is too compressive, the user must be able to author with larger per-frame dimensions.
+   - Larger authored frames may imply a larger runtime footprint later. That is acceptable. Over-compressing the source art during authoring is not.
+
+2. **Frame navigation must expose semantic frame slots, not projection-expanded engine columns. HIGH.**
+   - Current idle-only template metadata is `angles=8`, `frames=[1,8]`, `projs=2`.
+   - The current browser model expands this to `sum(anims) * projs = 18` frame columns too early.
+   - The user-facing frame-nav target should instead be the semantic animation surface: `8` angle rows by `9` semantic frames (`1 idle + 8 walk`).
+   - Source boxes from `Find Sprites` and manual draw-box flows should drop into those semantic slots.
+
+3. **Projection columns must be generated automatically later, not authored manually. HIGH.**
+   - A real source PNG will not ship with Asciicker-specific projection variants.
+   - The current workbench assumes projections as part of the immediate authoring grid, which is the wrong ownership boundary.
+   - Correct model: author one canonical semantic frame sheet, then derive engine projection-expanded output during export/build/runtime-prep.
+
+4. **Frame-slot deletion semantics must be split from clear-content semantics. HIGH.**
+   - Existing `#deleteCellBtn` is a proven clear-content action.
+   - If the user wants to remove a semantic frame slot entirely, that must be a separate `Delete Frame` action with explicit shift/repack behavior.
+
+### Planned cut for this fix attempt
+
+1. Record the semantic-slot model here first.
+2. Audit where template creation, grid rendering, drag/drop, whole-sheet hydration, and export assume `sum(anims) * projs` too early.
+3. Move frame-nav authoring to semantic slots while preserving a single owner path.
+4. Keep projection generation deferred until export/build.
+5. Re-verify source-box drag using real shipped UI actions only.
+
+### Local code landed in this attempt
+
+1. **Template-backed blank sessions now seed semantic authoring projections separately from export projections.**
+   - `config/template_registry.json` now declares `source_projs=1` for the player/attack/death template actions while keeping `projs=2`.
+   - `workbench_create_blank_session()` now persists `source_projs` from the action spec instead of blindly copying `projs`.
+   - Local API proof on `http://127.0.0.1:5071/api/workbench/create-blank-session` now returns `source_projs=1`, `projs=2` for `player_native_idle_only/idle`.
+
+2. **Workbench frame-nav geometry now follows authoring/source projections instead of export projections.**
+   - `web/workbench.js` now derives frame-nav column count and frame width from `sourceProjs` (`authoringProjectionCount()`) rather than `projs`.
+   - Intended localhost effect for idle-only: `9` semantic frame slots in `#wsFrameNav`, each wider than the old projection-expanded slots.
+
+3. **Template export no longer trusts persisted blank-session layers when semantic authoring needs projection expansion.**
+   - `workbench_export_xp()` now rebuilds template-family native layers instead of writing template persisted layers straight through.
+   - New helper path expands `source_projs=1 -> projs=2` automatically during export with mirrored second projection generation, matching the existing pipeline's projection convention.
+
+### Local browser proof in this attempt
+
+1. **Idle-only template now renders semantic frame-nav counts on localhost.**
+   - Headless browser check on `http://127.0.0.1:5071/workbench` after `Apply Template` observed `8` angle rows and `9` visible frame cells on row 0 (`72` total frame cells), with session summary reporting `source_projs=1`, `projs=2`, `semantic_frame_cols=9`, `frame_cols=9`.
+
+2. **`Find Sprites` -> drag auto-found source box into `#wsFrameNav` now commits into a frame slot.**
+   - Local diagnostic run used `tests/fixtures/known_good/cat_sheet.png`.
+   - Workflow: apply idle-only template -> upload PNG -> click `Find Sprites` -> drag first detected source box to frame cell `(row=0,col=0)`.
+   - Observed result: `selectedRow=0`, `selectedCols=[0]`, target frame non-empty cell count `0 -> 140`, status text `Dropped 1 source sprite box(es) into 1 grid row(s)`.
+
+### Remaining gaps after this landed slice
+
+- No user-facing `Delete Frame` action exists yet; only clear-content (`#deleteCellBtn`) remains.
+- Larger-than-native authoring geometry is only partially addressed so far. This slice widens semantic frame slots within the existing template sheet width; it does not yet provide a complete resizable authoring/export contract.
+- The specific browser-proven drag path is still narrow: one auto-found `Find Sprites` source box can now be dropped into `#wsFrameNav`, but the broader sprite-by-sprite authoring claim is still open until every visible per-sprite box path is proven in the shipped UI.
+- Panel topology is still wrong for the intended working layout. The next layout correction is to place the grid/frame-navigation region between the whole-sheet editor (`10`) and below the source panel (`8`), instead of treating it as an orphaned side placement.
+- Visible/clickable ID tagging is still incomplete. The next immediate task is to tag every user-visible and user-clickable control with stable on-screen identifiers so the user can refer to any panel, button, mode toggle, tab, box, and sub-panel unambiguously.
+- ID naming must follow a parent-child container convention. Child surfaces may retain lineage-based labels such as `10A wsFrameNav` even if they are visually moved, as long as the naming stays stable and the hierarchy is documented.
+
+### User-directed next sequence from this state
+
+1. Commit the current semantic-frame-authoring slice before further UI churn.
+2. Add the missing doc truth first: `Delete Frame`, incomplete sprite-by-sprite drag coverage, grid-panel placement, and full visible/clickable ID tagging remain open.
+3. Treat the immediate next product task as UI-wide ID tagging, not another behavior patch.
+4. After tagging, resume interaction work on:
+   - sprite-by-sprite drag across every visible source-box path
+   - real `Delete Frame` slot removal semantics
+   - final grid/frame-nav placement polish under the source/whole-sheet relationship
+
+### Current classification
+
+- This is a **product-model correction**, not just a cosmetic frame-nav layout tweak.
+- Prior fixes that only moved `#wsFrameNav` around without changing semantic/projection ownership were at best partial.
+
+---
+
+## Code Review — Steps 3–4 Workbench Refactor (2026-04-15)
+
+Review of commits `c836cde`–`4ff7a56` (5 commits). 12 reviewers, 63 active findings, 5 pre-existing separated. Run artifact: `.context/compound-engineering/ce-review/20260415-070856-7524f161/`.
+
+**Verdict:** Not ready — 4 P0 test suite failures block CI, plus multiple P2 regressions.
+
+### P0 — Test Suite Broken (4 findings)
+
+All four are tests that reference deleted backend behavior introduced in this commit range.
+
+| # | Test | Root cause |
+|---|------|-----------|
+| 1 | `test_web_skin_payload_runtime_scope_is_explicit` (line 189) | `runtime_scope` field and `invalid_runtime_scope` error code deleted from `service.py`. Test always fails. |
+| 2 | `test_save_session_persists_root_geometry_and_horizontal_cuts` (line 245) + `test_root_blank_session_returns_all_layer_names` (line 301) + `test_root_blank_session_rejects_invalid_geometry` (line 407) + `test_root_blank_session_rejects_oversized_dimensions` (line 429) | All use old `blank_session` dict payload to `/api/workbench/create-blank-session`. `app.py` now requires `template_set_key` + `action_key`. |
+| 3 | `test_run_to_workbench_to_export` (line 172) | `assert web_skin_data["runtime_scope"] == "player_only"` — key no longer in response. Line 174: `assert "wolfie-0000.xp" not in override_names` — wolfie IS now included because `_termpp_skin_override_names()` unconditionally generates all 5 families. |
+| 4 | `test_save_session_round_trips_root_owner_metadata` (line 332) | **Confirmed OK** — service.py `_session_payload` and `workbench_save_session` DO persist `locked_layers`, `editor_mode`, `active_tool`, `draw_state`. Testing reviewer flag was false alarm. |
+
+### P1 — High
+
+| # | Issue | File | Fix |
+|---|-------|------|-----|
+| 5 | `_resizeDocument` / `_parseResizeInput` / `_resizeFlatCells` entirely untested | `web/whole-sheet-init.js:1114` | Add Python or JS unit tests for resize path |
+| 6 | `_onKeyDown` keyboard authority handler has no test coverage | `web/whole-sheet-init.js:1276` | Add JS unit tests |
+| 7 | `saveSessionState` unconditionally sends `grid_cols`/`grid_rows` — blank-state save corrupts session dims to `buildWholeSheetDocumentFromState()` value | `web/workbench.js:3749` | Guard with `rootDoc.hasDocument` |
+| 8 | `OvalTool` placed into `_forEachTool` without confirming it implements `setGlyph`/`setColors`/`setApplyModes` | `web/whole-sheet-init.js:659` | Verify interface or add adapter wrapper |
+| 9 | `_historyCanUndo` uses `undoStack.length > 1` — correct only if UndoStack does not pop on undo | `web/whole-sheet-init.js:259` | Verify UndoStack API contract |
+
+### P2 — Moderate (selected)
+
+| # | Issue | File |
+|---|-------|------|
+| 10 | `create_root_blank_session` MCP tool always returns 400 — sends `blank_session` dict to endpoint now requiring `template_set_key`/`action_key` | `scripts/workbench_mcp_server.py` |
+| 11 | `_termpp_skin_override_names()` generates all 5 families unconditionally — Python disk-write scope is now inconsistent with JS inject path (`OVERRIDE_MODE === "full_parity"` guard still present in JS) | `src/pipeline_v2/service.py:68` |
+| 12 | `hydrateWholeSheetEditor()` called fire-and-forget — `renderAll()` fires before `mount()` resolves; first post-import save can write stale data | `web/whole-sheet-init.js` |
+| 13 | `_wsDrawSaveTimer` not cleared on session switch — 1500ms timer from session A can fire against session B state | `web/workbench.js` |
+| 14 | `_onCanvasWheel` fires `_emitDocumentChanged` → `renderAll()` on every tick — 30–60 full redraws/sec on trackpad | `web/whole-sheet-init.js:1793` |
+| 15 | Keydown listener re-registered on concurrent remount (double-fires Ctrl+Z) | `web/whole-sheet-init.js` |
+| 16 | Resize rejected by backend leaves client geometry out of sync — no rollback path | `web/whole-sheet-init.js` |
+| 17 | Inspector cell edits (paste/flip/fill/find-replace) bypass whole-sheet undo stack | `web/workbench.js:1464` |
+| 18 | `'r'` key handled by both `whole-sheet-init.js` (`_switchTool('rect')`) and `workbench.js` source panel handler (`setSourceMode("row_select")`) simultaneously | `web/workbench.js:7090` |
+| 19 | `GET /api/workbench/templates` no longer returns `enabled_families` — `workbench.js` fail-closes and shows no bundle actions | `src/pipeline_v2/app.py` |
+
+### Fixes Applied This Session
+
+P0 test failures fixed (items 1–3), MCP tool fixed (item 10), wheel throttle added (item 14), draw save timer flush on session load (item 13). Items 5–9, 11–12, 15–19 are residual actionable work.
+
+---
+
+## Browser Owner Process Failure And Rebuild Reset (2026-04-16)
+
+This entry records a process failure, not a shipped fix.
+
+### What failed
+
+1. **The old browser owner was misidentified even after repeated deletion-first instructions. HIGH.**
+   - The stale cleanup passes deleted obvious sub-owners (`wbAnalyze`, `/wizard`, old geometry inputs, and related proof helpers), but the real owner remained alive in `web/workbench.html` and `web/workbench.js`.
+   - That violated the active canon rule: if the ownership boundary moves, delete the old owner first instead of trimming around it.
+
+2. **Completion was claimed while the real owner shell/controller still existed. HIGH.**
+   - The peer-panel wrapper shell and its large browser-state/controller surface still owned source/template/runtime/session behavior even after the narrower deletions were reported as complete.
+   - This was not a spec ambiguity. Section 1 and the repo instructions were explicit enough; the failure was execution.
+
+3. **The correct reset was user-forced full deletion of the old browser owner. HIGH.**
+   - `web/workbench.html` was deleted from the working tree.
+   - `web/workbench.js` was deleted from the working tree.
+   - At reset time, `src/pipeline_v2/app.py` still routed `/workbench` to that file path, so the workbench route was intentionally broken until the rebuild landed.
+
+### Canon consequence
+
+- The rebuild must start from a blank browser boundary.
+- The surviving root editor authority is `web/whole-sheet-init.js` plus `web/rexpaint-editor/*`.
+- The new `web/workbench.html` and `web/workbench.js` may preserve public IDs and debug hooks for proof compatibility, but they must not reintroduce peer-panel ownership over the document root.
+
+---
+
+## Browser Owner Rebuild — Blank Boundary Proof (2026-04-16)
+
+This pass records the rebuilt browser owner after the deletion-first reset. Unlike the section above, this is live local code plus verification evidence.
+
+### Fixed in local code
+
+1. **`web/workbench.html` and `web/workbench.js` were recreated from scratch around the surviving root owner.**
+   - Evidence: the browser shell now mounts `window.__wholeSheetEditor` immediately into `#wholeSheetMount`, keeps the whole-sheet surface visible as the root editor, and treats source/runtime/proof panels as subordinate wrappers.
+
+2. **The remaining peer browser shell was deleted instead of preserved as a separate owner.**
+   - Evidence: the standalone alpha/header peer sections are gone; source/frame/runtime/obs now open as toggleable drawers inside `#wholeSheetPanel` instead of living as separate top-level browser sections.
+
+3. **Wrapper save/load behavior now stays on the root-owner boundary.**
+   - Evidence: manual `flushSave()` now forces a root-built payload even when autosave suppression is enabled, so Step 4 boundary proof sees `buildSessionPayload()` from `web/whole-sheet-init.js` rather than a wrapper-built substitute.
+   - Evidence: immediate resize-save failure now rolls the root document back through `rollbackDocument()` instead of leaving the browser/editor geometry diverged.
+   - Evidence: document-change autosaves now defer while pointer sessions are active, so two-touch gesture collapse no longer loses the surviving touch's resumed tool ownership mid-save.
+
+4. **The root `/api/run` proof contract was refreshed to a canon-valid native run shape.**
+   - Evidence: `tests/test_contracts.py` now exercises `cat_sheet.png` as a 2-angle, 3-frame uniform-grid sheet that actually fits the default native player output contract.
+   - Evidence: `src/pipeline_v2/app.py` now forwards optional `native_compat` / `target_cols` / `target_rows` fields instead of silently dropping them.
+
+### Verification
+
+- `node --check web/workbench.js` — PASS
+- `python3 -m py_compile src/pipeline_v2/app.py` — PASS
+- `python3 -m pytest tests/test_contracts.py tests/test_base_path.py -q` — PASS
+- `npx playwright test tests/playwright/step4-root-proof.spec.js --reporter=list` — PASS (6/6)
+
+### Remaining gaps unchanged
+
+- Canonical manifest authoring is still JSON-first; interactive slicer tooling is still missing.
+- Family expansion and mounted authoring coverage remain open outside the rebuilt browser boundary itself.
+
+---
+
+## Runtime Drawer Regression — TERM++ Skin Surface Hidden By Layout Cut (2026-04-16)
+
+This entry records a new process failure introduced during the delete-first shell cut.
+
+### What failed
+
+1. **The live TERM++ / Skin Dock surface was made effectively invisible by the new drawer model. HIGH.**
+   - Evidence at regression time: `web/workbench.js` booted with `activeDrawer: "source"`.
+   - Evidence at regression time: `web/workbench.html` hid `#runtimeDrawer` behind a default-closed drawer toggle labeled only `Runtime`.
+   - Evidence at regression time: the visible top-level controls no longer said `TERM++` or `Skin`, so the shipped localhost page read as if the TERM++ skin path no longer existed.
+
+2. **This was the wrong kind of deletion-first cut. HIGH.**
+   - The peer shell was deleted, but the replacement layout hid a still-required runtime surface instead of preserving a clear subordinate path.
+   - That is not acceptable evidence of parity progress. It is a discoverability and ownership regression introduced by the refactor itself.
+
+3. **The dedicated TERM++ skin lab still exists, but the main workbench stopped making that fact legible. HIGH.**
+   - Evidence: `web/termpp_skin_lab.html` and `web/termpp_skin_lab.js` still exist.
+   - Evidence: the runtime embed path still exists in `web/workbench.js` (`/termpp-web-flat/index.html`), but the live browser surface no longer makes `TERM++` explicit.
+
+### Classification
+
+- Process failure: I optimized for deleting the peer shell and did not stay suspicious enough about whether the resulting localhost page still communicated the shipped runtime surface clearly.
+- The correct standard is not merely "the controls still exist somewhere in DOM." The localhost page must make the runtime / TERM++ path explicit and legible.
+
+### Partial local follow-up that was still wrong
+
+1. **The live page did make the TERM++ / Skin Dock surface explicit again, but it did it the wrong way. HIGH.**
+   - Evidence: `web/workbench.js` now boots with `activeDrawer: ""`, so the root editor opens uncluttered instead of with the source drawer pre-expanded.
+   - Evidence: `web/workbench.html` labels the visible runtime control `TERM++ / Skin Dock`, but it also exposed `Open Skin Lab` as a peer product action.
+   - Evidence: that separate `Skin Lab` path is not part of the actual workbench product contract; it is a debug harness leak.
+
+2. **The live page no longer leaks canon-internal Section / wrapper wording into the primary UI.**
+   - Evidence: the visible `Section 1` / `Section 2` labels are gone from `web/workbench.html`.
+   - Evidence: the source drawer is now presented as `Source Sheet`, and the raw JSON editor is demoted under `Advanced layout JSON` instead of dominating the drawer copy.
+
+3. **Viewport-only root changes no longer drive wrapper redraw churn.**
+   - Evidence: `web/workbench.js::onWholeSheetDocumentChanged()` now treats `kind === "viewport"` and `saveReason === "whole-sheet-viewport"` as a fast path, skipping frame-grid, preview-canvas, and debug-dump mirror updates.
+   - Expected localhost effect: pan/zoom no longer pounds the wrapper layer when the user is only moving the root editor viewport.
+
+Residual gap: source authoring is still layout-JSON-backed under the hood; the interactive slicer workflow is still not rebuilt yet.
+
+---
+
+## Debug Harness Leak — `Skin Lab` Surfaced As Product UI (2026-04-16)
+
+This entry exists because the earlier runtime-drawer notes were still too soft about the actual failure.
+
+### What failed
+
+1. **`Skin Lab` was surfaced on `/workbench` as if it were a legitimate user-facing workflow. HIGH.**
+   - Evidence: `web/workbench.html` exposed `Open Skin Lab` directly in the TERM++ / Skin Dock drawer.
+   - Evidence: `src/pipeline_v2/app.py` still serves `/termpp-skin-lab` as a separate page, backed by `web/termpp_skin_lab.html` and `web/termpp_skin_lab.js`.
+   - Reality: that page is a debug harness for manual runtime poking. It is not the product.
+
+2. **That leak rewrote the runtime mental model into bullshit. HIGH.**
+   - The correct user-facing model is singular: whatever is currently authored in the whole-sheet XP editor gets injected into TERM++ preview via `Test This Skin`.
+   - Surfacing `Skin Lab` suggested there were two peer runtime products or two equally valid ways to test the same authored sheet.
+   - That was a frame failure, not just a bad label.
+
+3. **The public behavior-frozen page never made that mistake. HIGH.**
+   - Live evidence from `https://rikiworld.com/xpedit`: the public page exposes `Test This Skin`, `Upload Skin`, and advanced Skin Dock controls, but no `Skin Lab` action.
+   - That means the local refactor regressed below the frozen public behavior by inventing a new visible runtime owner instead of preserving the existing one.
+
+### Classification
+
+- Product-boundary violation: a debug harness leaked into the shipped `/workbench` surface.
+- Canon violation: Section 2 runtime tooling is allowed to help proof the current editor state; it is not allowed to redefine the product into separate runtime surfaces.
+- Process failure: I preserved and then promoted an implementation artifact instead of deleting or hiding it from the main UX.
+
+### Required rule going forward
+
+- If `/termpp-skin-lab` remains in-repo, it stays explicitly diagnostic and off the main `/workbench` user path.
+- The visible runtime lane on `/workbench` must continue to say only one thing: `Test This Skin` injects the current XP editor state into TERM++ preview.
+
+### Local correction already landed
+
+- `web/workbench.html` no longer exposes `Open Skin Lab` on the runtime drawer.
+- The runtime drawer now centers `Test This Skin` and `Upload Skin`, with extra preview controls demoted under `Advanced preview controls`.
+
+---
+
+## Public UI Diff — `rikiworld.com/xpedit` vs Local `/workbench` (2026-04-16)
+
+Evidence for this section comes from live page fetches on 2026-04-16:
+
+- public behavior-frozen page: `curl -L https://rikiworld.com/xpedit`
+- local refactor page: `curl -fsS http://127.0.0.1:5071/workbench`
+
+### Findings
+
+1. **Local `/workbench` incorrectly surfaced a separate runtime product path (`Open Skin Lab`). HIGH.**
+   - Public evidence: the shipped `https://rikiworld.com/xpedit` page exposes `Test This Skin` and `Upload Skin`, but it does not expose any `Open Skin Lab` action.
+   - Local evidence before correction: `web/workbench.html` exposed `Open Skin Lab` next to the embedded TERM++ preview controls.
+   - Canon consequence: this violated the user-facing runtime contract. The workbench is supposed to test the current editor sheet in TERM++ preview, not advertise a second runtime product surface.
+
+2. **Local `/workbench` fragmented the primary runtime action instead of centering the current-editor injection lane. HIGH.**
+   - Public evidence: the behavior-frozen page centers one primary action, `Test This Skin`, and hides its extra preview controls under advanced disclosure.
+   - Local evidence before correction: the runtime drawer exposed `Open TERM++ Preview`, `Apply In Preview`, `Apply + Restart`, and `Apply Current XP` as peer visible actions.
+   - Canon consequence: this diluted the basic mental model that the TERM++ lane exists to inject whatever is currently authored in the XP editor.
+
+3. **Local `/workbench` source authoring regressed below both the public UI and the canon statement. HIGH.**
+   - Public evidence: `rikiworld.com/xpedit` still exposes visible source-region tools such as `Select`, `Draw Box`, `Drag Row`, `Drag Column`, `Vertical Cut`, and `Find Sprites`.
+   - Local evidence: the current `Source Sheet` drawer exposes no equivalent direct marking controls; it shows a passive source canvas plus `Advanced layout JSON`.
+   - Canon consequence: the current local source surface no longer matches the Application Statement claim that the app "marks source regions, cuts, and selections in a separate source panel." That claim is now only partially true in local localhost.
+
+4. **Whole-sheet visibility is intentionally different, and that part should not be rolled back.**
+   - Public evidence: `rikiworld.com/xpedit` still keeps the whole-sheet editor hidden under a separate `Focus Whole-Sheet` flow.
+   - Local evidence: `/workbench` keeps the whole-sheet root mounted and visible from startup.
+   - Canon consequence: this is the intended Section 1 direction. It is a deliberate local refactor divergence from the frozen public page, not a reason to restore the old hidden-owner behavior.
+
+### Local correction landed from this re-audit
+
+- `web/workbench.html` no longer exposes `Open Skin Lab` on the user-facing runtime drawer.
+- The local runtime drawer now centers `Test This Skin` as the primary TERM++ action and demotes the extra preview controls into `Advanced preview controls`.
+
+Residual gap after this correction:
+
+- local source authoring is still behind the public UI and the canon statement because the direct slicer controls have not been rebuilt yet.
+
+---
+
+## Localhost UI Audit — Control Surfaces Still Wrong (2026-04-16)
+
+This entry exists because the live localhost page is still confusing and misleading even after the earlier runtime cleanup.
+
+### What failed
+
+1. **Local `/workbench` collapsed multiple public product surfaces into one TERM++ drawer. HIGH.**
+   - Local evidence: `web/workbench.html` now places `Test This Skin`, `Upload Skin`, recorder controls, verification controls, advanced preview controls, and the embedded iframe all inside one `TERM++ / Skin Dock` drawer.
+   - Public evidence: `https://rikiworld.com/xpedit` keeps these as separate surfaces:
+     - `Recorder`
+     - `Skin Test dock(Term++ Skin Equiv on asciid)`
+     - `Verification (Term++ / QA)`
+     - `Session`
+   - Why this is incorrect: the local page no longer teaches clear task boundaries. Runtime test, recorder capture, and verification are different jobs, but localhost now presents them as one overloaded bucket.
+
+2. **The local recorder surface is a crippled stub while still presenting itself like a serious workflow. HIGH.**
+   - Local evidence: `web/workbench.js` recorder only records bare `click` and `change` events, returns a raw event array, and exposes no summary or timing UI.
+   - Public evidence: `public_workbench.js` uses `getUiRecorderData()`, `refreshUiRecorderUi()`, `UI_RECORDER_AUTO_START`, and records `keydown`, `error`, `unhandledrejection`, and `status_change` events with snapshots and timing metadata.
+   - Public UI evidence: `public_workbench.html` includes a dedicated `Recorder` block with both `uiRecorderStatus` and `uiRecorderSummary`.
+   - Why this is incorrect: localhost still shows `Start Recording`, `Stop Recording`, `Clear`, and `Download JSON`, but the implementation no longer matches the richer recorder/recipe surface that the public UI and old proof flow assumed. The buttons imply capability that is no longer there.
+
+3. **The local source surface still deleted the public source owner and replaced it with layout-JSON operations. HIGH.**
+   - Local evidence: `web/workbench.html` source drawer exposes `Load Source`, `Apply Source`, `Reload Layout`, `Reset Draft`, `Seed Grid`, `Save Layout`, and `Advanced layout JSON`.
+   - Public evidence: `public_workbench.html` exposes direct source tools: `Select`, `Draw Box`, `Drag Row`, `Drag Column`, `Vertical Cut`, `Delete Box`, `Find Sprites`, `Rapid Add`, `Threshold`, and `Min Size`.
+   - Public code evidence: `public_workbench.js` still owns `setSourceMode()` and the direct source tool event wiring.
+   - Why this is incorrect: the current localhost page removed the visible direct marking workflow that users actually understand and replaced it with internal layout-management operations. That is exactly the kind of abstraction leak the canon is supposed to prevent.
+
+4. **Local labeling still sounds like a refactor diagram instead of the shipped product. MEDIUM.**
+   - Local evidence: `Source Sheet`, `Frames / Preview`, `TERM++ / Skin Dock`, and `Session Data` are exposed as drawer labels.
+   - Public evidence: the behavior-frozen page still teaches the workflow as `Upload + Convert`, `Source Panel`, `Grid Panel`, `Recorder`, `Skin Test dock(Term++ Skin Equiv on asciid)`, `Verification (Term++ / QA)`, `Session`, and `Export`.
+   - Why this is incorrect: the local page is still naming surfaces after internal architecture decisions instead of after the concrete user tasks they perform.
+
+### Classification
+
+- Product-clarity failure: localhost no longer communicates the workbench in the order a human uses it.
+- Canon violation: the public/source/runtime contract was not rebuilt faithfully before internal refactor language and drawer structure were exposed.
+- Process failure: I deleted stale owners, but then I rebuilt the replacement around architecture categories and debug affordances instead of the public workflow the user actually expects.
+
+### Required direction from this audit
+
+- Restore a first-class direct source authoring surface instead of making layout JSON the visible substitute.
+- Split recorder and verification back out of the TERM++ drawer so their scopes are obvious again.
+- Treat the public `xpedit` wording and task grouping as the starting point for the rebuild, not as optional legacy copy.
+
+---
+
+## Browser Owner Cleanup — Deletion-First Pass (2026-04-16)
+
+This pass re-audited the live browser surface against the current canon and deleted the stale ownership paths that were still pretending the old direct/analyze flow existed.
+
+### Fixed in local code
+
+1. **The deprecated browser `/wizard` owner is hard-disabled.**
+   - Evidence: `src/pipeline_v2/app.py` now redirects `/wizard` to `/workbench`, and `web/wizard.html` / `web/wizard.js` are deleted.
+
+2. **The workbench Load Source panel no longer owns layout geometry.**
+   - Evidence: `web/workbench.html` no longer exposes `wbAngles`, `wbFrames`, or `wbSourceProjs`.
+   - Evidence: `web/workbench.js::wbRun()` now materializes geometry only from canonical `source_manifest` layout or the active root-session/template geometry.
+
+3. **The deleted `wbAnalyze` owner is gone from the live browser and proof surface.**
+   - Evidence: `web/workbench.html` has no `wbAnalyze`, `wbRun` is the visible `Apply Source` action, and browser harnesses/scripts were updated from `Upload → Analyze → Convert` to template-backed `Load Source → Apply Source`.
+
+4. **Source preview loading no longer blocks upload or session activation.**
+   - Evidence: `web/workbench.js::loadSourceImageFromServer()` / `previewLocalSourceImage()` now fail open on timeout, and upload/session-manifest paths no longer await preview image fetch before enabling the next authoritative action.
+
+5. **The upload/apply output sink is restored and stale missing bindings now fail open.**
+   - Evidence: `web/workbench.html` again exposes `wbRunOut`.
+   - Evidence: missing inspector-only DOM controls no longer throw startup errors during `bindUI()`.
+
+6. **The browser proof fixtures now follow the native player path.**
+   - Evidence: updated e2e / Playwright / UI harness defaults now use `SMALLTESTPNGs/player-0100.png` as the primary PNG fixture instead of generic `cat_sheet.png`.
+
+### Verification
+
+- `python3 -m pytest tests/test_base_path.py tests/test_workbench_flow.py tests/test_workbench_validation.py tests/test_workbench_mcp_server.py -q` — PASS
+- `python3 -m pytest tests/e2e/test_browser_flow.py -q` — PASS
+- `node --check web/workbench.js` — PASS
+- `node --check scripts/workbench_png_to_skin_test_playwright.mjs` — PASS
+- `node --check scripts/workbench_bundle_manual_watchdog.mjs` — PASS
+- `node --check scripts/ui_tests/subagents/workbench_agents.mjs` — PASS
+- `node --check scripts/ui_tests/subagents/workbench_coverage_agent.mjs` — PASS
+- `node --check scripts/ui_tests/runner/cli.mjs` — PASS
+- `node --check scripts/xp_fidelity_test/run_randomized_bundle_test.mjs` — PASS
+- `npx playwright test tests/playwright/full-workflow-with-game.spec.js --list` — PASS
+
+---
+
+## Step 4 Root-Ownership Review Intake (2026-04-15)
+
+Working-tree review of the uncommitted delta from `HEAD 6cb839d`. This is a code-state intake entry, not a proof claim. Only findings re-verified against live code or focused tests are recorded here.
+
+### Verified regressions / residuals
+
+1. **Bundle action availability still depends on deleted `enabled_families` gating. HIGH.**
+   - Evidence: `src/pipeline_v2/app.py::api_wb_templates()` now returns the template registry without `enabled_families`, while `web/workbench.js::getEnabledActions()` still fail-closes when that field is absent.
+   - Canon alignment: this is the implementation form of `S2-FAM-02`; Section 2.3.5 already says authorable scope comes from template-set actions, not a separate family list.
+
+2. **Session load remains non-atomic and unguarded. HIGH.**
+   - Evidence: `web/workbench.js::hydrateLoadedSession()` writes `state.sessionId`, source-manifest fields, and multiple UI/session flags before its first `await ensureWholeSheetEditorReady()`.
+   - Evidence: `web/workbench.js::loadSession()` / `loadFromJob()` have no load-in-flight guard, so two rapid calls can overlap through fetch + hydrate.
+   - Impact: failed or concurrent loads can leave workbench metadata describing one session while the root editor has loaded another.
+
+3. **Prefixed root blank-session path still 400s on `{}` payload. HIGH.**
+   - Evidence: `tests/test_base_path.py::test_create_root_blank_session_under_prefix` still expects `POST /xpedit/api/workbench/create-blank-session` with `{}` to return `201`, but `src/pipeline_v2/app.py` now requires `template_set_key` + `action_key`.
+   - Focused verification: `python3 -m pytest tests/test_base_path.py -k create_root_blank_session_under_prefix -q` — FAIL (`201` expected, `400` actual).
+
+5. **`/api/run` still advertises dead request fields. MEDIUM.**
+   - Evidence: `src/pipeline_v2/models.py::RunConfig` still validates `force_fallback` and `crop_box`, but `src/pipeline_v2/app.py::api_run()` no longer passes either field into the model constructor.
+   - Impact: request-model validation no longer matches the live handler contract.
+
+6. **`_normalize_storage_id()` misclassifies falsy invalid ids as missing. MEDIUM.**
+   - Evidence: `src/pipeline_v2/service.py::_normalize_storage_id()` uses `str(raw_value or "").strip()`, so `0` becomes `""` and returns the `missing_*_id` path instead of `invalid_*_id`.
+
+### Explicit non-findings from the same review
+
+- `validate-xp` remains intentionally non-exporting in-repo, but the current compatibility contract returns a predicted `xp_path` together with `exported=false`.
+  - Evidence: `tests/test_workbench_validation.py::test_validate_xp_does_not_create_export_artifact` asserts the endpoint returns `xp_path` while still leaving no export artifact on disk.
+  - Focused verification: `python3 -m pytest tests/test_workbench_validation.py -k validate_xp_does_not_create_export_artifact -q` — PASS.
+
+- `state.jobId` was not actually lost from `hydrateLoadedSession()`.
+  - Evidence: `web/workbench.js::hydrateLoadedSession()` still assigns `state.jobId = String(j.job_id || state.jobId || "")`.
+
+- The claimed mid-load `onWholeSheetDocumentChanged()` double-sync is not evidenced on the current load path.
+  - Evidence: `hydrateLoadedSession()` calls `wsEditor.loadSessionPayload(j, { skipNotify: true })`, so the root load path suppresses the normal change notification during session hydration.
+
+### Local continuation after intake
+
+1. **`enabled_families` client gating removed in the current working tree.**
+   - Evidence: `web/workbench.js::getEnabledActions()` now derives action availability directly from `template_set.actions`, and `scripts/workbench_mcp_server.py::get_templates()` no longer documents `enabled_families`.
+   - Focused verification: headless browser check against a local `pipeline_v2.app` server rendered bundle action tabs for `player_native_full`:
+     - `["Idle / Walk ○","Attack ○","Death ○"]`
+
+2. **Session load now has an explicit load lock and staged side-state application.**
+   - Evidence: `web/workbench.js::withSessionLoadLock()` now wraps `loadSession()` / `loadFromJob()`, and `hydrateLoadedSession()` now waits for the root load before applying session metadata/source-side state to `state.*`.
+   - Focused verification: headless browser probe of two overlapping `window.__wb_debug.loadSession()` calls returned `[true, false]`, leaving the first session active.
+
+### Canon consequence
+
+- These findings did **not** change the Step 4 next-step order at intake time.
+- The two remaining canon blockers from that intake, agent-native text parity on the MCP path and inspector/undo coupling, were both closed in the `2026-04-16` completion pass recorded below.
+- The items above remain historical intake evidence, not the final Step 4 state.
+
+---
+
+## Verifier / Watchdog / Recipe-System Reassessment (2026-04-15)
+
+This reassessment was triggered only after the user explicitly asked whether the old watchdog / recipe-generator / verifier stack had become stale after the whole-sheet / root-ownership refactor. The fact that we did **not** ask this earlier is itself a process failure.
+
+### Process failure
+
+1. **We forgot to re-audit the verification machinery after changing the editor ownership boundary. HIGH.**
+   - The Step 4 work moved root session load/save translation and session-switch behavior, but we did not immediately ask whether the existing watchdog / verifier / recipe-generator stack still modeled the shipped user-reachable surface.
+   - This is not a small omission. The verifier machinery is supposed to be the contract that protects UI/UX regressions and user-reachable workflow drift. Failing to re-check it after an ownership move means code-state advanced while proof-state assumptions were left stale.
+
+2. **We treated local implementation proof and canonical action-coverage machinery as separable when they are coupled. HIGH.**
+   - Recent local proof work used targeted Playwright probes and `__wb_debug` helpers to validate specific refactor boundaries.
+   - That was valid for diagnosis, but we did not pair it with an immediate reclassification of the older canonical verifier stack. The result is the exact drift pattern already warned about elsewhere in this log: code changes move, but verifier architecture and terminology lag behind.
+
+### Current code-state truth
+
+1. **The old Python truth-table repaint lane is legacy, not the right foundation for full user-action coverage.**
+   - Evidence: `scripts/xp_fidelity_test/recipe_generator.py` still frames the problem as generating repaint recipes from XP truth tables, including inspector-centric and layer-2-focused repaint modes.
+   - Existing canon already records the core flaw: the truth-table extractor read all layers, but the generator/verifier path discarded everything except layer 2.
+
+2. **The newer JS verifier inventory is the salvageable foundation.**
+   - Evidence: `scripts/xp_fidelity_test/action_registry.json` + `action_registry_schema.json` model user actions with `generatorReadiness`, `acceptanceEligible`, `gestureType`, `preconditions`, and `postconditions`.
+   - Current inventory snapshot:
+     - 77 actions total
+     - 60 `READY`
+     - 13 `NEEDS_DESIGN`
+     - 4 `DEFERRED`
+
+3. **The current JS recipe generator / DOM runner still cannot cover the most important editor actions.**
+   - Evidence: `scripts/xp_fidelity_test/recipe_generator.mjs` explicitly limits itself to fixed first-pass recipes with no canvas gestures, no keyboard workflows, and no whole-sheet painting.
+   - Evidence: `scripts/xp_fidelity_test/dom_runner.mjs` explicitly refuses blocked gestures and only supports `click`, `setInputFiles`, `selectOption`, and `fill` in its first pass.
+   - Consequence: the current generator/runner stack cannot synthesize or replay the whole-sheet action family that matters most for Section 1 coverage.
+
+4. **The shared verifier core is still partially drifted and still depends on raw state escape hatches.**
+   - Evidence: `scripts/xp_fidelity_test/verifier_lib.mjs::captureState()` still falls back to `window.__wb_debug._state()` for `actionStates`.
+   - Evidence: this matches the earlier failure-log warning that the shared verifier core remained weaker than the proven runners and had an incomplete state-capture contract.
+
+5. **The bundle watchdog is a downstream runtime smoke, not an editor action-coverage oracle.**
+   - Evidence: `scripts/workbench_bundle_manual_watchdog.mjs` automates bundle upload/convert/apply/runtime-playable checks.
+   - It is still useful for runtime smoke and skin-dock confidence, but it does not model arbitrary editor action sequences and must not be confused with the editor recipe/verifier system.
+
+### Reclassification
+
+- `recipe_generator.py` / old XP truth-table repaint fidelity lane: **legacy diagnostic scaffolding**
+- `action_registry.json` / `action_registry_schema.json`: **keep; this is the right seed for future action coverage**
+- `recipe_generator.mjs`: **keep, but rewrite from fixed recipes into a stateful recipe synthesizer**
+- `dom_runner.mjs`: **keep, but extend to real pointer / keyboard / context-menu / whole-sheet gestures**
+- `verifier_lib.mjs`: **keep, but tighten readiness waits and remove `_state()` dependency from the public capture contract**
+- `workbench_bundle_manual_watchdog.mjs`: **keep as runtime smoke only; not part of the editor action-coverage oracle**
+
+### Correct future model
+
+The future system should not be described as “XP truth table -> repaint recipe”. The correct model is:
+
+1. **User-Reachable Action Graph**
+   - Input A is the full user-reachable action surface of the shipped workbench: top-level controls plus actions revealed only after prior actions (tabs, menus, mode changes, context menus, tool-local affordances, etc.).
+
+2. **Goal Artifact Contract**
+   - Input B is a golden target artifact set: for this product, a real Section 1 + Section 2 output such as a known-good converted XP sheet or bundle output derived from representative PNG sprite sheets.
+
+3. **Recipe Synthesizer + Runner**
+   - The synthesizer does not brute-force the full Cartesian product of all actions. It generates valid user-reachable sequences under explicit preconditions, uses deterministic checkpoints, and may insert bounded random-exploration segments between checkpoints to discover unexpected but reachable paths.
+   - The runner executes those sequences through real DOM/pointer/keyboard actions, then checks intermediate state contracts and final artifact equality.
+
+### Consequence for future work
+
+- Do **not** revive the old truth-table repaint lane as the main recipe/verifier architecture.
+- Do **not** call ad hoc `__wb_debug` probes or direct API calls “acceptance verification”.
+- Do build the next system on the action inventory / schema / runner infrastructure, but reframe it around user-reachable action coverage and goal-directed sequence synthesis.
+
+### Local continuation after Section 3 canon landing
+
+This repo now reflects the reassessment in live code/docs:
+
+1. **The canon spec now has a real Section 3 harness contract.**
+   - Evidence: `docs/plans/2026-03-23-workbench-canonical-spec.md` now defines Section 3 as the User-Reachable Action Harness Spec.
+
+2. **Legacy truth-table entrypoints are now explicitly gated out of the default path.**
+   - Evidence: `scripts/xp_fidelity_test/run.sh`, `run_bundle.sh`, `run_bundle_split.sh`, `run_fidelity_test.mjs`, and `run_bundle_fidelity_test.mjs` now fail closed unless `XP_FIDELITY_LEGACY_OK=1` is set.
+   - Verification:
+     - `bash scripts/xp_fidelity_test/run.sh sprites/player-0100.xp` -> exits `2` with a legacy-lane warning
+     - `node scripts/xp_fidelity_test/run_fidelity_test.mjs` -> exits `2` with a legacy-lane warning
+
+3. **The kept scaffolds are now labeled against the Section 3 model instead of the old M2 verifier wording.**
+   - Evidence: `scripts/xp_fidelity_test/README.md`, `recipe_generator.mjs`, `dom_runner.mjs`, `verifier_lib.mjs`, `selectors.mjs`, and `action_registry_schema.json` now describe the action-graph / synthesizer / runner split explicitly.
+
+4. **This is still a cleanup pass, not a proof-of-completeness claim.**
+   - The generator still lacks goal-directed planning.
+   - The DOM runner still lacks canvas / keyboard / context-menu execution.
+   - `verifier_lib.mjs::captureState()` still depends on `_state()` for `actionStates`.
+
+### Canon-Structure Process Failure (2026-04-16)
+
+1. **We did not follow the intended canon shape on the first harness-spec pass. HIGH.**
+   - The requested model was: `Application Statement`, Section 1, Section 2, Section 3 harness, then one unified sequence header.
+   - The prior pass instead preserved extra top-level Sections 4, 5, 6, and 7 for guardrails, repo alignment, research, and sequence.
+   - That was not a user-clarity problem. It was a process failure: we optimized for a low-diff renumber instead of the abstraction boundary the user explicitly requested.
+
+2. **The fix is structural, not cosmetic.**
+   - Guardrails and repo-alignment state are now folded into `Application Statement`.
+   - Research requirements are now folded into Section `1.9` and Section `2.9`.
+   - The final chronology is now `Unified Sequence Of Actions`, not a numbered spec section.
+
+---
+
+## Step 4 Heavy Contract Slice Fix Pass (2026-04-15)
+
+Local follow-up on the `8b103b6`–`712735f` heavy contract slice. This pass addresses the highest-risk save/session/input regressions discovered after the earlier Step 4 review. It is a code-state update, not a proof-run claim.
+
+### Fixed in local code
+
+1. **Session switch now flushes/checkpoints old-session edits before replacement.**
+   - Evidence: `web/workbench.js` now captures debounced save ownership at arm-time, flushes pending draw saves instead of discarding them, and checkpoints dirty sessions before `loadSession()` / `loadFromJob()` switch to the next session.
+
+2. **Text sessions are no longer unsaved-only until explicit commit.**
+   - Evidence: `web/whole-sheet-init.js` now emits debounced document-change saves while typing and quiesces/commits open text sessions before session replacement.
+
+3. **Two-finger gesture handoff no longer leaves the surviving touch inert.**
+   - Evidence: `web/whole-sheet-init.js` now resumes tool ownership for the remaining touch when a pinch gesture collapses back to one active touch.
+
+4. **Viewport contract rounding now matches across client and server.**
+   - Evidence: `src/pipeline_v2/service.py::_normalize_zoom_percent()` now snaps from `float(value)` instead of truncating with `int(value)`, matching the client rounding behavior.
+
+5. **Rejected resize saves now roll the root editor back instead of leaving geometry diverged.**
+   - Evidence: `web/whole-sheet-init.js` now emits a rollback snapshot for resize, and `web/workbench.js` restores that snapshot if the immediate save fails.
+
+6. **Whole-sheet now owns session payload translation at the load/save boundary.**
+   - Evidence: `web/whole-sheet-init.js` now exports `loadSessionPayload()` / `buildSessionPayload()`, and `web/workbench.js` now loads the API payload into whole-sheet first instead of rebuilding a parallel session document locally.
+
+7. **The Step 4 mirror-sync owner has been deleted.**
+   - Evidence: `syncRootOwnerMirrorsFromDocument()` is gone from `web/workbench.js`; load/document-change flow no longer writes root-owned layer/grid/visibility fields back into local mirrors, and the surviving render/debug read paths now consume whole-sheet snapshots.
+
+### Targeted verification
+
+- `python3 -m pytest tests/test_workbench_flow.py -k save_session_round_trips_root_owner_metadata` — PASS
+- `node --check web/workbench.js` — PASS
+- `node --experimental-vm-modules -e "const fs=require('fs'); const vm=require('vm'); new vm.SourceTextModule(fs.readFileSync('web/whole-sheet-init.js','utf8'));"` — PASS
+- `python3 -m py_compile src/pipeline_v2/service.py` — PASS
+- `PW_SKIP_WEBSERVER=1 npx playwright test tests/playwright/step4-root-proof.spec.js --reporter=list` — PASS
+  - Proves root-owner load/save payload translation, session-switch text persistence, pointer-cancel vs lost-capture behavior, touch gesture handoff, resize rollback, and concurrent remount undo single-fire.
+
+### Completion pass on 2026-04-16
+
+1. **FL-STEP4-02 is fixed.**
+   - Evidence: `_normalize_storage_id()` now uses `"" if raw_value is None else str(raw_value).strip()`, and tracked coverage asserts integer `0` round-trips as `"0"`.
+
+2. **FL-STEP4-03 is fixed.**
+   - Evidence: `/api/workbench/create-blank-session` again accepts bare `{}` and explicit `blank_session` payloads for generic root sessions, while the template-backed `template_set_key` / `action_key` path remains active.
+   - Focused verification: `python3 -m pytest tests/test_base_path.py -k "create_root_blank_session_under_prefix or save_and_export_root_blank_session_under_prefix" -q` — PASS.
+
+3. **FL-STEP4-04 is fixed.**
+   - Evidence: dead `force_fallback` and `crop_box` fields were removed from `RunConfig`, and `/api/run` plus `/pipeline/run` now reject those legacy keys with `unsupported_run_fields` instead of ignoring them.
+
+4. **FL-STEP4-05 is resolved by compatibility contract.**
+   - Evidence: `validate-xp` is now treated as a non-exporting checksum/quality endpoint that returns a predicted `xp_path` with `exported=false`, so callers keep the path shape without triggering a write. Callers that need a filesystem artifact must still use `export-xp`.
+   - Focused verification: `python3 -m pytest tests/test_workbench_flow.py -k validate_xp_contract_returns_predictable_path_without_exporting -q` — PASS.
+
+5. **Agent-native text parity is fixed on the MCP/HTTP path.**
+   - Evidence: `save_session()` now accepts `text_input={x,y,text}` and applies text through the same root-authoritative session payload contract, with tracked coverage for newline and draw-state persistence.
+
+6. **Inspector edits are now coupled to whole-sheet undo.**
+   - Evidence: whole-sheet exposes external-edit transactions, and inspector bulk/stroke actions now commit a single root-owned undo snapshot instead of bypassing the undo stack.
+   - Live browser proof against a local `pipeline_v2.app` server on `127.0.0.1:5082`: glyph `0 -> 65 -> 0`, `canUndo false -> true -> false`.
+
+7. **Mounted-family template definitions are now present in the current tree.**
+   - Evidence: `config/template_registry.json` includes `mounted_native_idle_only` and `mounted_native_full`.
+   - Consequence: the earlier "wolfie/wolack are absent from template_registry" finding is historical only. The remaining gap is broader family/item coverage, not a missing mounted-family registry entry.
+
+### Known limits after Step 4 completion
+
+- Historical note: the older `source_cuts_h` expectation was removed on `2026-04-16`. Current regression tests assert those legacy fields stay absent from save/load payloads.
+
+### Consequence for the active task sequence
+
+- Step 4 is now **COMPLETE**.
+- The active next sequence is now:
+  1. Step 7 manifest demotion
+  2. Step 8 quality enforcement
+  3. Step 10 mounted-family authoring
+  4. Step 11 agent API work
+
+---
+
+## Engine `skin_family` / B-18 Re-Audit (2026-04-16)
+
+Triggered by the main-game engine change that split base player-family selection
+into a canonical `skin_family` axis and moved sprite dispatch into
+`SkinFamilyDefinition` tables in `engine/game.cpp`.
+
+### Findings against the current pipeline-v2 code after the 2026-04-16 re-audit
+
+1. **The primary wrapper owner now models `filename_prefix` and `skin_family` separately, and the outward compatibility aliases were removed in this pass. RESOLVED.**
+   - Evidence: `src/pipeline_v2/service.py` now uses `_PREFIX_W_RANGE`,
+     `_PREFIX_SKIN_FAMILY`, `_RUNTIME_SCOPE_PREFIXES`, and
+     `_template_action_identity`, while `config/template_registry.json` now
+     stores explicit `filename_prefix` and `skin_family`.
+   - The live request-side `payload.family` run owner that survived the first
+     patch was deleted in this re-audit pass from `/api/run` and
+     `/pipeline/run`. This follow-up pass also removed outward `family` /
+     `enabled_families` aliases from new template/run/session responses. The
+     only remaining compatibility surface is read-only fallback when loading
+     older persisted job/session records.
+
+2. **MCP override-name validation now accepts engine-valid hyphenated prefixes. RESOLVED.**
+   - Evidence: `scripts/workbench_mcp_server.py` `_AHSW_RE` now accepts names
+     such as `player-green-0001.xp`, `attack-green-0001.xp`, and
+     `plydie-green-0001.xp`.
+
+3. **The canonical `{family}-0001.xp` representative-file rule is now explicit, but it needed a split between preview ownership and structural layer ownership. RESOLVED.**
+   - Evidence: `config/template_registry.json` now carries per-action
+     `preview_xp` / `preview_xp_sha256` fields for canonical representative
+     previews while leaving `l0_ref` / `l0_ref_sha256` as the structural layer
+     contract source. This keeps `plydie` and `wolfie` on their checked-in
+     `0000` layer refs without pretending those files are the canonical browser
+     previews.
+   - The legacy proof helpers now read preview defaults from that registry split:
+     `scripts/xp_fidelity_test/run_bundle.sh`,
+     `scripts/xp_fidelity_test/run_bundle_split.sh`,
+     `scripts/xp_fidelity_test/run_randomized_bundle_test.mjs`, and
+     `scripts/xp_fidelity_test/recipe_generator.mjs`.
+
+4. **Green proof-prefix coverage now exists; green authoring remains explicitly proof-only for now. IMPORTANT LIMIT.**
+   - Evidence: `scripts/workbench_png_to_skin_test_playwright.mjs` now injects
+     by engine filename prefix and accepts `player-green`, `attack-green`, and
+     `plydie-green`; `web/workbench.js` now preserves those hyphenated prefixes
+     through the web Skin Dock override-name safety gate.
+   - `config/template_registry.json` still has no authorable green template
+     sets, by explicit decision: the repo does not yet ship checked-in green
+     reference assets for blank-session/template ownership. Runtime/proof may
+     target green prefixes; template authoring remains human-only until that
+     asset surface exists.
+
+5. **The main-game registry is still compiled into C++, not data-driven. IMPORTANT LIMIT, NOT A PIPELINE-V2 BUG.**
+   - Evidence: main-game `engine/game.cpp` `g_skin_family[]` tables and the
+     B-18 / FL-869 engine audit.
+   - Consequence: the `green` family proves the new dispatch path, but adding a
+     new family still requires engine-side code/assets. Pipeline-v2 cannot solve
+     that alone.
+
+### Canon consequence
+
+- Engine truth now comes from main-game `engine/game.cpp` / B-18, not from this
+  repo's flat prefix tables.
+- pipeline-v2 template/runtime helpers now separate preview identity from
+  structural layer ownership, and proof fixtures now derive representative XP
+  defaults from that split.
+- The remaining wrapper-side family limitation is no longer proof routing; it
+  is the deliberate absence of authorable green templates plus broader
+  wearable/item coverage.
+- Future family work in this repo must keep base `skin_family` distinct from
+  filename-prefix authoring and finish the `0001` / green-surface follow-through
+  before `green` support can be considered complete.
+
+---
+
+## Step 5 Design Resolution — Section 2 Input Contract (2026-04-15)
+
+The canon Step 5 design output now exists in `docs/plans/2026-03-23-workbench-canonical-spec.md` Sections `2.3.1` through `2.3.4`. This resolves the Section 2 input-contract questions as design decisions. It does **not** implement the runtime/export changes yet.
+
+### Decisions now fixed in canon
+
+1. **Source layout contract**
+   - Naked PNG input is valid only for `uniform_grid`.
+   - `uniform_grid` means angle rows top-to-bottom and frame columns left-to-right.
+   - When `source_projs == 2`, columns are grouped `[all proj0 frames][all proj1 frames]`, matching current `run_pipeline()` packing.
+   - Irregular or multi-action sheets must use `explicit_regions`; they are not allowed to rely on arithmetic guessing.
+
+2. **Manifest authority**
+   - The authoritative Section 2 contract is a JSON sidecar adjacent to the source PNG: `<source>.asciicker-source.json`.
+   - `regions[]` are canonical conversion mappings.
+   - `guides.anchor_rect`, `guides.cuts_v`, `guides.cuts_h`, and `guides.detected_boxes` are editorial helpers only.
+   - Session-local `extractedBoxes`, `sourceCutsV`, and `sourceCutsH` are therefore old owners that Step 6 must demote into manifest-backed or derived state.
+
+3. **Slicing workflow**
+   - The source panel is a slicer surface over the root editor, not an export owner.
+   - Human UI and future MCP/HTTP tools must edit the same manifest contract.
+   - `apply_action_grid()` is now defined as a compatibility wrapper that should synthesize an ephemeral `uniform_grid` manifest before calling the generic materializer.
+   - The slicer must materialize a root-editor document/session before any export path runs.
+
+4. **Quality / agent vision substitute**
+   - Section 2 quality is now defined as a machine-readable `PASS` / `WARN` / `FAIL` report.
+   - `FAIL` includes unmapped required slots, out-of-bounds regions, invalid `uniform_grid` divisibility, failed structural gates, or fallback conversion during agent-autonomous export.
+   - `WARN` includes human-approved fallback, duplicate-frame clusters, and suspicious coverage deltas.
+   - Agents may auto-advance only on `PASS`.
+
+### Consequence
+
+- WND-1 (source layout), WND-2 (manifest format), WND-3 (agent vision substitute), and WND-4 (slicing workflow) are no longer design-open. They are now implementation-open.
+- Step 6 is now concretely defined: delete the old source/session overlay owner and replace it with sidecar-backed guides/regions only.
+- Step 7 is now concretely defined: enforce the full quality contract at export/payload time and add a lightweight single-XP validation endpoint.
+
+### Residual evidence-backed blockers after Step 5
+
+**S2-IMPL-01: Legacy session source fields were deleted on 2026-04-16. RESOLVED.**
+- Evidence: save/load now expose `source_manifest_path` and `source_manifest`; regression tests assert `source_boxes`, `source_anchor_box`, `source_cuts_v`, and `source_cuts_h` stay absent.
+- Next gap: canonical manifest authoring now exists via the source-panel JSON draft editor, the new uniform-grid seed helper, and sidecar routes, but interactive slicer UX is still missing.
+
+**S2-IMPL-02: Low-level conversion now runs through canonical manifest materializers. RESOLVED on 2026-04-16.**
+- Evidence: `/api/run`, `/pipeline/run`, and bundle action-apply still call `materialize_run_source_manifest()` before `run_pipeline()`, and `run_pipeline()` now dispatches through `_build_cells_from_uniform_grid_manifest()` or `_build_cells_from_explicit_regions()` instead of the old resize/fallback path. Invalid `uniform_grid` divisibility now returns `invalid_source_manifest` rather than silently inventing output.
+- Residual gap: source-manifest authoring is still JSON-first and interactive slicer tooling is still missing, but the conversion owner itself is now manifest-backed and the common uniform-grid draft can be seeded from live run/template geometry.
+
+**S2-IMPL-03: Agent-facing manifest tooling now exists, but it is still thin. RESOLVED on 2026-04-16.**
+- Evidence: `scripts/workbench_mcp_server.py` now exposes `read_source_manifest`, `write_source_manifest`, `mark_source_regions`, `validate_xp`, and `validate_session` in addition to the bundle/apply/export tools.
+- Residual gap: the agent surface is operational but still low-ergonomics; region mapping is JSON-first rather than a richer slicer workflow.
+
+**S2-IMPL-04: Quality contract is enforced at the export boundary. RESOLVED on 2026-04-16.**
+- Evidence: `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()` now call `_build_quality_report()` and raise `quality_gate_failed` on `FAIL`, while `/api/workbench/validate-xp` provides the lightweight single-XP PASS/WARN/FAIL endpoint.
+- Residual gap: the validator remains intentionally non-exporting (`exported=false`); callers that need a real artifact must still use `export-xp`.
+
+### Superseded statements
+
+The older failure-log sections that describe WND-1 through WND-4 as "unresolved design questions" are now stale. Keep them as historical audit context only. The current truth is:
+
+1. Step 5 design is complete in canon.
+2. Step 6 harness design is complete in canon.
+3. Section 2 is blocked by implementation work in Steps 7 and 8, not by missing design.
+4. Step 9 family expansion policy is now resolved in canon; mounted-family authoring is blocked by implementation, not by missing design.
+
+---
+
+## Step 9 Design Resolution — Family Expansion Policy (2026-04-15)
+
+The canon Step 9 design output now exists in `docs/plans/2026-03-23-workbench-canonical-spec.md` Section `2.3.5`. This resolves the family-expansion question as design. It does **not** enable mounted-family authoring in live code yet.
+
+### Decisions now fixed in canon
+
+1. **Family authority**
+   - `config/template_registry.json` is the single workbench family-authoring authority.
+   - Authorable family scope comes from template-set action specs, not from runtime override lists, not from `enabled_families`, and not from `scripts/xp_fidelity_test/action_registry.json`.
+
+2. **Two-registry distinction**
+   - `scripts/xp_fidelity_test/action_registry.json` is verifier instrumentation only.
+   - It may mirror coverage families for tests, but it does not define geometry, layer count, L0 metadata, or authoring scope.
+
+3. **Reference-XP-backed family contracts**
+   - Family contracts are action-scoped and reference-XP-backed.
+   - Each authorable action must declare `filename_prefix`, `skin_family`,
+     `xp_dims`, `angles`, `frames`, `projs`, `cell_w`, `cell_h`, `layers`,
+     `ahsw_range`, `preview_xp`, `preview_xp_sha256`, `l0_ref`, and
+     `l0_ref_sha256`.
+
+4. **Raw sprite inventory is evidence only**
+   - Local re-audit of committed canonical AHSW files shows multiple geometries and layer counts inside a single family.
+   - Example: `player` canonical AHSW files span `126x72`, `126x80`, and `162x80`; `wolfie` spans `180x96` and `180x104`.
+   - Step 10 must therefore not infer a family-global authoring contract by scanning `sprites/`.
+
+5. **Initial Step 10 mounted-family scope**
+   - `wolfie` idle/walk authoring target uses `sprites/wolfie-0000.xp` contract (`180x96`, `4` layers, `all_16`).
+   - `wolack` attack authoring target uses `sprites/wolack-0001.xp` contract (`160x104`, `5` layers, `weapon_gte_1`).
+   - One authored XP per action fans out to that action's AHSW override filenames. Step 10 does not attempt per-variant geometry synthesis.
+
+6. **Deferred runtime family**
+   - `bigbee` is explicitly deferred. It is runtime-real but outside current mounted-player authoring/proof scope.
+
+### Consequence
+
+- WND-5 is no longer design-open.
+- WD-1 and WD-3 are now implementation-open:
+  - add mounted template-set entries to `template_registry.json`
+  - remove vestigial `enabled_families` client gating
+  - extend L0/template-family validation to mounted actions
+- Step 10 is now concretely defined.
+
+### Residual evidence-backed blockers after Step 9
+
+**S2-FAM-01: Mounted family entries are now present in template registry. RESOLVED on 2026-04-16.**
+- Evidence: `config/template_registry.json` now includes `mounted_native_idle_only` and `mounted_native_full` with `wolfie` idle/walk and `wolack` attack action contracts.
+- Residual gap: broader family coverage is still missing; this resolution only covers the initial mounted Step 10 scope fixed in canon.
+
+**S2-FAM-02: Vestigial `enabled_families` client gating is removed. RESOLVED on 2026-04-16.**
+- Prior evidence: `web/workbench.js::getEnabledActions()` previously fail-closed when `/api/workbench/templates` omitted `enabled_families`, even though Step 9 makes template-set actions the authority.
+- Current code state: `getEnabledActions()` now derives availability from `template_set.actions` directly, and the focused regression suite now asserts mounted template sets remain visible through the templates API.
+
+**S2-FAM-03: Mounted-family L0 validation is now in the live prefix table. RESOLVED on 2026-04-16.**
+- Evidence: `src/pipeline_v2/service.py::_PREFIX_L0_COL0` now includes `wolfie` and `wolack`, and structural validation uses that prefix table for G12 instead of a player/attack/plydie-only subset.
+- Residual gap: item/wearable prefixes still do not have template-backed validation because they are not yet in the authoring surface.
+
+**S2-FAM-04: No wearable or item templates found in template registry. GAP.**
+- Evidence: `config/template_registry.json` defines only `player_native_idle_only` and `player_native_full`. No template sets exist for wearable items (armor, helmets, shields, weapons as standalone assets) or item sprites.
+- Impact: the authoring surface has no entry point for equipment items as independent assets; only full character+equipment AHSW combos are currently authorable.
+
+### Superseded statements
+
+Older failure-log sections below that describe family expansion or the two-registry distinction as design-open are historical audit context only. The current truth is:
+
+1. `template_registry.json` is the authoring authority.
+2. `action_registry.json` is verifier-only.
+3. Mounted-family authoring is blocked by implementation, not missing design.
+
+---
+
+## Catastrophic Process Failure (2026-04-14)
+
+The prior issue framing for the PNG / grid / frame-nav work was wrong. The product is not a conversion-first workbench with a user-facing "Run Conversion" flow. The source panel is the canonical XP surface, rendered at pixel-to-cell fidelity, and the other panels are abstracted controls layered on top of the whole-sheet editor.
+
+Because the framing was wrong, the following issue clusters are reopened as failed process work, not as closed fixes:
+
+| Issue | Earlier fix label | Reopened status | Why reopened |
+|-------|-------------------|-----------------|--------------|
+| #9 | Sub-Fix F | FAILED | Row add/delete controls were modeled against the wrong surface semantics |
+| #10 | Sub-Fix B | FAILED | Crop-box conversion framing is not the canonical user path |
+| #11 | Sub-Fix A | FAILED | There should not be a user-facing conversion button at all |
+| #15 | Sub-Fix H2 | FAILED | Horizontal cuts were treated as a separate conversion-era feature instead of a source-surface abstraction |
+| Export mismatch | Sub-Fix G | FAILED | Export padding/truncation was patched against the wrong workflow boundary |
+
+**Current correction target:** make the source panel itself the XP image surface, remove conversion from the UI vocabulary, and make row selection / drag / drop / cuts operate directly on the XP surface semantics.
+
+**Process failure classification:** catastrophic. The prior fix log claims should not be treated as acceptance, and any green status attached to them is invalid until the product is realigned to the source-panel-as-XP model.
+
+---
+
+## SAR Audit Corrections (2026-04-14)
+
+This audit reconciles the current failure log against the shipped `web/workbench.js`,
+`web/workbench.html`, and `web/whole-sheet-init.js` code. The earlier 2026-04-14
+appendix is directionally useful, but it mixes three different states:
+
+- stale conversion-era workflow claims
+- real handler-wired controls
+- visible but intentionally deferred controls
+
+### Confirmed hard blockers from code
+
+1. **D1 source-to-grid drag is physically fragile/broken in the current layout.**
+   - `onSourceMouseMove()` sets `state.sourceDragHoverFrame = gridFrameFromClientPoint(...)`.
+   - `gridFrameFromClientPoint()` uses `document.elementFromPoint(clientX, clientY)` and only resolves `.frame-cell`.
+   - If frame cells are offscreen during the drag, the drop target is `null`, so `dropSelectedSourceBoxesAtClientPoint()` fails with a warn-only status.
+
+2. **The old source-panel manual box/cut owner was deleted on 2026-04-16.**
+   - `drawBoxBtn`, cut buttons, source context-menu actions, and session-local overlay persistence are gone.
+   - The remaining gap is replacement manifest-authoring UX for canonical guides/regions.
+
+3. **Whole-sheet is visible, but it is still not the singular visual root workflow.**
+   - Startup now mounts and unhides `#wholeSheetPanel`, so the root editor does stay on-screen before a session is loaded.
+   - The standalone `#gridPanel` owner and the duplicate `#wsFrameNav` mount region were both deleted on 2026-04-16.
+   - The remaining misalignment is layout-level: wrapper panels are still presented as peers rather than demoted overlays on top of one dominant root surface.
+
+4. **RESOLVED (2026-04-16): Source panel now reloads canonical PNG/manifest directly.**
+   - `hydrateLoadedSession()` reloads `source_path` through `/api/workbench/source-image`.
+   - `renderSourceCanvas()` now renders canonical manifest guides/regions from `source_manifest`, even before the PNG finishes loading.
+   - The source panel no longer depends on pre-populated root grid geometry to show the canonical source surface.
+
+5. **Workbench still owns too much mirror/render lifecycle; whole-sheet is not yet the exclusive root owner.**
+   - `hydrateLoadedSession()` in `web/workbench.js` now hands the API payload to `window.__wholeSheetEditor.loadSessionPayload()` first, then mirrors the root document back into `workbench.js`.
+   - `whole-sheet-init.js` now owns session payload translation, but `workbench.js` still keeps mirror layer state, frame/source selections, and whole-sheet callbacks.
+   - The root-owner inversion is further along, but frame/source/template tooling still has enough post-load orchestration that the overall architecture remains hybrid.
+
+### Corrections to the earlier "dead UI" classification
+
+The following controls are **wired** in `workbench.js` and must not be logged as dead:
+
+- UI recorder controls (`uiRecorderStartBtn`, `uiRecorderStopBtn`, `uiRecorderClearBtn`, `uiRecorderDownloadBtn`)
+- bug-report controls (`bugKnownIssue`, `bugCategory`, `bugSeverity`, `bugReportSubmitBtn`)
+- verification controls (`verifyRunBtn`, `verifyDryRunBtn`)
+- advanced webbuild controls (`webbuildOpenBtn`, `webbuildReloadBtn`, `webbuildApplySkinBtn`)
+- TERM++ native controls (`termppSkinCmdBtn`, `termppSkinLaunchBtn`, `termppStreamPreviewBtn`, `termppStreamStartBtn`, `termppStreamStopBtn`)
+- inspector find/replace controls (`inspectorFindReplaceApplyBtn` plus the `inspectorFr*` inputs)
+
+The following control is still correctly classified as deferred/dead:
+
+- whole-sheet `BROWSE` mode button (`whole-sheet-init.js`) — visible but explicitly disabled and titled `Browse mode (deferred)`
+
+### Controls that are in the UI but still missing or under-modeled in the SAR map
+
+- `Threshold` and `Min Size` inputs for `findSprites()`
+- source-load parameter inputs: `Name`, `Angles`, `Frames CSV`, `Source Projs`, `Render Res`
+- `Load Source` / hidden `Refresh Surface` distinction
+- layer selector and layer-visibility row in the grid panel
+- jitter step input (`jitterStep`)
+- duplicate frame-navigation ownership: standalone `#gridPanel` near source plus a separate `#wsFrameNav` region inside the whole-sheet mount
+
+### Audit consequence
+
+The 2026-03-10 conversion-era workflow section below is now explicitly stale. It is kept as historical evidence only and must not be used as the canonical SAR/workflow model for current refactor planning.
+
+---
+
+## REXPaint-Parity Audit (2026-04-14)
+
+The local `docs/REXPAINT_MANUAL.txt` sets a clear baseline that the current product still violates:
+
+- canvas/image editing is the primary workflow, not a template workflow
+- paint and browse are peer modes
+- `New`, `Save`, and export actions are first-class image operations
+- layers are intrinsic to every image
+- browse is built into the editor rather than deferred to a separate surface
+
+### Manual-backed baseline
+
+- REXPaint defines the canvas as the main editing surface and tells the user to resize the image directly on that surface before drawing.
+- REXPaint has built-in layers with active-layer selection, ordering, visibility, and locking.
+- REXPaint has built-in browse mode and image control (`New`, `Save`, `Export`) as core editor actions, not as template-specific flows.
+
+### Current internal ownership callgraph
+
+1. `workbench.html` creates the top-level UX with `Template`, `File Operations`, `Load Source Surface`, `Source Panel`, `Frame Navigation`, `Grid Panel`, and the mounted `#wholeSheetPanel`.
+2. `wbUpload()` uploads a PNG to `/api/upload` and sets `state.sourceImage` directly from the browser `Image` object.
+3. `loadFromJob()` or `loadSession()` calls `hydrateLoadedSession()`.
+4. `hydrateLoadedSession()` now hands the backend session JSON to `window.__wholeSheetEditor.loadSessionPayload()`.
+5. `syncRootOwnerMirrorsFromDocument()` derives the frame/source/template mirrors back into `workbench.js` from the root document snapshot.
+6. `renderAll()` redraws source, grid, preview, and metadata from those mirrors while whole-sheet remains the live document owner.
+7. `hydrateWholeSheetEditor()` finally mounts `window.__wholeSheetEditor`, which proxies edits back into `workbench.js` through callbacks like `onCellEdited`, `onStrokeComplete`, `onActiveLayerChanged`, and `onSave`.
+
+### Redesign consequence
+
+The current owner graph is backward. The product must be rebuilt around:
+
+1. whole-sheet XP editor as root owner of the loaded image/session
+2. source panel as a view/overlay onto that same XP-backed surface
+3. frame navigation as an overlay/index over the same sheet, not a competing owner
+4. templates as optional automation layered on top of the core editor, never as the root workflow
+
+Until that inversion is done, source drag fixes and row/frame controls will remain patchwork over the wrong authority boundary.
+
+---
+
 ## Test Execution Attempt
 
 **Test File:** `full-workflow-with-game.spec.js`
@@ -13,8 +989,8 @@
 1. Open workbench ✓
 2. Select PNG file ✓
 3. Click Upload PNG button ✓
-4. Click Analyze button ✓
-5. Click Convert to XP button ✓
+4. Click Load Source button ✓
+5. Click Apply Source button ✓
 6. Click "Test This Skin" button ❌
 7. Move player in game for 10+ seconds ❌
 8. Capture gameplay ❌
@@ -78,7 +1054,7 @@ These runtime files are required for the game to load and test converted sprites
 Test execution shows:
 - Workbench loads ✓
 - File upload works ✓
-- Analyze/Convert buttons enabled and respond ✓
+- Load Source / Apply Source buttons enabled and respond ✓
 - Convert completes ✓
 - **"Test This Skin" button DISABLED** ❌ (missing runtime files)
 - Cannot click button - disabled state maintained for 90s
@@ -141,8 +1117,8 @@ Test execution shows:
 |-----------|--------|-------|
 | Workbench loads | ✓ | None |
 | PNG upload | ✓ | None |
-| Analyze button | ✓ | None |
-| Convert button | ✓ | Works (output unknown) |
+| Load Source button | ✓ | None |
+| Apply Source button | ✓ | Works (output unknown) |
 | Test Skin button | ❓ | State/functionality unclear |
 | Game launch | ❌ | No window/canvas detected |
 | Game input | ❌ | Not tested |
@@ -3643,17 +4619,17 @@ W15 SelectTool visualization confirmed with three-part proof:
 - S5 (cut_v mode): `#cutVBtn` click → `sourceMode === 'cut_v'` PASS
 - S6 (delete box action): `#deleteBoxBtn` click → `extractedBoxes === 0, anchorBox === null` PASS
 
+**Historical note (superseded on 2026-04-16):** the `addFrameBtn` and `applyGroupsToAnimsBtn` controls referenced below were deleted with the local frame-metadata owner.
+
 **Grid Panel Actions (G5-G6):**
-- G5 (add frame): `#addFrameBtn` click with `selectedRow >= 0` → `gridCols` increased PASS
 - G6 (delete selected frames): `#deleteCellBtn` click on non-empty frame → frame signature changed (content cleared) PASS
 
 **Grid Metadata Actions (G9-G11):**
 - G9 (assign row category): `#assignAnimCategoryBtn` click → `rowCategories[0]` set PASS
 - G10 (assign frame group): `#assignFrameGroupBtn` click with name → `frameGroups` contains entry PASS
-- G11 (apply groups to anims): `#applyGroupsToAnimsBtn` click → `anims` array updated PASS
 
-**Runner:** `run_m2d_action_proof_test.mjs` (new, hand-written)
-**Result:** 12/12 PASS (root-hosted)
+**Runner:** removed on `2026-04-16` with the deleted owner-specific action set.
+**Result:** historical proof only; do not treat G5/G11 as current controls.
 **Artifact:** `output/m2d_action_proof/report.json`
 
 **W12-W13 (add/delete layer):** Already PROVEN at commit 7bdab92 via `run_whole_sheet_layer_test.mjs`. No new work needed.
@@ -3665,6 +4641,8 @@ W15 SelectTool visualization confirmed with three-part proof:
 
 **Date:** 2026-03-24
 **Status:** PROVEN (UI-driven acceptance)
+
+**Historical workflow (superseded on 2026-04-16):** the source draw-box/context-menu path below was deleted with the old source overlay owner.
 
 **Workflow:** Apply template → Upload PNG → Select grid row → Draw box mode → Draw box A → Set as anchor (context menu) → Draw box B → Pad to anchor (context menu) → Add to selected row (context menu) → Double-click grid frame → WS editor focus → Paint cell (wsToolCell) → Save → Export XP
 
@@ -3710,7 +4688,7 @@ That repository-boundary claim was not established from this repo's contents and
 **Corrective rule going forward:**
 - Do not say a required change "lives in another repo" unless the current repo contents prove that boundary.
 - When discussing runtime/menu rendering here, distinguish between:
-  - what is proven from files present in `/Users/r/Downloads/asciicker-pipeline-v2`
+  - what is proven from files present in the current repo checkout
   - what is only inferred from older research or adjacent repos
 - If the repo boundary is disputed, log the uncertainty and inspect this repo first instead of asserting an upstream dependency.
 
@@ -4129,7 +5107,7 @@ Each run randomly permutes 3 authoring methods across the 3 bundle actions (idle
 |--------|------|-----------|
 | `new_xp` | Draw random scribbles in WS editor | Set glyph to action letter (I/A/D), random fg/bg colors, 20-40 random tool actions (paint, fill, rect, line, erase) |
 | `upload_xp` | Import reference XP via UI | `#xpImportFile` → `#xpImportBtn` → wait for session hydration → export to promote to converted |
-| `upload_png` | Upload PNG → full server pipeline | `#wbFile` → `#wbUpload` → `#wbRun` (Convert to XP) → session auto-promoted to converted |
+| `upload_png` | Load Source → full server pipeline | `#wbFile` → `#wbUpload` → `#wbRun` (Apply Source) → session auto-promoted to converted |
 
 After all 3 actions are converted: Skin Dock test (Test Bundle Skin) + 10-second headed runaround with crash detection (rafCount/renderCrashes probing).
 
@@ -4449,9 +5427,2300 @@ dimensions and valid native layers — `run_pipeline` never fails for a valid im
 `waitForFunction` now returns `true` for `!!j.session_id || !!j.error`. After the wait,
 the test reads `convResult.error` and calls `fail()` immediately instead of timing out.
 
-### Fix C (HTML — workbench.html): Default angles changed from 1 to 8
+### Fix C (historical, now deleted): top-level angle defaults
 
-`wbAngles` default changed from `value="1"` to `value="8"` so classic-mode conversion
-uses the correct native_compat angle count out of the box when Analyze is skipped.
+The old `wbAngles` workaround is no longer the active model. The current workbench
+deletes top-level `wbAngles` / `wbFrames` / `wbSourceProjs`; classic `wbRun()` now
+materializes from canonical `source_manifest` layout or current root-session geometry,
+and the visible action is `Apply Source`, not `Analyze` → `Convert to XP`.
 
 Until fixed: oracle results for upload_xp/upload_png are classified as UNRELIABLE for custom-skin-specific proof. Seed 2 "oracle=true" should be read as "character visible" not "custom skin visible."
+
+---
+
+## PNG Auto-Pipeline Slicing Still Broken (2026-04-13)
+
+**Date:** 2026-04-13
+**Status:** OPEN BLOCKER
+
+### Observation
+
+The auto-pipeline (`run_pipeline` normal path) produces incorrect slice output even for
+well-formed native player sprites (e.g. `player-0000`). The arithmetic grid division
+(`src_w // total_frames`, `src_h // angles`) does not reliably produce meaningful per-frame
+cells unless the source image was authored with exact pixel-aligned frame boundaries matching
+the pipeline's assumptions. Most real-world PNGs — including the native player reference —
+get sliced incorrectly, producing frames that cut through sprite content rather than
+isolating it.
+
+### Root Cause (hypothesis)
+
+The pipeline assumes the source image was laid out with exactly `total_frames × angles`
+equal-size cells. Any misalignment (padding, spacing, or non-power-of-2 dimensions) causes
+the grid to land on wrong boundaries. `_foreground_bbox()` per cell then crops whatever
+content happened to land in that cell — there is no global sprite-detection pass to
+re-anchor the grid.
+
+### What Is NOT Broken
+
+- The fallback path (pixel-to-cell dumb convert) works correctly for any input.
+- The `upload_xp` path always works — it reads geometry from the XP file directly.
+- No crashes or RUN FAILED errors remain.
+
+### What Is Broken
+
+- The normal slicing path produces visually wrong output for most real PNG inputs.
+- Even the native reference player sheet is sliced incorrectly under normal-path assumptions.
+- There is no "Find Sprites" / flood-fill detection in the pipeline — only arithmetic grid.
+
+### Blocked Until
+
+A correct automatic sprite detection pass (flood-fill or declared bounding box) is wired
+into the pipeline, or the workbench fully exposes manual grid/bbox declaration so users can
+override the arithmetic default before running conversion.
+
+---
+
+## Half-Block Stripe Bug — MAGENTA Bleeding in Preview & Workbench (2026-04-13)
+
+**Date:** 2026-04-13
+**Status:** OPEN — visual corruption on every PNG input
+**Evidence:** Screenshots from upload preview (magenta stripes) and workbench cell grid (black stripes)
+
+### What Is Happening
+
+`_cell_from_patch` (service.py:1686-1688) chooses glyph 223 (▀ upper half block) with
+`bg=MAGENTA_BG=(255,0,255)` whenever the top half of a pixel patch has foreground signal
+but the bottom half does not:
+
+```python
+if top is not None and bot is None:
+    return (223, top[1], MAGENTA_BG)   # ← ▀, bottom half = magenta = transparent
+```
+
+This is correct for ANSI terminal rendering (magenta = REXPaint transparent key). But it
+means the bottom half of **every such cell row** is the magenta transparency color.
+
+Result: every row of cells encodes as a half-height colored band (▀) + a half-height
+magenta/transparent band, producing alternating stripes throughout the entire XP.
+
+### Two Manifestation Points
+
+1. **Upload preview PNG** (`render_preview_png`): the preview renderer renders MAGENTA_BG
+   cells as literal magenta (255,0,255) instead of actual PNG transparency or a neutral
+   dark color. Screenshot shows the logo rendered with hot-pink horizontal stripes.
+
+2. **Workbench cell grid**: the workbench background is dark. MAGENTA_BG cells and
+   transparent-bg cells both appear as dark/black stripes alternating with the colored
+   half-rows. Same data, dark background makes stripes look "black" instead of magenta.
+
+### Root Cause Chain
+
+- `_region_stats` for the bottom half of a 1×1 or sparse patch returns `None` (below
+  occupancy threshold) → forces `▀` + MAGENTA_BG path
+- For 1:1 pixel-to-cell (render_resolution=1): each patch is exactly 1px tall, so
+  `split = max(1, 1//2) = 1`, bottom crop is 0-height → always empty → always ▀ path
+- For larger patches (normal slicing path with cell_h > 1): depends on where foreground
+  pixels fall in the sample window — same artifact when they're concentrated in top half
+
+### What Is NOT the Striping Root Cause
+
+The black rows in the workbench are **not** caused by `bg=(0,0,0)` (line 1704). That path
+requires both halves to have signal — which is relatively rare. The dominant source of
+stripes is the ▀ + MAGENTA_BG path on nearly every cell.
+
+### Fix Direction
+
+Two orthogonal fixes needed:
+
+1. **Preview PNG renderer**: replace MAGENTA_BG `(255,0,255)` cells with actual PNG
+   transparency (alpha=0) or a dark neutral, not raw magenta. This is a rendering bug
+   independent of the cell encoding.
+
+2. **Cell encoding**: for non-transparent source pixels, prefer full-block █ (glyph 219)
+   with the pixel color as bg and a matching fg, rather than ▀ with MAGENTA_BG. The ▀
+   encoding wastes half the visual cell for single-pixel-row sources. Only use ▀/▄ when
+   genuinely encoding two different colors in one cell.
+
+### Blocked Until
+
+Either fix is applied. The preview PNG fix is lower-risk and should come first.
+
+---
+
+## Issue #13 Fix Plan: Number Each Panel Box (2026-04-13)
+
+**Issue:** UI IS AI SLOP. AT LEAST MAKE EACH CATEGORY BOX NUMBERED AT THE TOP.
+**Status:** FAILED — superseded by XP-surface refactor
+
+### Panels to Number
+
+12 user-visible main panels in `web/workbench.html`, DOM order top-to-bottom:
+
+| # | HTML element / id | Current header |
+|---|---|---|
+| 1 | `div.panel#templatePanel` (line 39) | no h3 — needs new `div.panel-header` |
+| 2 | `div.panel` (line 58) | no h3 — needs new `div.panel-header` labeled "File Operations" |
+| 3 | `details.panel` (line 73) | `<summary>Recorder</summary>` |
+| 4 | `div.panel` (line 85) | `<h3>Upload + Convert (...)</h3>` |
+| 5 | `div.two-col > div.panel` (line 104) | `<h3>Source Panel</h3>` |
+| 6 | `div.two-col > div.panel` (line 137) | `<h3>Grid Panel</h3>` |
+| 7 | `div.panel` (line 238) | `<h3>Animation + Metadata</h3>` |
+| 8 | `div.two-col > div.panel` (line 292) | `<h3>XP Preview</h3>` |
+| 9 | `div.two-col > div.panel` (line 304) | `<h3>Session</h3>` |
+| 10 | `div.panel#webbuildDockPanel` (line 310) | `<h3>Skin Test dock(...)</h3>` |
+| 11 | `div.panel#verificationPanel` (line 368) | `<h3>Verification (Term++ / QA)</h3>` |
+| 12 | `div.panel` (line 391) | `<h3>Export</h3>` |
+
+Excluded from numbering: `.alpha-banner`, `#firstStepsGuide`, `#runtimePreflightBanner`
+(status/info banners), `#wholeSheetPanel` (full editor embed), `#cellInspectorPanel`
+(secondary floating editor), `#termppNativePanel` (hidden advanced panel), `#bugReportModal`
+(overlay).
+
+### Proposed Changes
+
+**`web/styles.css`** — append after last line (~942):
+
+```css
+/* Panel numbering (Issue #13) */
+.panel-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  background: #1a2030;
+  color: #6f8aa8;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid #2a3a50;
+  border-radius: 0;
+  margin-right: 8px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.panel > h3:has(.panel-num) { display: flex; align-items: center; }
+.panel-header {
+  display: flex; align-items: center;
+  margin-bottom: 10px;
+  font-size: 16px; font-weight: bold;
+}
+details.panel > summary { display: flex; align-items: center; gap: 8px; list-style: none; }
+details.panel > summary::-webkit-details-marker { display: none; }
+```
+
+**`web/workbench.html`** — 12 targeted edits:
+
+- Panels 1 & 2 (no h3): insert `<div class="panel-header"><span class="panel-num">N</span><span>Label</span></div>` as first child
+- Panels 3 (details/summary): wrap summary text — `<summary><span class="panel-num">3</span> Recorder</summary>`
+- Panels 4–12 (have h3): prepend `<span class="panel-num">N</span>` inside each `<h3>` tag
+
+Full details and exact replacement strings: `/tmp/claude-issue13-plan-1776133081.md`
+
+### Implementation Notes
+
+- No JS changes required; numbers are static HTML
+- Use `:has(.panel-num)` to scope the flex rule so it does not break excluded panels' h3s (e.g., `#wholeSheetPanel` h3 has an inline status badge span)
+- Panel 3 (`<details>`) requires `list-style: none` on `<summary>` to suppress the browser disclosure triangle before the number; a custom `►` can be added via CSS `::before` if collapsed-state affordance is desired
+- Numbers are fixed/static — if panel order ever changes, the HTML numbers must be updated manually (no auto-counter used, for explicitness)
+
+---
+
+## Issue #15 Fix Plan: Frame Navigation Panel Layout (2026-04-13)
+
+**Issue:** Frame nav panel should sit next to source panel
+**Status:** FIX PLANNED — not yet implemented
+
+### Current Layout
+
+The **Source Panel** is the left cell of `<div class="two-col">` at `web/workbench.html` line 103 (panel content lines 104–135). It contains `<canvas id="sourceCanvas">` and the source image tool buttons.
+
+The **Frame Navigation panel** (`#wsFrameNav`, class `ws-frame-nav`) is built dynamically in `web/whole-sheet-init.js` lines 265–272 and appended to `.ws-canvas-area` inside `#wholeSheetPanel` (`workbench.html` line 169). `#wholeSheetPanel` is a separate full-width panel well below the two-col layout in page flow, and is hidden (`class="panel hidden"`) when the whole-sheet editor is not open. The frame nav strip is therefore invisible during PNG slicing workflow and far from the source panel when visible.
+
+DOM ancestry of frame nav:
+```
+#wholeSheetPanel (workbench.html:169, hidden until editor open)
+  └─ #wholeSheetMount
+       └─ .ws-layout (whole-sheet-init.js:244)
+            └─ .ws-canvas-area (whole-sheet-init.js:251)
+                 └─ #wsFrameNav / .ws-frame-nav (whole-sheet-init.js:266–272)
+```
+
+### Target Layout
+
+`#wsFrameNav` (or a synced mirror) should appear **directly below the source canvas** within the left column of the `two-col` grid, always visible regardless of whether `#wholeSheetPanel` is open. The user sees source image + frame navigation in the same viewport viewport region.
+
+### Proposed Changes
+
+**1. `web/workbench.html` lines 103–135** — wrap source panel in a flex column, add standalone frame nav mount as second child:
+
+```html
+<!-- BEFORE: line 103 -->
+<div class="two-col">
+  <div class="panel">
+    <h3>Source Panel</h3>
+    ...
+  </div>
+
+<!-- AFTER -->
+<div class="two-col">
+  <div class="source-col">
+    <div class="panel">
+      <h3>Source Panel</h3>
+      ...
+    </div>
+    <div class="panel" id="frameNavStandalonePanel">
+      <h3>Frame Navigation</h3>
+      <div id="frameNavMount"></div>
+    </div>
+  </div>
+```
+
+**2. `web/styles.css` after line 226** — add `.source-col` flex container and reset inner panel margin:
+
+```css
+.source-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.source-col > .panel {
+  margin-bottom: 0;
+}
+```
+
+**3. `web/whole-sheet-init.js` after line 272** — populate standalone mount with mirrored frame nav:
+
+```javascript
+const standaloneMount = document.getElementById('frameNavMount');
+if (standaloneMount) {
+  const mirrorFrameNav = document.createElement('div');
+  mirrorFrameNav.id = 'wsFrameNavMirror';
+  mirrorFrameNav.className = 'ws-frame-nav';
+  standaloneMount.appendChild(mirrorFrameNav);
+}
+```
+
+Sync logic also needed at `whole-sheet-init.js` lines 420–424 (where gridPanel is appended to frameNavEl) to also update `#wsFrameNavMirror`.
+
+### CSS Impact
+
+- `.two-col` grid (1fr 1fr) is unaffected; `.source-col` becomes the left cell instead of `.panel`
+- `margin-bottom: 14px` on `.panel` requires override inside `.source-col` to avoid double spacing
+- `@media (max-width: 1100px)` collapse already works — `.source-col` becomes a full-width flex column on narrow screens
+- Original `#wsFrameNav` inside `#wholeSheetPanel` remains (spec §3.8 intact); standalone panel is additive
+- Frame nav content sync between both instances is the main risk (MEDIUM): if selection state diverges, users see inconsistent thumbnails
+
+Full analysis: `/tmp/claude-issue15-layout-plan-1776133344.md`
+
+---
+
+## Issue #3 Cluster Fix Plan: PNG Slicing + Grid UX (2026-04-13, revised)
+
+**Issues:** #9, #10, #11, #15 (and frame nav toolbar, engine dim contract)
+**Status:** FIX PLANNED — not yet implemented
+**Authority:** Canon spec §3.2 (Priority Stack items 2, 6)
+
+---
+
+> **How to read this plan:** Each sub-fix starts with the exact user-facing issue (what the user is trying to do but cannot), then the mechanism, then the expected step-by-step UX change, then exact before/after code. No recipe generator or verifier changes are included — those come after the fixes are implemented and proven.
+
+---
+
+### Sub-Fix A — Issue #11: PNG "Run Conversion" produces visually broken output
+
+**User-facing issue:** User uploads a PNG sprite sheet. Fills in angles/frames. Clicks "Run Conversion". The resulting XP file loaded into the grid shows garbled, sliced-through content — frames cut in the middle of a sprite, cells with wrong content, or all blank. The user cannot get a usable XP from any real-world PNG via the Run button.
+
+**Root cause (code):** `run_pipeline()` defaults to the arithmetic grid slicing path (`src_w // total_frames`, `src_h // angles`), which assumes the source PNG was authored with exact pixel-aligned frame boundaries. Most real PNGs have padding, spacing, or non-exact dimensions. The working fallback path (pixel-to-cell scale-fit) exists but is only triggered by geometry failures.
+
+**How the fix solves it:** Adding `force_fallback: bool = True` to `RunConfig` (defaulting True) makes the pixel-to-cell path the default for all conversions. The fallback scales the whole image to fit the target cell grid — correct pixels, no slicing artifacts. The arithmetic path stays accessible for future use via `force_fallback=False`.
+
+**Expected UX change (step by step):**
+1. Upload PNG → unchanged (already works)
+2. Click "Run Conversion" → **before:** garbled sliced output; **after:** scaled pixel-faithful XP with correct sprite pixels
+3. Grid panel loads with recognizable scaled content — user can double-click frames, enter whole-sheet editor, make targeted corrections
+4. Export/skin dock test work as before
+
+**Exact code changes:**
+
+`src/pipeline_v2/models.py` — add field to `RunConfig` after `family`:
+```python
+# BEFORE (line 37 is last field):
+    family: str = "player"
+
+# AFTER:
+    family: str = "player"
+    force_fallback: bool = True   # pixel-to-cell fallback is now the default; set False to opt into arithmetic slicing
+```
+
+`src/pipeline_v2/service.py` — line 1761-1763, change the `use_fallback` initializer:
+```python
+# BEFORE:
+            # Geometry validation: set use_fallback instead of raising so any
+            # valid image always produces output (dumb convert + upper-left placement).
+            use_fallback = src_w < source_frame_cols or src_h < cfg.angles
+
+# AFTER:
+            # force_fallback=True (default) bypasses arithmetic slicing entirely.
+            # Arithmetic path is still reachable via force_fallback=False in the API payload.
+            use_fallback = cfg.force_fallback or src_w < source_frame_cols or src_h < cfg.angles
+```
+
+`src/pipeline_v2/app.py` — `api_run()` handler, add one line to `RunConfig(...)` construction (after `native_compat=` line):
+```python
+# BEFORE (lines 483-493):
+            cfg = RunConfig(
+                source_path=str(payload.get("source_path", "")),
+                name=str(payload.get("name", "")).strip(),
+                angles=int(payload.get("angles", 1)),
+                frames=parse_frames_csv(payload.get("frames", "1"), req_id, "run"),
+                source_projs=int(payload.get("source_projs", 1)),
+                render_resolution=int(payload.get("render_resolution", 12)),
+                bg_mode=str(payload.get("bg_mode", "key_color")),
+                bg_tolerance=int(payload.get("bg_tolerance", 8)),
+                native_compat=_as_bool(payload.get("native_compat"), default=True),
+            )
+
+# AFTER:
+            cfg = RunConfig(
+                source_path=str(payload.get("source_path", "")),
+                name=str(payload.get("name", "")).strip(),
+                angles=int(payload.get("angles", 1)),
+                frames=parse_frames_csv(payload.get("frames", "1"), req_id, "run"),
+                source_projs=int(payload.get("source_projs", 1)),
+                render_resolution=int(payload.get("render_resolution", 12)),
+                bg_mode=str(payload.get("bg_mode", "key_color")),
+                bg_tolerance=int(payload.get("bg_tolerance", 8)),
+                native_compat=_as_bool(payload.get("native_compat"), default=True),
+                force_fallback=_as_bool(payload.get("force_fallback"), default=True),
+            )
+```
+
+**Files changed:** `models.py`, `service.py`, `app.py` (3 files, ~3 lines). No frontend changes required — API default handles all existing callers.
+
+---
+
+### Sub-Fix B — Issue #10: Declared bounding box is ignored by the pipeline
+
+**User-facing issue:** User uploads a PNG that has empty margins around the sprite area. They draw a bounding box in the Source Panel (S2/draw-box mode + S7/commit), set it as anchor (S15). They click "Run Conversion". The pipeline ignores the anchor box and converts the entire PNG including the margins — wasting cells on empty border space and producing a badly-scaled result.
+
+**Root cause (code):** `wbRun()` (workbench.js:6664) never reads `state.anchorBox`. The payload sent to `/api/run` has no crop/bbox field. `RunConfig` has no crop field. The pipeline always works on the full source image.
+
+**How the fix solves it:** `wbRun()` sends `state.anchorBox` as `crop_box` in the API payload. The pipeline crops the image to those bounds before any conversion (Sub-Fix A fallback runs on the cropped image). Users who set an anchor box get a tight crop; users who don't get full-image conversion.
+
+**Expected UX change (step by step):**
+1. Upload PNG → unchanged
+2. Draw bounding box around sprite content in Source Panel → unchanged (already works)
+3. Set as anchor (right-click → "Set as Anchor" or S15 button) → unchanged
+4. Click "Run Conversion" → **before:** full PNG converted, margins included; **after:** only the declared anchor-box region is converted
+5. Grid panel shows the cropped sprite content, filling cells more accurately
+
+**Exact code changes:**
+
+`src/pipeline_v2/models.py` — add field after `force_fallback`:
+```python
+# AFTER force_fallback line:
+    crop_box: list[int] | None = None   # Optional [x, y, w, h] in source image pixels
+```
+
+Add validation in `RunConfig.validate()` (before the `family` check, line ~60):
+```python
+# INSERT:
+        if self.crop_box is not None:
+            if not (isinstance(self.crop_box, list) and len(self.crop_box) == 4
+                    and all(isinstance(v, int) and v >= 0 for v in self.crop_box)
+                    and self.crop_box[2] > 0 and self.crop_box[3] > 0):
+                raise ApiError(
+                    "crop_box must be [x, y, w, h] with w>0, h>0",
+                    "invalid_crop_box", "run", request_id, 422,
+                )
+```
+
+`src/pipeline_v2/service.py` — in `run_pipeline()`, after `with Image.open(src) as im:` (line 1748) and before `bg_rgb = _estimate_bg_rgb(im)` (line 1750):
+```python
+# INSERT after line 1748:
+            if cfg.crop_box is not None:
+                bx, by, bw, bh = cfg.crop_box
+                im = im.crop((bx, by, bx + bw, by + bh))
+                src_w, src_h = im.size
+```
+
+`src/pipeline_v2/app.py` — `api_run()`, add one line to `RunConfig(...)` (after `force_fallback=` line):
+```python
+                crop_box=payload.get("crop_box") or None,
+```
+
+`web/workbench.js` — historical `wbRun()` payload note (superseded):
+```javascript
+// Current model after the deletion-first cleanup:
+    const manifestPreview = sourceManifestPreviewState();
+    const geometry = sourceMaterializationGeometry(manifestPreview.manifest);
+    const payload = {
+      source_path: state.sourcePath,
+      name: $("wbName").value || "wb_sprite",
+      angles: geometry.angles,
+      frames: geometry.frames.join(","),
+      source_projs: geometry.source_projs,
+      render_resolution: parseInt($("wbRenderRes").value || "12", 10),
+      source_manifest: manifestPreview.manifest,
+      crop_box: state.anchorBox
+        ? [Math.round(state.anchorBox.x), Math.round(state.anchorBox.y),
+           Math.round(state.anchorBox.w), Math.round(state.anchorBox.h)]
+        : null,
+    };
+```
+
+**Files changed:** `models.py`, `service.py`, `app.py`, `workbench.js` (4 files).
+
+---
+
+### Sub-Fix C — Issue #9 (part 1): Right-click context menu is broken
+
+**User-facing issue (bug 1 — empty-space right-click):** User right-clicks on empty space in the grid panel (not on a frame thumbnail or row header). The browser's native context menu appears (Inspect Element, Save Page As, etc.). This is unexpected and disorienting. Simultaneously, if a custom context menu was previously open, it stays open at its old position.
+
+**User-facing issue (bug 2 — drag-select conflict):** User is multi-selecting frames by click-dragging across them. They accidentally right-click mid-drag. The custom context menu pops up while the drag-select is still active, showing stale/wrong selection state.
+
+**Root cause (code):** `attachGridHandlers()` contextmenu handler (workbench.js:6124): when `!header && !cell`, the handler returns early WITHOUT calling `e.preventDefault()`. This lets the browser's native menu through AND leaves any open custom menu open. The handler also only checks `state.gridCellDrag.dragging` but not `state.gridFrameDragSelect` (row drag-select).
+
+**How the fix solves it:** Two targeted changes to the contextmenu handler:
+1. Add `state.gridFrameDragSelect` check at the top (same pattern as `gridCellDrag` check)
+2. In the empty-space branch: call `e.preventDefault()`, close any open custom menu, clear selection, return
+
+**Expected UX change (step by step):**
+1. Right-click on frame → custom menu appears (**unchanged** ✓)
+2. Right-click on empty grid space → **before:** browser native menu appears, old custom menu stays open; **after:** nothing happens, browser menu suppressed, custom menu closes, selection cleared
+3. During drag-select, accidentally right-click → **before:** context menu opens mid-drag; **after:** nothing happens, drag-select continues uninterrupted
+
+**Exact code changes:**
+
+`web/workbench.js` — `attachGridHandlers()` contextmenu handler (lines 6106-6130):
+```javascript
+// BEFORE (lines 6106-6130):
+    panel.addEventListener("contextmenu", (e) => {
+      if (state.gridCellDrag && state.gridCellDrag.dragging) {
+        e.preventDefault();
+        return;
+      }
+      const header = e.target.closest(".frame-row-header");
+      if (header) {
+        e.preventDefault();
+        const row = Number(header.dataset.row);
+        if (Number.isFinite(row)) selectWholeRow(row);
+      }
+      const cell = e.target.closest(".frame-cell");
+      if (cell) {
+        e.preventDefault();
+        const row = Number(cell.dataset.row);
+        const col = Number(cell.dataset.col);
+        selectFrame(row, col, false);
+      }
+      if (!header && !cell) return;
+      const menu = $("gridContextMenu");
+      updateGridContextMenuUI();
+      menu.style.left = `${e.clientX}px`;
+      menu.style.top = `${e.clientY}px`;
+      menu.classList.remove("hidden");
+    });
+
+// AFTER:
+    panel.addEventListener("contextmenu", (e) => {
+      // Block context menu during any active drag.
+      if ((state.gridCellDrag && state.gridCellDrag.dragging) || state.gridFrameDragSelect) {
+        e.preventDefault();
+        return;
+      }
+      const header = e.target.closest(".frame-row-header");
+      if (header) {
+        e.preventDefault();
+        const row = Number(header.dataset.row);
+        if (Number.isFinite(row)) selectWholeRow(row);
+      }
+      const cell = e.target.closest(".frame-cell");
+      if (cell) {
+        e.preventDefault();
+        const row = Number(cell.dataset.row);
+        const col = Number(cell.dataset.col);
+        selectFrame(row, col, false);
+      }
+      if (!header && !cell) {
+        // Empty space: suppress browser menu, close custom menu, clear selection.
+        e.preventDefault();
+        $("gridContextMenu").classList.add("hidden");
+        state.selectedRow = null;
+        state.selectedCols = new Set();
+        renderFrameGrid();
+        return;
+      }
+      const menu = $("gridContextMenu");
+      updateGridContextMenuUI();
+      menu.style.left = `${e.clientX}px`;
+      menu.style.top = `${e.clientY}px`;
+      menu.classList.remove("hidden");
+    });
+```
+
+**Files changed:** `workbench.js` (1 file, ~5 lines).
+
+---
+
+### Sub-Fix D — Issue #10 (part 2): Drawing a bbox and clicking "Add sprite" still leaves user unable to drag to grid
+
+**User-facing issue:** User draws a bounding box over a sprite in the source panel. They right-click → "Add 1 sprite". The box appears committed. But attempting to drag it to a frame in the grid panel does nothing.
+
+**Confirmed by user (2026-04-14):** "right click shows context menu, i am able to click 'add 1 sprite' but that does nothing in terms of my ability to drag."
+
+**Root cause (code, rechecked):**
+- The source→grid drag path already exists and only starts when `state.sourceMode === "row_select"` or `"col_select"`.
+- `srcCtxAddSprite` currently commits the draft box and hides the menu, but leaves source mode unchanged.
+- `commitDraftToSource()` is a shared helper used by other flows too; broadening it first would risk changing rapid-add and add-to-row behavior.
+- The earlier `renderSourcePanel()` suggestion was invalid. The real helper is `setSourceMode()`, which already updates tool UI and rerenders the source canvas.
+
+**Corrected plan:** keep the change handler-scoped. In the `srcCtxAddSprite` click listener, after a successful `commitDraftToSource("manual")`, call `setSourceMode("row_select")`. Do not patch shared `commitDraftToSource()` until the other call sites are explicitly reviewed.
+
+**Expected UX change:**
+1. User draws bbox over a sprite.
+2. User clicks "Add 1 sprite".
+3. The box is committed and the source panel enters drag-ready row mode immediately.
+4. User drags the selected box to a frame cell in the adjacent grid panel.
+
+**Exact code shape:**
+```javascript
+$("srcCtxAddSprite").addEventListener("click", () => {
+  const box = state.sourceContextTarget?.type === "draft"
+    ? commitDraftToSource("manual")
+    : null;
+  if (box) setSourceMode("row_select");
+  hideSourceContextMenu();
+});
+```
+
+**Files changed:** `workbench.js` (1 file, click handler only).
+
+---
+
+### Sub-Fix E — Issue #15: Whole-sheet frame-nav ergonomics
+
+**Correction after layout audit:** source panel and grid panel are already adjacent in the shipped `two-col` layout. Layout is not the root cause for source→grid drag failure, so this item is no longer a prerequisite for D1.
+
+**Actual issue:** when the whole-sheet editor mounts, it moves `#gridPanel` into `#wsFrameNav`, but the grid toolbar remains behind in the original grid panel shell. That is a whole-sheet-editor UX problem, not a source→grid layout problem.
+
+**Corrected plan:**
+1. Keep D1 unblock focused on Sub-Fix D.
+2. If proxy controls are added inside `#wsFrameNav`, use unique ids/classes. Do **not** duplicate live ids like `addFrameBtn` or `deleteCellBtn`.
+3. Treat any larger "frame nav next to source panel" redesign as optional UX hardening after the drag workflow is proven.
+
+**Files changed:** none until proxy-toolbar scope is finalized.
+
+---
+
+### Sub-Fix F — Issue #9: Row operations and frame-slot semantics
+
+**Correction after grid audit:** `deleteCellBtn` is already a PROVEN G6 action that clears selected frame contents in-place. It must not be rewritten into "delete frame slot and shift left" without retiring that old owner and re-proving the new one.
+
+**Actual gaps:**
+- No row add/delete actions for angle rows.
+- No separate "delete frame slot" action if product wants slot removal rather than content clearing.
+- Any dimension-changing action is risky while the whole-sheet editor is mounted because the editor caches dimensions at mount time.
+
+**Corrected plan:**
+1. Add new row actions (`addRowBtn`, `deleteRowBtn`) if row growth/shrink is required.
+2. Preserve `deleteCellBtn` as clear-content/delete-selection.
+3. If frame-slot deletion is needed, add a new control/action instead of changing G6 semantics.
+4. Use the real mounted-state guard already present elsewhere: `window.__wholeSheetEditor?.getState?.().mounted`, not `state.wholeSheetEditorOpen`.
+5. Apply that guard to all dimension-changing actions, including the existing `addGridFrameSlot()`.
+
+**Files changed:** `workbench.js`, `workbench.html` once the product semantics are split into distinct actions.
+
+---
+
+### Sub-Fix G — Engine dimension mismatch blocks export after row/frame changes
+
+**User-facing issue:** User has customized the grid (e.g., removed 2 rows so they have 6 angles instead of 8 for a player sprite). They click "Export XP". The export FAILS with error "native contract violated: got 126×60, expected 126×80". The user cannot export their work even though it's visually correct for their intent.
+
+Symmetric issue: User wants only 3 frames per angle but the engine contract expects 9 frames × 2 projs = 18 cols worth of content. Export fails if grid cols don't match.
+
+**The user's proposed solution (directionally correct):** missing rows/cols should export as transparent padding; extra rows/cols should be truncated to family-native export dimensions.
+
+**Root cause (code, rechecked):**
+- `workbench_export_xp()` currently exports session geometry directly.
+- The export function has two branches: persisted uploaded layers are exported directly; template sessions build native layers from layer 2.
+- `_build_native_layers()` takes `cells_layer2`, `cols`, and `rows` explicitly. It does not re-read `sess`.
+- The previous plan's `sess["layers"] = ...` mutation was unsafe and the proposed insertion point was wrong.
+
+**Corrected plan:** adapt export geometry through local variables only.
+- Compute `export_cols` / `export_rows` from `_FAMILY_DIMS`.
+- If persisted layers exist, build a local `export_layers` array by padding/truncating each layer into the export dimensions.
+- Otherwise, build a local adapted layer-2 cell array and pass that into `_build_native_layers(...)`.
+- Write the XP using the adapted locals. Do not mutate `sess`, `sess["layers"]`, or `sess["cells"]`.
+
+**Files changed:** `service.py` (branch-aware local export adaptation only).
+
+---
+
+### Sub-Fix H — Issue #15: Cut line management (undo, horizontal cuts, adjustability)
+
+**Full scope from Issue #15 (2026-04-14):**
+> "VERTICAL CUT IS UNDOABLE, EITHER SOURCE PANEL DRAW BOX, VERTICAL CUT, DELETE ROW FUNCTIONS SHOULD HAVE THEIR OWN ERASER OR UNDO REDO. NO HORIZONTAL CUT EITHER. VERTICAL CUT SHOULD BE ADJUSTABLE ONCE PLACED."
+
+The source audit changes the status of the three parts:
+
+**Sub-Fix H1: Vertical cut undo**
+- Insert-cut already pushes history.
+- `deleteSourceTarget()` begins with `pushHistory()`.
+- `deleteSelectedSourceObjectsOrDraft()` also pushes history before deleting selected cuts.
+- Treat H1 as a proof gap unless a failing repro shows otherwise.
+
+**Sub-Fix H2: Horizontal cuts**
+- `sourceCutsH` scaffolding already exists in state/snapshot/load/reset.
+- Missing pieces are the actual mode, hit-test, render, UI, and workflow wiring.
+- H2 remains a real new feature, but it is partial scaffolding, not a greenfield build.
+
+**Sub-Fix H3: Cut adjustability**
+- Vertical-cut movement is already wired through `sourceVBoxAtPoint()` and `move_cut_v`.
+- Treat H3 as a proof/discoverability item first, not a missing implementation.
+
+**Corrected priority inside H:**
+1. Verify H1/H3 with UI-driven proof before writing code.
+2. Patch only if the proof run demonstrates a real failure.
+3. Keep H2 as the only clearly new implementation item.
+
+---
+
+
+### Implementation Priority Order (revised 2026-04-14)
+
+1. **Sub-Fix A** (#11 — force_fallback) — 3 files, 3 lines. Zero risk. Implement first.
+2. **Sub-Fix C** (context menu empty-space + drag-conflict) — 1 file, ~8 lines. Low risk.
+3. **Sub-Fix D** (handler-scoped mode handoff in `srcCtxAddSprite`) — 1 file, low risk. Unblocks the reported source→grid workflow without changing other commit paths.
+4. **Sub-Fix G** (branch-aware export pad/truncate using local vars only) — 1 file. Implement before any row/slot dimension work.
+5. **Sub-Fix F** (new row actions + mounted-state guards on all dimension-changing actions; preserve G6 semantics) — 2 files.
+6. **Sub-Fix B** (crop_box from anchorBox) — 4 files. After A confirms fallback works.
+7. **Sub-Fix E** (whole-sheet frame-nav UX hardening) — separate from D1; do not block source→grid proof on it.
+8. **Sub-Fix H1/H3** — verify first; patch only on failing repro.
+9. **Sub-Fix H2** — new feature after the proof-backed blocker set above.
+
+---
+
+### Canon Spec Reference
+
+Priority Stack items: §3.2 item 2 (PNG slicing + grid UX cluster). Full revised plan (Sub-Fixes A–H) above is authoritative. Canon spec §3.2 item 2 contains a concise summary cross-referencing this section.
+
+---
+
+## SESSION FAILURE LOG — 2026-04-14: Sub-Fixes A–H All Non-Functional
+
+**Status:** FAILED — none of the committed sub-fixes produce working user-facing behavior
+**Commits implicated:** 991a74b (Sub-Fix G), db4e85c (Sub-Fix F), 6d987bd (Sub-Fix B), 0965bb4 (Sub-Fix H2), 43664eb (G-RANDOM oracle)
+**User report:** "NONE OF IT FUCKING WORKS" — Issues #9, #10, #15 all still broken after commits
+
+### Critical Model Error Surfaced This Session
+
+A prior agent session introduced a hard prerequisite: **whole-sheet XP editor must be CLOSED** before source-box drag is allowed. This requirement makes no sense and broke the workflow. The whole-sheet XP editor IS the primary editor — it should not gate source drag operations.
+
+### Conversation Block (verbatim, user-facing failure evidence)
+
+```
+• I've removed the preselection requirement for source-box drag. I'm doing a quick
+  hygiene check on the updated files now, then I'll tell you exactly where the frame
+  nav lives and what the drag gesture should be doing.
+
+• The frame nav is the panel labeled Frame Navigation in workbench.html at lines 140-150.
+  That panel contains #gridPanel, which is the actual frame-tile grid.
+
+  One important detail: when the whole-sheet editor mounts, the same #gridPanel DOM
+  node gets moved into #wsFrameNav inside the hidden whole-sheet panel. So there is
+  not a second independent frame-nav grid. It is the same grid, just reparented.
+
+  Drag behavior I just changed:
+  - A body drag on a source box in Select mode now starts drag-to-grid immediately.
+  - You should not need a preselected box state anymore.
+  - The drop still has to land on an actual frame tile, not the empty panel background.
+
+[USER]: OH MY FUCKING GOD TELL ME WHAT THE ACTUAL FUCK IS SUPPOSED TO HAPPEN ONCE I
+UPLOAD A PNG AND ADD V AND H CUTS. BECAUSE YOU HAVE NO FUCKING IDEA DO YOU YOU PIECE
+OF SHIT????? WHY ARE YOU USING A NON CANON FUCKING DOC
+
+• I'm not pulling from a random doc. I'm grounding this on the current canonical spec
+  and the failure log...
+
+  After you upload a PNG:
+  1. The source panel becomes the canonical source surface.
+  2. There is no user-facing conversion step.
+  3. If the source is a PNG, it should be shown and operated on as the editable source
+     surface with pixel-to-cell fidelity.
+  ...
+
+[USER]: OK SO IF YOU FUCKING UNDERSTAND, WHY ISN'T IT FUCKING THE CASE????
+
+• Because the code still does a different thing than the model you described.
+
+  The mismatch is here:
+  - The source panel is still a manual sprite-box editor, not a pure XP-surface-derived
+    box lattice. Driven by drawCurrent, extractedBoxes, sourceSelection, sourceMode.
+  - cut_v and cut_h only create/move cut markers in sourceCutsV/sourceCutsH. They do
+    NOT automatically generate frame boxes. Logic at workbench.js:4631-4669.
+  - Drag/drop = "drag selected source boxes to a grid cell" — not semantic frame slots
+    derived from cuts. Drop path at workbench.js:4757-4808.
+  - Frame nav is not a separate destination surface. It is #gridPanel reparented.
+
+  The real fix is bigger than "make drag work":
+  1. Make the source surface canonical.
+  2. Make V/H cuts partition that surface into frame boxes.
+  3. Make row drag operate on those boxes, not on old manual box selection layer.
+  4. Make frame nav the explicit drop target for those boxes.
+  5. Remove old conversion-era and manual-box fallback behaviors still alive today.
+
+[USER]: JUST PASTE IN THE FAILURE LOG, SEND PAR AGENTS TO AUDIT CANON SPEC AND MAKE
+AN SAR CALLGRAPH STYLE MAP OF EVERYTHING THAT IS SUPPOSED TO HAPPEN. THE WHOLE SHEET
+XP EDITOR IS THE MAIN EDITOR.
+```
+
+### Key Invariant Established
+
+**THE WHOLE-SHEET XP EDITOR IS THE PRIMARY EDITOR.** Any code that gates source-panel operations on whole-sheet-editor-closed state is wrong and must be removed.
+
+### Next Action
+
+Parallel agents launched to: (1) audit canon spec for the full intended SAR model, (2) produce a callgraph-style map of the upload→cuts→drag→drop→export workflow as it is SUPPOSED to work per canon. Output in /tmp.
+
+---
+
+## PROCESS FAILURE — 2026-04-14: Agent Created New MD Files While Instructed to Delete
+
+**Instruction given:** "USE PARALLEL AGENTS TO AUDIT THE ENTIRE FUCKING REPO: ANY NON CANON DOC THAT IS NOT THE CANON SPEC OR THE FAILURE LOG: DELETE. PUT ALL DOCS IN ONE FOLDER INCLUDING CLAUDE AND AGENTS.MD."
+
+**What agent did instead:**
+- Moved non-canon docs to dumpster (correct)
+- Then CREATED new MD files: `docs/CLAUDE.md` (duplicate of root), `docs/CODEX.md` (moved instead of deleted)
+- Net result: deleted ~40 docs, created 2 new ones, moved 1
+
+**Root cause:** Agent interpreted "put all docs in one folder" as license to create copies/moves rather than consolidate-then-delete. The instruction was delete non-canon. CLAUDE.md and AGENTS.md are config, not docs — they stay where they are.
+
+**Rule established:** When told to delete non-canon docs, DELETE them. Do not create new MD files as byproducts of reorganization. Do not move files to new paths and call it consolidation. Do not produce AI slop filler docs. If a doc is non-canon, it goes to the dumpster — full stop.
+
+**Remediation:** Deleted docs/CLAUDE.md and docs/CODEX.md. docs/AGENTS.md retained as the single project config location per instruction.
+
+---
+
+## MASTER SAR MAP — 2026-04-14: Every User-Reachable Action
+
+**Generated by 5 parallel agents cross-checking workbench.js, whole-sheet-init.js, workbench.html.**
+**Totals: 158 wired actions across 4 panels. 176 HTML element IDs. 94 wired. 82 dead.**
+
+---
+
+### DRAG CALLGRAPH (D1 — the primary workflow action)
+
+```
+User: mousedown on sourceCanvas with committed box selected
+  onSourceMouseDown (workbench.js:4590)
+    guard: !state.sourceImage → return
+    guard: e.button !== 0 → return
+    mode "row_select"/"col_select" + sourceSelection.size > 0 + hit box → path A
+    mode "select" + hit box body (handle === "move") → path B
+    → state.sourceDrag = { type: "drag_source_selection_to_grid", startClientX, startClientY, moved:false }
+    → state.sourceDragHoverFrame = null
+
+User: mousemove across DOM into grid panel
+  onSourceMouseMove (workbench.js:4726)
+    d.moved = true (if >3px threshold)
+    → state.sourceDragHoverFrame = gridFrameFromClientPoint(clientX, clientY)
+      gridFrameFromClientPoint (workbench.js:5574)
+        document.elementFromPoint(clientX, clientY)
+        el.closest(".frame-cell")
+        → { row: frame.dataset.row, col: frame.dataset.col } or null
+
+User: mouseup over frame cell
+  onSourceMouseUp (workbench.js:4775)
+    → dropSelectedSourceBoxesAtClientPoint(clientX, clientY) (workbench.js:5585)
+      boxes = state.extractedBoxes.filter(selected)
+      guard: !boxes.length → return false
+      tgt = gridFrameFromClientPoint(clientX, clientY)
+      guard: !tgt → status warn, return false
+      → insertSourceBoxesIntoGridAt(boxes, tgt.row, tgt.col) (workbench.js:5518)
+        guard: !editableLayerActive() → status "read-only", return false
+          editableLayerActive() = (state.activeLayer === 2)
+        guard: !state.sourceImage → return false
+        guard: row/col out of bounds → return false
+        pushHistory()
+        for each box: frameCellsFromSourceBox(box) → writeSourceCellsToFrame(row, col, cells)
+          → state.cells[gy][gx] = { glyph, fg, bg }  [layer 2]
+        state.selectedRow = firstRow
+        state.selectedCols = new Set(firstRowCols)
+        renderAll()
+        saveSessionState("drop-source-selection-to-grid")
+        → status "Dropped N sprite box(es) into M row(s)"
+```
+
+**GATE SUMMARY FOR D1:**
+1. `state.sourceImage` must exist
+2. `state.sourceSelection.size > 0` with correct mode OR box body hit in select mode
+3. `state.extractedBoxes` must contain the selected IDs (boxes must be committed, not just draft)
+4. Drop target must be a `.frame-cell` DOM element (not grid background)
+5. `state.activeLayer === 2` (Visual layer must be active)
+
+---
+
+### PANEL 1 — SOURCE PANEL (51 actions, historical pre-2026-04-16 overlay owner)
+
+The source-overlay toolbar/context-menu actions in the table below were deleted on `2026-04-16`. Keep this section only as historical evidence; it is not current canon.
+
+| ID | Starting State | UI Trigger | Handler (file:line) | State Written | User-Visible Response |
+|----|---------------|------------|--------------------|--------------|-----------------------|
+| SP-01 | any | click #sourceSelectBtn | setSourceMode("select"):workbench.js:6992 | sourceMode="select" | Select mode active, cursor arrow |
+| SP-02 | any | click #drawBoxBtn | setSourceMode("draw_box"):6993 | sourceMode="draw_box" | Draw mode active |
+| SP-03 | any | click #rowSelectBtn | setSourceMode("row_select"):6994 | sourceMode="row_select" | Row select mode active |
+| SP-04 | any | click #colSelectBtn | setSourceMode("col_select"):6995 | sourceMode="col_select" | Col select mode active |
+| SP-05 | any | click #cutVBtn | setSourceMode("cut_v"):6996 | sourceMode="cut_v" | Vertical cut mode active |
+| SP-06 | any | click #cutHBtn | setSourceMode("cut_h"):6997 | sourceMode="cut_h" | Horizontal cut mode active |
+| SP-07 | any | #wbFile change (file input) | onSourceMouseDown→img.onload:6967 | sourceImage, extractedBoxes=[], sourceCutsV=[], sourceCutsH=[], anchorBox=null | Source panel shows uploaded image |
+| SP-08 | sourceImage set | click #extractBtn | findSprites():7015 | extractedBoxes (populated from anchor+threshold) | Box overlays appear on source panel |
+| SP-09 | sourceSelection.size > 0 | click #deleteBoxBtn | deleteSelectedSourceObjectsOrDraft():7002 | extractedBoxes (filtered), sourceSelection=Set() | Selected boxes removed |
+| SP-10 | rapidManualAdd checkbox | click #rapidManualAddChk | state.rapidManualAdd toggled:7010 | rapidManualAdd | Checkbox visual state |
+| SP-11 | sourceMode="draw_box" | mousedown→drag→mouseup on sourceCanvas | onSourceMouseDown:4590→setDraftBox→commitDraftToSource | drawCurrent (draft rect shown), then extractedBoxes.push on mouseup if rapidManualAdd | Blue draft rect during drag; committed box on release |
+| SP-12 | sourceMode="draw_box", draft exists | right-click sourceCanvas → click #srcCtxAddSprite | commitDraftToSource("manual"):7052→setSourceMode("row_select") | extractedBoxes.push(committed), sourceMode="row_select" | Draft becomes committed box; mode switches to row_select |
+| SP-13 | sourceMode="draw_box", draft exists | right-click → click #srcCtxAddToRow | addSourceBoxToSelectedRowSequence():7059 | extractedBoxes.push, rowSequence appended | Box added to row sequence |
+| SP-14 | sourceMode="draw_box", draft exists | right-click → click #srcCtxSetAnchor | setAnchorFromDraft():7070 | anchorBox = drawCurrent | Anchor indicator shown |
+| SP-15 | anchorBox set, box selected | right-click → click #srcCtxPadAnchor | padSelectedBoxesToAnchor():7076 | extractedBoxes (resized to anchor dims) | Boxes resize to match anchor |
+| SP-16 | sourceSelection.size > 0 | right-click → click #srcCtxDelete | deleteSelectedSourceObjectsOrDraft():7080 | extractedBoxes filtered, sourceSelection cleared | Selected boxes deleted |
+| SP-17 | sourceMode="select", box at point | mousedown on box body (handle="move") | onSourceMouseDown:4681 | sourceDrag={type:"drag_source_selection_to_grid"} | Drag begins; status "Drag selected source sprite to grid frame cell" |
+| SP-18 | sourceDrag active, drag_source_selection_to_grid | mousemove | onSourceMouseMove:4726 | sourceDragHoverFrame=gridFrameFromClientPoint() | Hover indicator on target frame |
+| SP-19 | sourceDrag active, moved=true | mouseup over .frame-cell | onSourceMouseUp:4775→dropSelectedSourceBoxesAtClientPoint:5585→insertSourceBoxesIntoGridAt:5518 | state.cells[gy][gx] written (layer 2) | Frame cell receives sprite content |
+| SP-20 | sourceDrag active, moved=false | mouseup (click, not drag) | onSourceMouseUp:4775 | sourceDrag=null | Selection update only |
+| SP-21 | sourceMode="select", box at point | mousedown on resize handle | onSourceMouseDown:4690 | sourceDrag={type:"resize", handle, id} | Resize drag begins |
+| SP-22 | sourceDrag={type:"resize"} | mousemove | onSourceMouseMove:4726 | drawCurrent resized | Box resize preview |
+| SP-23 | sourceDrag={type:"resize"} | mouseup | onSourceMouseUp:4775→commitResize | extractedBoxes updated with new dims | Box resized |
+| SP-24 | sourceMode="select", nothing at point | mousedown | onSourceMouseDown:4700 | sourceSelection=Set() | Deselects all boxes |
+| SP-25 | sourceMode="cut_v" | mousedown on canvas (no existing cut) | onSourceMouseDown:4631 | sourceCutsV.push({id,x}), pushHistory() | Vertical cut line appears |
+| SP-26 | sourceMode="cut_v", cut at point | mousedown on existing cut | onSourceMouseDown:4631 | sourceDrag={type:"move_cut_v", id} | Cut selected |
+| SP-27 | sourceDrag={type:"move_cut_v"} | mousemove | onSourceMouseMove | sourceCutsV[i].x = pt.x | Cut line moves |
+| SP-28 | sourceDrag={type:"move_cut_v"} | mouseup | onSourceMouseUp | sourceDrag=null, saveSessionState | Cut position committed |
+| SP-29 | sourceMode="cut_h" | mousedown on canvas (no existing cut) | onSourceMouseDown:4651 | sourceCutsH.push({id,y}), pushHistory() | Horizontal cut line appears |
+| SP-30 | sourceMode="cut_h", cut at point | mousedown on existing cut | onSourceMouseDown:4651 | sourceDrag={type:"move_cut_h", id} | Cut selected |
+| SP-31 | sourceDrag={type:"move_cut_h"} | mousemove | onSourceMouseMove | sourceCutsH[i].y = pt.y | Cut line moves |
+| SP-32 | sourceDrag={type:"move_cut_h"} | mouseup | onSourceMouseUp | sourceDrag=null, saveSessionState | Cut position committed |
+| SP-33 | sourceMode="row_select", boxes exist | mousedown on selected box | onSourceMouseDown:4597 | sourceDrag={type:"drag_source_selection_to_grid"} | Row drag begins |
+| SP-34 | sourceZoom range | change #sourceZoomRange | sourceZoom updated:workbench.js | sourceZoom | Source canvas zooms |
+| SP-35 | any | click #undoBtn | undo():6961 | state reverted from historyStack | UI reverts to prior state |
+| SP-36 | any | click #redoBtn | redo():6962 | state advanced from redoStack | UI advances to next state |
+
+---
+
+### PANEL 2 — GRID PANEL (19 actions)
+
+**Global gate on all edit actions: `editableLayerActive()` → `state.activeLayer === 2`**
+**If gate fails: status "Selected layer is read-only. Switch to Visual layer (2) to edit."**
+
+| ID | Starting State | UI Trigger | Handler (file:line) | Guards | State Written | User-Visible Response |
+|----|---------------|------------|--------------------|---------|--------------|-----------------------|
+| GP-01 | grid rendered | click .frame-cell | selectFrame:5860 | none | selectedRow, selectedCols | Frame highlighted |
+| GP-02 | frame selected | shift+click .frame-cell | selectFrame (shift):workbench.js | none | selectedCols (add/remove) | Multi-select |
+| GP-03 | session valid | click #addFrameBtn | addGridFrameSlot:5368 | editableLayerActive | anims resized, gridCols++ | New frame column appears |
+| GP-04 | frame selected | click #deleteCellBtn | deleteSelectedFrames:5709 | editableLayerActive | cells cleared at selectedRow×selectedCols | Frame content erased |
+| GP-05 | session valid | click #addRowBtn | addGridAngleRow:5398 | editableLayerActive | angles++, gridRows resized | New angle row appears |
+| GP-06 | angles > 1 | click #deleteRowBtn | deleteGridAngleRow:5424 | editableLayerActive, angles>1 | angles--, selectedRow adjusted | Angle row removed |
+| GP-07 | selectedRow > 0 | click #rowUpBtn | moveSelectedRow(-1):5744 | editableLayerActive | cells swapped (row i ↔ i-1), selectedRow-- | Row moves up |
+| GP-08 | selectedRow < angles-1 | click #rowDownBtn | moveSelectedRow(1):5744 | editableLayerActive | cells swapped (row i ↔ i+1), selectedRow++ | Row moves down |
+| GP-09 | selectedCols, min col > 0 | click #colLeftBtn | moveSelectedCols(-1):5780 | editableLayerActive | cells swapped, selectedCols shifted | Cols move left |
+| GP-10 | selectedCols, max col < total-1 | click #colRightBtn | moveSelectedCols(1):5780 | editableLayerActive | cells swapped, selectedCols shifted | Cols move right |
+| GP-11 | any | dragstart on .frame-row-header | attachGridHandlers:6345 | none | gridRowDrag.fromRow | Drag highlight on header |
+| GP-12 | gridRowDrag active | drop on .frame-row-header | moveRowToIndex:2634 | editableLayerActive | cells reordered, selectedRow updated | Row repositioned |
+| GP-13 | frame selected | dblclick .frame-cell | focusWholeSheetFrame:3487 | none | inspectorOpen state, whole-sheet editor focused | Whole-sheet editor opens/focuses on frame |
+| GP-14 | frame selected | right-click → #ctxCopy | copySelectedFrameToClipboard:6061 | none | inspectorFrameClipboard | Context menu closes; frame copied |
+| GP-15 | clipboard set, frame selected | right-click → #ctxPaste | pasteClipboardToSelectedFrame:6073 | editableLayerActive | cells written from clipboard | Frame receives pasted content |
+| GP-16 | frame selected | right-click → #ctxDelete | deleteSelectedFrames:5709 | editableLayerActive | cells cleared | Frame content erased |
+| GP-17 | frame selected | right-click → #ctxOpenInspector | focusWholeSheetFrame:3487 | none | whole-sheet editor focused | Editor opens |
+| GP-18 | frame selected | keydown Delete | deleteSelectedFrames:7482 | editableLayerActive | cells cleared | Frame erased |
+| GP-19 | frame selected | keydown W/A/S/D | nudgeSelectedFrames:7526 | editableLayerActive | cells shifted by dx/dy | Frame content nudged |
+
+---
+
+### PANEL 3 — WHOLE-SHEET EDITOR (54 actions)
+
+| ID | Starting State | UI Trigger | Handler (file:line) | State Written | User-Visible Response |
+|----|---------------|------------|--------------------|--------------|-----------------------|
+| WS-01 | editor mounted | click #wsToolCell OR key C | _switchTool('cell'):889 | activeTool='cell' | Cell tool active |
+| WS-02 | editor mounted | click #wsToolSelect OR key S | _switchTool('select'):889 | activeTool='select' | Select tool active |
+| WS-03 | editor mounted | click #wsToolErase OR key E | _switchTool('erase'):889 | activeTool='erase' | Erase tool active |
+| WS-04 | editor mounted | click #wsToolEyedropper OR key D | _switchTool('eyedropper'):889 | activeTool='eyedropper' | Eyedropper active |
+| WS-05 | editor mounted | click #wsToolFill OR key I | _switchTool('fill'):889 | activeTool='fill' | Fill tool active |
+| WS-06 | editor mounted | click #wsToolLine OR key L | _switchTool('line'):889 | activeTool='line' | Line tool active |
+| WS-07 | editor mounted | click #wsToolRect OR key R | _switchTool('rect'):889 | activeTool='rect' | Rect tool active |
+| WS-08 | activeTool='cell' | mousedown→mousemove→mouseup on wsCanvas | CellTool.startDrag/drag/endDrag:367 | canvas cells written (glyph,fg,bg per cell), onStrokeComplete | Cells painted |
+| WS-09 | activeTool='erase' | mousedown→mousemove→mouseup | EraseTool:81 | canvas cells cleared to (0,white,black) | Cells erased |
+| WS-10 | activeTool='eyedropper' | mousedown on wsCanvas | EyedropperTool._sample:55 | drawGlyph, drawFg, drawBg, lastSampledCell | Draw state updated from sampled cell |
+| WS-11 | activeTool='fill' | mousedown on wsCanvas | FillTool.fill:147 | canvas cells flood-filled | Region painted |
+| WS-12 | activeTool='line' | mousedown→drag→mouseup | LineToolAdapter:124 | canvas cells (line path) | Line drawn |
+| WS-13 | activeTool='rect' | mousedown→drag→mouseup | RectToolAdapter:136 | canvas cells (rect outline) | Rectangle drawn |
+| WS-14 | activeTool='select' | mousedown→drag→mouseup | SelectToolAdapter:155 | selectTool bounds | Selection box drawn |
+| WS-15 | selection active | Ctrl+C OR click #inspectorCopySelBtn | _copySelection:505 | clipboard={cells,bounds} | Clipboard set (silent) |
+| WS-16 | selection active | Ctrl+X | _cutSelection:558 | clipboard set, cells cleared | Selection cut |
+| WS-17 | clipboard set | Ctrl+V OR click #inspectorPasteSelBtn | _enterPasteMode:568 | pasteMode=true | Cursor→copy; next click places paste |
+| WS-18 | pasteMode=true | mousedown on wsCanvas | _pasteAt:587 | cells written at click pos, pasteMode=false | Clipboard placed |
+| WS-19 | selection active | Delete/Backspace OR click #inspectorClearSelBtn | _deleteSelection:533 | cells cleared in selection | Selection erased |
+| WS-20 | editor mounted | Ctrl+A | _onKeyDown:981 | selectTool bounds = full canvas | Full canvas selected |
+| WS-21 | selection active | click #inspectorRotateSelCwBtn OR key ] | _transformSelection('rot_cw'):664 | cells rotated 90° CW | Selection rotated |
+| WS-22 | selection active | click #inspectorRotateSelCcwBtn OR key [ | _transformSelection('rot_ccw'):664 | cells rotated 90° CCW | Selection rotated |
+| WS-23 | selection active | click #inspectorFlipSelHBtn | _transformSelection('flip_h'):664 | cells flipped H | Selection mirrored |
+| WS-24 | selection active | click #inspectorFlipSelVBtn | _transformSelection('flip_v'):664 | cells flipped V | Selection mirrored |
+| WS-25 | selection active | click #inspectorFillSelBtn | _fillSelection:734 | cells in selection = active draw state | Selection flood-filled uniformly |
+| WS-26 | selection active, lastSampledCell set | click #inspectorReplaceFgBtn | _replaceSelectionColor('fg'):764 | cells with matching FG → new FG | FG color replaced in selection |
+| WS-27 | selection active, lastSampledCell set | click #inspectorReplaceBgBtn | _replaceSelectionColor('bg'):764 | cells with matching BG → new BG | BG color replaced in selection |
+| WS-28 | editor mounted | click #inspectorFindReplaceApplyBtn | _findReplace:805 | matching cells replaced per criteria | Find-replace applied |
+| WS-29 | layerStack present | click layer row in wsLayersPanel | _switchActiveLayer:1879 | layerStack.selectLayer(i), onActiveLayerChanged | Layer highlighted |
+| WS-30 | layerStack present | click eye icon on layer row | _toggleLayerVisibility:1891 | layer.visible toggled | Layer show/hide |
+| WS-31 | layerStack present | click lock icon on layer row | _toggleLayerLock:1907 | layer.locked toggled | Lock icon toggles |
+| WS-32 | layerStack present | click add layer button | _addLayer:1915 | new layer added, selected | New layer row appears |
+| WS-33 | layerStack.length > 1 | click delete layer button | _deleteActiveLayer:1925 | layer removed | Layer row removed |
+| WS-34 | layer index > 0 | click layer up button | _moveLayerUp:1936 | layers[i] ↔ layers[i-1] | Layer moves up |
+| WS-35 | layer index < max | click layer down button | _moveLayerDown:1945 | layers[i] ↔ layers[i+1] | Layer moves down |
+| WS-36 | editor mounted | Ctrl+Z OR click #wsUndoBtn | onUndo callback→workbench undo | state reverted | Prior state restored |
+| WS-37 | editor mounted | Ctrl+Y OR click #wsRedoBtn | onRedo callback→workbench redo | state advanced | Next state restored |
+| WS-38 | editor mounted | click wsGlyphPickerCanvas at cell | _setDrawGlyph:1061 | drawGlyph | Glyph picker updates |
+| WS-39 | editor mounted | change #wsGlyphCode (0-255) | _setDrawGlyph:1061 | drawGlyph clamped | Code field updates picker |
+| WS-40 | editor mounted | input #wsGlyphChar (single char) | _setDrawGlyph:1061 | drawGlyph=charCode | Picker highlights char |
+| WS-41 | editor mounted | LMB click wsPaletteCanvas | _setDrawColor('fg',rgb):1970 | drawFg, fgInput | FG swatch updates |
+| WS-42 | editor mounted | RMB click wsPaletteCanvas | _setDrawColor('bg',rgb):1970 | drawBg, bgInput | BG swatch updates |
+| WS-43 | editor mounted | input #wsFgColor | _setDrawColor('fg',hex):1970 | drawFg | FG swatch updates |
+| WS-44 | editor mounted | input #wsBgColor | _setDrawColor('bg',hex):1970 | drawBg | BG swatch updates |
+| WS-45 | editor mounted | click #wsApplyGlyph | _buildToggle:1774 | applyGlyph toggled | G tag toggles |
+| WS-46 | editor mounted | click #wsApplyFg | _buildToggle:1774 | applyFg toggled | F tag toggles |
+| WS-47 | editor mounted | click #wsApplyBg | _buildToggle:1774 | applyBg toggled | B tag toggles |
+| WS-48 | editor mounted | click #wsGridToggle | _buildToggle:1774 | canvas.gridVisible toggled | Grid overlay on/off |
+| WS-49 | editor mounted | change #wsGridStep | gridStepSel change:1331 | canvas grid step | Grid pattern changes |
+| WS-50 | editor mounted | click #wsSaveBtn | onSave callback | delegates to workbench save | Session saved |
+| WS-51 | editor mounted | click #wsExportBtn | onExport callback | delegates to workbench export | XP file downloaded |
+| WS-52 | editor mounted | mousemove on wsCanvas | _onCanvasMouseMove:2079 | wsPos, wsHoverGlyph, wsHoverFg, wsHoverBg | Info panel shows live cell readout |
+| WS-53 | editor mounted | Escape | _onKeyDown→cancel paste/select | pasteMode=false OR selection cleared | Paste/select cancelled |
+| WS-54 | editor mounted | mouseleave wsCanvas | _onCanvasMouseLeave:2008 | wsPos='−,−', swatches cleared | Info panel blanks |
+
+---
+
+### PANEL 4 — GLOBAL TOOLBAR, CONTEXT MENUS, KEYBOARD (34 actions)
+
+| ID | Starting State | UI Trigger | Handler (file:line) | State Written | User-Visible Response |
+|----|---------------|------------|--------------------|--------------|-----------------------|
+| GL-01 | session exists | click #btnSave | saveCurrentActionProgress:6901 | session persisted | Save confirmation |
+| GL-02 | session exists | click #btnExport | exportXp:6902 | XP file downloaded | File download |
+| GL-03 | any | click #xpImportBtn | importXp:6900 | session state loaded from .xp | Grid populated |
+| GL-04 | any | click #btnNewXp | newXp:6903 | session state reset | Blank grid |
+| GL-05 | job exists | click #btnLoad | loadFromJob:6899 | session hydrated from job | Grid populated from job |
+| GL-06 | any | click #undoBtn | undo:6961 | state reverted | UI reverts |
+| GL-07 | any | click #redoBtn | redo:6962 | state advanced | UI advances |
+| GL-08 | session exists | click #webbuildQuickTestBtn | testCurrentSkinInDock:6910 | XP exported, injected into skin dock iframe | Skin dock preview updates |
+| GL-09 | any | click #webbuildUploadTestBtn | onWebbuildUploadTestClick:6911 | external .xp loaded | Skin dock loads file |
+| GL-10 | any | click #reportBugBtn | openBugReportModal:6951 | modal shown | Bug report modal opens |
+| GL-11 | modal open | submit bug report | submitBugReport | POST to GitHub Issues API | Issue filed, modal closes |
+| GL-12 | template loaded | click #templateSelect (change) | applyTemplate | session state reset to template | Grid resized/reset |
+| GL-13 | any | keydown Ctrl+Z | undo:workbench.js | state reverted | UI reverts |
+| GL-14 | any | keydown Ctrl+Y | redo | state advanced | UI advances |
+| GL-15 | any | keydown Ctrl+S | saveCurrentActionProgress | session saved | Save |
+| GL-16 | source context menu visible | click #srcCtxAddSprite | commitDraftToSource→setSourceMode("row_select"):7052 | extractedBoxes.push, sourceMode="row_select" | Box committed, mode switches |
+| GL-17 | source context menu visible | click #srcCtxAddToRow | addSourceBoxToSelectedRowSequence:7059 | rowSequence appended | Box added to row |
+| GL-18 | source context menu visible | click #srcCtxSetAnchor | setAnchorFromDraft:7070 | anchorBox=drawCurrent | Anchor set |
+| GL-19 | source context menu visible, anchorBox set | click #srcCtxPadAnchor | padSelectedBoxesToAnchor:7076 | extractedBoxes resized | Boxes padded |
+| GL-20 | source context menu visible | click #srcCtxDelete | deleteSelectedSourceObjectsOrDraft:7080 | extractedBoxes filtered | Boxes/cuts deleted |
+| GL-21 | grid context menu visible, frame selected | click #ctxCopy | copySelectedFrameToClipboard:6061 | inspectorFrameClipboard | Frame copied |
+| GL-22 | grid context menu visible, clipboard set | click #ctxPaste | pasteClipboardToSelectedFrame:6073 | cells written | Frame pasted |
+| GL-23 | grid context menu visible | click #ctxDelete | deleteSelectedFrames:5709 | cells cleared | Frame erased |
+| GL-24 | grid context menu visible | click #ctxOpenInspector | focusWholeSheetFrame:3487 | editor focused | Whole-sheet opens |
+| GL-25 | any | keydown V | setSourceMode("cut_v") | sourceMode | Vertical cut mode |
+| GL-26 | any | keydown B | setSourceMode("draw_box") | sourceMode | Draw box mode |
+| GL-27 | any | keydown Escape | hideSourceContextMenu / cancel | context menu hidden | Context menu closes |
+| GL-28 | grid focused | keydown Delete | deleteSelectedFrames | cells cleared | Frame erased |
+| GL-29 | grid focused | keydown W/A/S/D | nudgeSelectedFrames:5526 | cells shifted | Frame content nudged |
+| GL-30 | any | keydown Q/R (inspector) | angle nav | selectedRow changes | Different angle row selected |
+| GL-31 | any | keydown A/D (inspector) | frame nav | selectedCols changes | Different frame selected |
+| GL-32 | any | keydown F | _transformSelection('flip_h') | cells flipped | Flip applied |
+| GL-33 | any | keydown P | setSourceMode / inspector paint | mode change | Paint mode |
+| GL-34 | any | keydown Enter | confirm action (context dependent) | varies | Confirms current action |
+
+---
+
+### DEAD UI (elements visible to user with NO handler)
+
+These are user-visible controls that do nothing when clicked:
+
+| Element ID | Type | Panel | Dead Action |
+|-----------|------|-------|------------|
+| inspectorFrMatchGlyphChk | checkbox | Inspector Find & Replace | Match glyph toggle — unwired |
+| inspectorFrMatchFgChk | checkbox | Inspector Find & Replace | Match FG toggle — unwired |
+| inspectorFrMatchBgChk | checkbox | Inspector Find & Replace | Match BG toggle — unwired |
+| inspectorFrReplaceGlyphChk | checkbox | Inspector Find & Replace | Replace glyph toggle — unwired |
+| inspectorFrReplaceFgChk | checkbox | Inspector Find & Replace | Replace FG toggle — unwired |
+| inspectorFrReplaceBgChk | checkbox | Inspector Find & Replace | Replace BG toggle — unwired |
+| inspectorFrFindGlyph | input | Inspector Find & Replace | Find glyph input — unwired |
+| inspectorFrFindFg | input | Inspector Find & Replace | Find FG input — unwired |
+| inspectorFrFindBg | input | Inspector Find & Replace | Find BG input — unwired |
+| inspectorFrReplGlyph | input | Inspector Find & Replace | Replace glyph input — unwired |
+| inspectorFrReplFg | input | Inspector Find & Replace | Replace FG input — unwired |
+| inspectorFrReplBg | input | Inspector Find & Replace | Replace BG input — unwired |
+| templateSelect | select | Global | Template selection — no change handler |
+| bugKnownIssue | select | Bug modal | Known issue selector — unwired |
+| bugCategory | select | Bug modal | Category selector — unwired |
+| bugSeverity | select | Bug modal | Severity selector — unwired |
+| animCategorySelect | select | Grid | Animation category — no change handler |
+| jitterAlignMode | select | Grid | Jitter align mode — unwired |
+| jitterRefMode | select | Grid | Jitter ref mode — unwired |
+| legacyGridDetails | details | Grid | Details toggle — unwired |
+| inspectorFindReplaceDetails | details | Inspector | F&R section toggle — unwired |
+| inspectorShortcutsDetails | details | Inspector | Shortcuts section toggle — unwired |
+
+**NOTE: The entire Inspector Find & Replace subsystem (12 controls) is dead UI. WS-28 (_findReplace:805) is wired but its input controls are not. The Apply button fires but reads nothing meaningful.**
+
+
+---
+
+## PROCESS FAILURE — 2026-04-14: Wrong Root Cause Diagnosis on D1 Drag
+
+**What agent claimed:** "The root cause of D1 drag failure is the vertically stacked layout — source canvas and frame cells are 400-700px apart, gridFrameFromClientPoint returns null when frame cells are scrolled out of viewport."
+
+**What user confirmed:** FALSE. D1 drag does not work even when source panel and frame navigation are both visible simultaneously. The layout distance is NOT the root cause.
+
+**Status of prior diagnosis:** WRONG. Retracted. Do not use this as a basis for any fix.
+
+**Actual root cause:** UNKNOWN. Not yet investigated from first principles against the live UI.
+
+**What is strictly proven:** D1 drag does not produce any result under any conditions the user has tried.
+**What is only implemented:** The drag callgraph exists in code (onSourceMouseDown:4590 → insertSourceBoxesIntoGridAt:5518).
+**What is still assumed:** That the code path is actually reachable from user gestures.
+**What would make the prior claim false:** User demonstrating drag failure with both panels visible — confirmed by user.
+
+---
+
+## VISUAL AUDIT — 2026-04-14: UI vs SAR Map (Playwright + DOM Inspection)
+
+**Method:** Playwright headless browser, 1440×900 viewport, DOM rect capture, control enumeration, state inspection via `window.__wb_debug.getState()`. Server running at http://localhost:5071.
+
+### 1. PAGE LAYOUT (as delivered to user)
+
+The page is a **3397px tall single-column scroll document** with 12 numbered sections. No sticky toolbar. No panel anchoring. Users must scroll through non-workflow content to reach the canonical workflow controls.
+
+Section positions (pageY from document top):
+
+| Section | pageY |
+|---------|-------|
+| 1 Getting Started (instructions) | 276 |
+| 2 File Operations (Save/Export/Undo) | 707 |
+| 3 Recorder (UI recording) | ~860 |
+| 4 Load Source Surface (file upload) | 918 |
+| 5 Source Panel + 6 Grid Panel (side by side) | 1110 |
+| Frame Navigation (frame cell grid) | ~1738 |
+| 7 Animation + Metadata | 2027 |
+| Frame Jitter | 2192 |
+| Whole-Sheet XPEdit (hidden, unhides on demand) | ~2200 |
+| 8 XP Preview / 9 Session | 2427 |
+| 12 Export | 2827 |
+| 10 Skin Test dock | 3029 |
+| 11 Verification panel | 3197 |
+
+**Key layout observation:** The canonical 5-step workflow requires scrolling 2500px. Source Panel (5) and Grid Panel (6) controls are side-by-side but the frame cell grid (Frame Navigation) is ~628px below them on the page.
+
+---
+
+### 2. D1 DRAG ROOT CAUSE — CONFIRMED BY LIVE TEST
+
+**Historical note (pre-2026-04-16):** this section describes the deleted dual-surface source-refresh path (`refreshSourceSurfaceFromSession()` / `buildXpSourceCanvas()`). The live source panel now reloads canonical PNGs through `/api/workbench/source-image` and renders saved/draft manifest geometry directly.
+
+**Observation:** After full upload flow (`#wbFile` select + `#wbUpload` click + pipeline run), `window.__wb_debug.getState()` returns `sourceImageLoaded: false`.
+
+**Explanation of `sourceImageLoaded`:** Computed at workbench.js:7602 as `!!state.sourceImage`. Therefore `state.sourceImage` is **null or undefined** after the complete upload flow.
+
+**Code path that produces null:**
+```
+wbUpload() [workbench.js:6410]
+  → img.onload sets state.sourceImage = img  [line 6419] ← TEMPORARY (set from local file)
+  → fetch('/api/upload')
+  → wbRun() [line 6853]
+    → fetch('/api/run')  ← pipeline runs
+    → loadFromJob() [line 3962]
+      → hydrateLoadedSession(j) [line 3869]
+        → refreshSourceSurfaceFromSession() [line 3938]
+          → buildXpSourceCanvas(2) [line 4962]
+            guard: if (state.gridCols <= 0 || state.gridRows <= 0) return null  ← FIRES
+          ← returns null
+        ← returns false, state.sourceImage unchanged from last set
+```
+
+**Observed state after upload (live capture):**
+- `sourceImageLoaded: false` (state.sourceImage = null)
+- `angles: 1`, `gridCols: unknown` (not captured), `gridRows: unknown`
+- 1 frame cell rendered in DOM (session hydration ran)
+- Source canvas shows checker pattern ("No source image loaded.")
+
+**Primary consequence:** `onSourceMouseDown:4591` — `if (!state.sourceImage) return` — **fires on EVERY drag attempt.** The entire D1 drag path is dead from the first line.
+
+**Why `buildXpSourceCanvas()` returns null:** The session returned by the pipeline has `grid_cols: 0` or `grid_rows: 0` (the pipeline doesn't populate these for the direct PNG upload flow). These are used for source surface dimensions, separate from `angles` which IS non-zero.
+
+**State invariant broken:** Source canvas renders the uploaded image (via the temporary `img.onload` set at line 6419 or the `wbFile.change` handler at line 6973), but by the time the user attempts to drag, `state.sourceImage` has been set to null by `refreshSourceSurfaceFromSession()` returning false.
+
+---
+
+### 3. SECOND D1 FAILURE: LAYOUT GAP
+
+**Even if `state.sourceImage` were non-null, D1 drag still fails due to layout.**
+
+Measured positions after PNG upload (Playwright, scroll=800):
+- Source canvas: clientY=541, pageY=**1341** to **1661** (h=320px)
+- Frame cell [0,0]: clientY=1759, pageY=**2559** (h=70px)
+- Gap between source canvas bottom and frame cell top: **898px**
+
+With a 900px viewport: source canvas bottom (pageY=1661) to frame cell top (pageY=2559) = 898px gap. **You cannot see both simultaneously in any standard viewport.**
+
+`gridFrameFromClientPoint()` uses `document.elementFromPoint(clientX, clientY)`. This only resolves elements in the current viewport. When the source canvas is visible, the frame cells are ~900px below the visible area → `elementFromPoint()` returns null → D1 drag returns false silently.
+
+**Note:** This was the previously retracted diagnosis (layout distance). The PRIOR retraction was specifically about scrolling. The confirmed finding is: even with both panels visible (user's claim), the frame cells are in a DIFFERENT SECTION (Frame Navigation, below Source Panel) — they are never simultaneously visible with the source canvas after a real PNG upload.
+
+---
+
+### 4. CONTROLS IN VIEWPORT vs SAR MAP
+
+#### Controls visible in initial viewport (scroll=0, 1440×900):
+Only 4 controls visible without scrolling:
+- `#reportBugBtn` — mapped (GL-10)
+- `#templateSelect` — listed as DEAD UI in SAR map (no change handler — only `#templateApplyBtn` does anything)
+- `#templateApplyBtn` — mapped (GL-12)
+- UI Recorder controls (`uiRecorderStartBtn/StopBtn/ClearBtn/DownloadBtn`) — **NOT IN SAR MAP**
+
+The Getting Started instructions are visible at scroll=0. The canonical workflow controls require scrolling to y=800+.
+
+#### Controls present in UI but MISSING from SAR map:
+
+| Control ID | Section | Description |
+|------------|---------|-------------|
+| `uiRecorderStartBtn` | Recorder | Start UI recording |
+| `uiRecorderStopBtn` | Recorder | Stop recording |
+| `uiRecorderClearBtn` | Recorder | Clear recording |
+| `uiRecorderDownloadBtn` | Recorder | Download JSON recording |
+| `wbName` | Load Source | Session name input |
+| `wbRenderRes` | Load Source | Render resolution |
+| `wbRunOut` | Load Source | Apply-source request/output JSON |
+| `sourceManifestReloadBtn` | Source Panel | Reload canonical manifest from disk |
+| `sourceManifestResetDraftBtn` | Source Panel | Reset manifest draft to blank canonical state |
+| `sourceManifestSeedUniformBtn` | Source Panel | Seed canonical uniform-grid layout from active geometry |
+| `sourceManifestSaveBtn` | Source Panel | Save canonical manifest draft |
+| `sourceManifestEditor` | Source Panel | Canonical manifest JSON editor |
+| `animCategorySelect` | Animation | Row category selector |
+| `assignAnimCategoryBtn` | Animation | Assign row category |
+| `frameGroupName` | Animation | Frame group name input |
+| `assignFrameGroupBtn` | Animation | Assign selected frames |
+| `jitterAlignMode` | Frame Jitter | Align mode selector |
+| `jitterRefMode` | Frame Jitter | Reference mode selector |
+| `jitterRow` | Frame Jitter | Row input |
+| `jitterStep` | Frame Jitter | Step input |
+| `jitterLeftBtn` / `jitterRightBtn` / `jitterUpBtn` / `jitterDownBtn` | Frame Jitter | Nudge controls |
+| `autoAlignSelectedBtn` | Frame Jitter | Auto align selected |
+| `autoAlignRowBtn` | Frame Jitter | Auto align row |
+| `playBtn` / `stopBtn` / `fpsInput` / `previewAngle` | Preview | Animation preview controls |
+| `openXpToolBtn` | XP Tool | Launch desktop XP tool |
+| `verifyProfile` / `verifyTimeout` / `verifyRunBtn` / `verifyDryRunBtn` / `verifyCommandTemplate` | Verification | QA/verification panel |
+| `webbuildApplyInPlaceBtn` / `webbuildApplyRestartBtn` / `webbuildOpenBtn` / `webbuildReloadBtn` / `webbuildApplySkinBtn` | Webbuild | Skin dock controls (hidden) |
+
+**Total controls in UI not in SAR map: ~30+**
+
+---
+
+### 5. DEAD UI CONFIRMED IN LIVE DOM
+
+All 22 dead UI elements from the SAR map confirmed present in live DOM:
+
+**Inspector Find & Replace (12 controls — all dead):**
+- `#inspectorFrMatchGlyphChk`, `#inspectorFrMatchFgChk`, `#inspectorFrMatchBgChk`
+- `#inspectorFrReplaceGlyphChk`, `#inspectorFrReplaceFgChk`, `#inspectorFrReplaceBgChk`
+- `#inspectorFrFindGlyph`, `#inspectorFrFindFg`, `#inspectorFrFindBg`
+- `#inspectorFrReplGlyph`, `#inspectorFrReplFg`, `#inspectorFrReplBg`
+
+The Apply button (`#inspectorFindReplaceApplyBtn`) fires but reads nothing from these dead inputs.
+
+**Other dead controls (confirmed):**
+- `#templateSelect` — visible in viewport, no change handler (apply is via separate button)
+- `#bugKnownIssue` / `#bugCategory` / `#bugSeverity` — bug modal selectors, unwired
+- `#animCategorySelect` — animation category, no change handler
+- `#jitterAlignMode` / `#jitterRefMode` — jitter controls, unwired
+- `#legacyGridDetails` / `#inspectorFindReplaceDetails` / `#inspectorShortcutsDetails` — detail toggles, unwired
+
+---
+
+### 6. CANONICAL 5-STEP WORKFLOW — VISUAL FLOW ANALYSIS
+
+**Step 1: Upload PNG → Source Panel becomes XP surface**
+- Control: `#wbFile` (Choose File) + `#wbUpload` (Load Source) at section 4, pageY=918
+- Discoverability: POOR — requires scrolling ~930px from top; 4 non-workflow sections must be passed
+- After upload: source canvas shows image (via img.onload) BUT `state.sourceImage` becomes null after pipeline (see Finding 2)
+- Status: **BROKEN** — `state.sourceImage = null` blocks all subsequent source panel interaction
+
+**Step 2: Find Sprites**
+- Control: `#extractBtn` ("Find Sprites") at section 5, pageY=1196
+- Guard: `!state.sourceImage` at workbench.js:4825 → exits with error "Load source image first"
+- Status: **BROKEN** — blocked by same null sourceImage
+
+**Step 3: Draw/Commit Box**
+- Controls: `#drawBoxBtn` visible; right-click → context menu → `#srcCtxAddSprite`
+- Right-click menu: hidden div, not discoverable without prior knowledge
+- Mode button: visible. Draw gesture: works (sourceMouseDown draw_box path bypasses the null-sourceImage guard? NO — line 4591 runs FIRST before mode check)
+- Status: **BROKEN** — line 4591 guard kills draw_box mode too
+
+**Step 4: Drag Committed Box to Frame Cell**
+- Blocked by: null sourceImage (line 4591) + layout gap (898px)
+- Status: **BROKEN** (two independent blockers)
+
+**Step 5: Whole-Sheet Editor Correction**
+- Control: `#openInspectorBtn` ("Focus Whole-Sheet") at pageY=1196
+- WS panel: `class="panel hidden"` — completely hidden by default
+- After clicking "Focus Whole-Sheet": WS editor appears (below all other panels, pageY≈2200)
+- Status: **WIRED** (button works, editor loads) but isolated from the broken steps above
+
+---
+
+### 7. STATE INVARIANTS OBSERVED
+
+From `window.__wb_debug.getState()` after fresh page load (no upload):
+- `sourceMode: "select"` ✓
+- `activeLayer: 2` ✓ (Visual layer — editableLayerActive() = true)
+- `sourceImage: null` (no upload yet) — expected
+- `extractedBoxes: 0` — expected
+- `sourceSelection: ""` (not a Set) — suspicious
+
+`sourceSelection` is serialized as `""` (empty string), not as `"[object Set]"`. This suggests either the `__wb_debug.getState()` serializer converts Sets to empty strings, or `state.sourceSelection` is initialized as `""` instead of `new Set()`. If the code checks `state.sourceSelection.size > 0` and `sourceSelection` is `""`, then `"".size` is `undefined`, and `undefined > 0` is false — same as empty Set. Not immediately a bug but worth noting.
+
+---
+
+### 8. SUMMARY TABLE
+
+| Finding | Severity | Evidence |
+|---------|----------|----------|
+| `state.sourceImage = null` after upload blocks ALL source panel actions | CRITICAL | Live state capture: sourceImageLoaded=false |
+| Frame cells 898px below source canvas — drag physically impossible | CRITICAL | Measured: source pageY=1341-1661, frame cell pageY=2559 |
+| `buildXpSourceCanvas()` returns null (gridCols/gridRows=0) | ROOT CAUSE | Code path: hydrateLoadedSession→refreshSourceSurface→buildXpSourceCanvas |
+| 22 dead UI elements confirmed in live DOM | HIGH | DOM audit |
+| ~30 controls in UI not in SAR map | MEDIUM | DOM enumeration |
+| Whole-sheet editor hidden by default despite being primary editor | MEDIUM | DOM: class="panel hidden" |
+| Canonical workflow requires 930px scroll before first action | LOW | Section pageY measurements |
+| `templateSelect` in viewport is dead UI (misled as functional) | LOW | No change handler |
+
+**What is strictly proven:**
+1. `state.sourceImage` is null after the full `wbUpload + wbRun + loadFromJob + hydrateLoadedSession` flow
+2. `onSourceMouseDown:4591` returns immediately when `state.sourceImage` is null
+3. Source canvas and frame cells are 898px apart in page layout after upload
+4. 1 frame cell exists after upload (session hydration works), but source image state is broken
+5. `activeLayer = 2` is correct (editableLayerActive guard is NOT the blocker)
+
+**What is only implemented:**
+- The drag callgraph exists in code and appears correct IF the guards pass
+- Sub-Fixes B/F/G/H2 are committed but are all gated behind the broken `state.sourceImage`
+
+**What is still assumed:**
+- That `buildXpSourceCanvas()` returning null is caused by `gridCols=0` (not captured directly)
+- That fixing `state.sourceImage` would make drag work (layout gap would still block it)
+
+**What would falsify this analysis:**
+- A test showing `sourceImageLoaded: true` after the full upload flow
+- A test showing frame cells within 900px of source canvas after upload
+
+---
+
+## PROCESS FAILURE — 2026-04-14: Canon Spec Described The Wrong Application
+
+**What failed:** The canon/spec layer described a target or mixed-state application instead of the application that actually exists in code.
+
+**Wrong framing that was allowed to stand:**
+- that the source panel was already the canonical XP surface
+- that the whole-sheet editor was effectively the primary editor surface already
+- that template-first startup had already been demoted out of the root workflow
+- that the product could be described as a single-owner editor with overlays
+
+**What the application actually is today:**
+- a browser workbench rooted in `web/workbench.js`
+- with template/session/bundle ownership still at the workbench level
+- with a subordinate mounted whole-sheet editor in `web/whole-sheet-init.js`
+- with the source panel reduced to a read-only source projection plus manifest metadata
+- with frame navigation colocated under the root panel instead of a separate standalone owner
+
+**Why this is a process failure:**
+1. It mixed shipped behavior, dirty-worktree experiments, and target architecture into one canon.
+2. It allowed planner prose to outrun direct code ownership evidence.
+3. It made the spec sound cleaner than the internal architecture really is.
+4. That creates fake progress and sends refactor work in the wrong direction.
+
+**Correction:**
+- The canon spec must describe the current app exactly first.
+- The target architecture must be stated separately as a target.
+- Any claim that the app already has a whole-sheet-root, single-owner XP surface is non-canonical until the code actually reflects that owner graph.
+
+**Required doc rule going forward:**
+- top of canon spec must state exactly what the application is and does right now
+- current architecture and target architecture must be separate sections
+- no doc may describe the target owner graph as if it were already shipped
+
+---
+
+## PROCESS FAILURE — 2026-04-14: Active Docs Sprawled Beyond The 2-Doc Canon
+
+**What failed:** The active doc layer still contained more than the intended failure log + canon spec, and the canon spec itself still carried a stale appended tail from older plans/SAR/worksheet material.
+
+**Exact findings from the doc audit:**
+- `docs/` still contained active-looking non-canon docs: `AGENTS.md`, `CLAUDE.md`, `REXPAINT_MANUAL.txt`, `research/ascii/2026-04-14-claim-verification.md`, and `artifacts/`
+- the canon spec had a new front section but old legacy material restarted afterward, so one file still described multiple incompatible architectures at once
+- the engine sprite-system truth existed mostly in archive/dumpster docs instead of inside the canon spec
+- the local REXPaint manual was still separate from the active canon even though it was already being treated as the parity baseline
+
+**User correction/directive for this pass:**
+- there should be only the failure log and the canon spec as active docs
+- the REXPaint manual should be wholesale pasted into the first section of the canon spec
+- that first section should build the full REXPaint-first SAR/callgraph/behavior tree
+- engine sprite-system material should be folded into a second canon section covering the Asciicker runtime wrapper, injection behavior, Skin Dock, and game-engine-aware sprite-family truth
+- after the canon is rebuilt, the non-canon docs should be archive-stitched and moved into the dumpster
+
+**Why this is a process failure:**
+1. The repo kept multiple authority-like docs alive after the canon had already been simplified.
+2. The canon spec still mixed current architecture, target architecture, and stale historical plan text in one active file.
+3. The parity baseline and engine-wrapper truth were being referenced from side docs instead of being carried directly by the canon.
+4. That makes the doc layer itself misleading even before code changes begin.
+
+**Correction applied in this pass:**
+- rebuild the canon spec as a 2-section doc:
+  - Section 1 = fundamental REXPaint-parity editor spec with embedded local manual
+  - Section 2 = Asciicker engine sprite-wrapper spec with runtime-family/injection/Skin Dock truth
+- retire active-looking non-canon docs out of `docs/`
+- keep the failure log append-only and use it to record the doc/process correction
+
+---
+
+## CANON AUDIT — 2026-04-15: The 2-Doc Collapse Is True, But The Canon Was Still Under-Specified
+
+**What is strictly proven:**
+- the current active canon files are:
+  - `PLAYWRIGHT_FAILURE_LOG.md`
+  - `docs/plans/2026-03-23-workbench-canonical-spec.md`
+- the canon spec really does contain the full embedded local REXPaint manual in Section 1
+- the canon spec really does contain Asciicker family/runtime/injection material in Section 2
+- this pass did not change the deployed behavior of `rikiworld.com/xpedit`
+
+**Why the earlier "collapse complete" claim was not enough:**
+1. The filesystem collapse was true, but the canon spec still lacked an execution-grade misalignment ledger.
+2. The spec still needed a hard split between root-editor failures and wrapper/runtime failures.
+3. The spec still needed a research section for browser/mobile design constraints.
+4. The spec still needed one unified chronological task sequence instead of implied parallel branches.
+5. Repo path/tooling drift was still unlogged even though the active doc layer had changed.
+
+**Exact repo-alignment drift found during this audit:**
+- `README.md:75-76` still points at retired canonical paths (`docs/plans/...` and top-level `PLAYWRIGHT_FAILURE_LOG.md`)
+- `scripts/doc_lifecycle_stitch.sh:24-39`, `:63-75`, and `:250-252` still point at retired failure-log/spec paths and an older protected-doc list
+- older doc-health instructions still reference `scripts/git_guardrails.py`, but that file is absent in this repo
+
+**Correction applied in this pass:**
+- the canon spec was rewritten below the embedded manual into an execution-grade shape:
+  - Application Statement = product scope + guardrails + canon/repo alignment
+  - Section 1 = root editor contract + exact misalignment ledger + folded editor research
+  - Section 2 = wrapper/runtime contract + exact misalignment ledger + folded wrapper research
+  - Section 3 = user-reachable action harness spec
+  - Unified Sequence Of Actions = single chronological task sequence
+
+**Verdict:**
+- "docs collapsed to exactly two files" = TRUE
+- "the canon was already sufficiently framed/execution-ready" = FALSE before this update
+
+---
+
+## ARCHITECTURE AUDIT — 2026-04-15: Live Code Still Has Split Ownership
+
+This audit was taken directly from the current local code, not from planner prose.
+
+### Root-editor violations confirmed
+
+1. **Template-first startup is still the visible root workflow.**
+   - Evidence: `web/workbench.html:23-56`
+   - The UI still tells the user to choose/apply a template before starting. That keeps wrapper setup in the root workflow.
+
+2. **Whole-sheet is still a subordinate panel rather than the root owner.**
+   - Evidence: `web/workbench.html:179-186`
+   - The panel is hidden by default and presented as something to focus/open after other steps.
+
+3. **`workbench.js` still owns session state first and hydrates whole-sheet second.**
+   - Evidence: `web/workbench.js:3922-3946`
+   - Session layers/cells are written into `workbench.js`, `refreshSourceSurfaceFromSession()` runs there, `renderAll()` runs there, and only then does `hydrateWholeSheetEditor()` mount the editor.
+
+4. **Browse mode is still explicitly deferred.**
+   - Evidence: `web/whole-sheet-init.js:1142-1146`
+   - The browse button exists but is disabled and titled `Browse mode (deferred)`.
+
+5. **`New XP` is still template-gated instead of being a pure image action.**
+   - Evidence: `web/workbench.js:4072-4095`
+   - `newXp()` requires `templateSetKey`; otherwise it errors with `Apply a template first`.
+
+### Source/frame ownership violations confirmed
+
+**Historical note (pre-2026-04-16):** items 6 through 9 below describe ownership paths that were later deleted or replaced. Keep them as audit history only; do not treat them as the current tree.
+
+6. **Source ownership still flips between raw source and XP-backed state.**
+   - Evidence: `web/workbench.js:79`, `web/workbench.js:6422-6448`, `web/workbench.js:4994-4999`
+   - Upload sets `sourceSurfaceKind = "source"` from the raw image, while session refresh sets it back to `"xp"`. That is still a dual-surface model.
+
+7. **Source drag/drop is still physically fragile because drop targeting is viewport-hit-test-based.**
+   - Evidence: `web/workbench.js:4765-4769` and `web/workbench.js:5580-5600`
+   - Hover and drop both depend on `gridFrameFromClientPoint()` calling `document.elementFromPoint()` and finding a visible `.frame-cell`.
+
+8. **XP source refresh still depends on existing grid geometry.**
+   - Evidence: `web/workbench.js:4967-4999`
+   - `buildXpSourceCanvas()` returns `null` unless `gridCols > 0` and `gridRows > 0`, so the XP-backed source surface cannot stand alone yet.
+
+9. **Frame navigation still has duplicate ownership surfaces.**
+   - Evidence: `web/workbench.html:138-175` and `web/whole-sheet-init.js:265-272`
+   - Standalone `#gridPanel` and embedded `#wsFrameNav` both exist, so frame-nav is not yet one overlay/view on the root editor.
+
+### Wrapper/runtime misalignment confirmed
+
+10. **The runtime family truth is broader than the active workbench export path.**
+    - Evidence: `src/pipeline_v2/service.py:59-78`, `src/pipeline_v2/config.py:38`, `src/pipeline_v2/service.py:2880-2883`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js:22-32`
+    - Server/runtime naming already knows `wolfie` and `wolack`, but active workbench export still gates families through `ENABLED_FAMILIES = {"player", "attack", "plydie"}`.
+
+11. **Template/action setup still narrows the wrapper before the root owner is corrected.**
+    - Evidence: `web/workbench.html:39-56`, `web/workbench.js:4072-4095`
+    - Template and action state still shape creation and flow before the editor root is fixed.
+
+### Consequence
+
+The current application is still:
+- a `web/workbench.js`-rooted hybrid workbench
+- with a child-mounted whole-sheet editor
+- with a separate source ownership domain
+- with separate frame-nav ownership
+- with wrapper/runtime truth only partially reconciled to engine truth
+
+It is **not yet** a whole-sheet-root, browse-capable, web/mobile REXPaint clone with overlays.
+
+### Correction target reaffirmed
+
+The only valid deletion-first correction order remains:
+1. keep production `/xpedit` behavior frozen during refactor
+2. remove template-first root ownership
+3. promote whole-sheet/editor ownership to the root
+4. make browse/new/save/export true root image actions
+5. demote source and frame-nav to overlays/views
+6. only then rebuild Section 2 wrapper behavior and family/runtime coverage on top of that owner graph
+
+---
+
+## SECTION 2 AUDIT — 2026-04-15: Hidden Runtime Scope And Save-Shape Owners
+
+This failure was discovered during the Step 8 Section 2 rebuild audit.
+
+### Failures found
+
+1. **Root-session save still dropped part of the root document shape.**
+   - Evidence before fix: `web/workbench.js` save payload omitted `grid_cols`,
+     `grid_rows`, `cell_w`, `cell_h`, and canonical source-manifest authority, while
+     `src/pipeline_v2/service.py` only persisted the older wrapper subset.
+   - Consequence: the whole-sheet/root editor could own the live document, but
+     save-session could still preserve stale wrapper geometry/source ownership.
+
+2. **Single-session Skin Dock proof still inferred family scope instead of
+   declaring it.**
+   - Evidence before fix: single-session web skin injection relied on
+     `OVERRIDE_MODE` / frontend defaults instead of an explicit runtime-scope
+     contract.
+   - Consequence: mounted-family proof, player-only proof, and full-parity
+     debug proof were observationally mixed.
+
+### Required correction
+
+- persist the full root-session save shape from the root editor owner
+- make single-session runtime proof use an explicit runtime scope
+- keep bundle/runtime flow separate: bundle payloads stay per-action with
+  structural gates, not the single-session scope selector
+
+### Resolution (2026-04-15)
+
+Resolved by `5d5af15` (`refactor: make section 2 runtime proof explicit`).
+
+- `web/workbench.js` now saves `grid_cols`, `grid_rows`, `cell_w`, `cell_h`,
+  `source_manifest`, and the full layer/cell document shape from the whole-sheet
+  owner.
+- `src/pipeline_v2/service.py` / `src/pipeline_v2/app.py` now accept and
+  return explicit `runtime_scope` for `/api/workbench/web-skin-payload`.
+- Verification evidence:
+  - `node --check web/workbench.js`
+  - `python3 -m pytest tests/test_workbench_flow.py tests/test_base_path.py`
+  - `python3 scripts/self_containment_audit.py`
+
+---
+
+## Section 2 Wrapper Gap Audit (2026-04-15)
+
+Audit question: does Section 2 of the canon spec sufficiently describe the sprite-sheet conversion and editing workflow needed to make PNG sprite sheets from other games usable in Asciicker? Section 1 enables XP editing to exist. Section 2 is supposed to add the game-engine-aware wrapper that makes PNG-to-XP sprite conversion tractable, especially for agents who cannot see.
+
+### EXECUTION GAPS (design is clear enough to act once Section 1 ownership is correct)
+
+**WD-1: Enable wolfie and wolack in workbench export path. OPEN.**
+- Evidence: `src/pipeline_v2/config.py:38` — `ENABLED_FAMILIES = {"player", "attack", "plydie"}`
+- wolfie and wolack are defined in `runtime/termpp-skin-lab-static/termpp_skin_lab.js:22-32` and in `sprites/`. Blocked by a hardcoded set in config.py AND duplicated in `web/workbench.js:42-43` (FAMILY_W_RANGE). Adding these families requires code changes in at least two files.
+- Blocked until Section 1 ownership is corrected and WND-5 (family expansion policy) is decided.
+
+**WD-2: Wire G7/G8/G9 gates into workbench_export_bundle(). PARTIALLY OPEN.**
+- Evidence: `src/pipeline_v2/gates.py`, `src/pipeline_v2/service.py:2012-2014`
+- G7/G8/G9 (geometry cell count, non-empty content ≥5%, handoff population) ARE called during `run_pipeline()`. They are NOT called from `workbench_export_bundle()`. G10/G11/G12 are the only active bundle export gates.
+- Gap: conversion-time gates run but bundle export gates do not re-check content quality. An XP that passes pipeline conversion but has cells cleared afterward will not fail bundle export on content grounds.
+
+**WD-3: Document registry purpose distinction. PARTIALLY OPEN — not a conflict.**
+- Evidence: `config/template_registry.json`, `scripts/xp_fidelity_test/action_registry.json`
+- Re-audit confirms these serve different domains: template_registry drives workbench bundle authoring (per-action dims, l0_ref). action_registry is fidelity test instrumentation (action coverage families F1–F12). They are not competing authorities.
+- Gap: the distinction is not documented. Agents and contributors cannot know which to use for runtime geometry truth without reading implementation code.
+
+**WD-4: Promote session-local source overlays into a real manifest contract. PARTIALLY OPEN.**
+- Evidence: `web/workbench.js:4082-4086, 4138-4142`, `src/pipeline_v2/service.py:2133-2137, 3224-3248`
+- Re-audit confirms: box state, anchor state, draft box, and both cut arrays now persist through normal session save/load, not only bundle sessions.
+- Gap: this is still workbench-session persistence, not a manifest or engine-facing contract. Regions cannot yet be shared, versioned, or batch-converted outside the session blob.
+
+**WD-5: Extend batch_png_to_xp.py with multi-region/grid extraction. OPEN.**
+- Evidence: `scripts/batch_png_to_xp.py:310-336`
+- Supports only one PNG per run, no --manifest or --grid argument. No format exists for defining source region → target action/family/angle/frame mappings.
+- Blocked until WND-2 (manifest format) is decided.
+
+### DESIGN GAPS (no code should be written until resolved)
+
+**WND-1: Source sprite sheet layout convention — completely unspecified.**
+- Section 2 says "upload PNG or load source art" and "mark sprite regions" but defines no contract for what a convertible PNG sprite sheet looks like.
+- Open: are sheets expected to be row-per-angle grids, frame-sequence rows, or ad hoc layouts? Is there a target standard (LPC format, RPG Maker, custom)? Does the tool require pre-organized input or does the slicer define organization? What is the required resolution relationship between source pixels and output XP cells?
+- This is the root unresolved question. WND-2, WND-4, WD-4, WD-5 all depend on it.
+
+**WND-2: Source manifest format — does not exist.**
+- "Mark sprite regions, cuts, and selections" implies a persistent data model linking PNG regions to action/family/angle/frame slots. That data model has not been specified.
+- Open: format (JSON sidecar? embedded in session?), entry schema (source path, [x,y,w,h], target family, action, angle, frame), authorship (human UI, agent MCP, or both).
+
+**WND-3: Agent vision substitute / conversion quality contract — unspecified.**
+- Agents cannot see. xp_cat.py renders ANSI but agents cannot evaluate "does this look right?" from that output.
+- Open: what programmatic signals define a successful conversion? (G7/G8 cell density? color histogram match? foreground bounding-box coverage?) Is xp_cat.py ANSI sufficient if agents are given a rubric? Or does quality validation require a human acceptance step by design?
+- This is the core problem: the entire motivation for Section 2 is that manual asset generation is tedious and agents cannot see. Without a quality substitute for vision, the agent automation path cannot close.
+
+**WND-4: Slicing workflow design — partially described, not designed.**
+- Section 2 §2.3 mentions "mark regions" but does not describe the workflow.
+- Open: is there a separate slicer mode in the workbench UI or does slicing use the existing source panel? Can an agent drive the slicer via MCP without the UI? Does the slicer produce XP cells in-editor (feeding Section 1 ownership) or output a batch of XP files directly? How does the slicer interact with `apply_action_grid`?
+
+**WND-5: Family expansion policy — hardcoded, policy unspecified.**
+- Adding a new family requires code changes to `config.py:38` and `web/workbench.js:42-43`. No config-driven approach exists.
+- Open: should `template_registry.json` replace `ENABLED_FAMILIES` as the complete source of truth? Who defines dimensions, layer contract, and L0 metadata schema for a new family? Should bigbee be in scope or deferred?
+
+**WND-6: Conversion quality definition — no formal definition.**
+- A "good XP conversion" from PNG has no objective specification.
+- Open: what character/glyph selection heuristic is canonical? (brightness-to-glyph mapping? block characters only? CP437 subset?) What is the render resolution policy? (fixed 12px/cell? adaptive per family?) What counts as a rejected vs. sub-optimal but acceptable conversion?
+- The half-block + color-averaging algorithm exists at `src/pipeline_v2/service.py:1835-1854` but is undocumented. Agents and contributors cannot understand the quality model without reading the implementation.
+
+**WND-7: Section 2 is missing a sub-spec for each of the four wrapper layers.**
+- Section 2 §2.3 names four layers but gives no per-layer contract.
+- Source-wrapper: needs input format contract, manifest schema, slicer workflow, agent API.
+- Family/action wrapper: needs frame→cell grid mapping spec, angle/frame assignment validation, policy for new families.
+- Runtime injection: partially covered by §2.4 gates; payload format and injection endpoint contract not specified end-to-end.
+- Proof/test: partially covered by failure log; agent-usable quality rubric not specified.
+
+### NEW GAPS from re-audit
+
+**NG-1: Conversion algorithm undocumented — HIGH.**
+- Evidence: `src/pipeline_v2/service.py:1835-1854`
+- Half-block + color-averaging logic is in code only. No doc describes the selection heuristic, color-averaging approach, or quality tradeoffs. Agents cannot evaluate conversion quality without understanding the algorithm.
+
+**NG-2: No lightweight quality validation endpoint for agents — MEDIUM.**
+- G7–G12 require full bundle export context. No lightweight API call exists to check XP cell population or quality after a single conversion run without building a full bundle.
+
+**NG-3: No MCP region-marking or manifest tools — MEDIUM.**
+- Evidence: `scripts/workbench_mcp_server.py`, `scripts/asset_gen/xp_mcp_server.py`
+- No MCP tool exposes source region marking, manifest read/write, or quality validation. The agent automation path for the source-wrapper layer step is entirely absent from the MCP API surface.
+
+**NG-4: G12 error messages not agent-readable — LOW.**
+- G12 failures report mismatched metadata but the error string format is not structured for programmatic parsing. Agents receiving G12 failures cannot extract which angle or frame index failed without string parsing.
+
+**NG-5: ENABLED_FAMILIES duplicated in backend and frontend — LOW.**
+- Evidence: `src/pipeline_v2/config.py:38`, `web/workbench.js:42-43`
+- Adding wolfie/wolack requires changes in both locations. Lists can drift out of sync.
+
+### Audit consequence
+
+WND-1 (source sheet layout), WND-2 (manifest format), and NG-3 (MCP region tools) are all asking the same unresolved design question: what is the data contract for mapping "a set of PNG regions" to "a set of AHSW-keyed XP files"? That single design decision, once made, unblocks WD-4, WD-5, WND-4, NG-2, and NG-3 simultaneously. No Section 2 implementation work should proceed until WND-1, WND-2, and WND-3 are answered.
+
+---
+
+## RE-AUDIT — 2026-04-15 AFTER STEPS 2-8
+
+This re-audit supersedes the older "live code still has split ownership"
+section as the current reality snapshot.
+
+### Resolved since the earlier architecture audit
+
+1. **Template-first startup is no longer the visible root workflow.**
+   - Evidence: `web/workbench.html:23-30`
+   - The getting-started flow now starts with `New XP`, `Import XP`, or
+     `Load Source`, and `Apply Template` is explicitly optional.
+
+2. **`New XP` is no longer template-gated.**
+   - Evidence: `web/workbench.js:4310-4324`
+   - Blank root-image creation now uses `createBlankRootSession()` directly.
+
+3. **Browse mode is no longer deferred.**
+   - Evidence: `web/whole-sheet-init.js:1122-1130, 1358`
+   - Browse now exists as a live peer mode toggled by `Tab`.
+
+4. **Raw-vs-XP source ownership split was deleted.**
+   - Evidence: `web/workbench.js:5223-5225`
+   - The source surface is now refreshed from the root XP projection; the old
+     `sourceSurfaceKind` split is gone.
+
+5. **Grid drop targeting no longer depends on viewport hit-testing.**
+   - Evidence: `web/workbench.js:5807-5826`
+   - Frame targeting is computed logically from frame geometry, not by
+     `document.elementFromPoint()`.
+
+6. **Duplicate frame-nav ownership was removed.**
+   - Evidence: `web/workbench.html:140`, `web/whole-sheet-init.js`
+   - Standalone `#gridPanel` remains; embedded `#wsFrameNav` is gone.
+
+7. **Section 2 runtime proof is now explicit.**
+   - Evidence: `src/pipeline_v2/service.py:2898-2921`,
+     `web/workbench.html:320-404`, `web/workbench.js:1453-1558`
+   - Single-session runtime proof now declares `runtime_scope`, and structural
+     vs runtime proof is separated in the UI.
+
+### Current remaining misalignment
+
+1. **Canonical manifest authoring now exists, but it is still JSON-first.**
+   - Evidence: `web/workbench.html:133-145`, `web/workbench.js:2196-2377`,
+     `web/workbench.js:3278-3367`, `src/pipeline_v2/app.py:496-525`
+   - The old source boxes/cuts owner is gone. The remaining gap is ergonomic,
+     direct slicer tooling; current authoring is a JSON draft editor plus
+     guide/region overlays.
+
+3. **Wrapper run paths now persist canonical manifests and convert through manifest-backed builders.**
+   - Evidence: `src/pipeline_v2/app.py:438-446`, `src/pipeline_v2/app.py:599-621`,
+     `src/pipeline_v2/service.py:1437-1660`, `src/pipeline_v2/service.py:2558-2710`
+   - `/api/run`, `/pipeline/run`, and bundle action-apply save a canonical
+     `uniform_grid` manifest before conversion, and `run_pipeline()` now routes
+     `uniform_grid` and `explicit_regions` through explicit manifest builders
+     that reject invalid geometry instead of silently resizing.
+
+4. **Authoring/export family coverage is still narrower than runtime filename truth.**
+   - Evidence: `src/pipeline_v2/config.py:38`,
+     `runtime/termpp-skin-lab-static/termpp_skin_lab.js`,
+     `web/workbench.js:39-88`
+
+5. **Section 2 execution gaps are still open.**
+   - The source-layout convention, manifest format, validation endpoint, and
+     MCP session tooling now exist.
+   - Remaining gaps are manifest-backed conversion enforcement, ergonomic
+     slicer authoring, mounted-family template coverage, and Y9-2 launcher
+     wiring.
+
+### Corrected next sequence
+
+1. Finish Section 1 cleanup:
+   - demote peer wrapper panels into overlays/views on the always-visible root
+     editor
+2. Enforce the Section 2 source contract in the backend:
+   - require manifest-backed `uniform_grid` or `explicit_regions` input where
+     the canon now says it is authoritative
+   - stop treating naked arithmetic slicing as the default live contract
+3. Upgrade source-panel authoring from JSON-first to direct interactive slicer
+   tooling on the same canonical manifest contract.
+4. Decide family expansion policy, then enable mounted-family authoring
+   consistently across backend/frontend/template/runtime proof paths.
+5. Wire the Y9-2 launcher and wizard against the now-live HTTP backend.
+
+---
+
+## PAR-AUDIT GAP LOG — 2026-04-15
+
+Full parallel spec-vs-code audit run against `master @ 5d5af15`. Both Section 1
+and Section 2 audited simultaneously. Each gap below was individually verified
+against live code. Design gaps are distinguished from implementation gaps.
+
+---
+
+### Section 1 Gaps
+
+**GAP-S1-01: Resize action completely missing. CRITICAL.**
+- Spec: Section 1.3 item 2 — resize is a first-class image action. REXPaint manual: Ctrl-r.
+- Evidence: no resize UI, no `Ctrl-r` handler, no resize logic anywhere in `web/workbench.js` or `web/whole-sheet-init.js`.
+- Impact: entire parity item 2 ("New, open/import, resize, save, export are image actions") cannot be satisfied without this.
+
+**GAP-S1-02: Browse mode non-functional — Tab toggle not wired. CRITICAL.**
+- Spec: Section 1.3 item 3 — paint and browse are peer modes, Tab toggles between them.
+- Evidence: browse DOM element exists in `web/whole-sheet-init.js` but has `display:none`. No `Tab` key handler exists in `web/workbench.js` or `web/whole-sheet-init.js`.
+- The 2026-04-15 RE-AUDIT section of this log incorrectly marked browse as resolved ("Browse now exists as a live peer mode toggled by Tab" — Evidence: `web/whole-sheet-init.js:1122-1130, 1358`). Re-audit confirms this is STILL NOT WIRED. The button is titled "Browse mode (deferred)" and is explicitly disabled.
+
+**GAP-S1-03: Dual image-state ownership — workbench.js still owns history and layer state. HIGH.**
+- Spec: Section 1.5 — whole-sheet-init.js must own the image, layers, mode, and history.
+- Evidence: `web/workbench.js` maintains `state.layers`, `state.activeLayer`, `state.visibleLayers`, `state.history`, `state.future`. `web/whole-sheet-init.js` owns the canvas and LayerStack but re-delegates mutations back through workbench.js callbacks.
+- Root owner inversion is not complete. workbench.js is still the de facto image owner.
+
+**GAP-S1-04: Apply mode keyboard shortcuts not bound (g / f / b). HIGH.**
+- Spec: Section 1.3 item 5 — apply modes split glyph/fg/bg, toggled by g/f/b.
+- Evidence: `applyGlyph`, `applyFg`, `applyBg` state flags exist in `web/whole-sheet-init.js` but no keyboard event handler binds g/f/b to these toggles.
+
+**GAP-S1-05: Draw tool keyboard shortcuts not bound. HIGH.**
+- Spec: REXPaint commands — c (cell), l (line), r (rect), o (oval), i (fill), t (text).
+- Evidence: CellTool, LineTool, RectTool, FillTool exist in `web/whole-sheet-init.js`. No keyboard handler binds c/l/r/i to tool selection.
+
+**GAP-S1-06: Draw tools missing — Oval, Text, Copy/Cut/Paste. HIGH.**
+- Spec: Section 1.4 family 5 — all six draw tools are required.
+- Evidence: OvalTool, TextTool, and clipboard (copy/cut/paste) are absent from `web/whole-sheet-init.js`. No implementation exists.
+
+**GAP-S1-07: Mouse-only input — touch and pen events not wired. MEDIUM.**
+- Spec: Section 1.3 item 9 — pointer-device-agnostic interaction.
+- Evidence: `web/whole-sheet-init.js` uses `mousedown`, `mousemove`, `mouseup` only. No `pointerdown`/`pointermove`/`pointerup` handlers exist.
+- Section 1.9.1 already defined the touch contract. The decision was made; implementation is absent.
+
+**GAP-S1-08: Zoom / font-scale not implemented. MEDIUM.**
+- Spec: Section 1.4 family 3 — canvas navigation includes zoom/font scale.
+- Evidence: no zoom or font-scale control exists in `web/whole-sheet-init.js`. REXPaint: Ctrl-PgUp/Dn or `<`/`>`.
+
+**GAP-S1-09: Grid toggle (Ctrl-g) not implemented. MEDIUM.**
+- Spec: Section 1.4 family 3 — canvas navigation includes grid toggle.
+- Evidence: no Ctrl-g handler and no grid overlay rendering in `web/whole-sheet-init.js`.
+
+**GAP-S1-10: Layer locking not implemented (Shift-1~9 / Lck button). MEDIUM.**
+- Spec: Section 1.4 family 7 — visibility and locking are required layer operations.
+- Evidence: `LayerStack` in `web/whole-sheet-init.js` has no lock state. No Shift-1~9 handler. REXPaint manual: "Locked layers (Shift-# or the 'Lck' button) prevent editing."
+
+**GAP-S1-11: Layer keyboard shortcuts not bound (Ctrl-l, 1~9, Ctrl-1~9, Ctrl-Shift-m). MEDIUM.**
+- Spec: Section 1.4 family 7 — layers must be directly controllable.
+- Evidence: layer create button works via UI click. No Ctrl-l, 1~9 (select active), Ctrl-1~9 (toggle visibility), or Ctrl-Shift-m (merge) keyboard handlers exist.
+
+**GAP-S1-12: Layer wheel cycling not implemented. LOW.**
+- Spec: REXPaint commands — "Wheel: Cycle Active Layer" while cursor is over canvas.
+- Evidence: no wheel event handler on the whole-sheet canvas changes the active layer.
+
+---
+
+### Section 2 Gaps
+
+**GAP-S2-01: G7/G8/G9 not called from bundle export path. CRITICAL.**
+- Spec: Section 2.4 — structural gates guard bundle export.
+- Evidence: G7/G8/G9 run only in `run_pipeline()` at `src/pipeline_v2/service.py:2036-2038`. `workbench_export_bundle()` calls `_run_structural_gates()` which only invokes G10/G11/G12. An XP that passes source conversion but has cells cleared afterward exports without quality gates.
+- Agent impact: agents calling `create_bundle → apply_action_grid → export_bundle` never run G7-G9. Agent-driven export has no content quality check.
+
+**GAP-S2-02: ENABLED_FAMILIES hardcoded — no data-driven family expansion policy. CRITICAL.**
+- Spec: Section 2.2 — runtime knows wolfie/wolack; workbench export does not.
+- Evidence: `src/pipeline_v2/config.py:38` — `ENABLED_FAMILIES = {"player", "attack", "plydie"}`. Runtime knows 5 families. Adding a family requires code changes in at least `config.py` AND `web/workbench.js:42-43`. No config-driven mechanism exists.
+- Blocked until WND-5 (family expansion policy) is designed.
+
+**GAP-S2-03: ENABLED_FAMILIES runtime scope selector is vestigial. HIGH.**
+- Spec: Section 2.2 — `_WEB_SKIN_RUNTIME_SCOPES` defines `mounted_default = (player, wolfie, wolack)`.
+- Evidence: `workbench_web_skin_bundle_payload()` at `src/pipeline_v2/service.py:3111` checks `if family not in ENABLED_FAMILIES: continue` before any scope selector is applied. The scope selector parameter is accepted but never reaches the ENABLED_FAMILIES filter. wolfie/wolack are silently dropped even when the caller passes `mounted_default`.
+
+**GAP-S2-04: Source sprite sheet layout convention completely absent. CRITICAL DESIGN GAP.**
+- Spec: Section 2.3 — source-wrapper layer must "mark sprite regions, cuts, and selections" but no layout contract exists.
+- Evidence: `run_pipeline()` uses implicit row-per-angle arithmetic (`angle_px_h = src_h // angles`, `frame_px_w = src_w // source_frame_cols`) with no documented contract. No validation that source PNG matches any standard layout.
+- This is a design gap. No code should be written against the source-wrapper layer until this is answered.
+
+**GAP-S2-05: Source manifest format does not exist. CRITICAL DESIGN GAP.**
+- Spec: Section 2.3 — "mark sprite regions" implies a persistent data model.
+- Evidence: session saves `sourceCutsV`, `sourceCutsH`, `extractedBoxes` as mutable first-class state. No format links these regions to action/family/angle/frame slots. No engine-facing contract.
+
+**GAP-S2-06: Agent automation path for source-wrapper layer is completely blocked. HIGH.**
+- Spec: Section 2.7 step 2 — "optionally use source-wrapper tools to mark/import sheet content."
+- Evidence: no MCP tool in `scripts/workbench_mcp_server.py` exposes source region marking, manifest read/write, or programmatic layout description. Agent must use UI for all source-wrapper operations.
+
+**GAP-S2-07: No lightweight single-XP quality validation endpoint for agent loops. MEDIUM.**
+- Spec: Section 2.5 — "no lightweight quality validation endpoint exists for agents."
+- Evidence: G7-G12 all require full bundle workflow context. No `/api/workbench/validate-xp` or equivalent endpoint accepts a single XP and returns a pass/fail quality score.
+
+**GAP-S2-08: Registry purpose distinction undocumented. LOW.**
+- Evidence: `config/template_registry.json` (workbench bundle authoring) vs `scripts/xp_fidelity_test/action_registry.json` (fidelity test instrumentation). Purposes confirmed distinct by re-audit but no user-facing documentation states this. Agents and contributors cannot know which drives runtime geometry truth.
+
+---
+
+### Audit consequence
+
+The RE-AUDIT section above (2026-04-15) contains one incorrect "resolved" claim:
+item 3 ("Browse mode is no longer deferred") is NOT confirmed by code. Treat that
+claim as unverified. The browse button remains titled "Browse mode (deferred)" and
+the Tab handler is not wired.
+
+All Section 1 parity items 1–9 remain either partial or missing. The core ownership
+inversion is not complete. Section 2 implementation work is blocked on three design
+decisions (GAP-S2-04, GAP-S2-05, WND-3 / agent vision) that have not been answered.
+
+---
+
+## DELETION-PASS VERIFICATION — 2026-04-15
+
+Post-pass re-check against the current working tree shows that several old-owner
+claims in the 2026-04-15 parallel audit are now stale.
+
+### Verified deletions
+
+- `rg -n "state\\.history|state\\.future|pushHistory|syncRootStateFromWholeSheet" web/workbench.js`
+  returns no matches. The old local history owner was deleted.
+- `rg -n "renderInspector|closeInspector|inspectorOpen|cellInspectorPanel" web/workbench.js web/workbench.html`
+  returns no matches. The legacy inspector owner/fallback path was deleted.
+- `rg -n "ENABLED_FAMILIES" src/pipeline_v2 web`
+  returns no matches. The hardcoded mounted-family gate was deleted.
+- `rg -n "Browse mode \\(deferred\\)|browseBtn\\.disabled" web/whole-sheet-init.js`
+  returns no matches. The old deferred-browse placeholder state was deleted.
+
+### Consequence
+
+1. Delete-first progress is real: the old history owner, inspector owner, and
+   hardcoded family gate are gone.
+2. This is intentionally a broken intermediate state. Undo/redo now has no live
+   owner, and mounted-family export now fails loud until replacement Section 1
+   and Section 2 contracts are implemented.
+3. Several earlier gap lines are therefore too old to use literally:
+   - browse is still unwired, but it is no longer disabled/deferred in the DOM
+   - copy/cut/paste and several tool shortcuts now exist in `whole-sheet-init.js`
+   - click-based layer lock UI exists locally, but lock persistence/keyboard
+     authority do not
+4. The next implementation gate is no longer "delete more old owner." The next
+   gate is the written Section 1 behavior contract now recorded in
+   `docs/plans/2026-03-23-workbench-canonical-spec.md` Section 1.8. Section 1
+   implementation must follow that contract before more feature work lands.
+
+## CE REVIEW — 2026-04-15: Step 4 Root-Ownership Move
+
+**Run:** `20260415-112338-b515fe54`
+**Scope:** uncommitted working-tree diff against HEAD `6cb839d` — the Step 4 heavy-contract fix pass
+**Reviewers:** correctness, julik-frontend-races, security, reliability, kieran-python, testing, maintainability, adversarial, api-contract, project-standards, agent-native-reviewer, learnings-researcher
+
+### Findings addressed in this pass
+
+**P0 — enabled_families fail-close (fixed).**
+`getEnabledActions()` was fail-closing on absent `enabled_families`, making all bundle tabs vanish. Root cause: `app.py` removed the field without removing the client guard. Fixed: `web/workbench.js:6552` — `getEnabledActions` now derives scope from template action entries only. Canon spec Section 2.4 note updated to confirm.
+Browser proof: bundle tabs rendered `["Idle / Walk ○","Attack ○","Death ○"]`.
+
+**P1 — Concurrent session load race (fixed).**
+`hydrateLoadedSession` had no in-flight guard. Two rapid load calls would race through `wsEditor.loadSessionPayload()` and leave `state.sessionId` pointing at the wrong session. Fixed: `withSessionLoadLock` wraps both `loadFromJob` and `loadSession`; `state.sessionLoadInFlight` in state initializer.
+Browser proof: overlapping `loadSession()` calls returned `[true, false]`, first session stayed active.
+
+**P1 — Partial state before await, no rollback on failure (fixed).**
+`hydrateLoadedSession` wrote 18 state fields synchronously before the first `await`, leaving `state.sessionId` dirty on any post-await failure. Fixed: `ensureWholeSheetEditorReady()` called first; side state deferred into `applyLoadedSessionSideState(j)` after root load succeeds; `previousRootPayload` snapshot + `wsEditor.loadSessionPayload(previousRootPayload)` rollback wired on mirror-sync failure.
+
+**P2 — `_wsDrawSaveTimer` not in state initializer (fixed).**
+`_wsDrawSavePending` was declared; `_wsDrawSaveTimer` was not. Both now explicit in the state literal.
+
+### Findings ledger — open unless marked resolved
+
+**FL-STEP4-01 (resolved 2026-04-16, architectural): `syncRootOwnerMirrorsFromDocument()` reinstated dual-ownership.**
+Historical issue: `syncRootStateFromWholeSheet()` was deleted in Step 3 (`c836cde`), but `syncRootOwnerMirrorsFromDocument()` reintroduced the same pattern by copying root-document layer/grid/visibility fields back into `workbench.js` mirror state.
+Resolution: `syncRootOwnerMirrorsFromDocument()` has been deleted. Load/document-change flow no longer writes those mirror fields, and the surviving render/debug read paths now consume whole-sheet snapshots instead.
+Evidence: `web/workbench.js` no longer contains `syncRootOwnerMirrorsFromDocument()`, and `python3 -m pytest tests/test_workbench_flow.py -k save_session_round_trips_root_owner_metadata -q` still passes after the deletion.
+
+**FL-STEP4-02 (resolved 2026-04-16): `_normalize_storage_id(0)` wrong HTTP 400.**
+Historical issue: `str(raw_value or "")` coerced `int(0)` to `""`, raising "required" 400 instead of preserving the identifier.
+Resolution: `_normalize_storage_id()` now preserves integer `0` via `"" if raw_value is None else str(raw_value).strip()`.
+Evidence: tracked coverage in `tests/test_workbench_flow.py::test_normalize_storage_id_preserves_integer_zero`.
+
+**FL-STEP4-03 (resolved 2026-04-16): `/api/workbench/create-blank-session` `{}` path removed.**
+Historical issue: callers sending `{}` or `blank_session` payloads received HTTP 400 after the blank-root helper was removed.
+Resolution: the route again accepts bare `{}` and explicit `blank_session` payloads for generic root sessions while preserving the template-backed path.
+Evidence: `tests/test_base_path.py::test_create_root_blank_session_under_prefix` and `tests/test_workbench_mcp_server.py`.
+
+**FL-STEP4-04 (resolved 2026-04-16): Dead `force_fallback`/`crop_box` in `RunConfig`.**
+Historical issue: both fields were declared and validated in `RunConfig` but stripped before `run_pipeline()`.
+Resolution: the dead fields were deleted from `RunConfig`, and `/api/run` plus `/pipeline/run` now reject those legacy keys with `unsupported_run_fields` instead of silently ignoring them.
+Evidence: tracked coverage in `tests/test_workbench_validation.py::test_api_run_rejects_removed_legacy_fields` and `tests/test_workbench_validation.py::test_pipeline_run_rejects_removed_legacy_fields`.
+
+**FL-STEP4-05 (resolved by compatibility contract on 2026-04-16): `/api/workbench/validate-xp` response shape changed.**
+Historical issue: the response shape changed from export-oriented output to checksum/quality output.
+Resolution: `validate-xp` remains non-exporting, but now returns a predicted `xp_path` together with `checksum`, `xp_size_bytes`, and `exported=false` so existing callers can keep reading the path shape without causing a write.
+Evidence: tracked coverage in `tests/test_workbench_flow.py::test_validate_xp_contract_returns_predictable_path_without_exporting` and `tests/test_workbench_validation.py::test_validate_xp_does_not_create_export_artifact`.
+
+**FL-STEP4-06 (resolved 2026-04-16): Mid-load `documentChanged` fired the removed mirror-sync path during session load.**
+Historical issue: `loadSessionPayload` → `loadDocument` → `resize` → `_emitDocumentChanged` triggered `onWholeSheetDocumentChanged` synchronously before `applyLoadedSessionSideState` had run, so mirrors were written twice per load.
+Resolution: this path disappeared when `syncRootOwnerMirrorsFromDocument()` was deleted. The load path still uses the single-flight guard, but it no longer performs the structural double-sync.
+
+---
+
+## Code Review — Step 4 Commit 42df1c9 (2026-04-16)
+
+12 reviewers. Run artifact: `.context/compound-engineering/ce-review/20260416-021818-28ecfb9c/`.
+
+**Verdict:** Historical intake only — the 10 P1 findings below were real at review time, but they are now resolved in the current working tree. Safe-auto fixes and the follow-on completion pass both landed in the same local branch state.
+
+### P1 — Findings logged in the intake (resolved in the current working tree)
+
+| ID | File | Issue |
+|----|------|-------|
+| FL-42df-01 | `service.py:1533` | `save_bundle` bypasses `_normalize_storage_id` on write path — all read paths validate, `save_bundle(bundle)` does not. 5 reviewers. |
+| FL-42df-02 | `workbench.js:4151` | `sessionSaveInFlight` flag set before `ensureWholeSheetEditorReady` await — concurrent saves can race the same session slot. |
+| FL-42df-03 | `workbench.js:6166` | Fire-and-forget rollback IIFE captures `wasDirtyBefore` but not `sessionId` — rollback can target the new session after a session switch. |
+| FL-42df-04 | `workbench.js:6173` | `wsEditor.rollbackDocument` fires against an open external-edit transaction — `externalEdit` depth not reset by `loadDocument`, left stranded. |
+| FL-42df-05 | `workbench.js:7539` | Inspector `mousedown` opens external-edit transaction; `quiesceWholeSheetBeforeSessionSwitch` resets whole-sheet depth but leaves `state.inspectorWholeSheetStrokeActive = true` — late `mouseup` commits on already-quiesced editor. |
+| FL-42df-06 | `workbench.js:4599` | Mount failure leaves `wholeSheetMountPromise = null` with no recovery path — all subsequent saves return `whole_sheet_root_owner_missing` silently forever. |
+| FL-42df-07 | `service.py:1689` | No per-session lock on `workbench_save_session` — concurrent requests for the same session ID race last-write-wins. |
+| FL-42df-08 | `app.py:285` | `GET /api/workbench/templates`: `enabled_families` removed from response — existing clients reading this key get `null` silently. |
+| FL-42df-09 | `app.py:366` | `POST /api/workbench/web-skin-payload`: `runtime_scope` parameter silently dropped — override name list no longer scoped. |
+| FL-42df-10 | `service.py:3533` | `POST /api/workbench/validate-xp`: `xp_path`/`checksum` removed from response, `xp_size_bytes` added — callers reading `xp_path` break. (Note: `validate-xp` is intentionally non-exporting per FL-STEP4-05. FL-42df-10 tracks only external caller breakage that has not been confirmed addressed.) |
+
+### Completion pass on 2026-04-16
+
+1. **FL-42df-01, FL-42df-07:** bundle/session writes now normalize storage ids on write paths and serialize saves per session, so write-path validation and last-write-wins races are closed.
+2. **FL-42df-02 through FL-42df-06:** the whole-sheet save/rollback/session-switch race cluster is closed. Save-slot claiming now happens after whole-sheet readiness, rollback is session-bound and quiesces external edit depth first, inspector strokes are committed/cancelled on session switch, draw-save timers are cleared on hydration, and mount failure now prompts explicit reload recovery instead of silently stranding all future saves.
+3. **FL-42df-08 through FL-42df-10:** compatibility contract fields are restored where callers depended on them. `GET /api/workbench/templates` again returns `enabled_families` for compatibility, `POST /api/workbench/web-skin-payload` again accepts/returns explicit `runtime_scope`, and `POST /api/workbench/validate-xp` again returns predicted `xp_path` plus `checksum` while remaining non-exporting (`exported=false`).
+4. **Follow-on contract cleanup from the same review:** removed `force_fallback` / `crop_box` fields are now rejected explicitly with `unsupported_run_fields` instead of being ignored; session save/validate now enforce whole-sheet geometry consistency (`session_geometry_invalid`) so impossible grid/frame combinations cannot drift into quality validation.
+5. **Follow-on editor/MCP cleanup from the same review:** inspector find/replace now uses live whole-sheet frame geometry rather than stale mirror width/height, and the MCP server now exposes `get_cell(session_id, x, y, layer=2)` plus `validate_session(session_id)` so agents can verify `text_input` and quality results without guessing.
+6. **Verification evidence for the completion pass:** `python3 -m pytest tests/test_workbench_flow.py tests/test_workbench_validation.py tests/test_workbench_mcp_server.py tests/test_base_path.py -q`, `node --check web/workbench.js`, and `python3 -m py_compile src/pipeline_v2/service.py src/pipeline_v2/app.py scripts/workbench_mcp_server.py` all pass on 2026-04-16.
+
+### Safe-Auto Fixes Applied (same session)
+
+| Fix | File | Change |
+|-----|------|--------|
+| cursor_x clamp off-by-one | `service.py:3960` | `min(max(0, cols-1), cursor_x+1)` → `cursor_x + 1` |
+| cursor_x clamp off-by-one JS | `whole-sheet-init.js:1579` | `Math.min(Math.max(0, gridCols-1), x+1)` → `Math.min(gridCols, x+1)` |
+| bare `except Exception` x3 | `service.py:2565,2573,3918` | Narrowed to `except (TypeError, ValueError)` |
+| `save_json` no OSError guard | `service.py:2946` | Wrapped in `OSError → ApiError(500)` like `_save_source_manifest` |
+| Preview interval on session switch | `workbench.js:4231` | Added `stopPreview()` at top of `applyLoadedSessionSideState` |
+| `hydrateWholeSheetEditor` dead wrapper | `workbench.js:6248` | Inlined single call site, removed wrapper |
+| `docMeta.hasDocument` duplicate | `whole-sheet-init.js:509` | Removed redundant field from `docMeta` object (overridden by caller at load time) |
+| Missing unit tests x3 | `tests/test_workbench_flow.py` | Added tests for storage-id rejection, `_save_source_manifest` OSError, `_source_image_dimensions` OSError |
+
+---
+
+## False-Green Proof Failure — Product Still Wrong While Local Proof Goes Green (2026-04-17)
+
+This entry records a current failure in proof framing and acceptance, not a shipped success.
+
+### What failed
+
+1. **Local proof was allowed to go green while `/workbench` still diverged visibly from `rikiworld.com/xpedit`. HIGH.**
+   - Reality reported during review on 2026-04-17: the rebuilt localhost UI is still jumbled relative to the public page, and the runtime test lane does not behave like a durable user-facing TERM++ proof surface.
+   - Canon consequence: green local proof here is not evidence that the rebuild matches the requested product flow.
+
+2. **`tests/e2e/test_browser_flow.py` is a structural smoke, not a public-parity proof. HIGH.**
+   - Evidence: `tests/e2e/test_browser_flow.py:82-172` only verifies open workbench, apply template, upload PNG, apply source, obtain session/job state, see nonzero grid cells, export XP, and show the XP tool hint.
+   - Evidence: it never asserts visible grouping, panel labels, public workflow order, direct source-tool parity, Recorder / Verification / Session separation, or TERM++ runtime persistence.
+   - Consequence: a pass here only means the transport lane works. It does not mean the rebuilt workbench matches the public product.
+
+3. **Section 3 `classic_xp_lifecycle` can pass without proving runtime behavior. HIGH.**
+   - Evidence: `scripts/xp_fidelity_test/action_registry.mjs:222-233` defines `R1` (`Test This Skin`) with no postconditions at all.
+   - Evidence: `scripts/xp_fidelity_test/dom_runner.mjs:159-225` waits only `STEP_SETTLE_MS = 500` after a click, then evaluates postconditions. For `R1`, there are none to fail.
+   - Consequence: this recipe can report PASS even if TERM++ never reaches a stable playable state, reloads incorrectly, or collapses immediately after click.
+
+4. **Existing runtime harnesses still treat a short delay after click as if it were runtime proof. HIGH.**
+   - Evidence: `scripts/xp_fidelity_test/run_edge_workflow_test.mjs:190-199` handles `test_this_skin` by clicking `#webbuildQuickTestBtn` and then waiting only 3000 ms.
+   - Evidence: the richer bundle runner has a longer runtime probe (`scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs:863-930`), but that depth is not part of the currently-green `classic_xp_lifecycle` pass.
+   - Consequence: the current “Test This Skin” lane is under-asserted in the proof stack and can produce false confidence.
+
+5. **Earlier assistant claims that these green results demonstrated successful rebuild were wrong. HIGH.**
+   - Incorrect interpretation made during the 2026-04-17 local pass: `tests/e2e/test_browser_flow.py` passing, `classic_xp_lifecycle` passing, and Step 4 beginning to pass were described as if they supported the requested rebuild.
+   - Correction: Step 4 root-owner proof remains a boundary proof only; it does not validate public UX parity. The other two proofs were too weak to support any acceptance claim about the rebuilt UI.
+
+### Classification
+
+- Process failure: proof compatibility and low-level transport success were mistaken for product acceptance.
+- Product-boundary failure: the rebuilt local `/workbench` is still not aligned enough with the public `rikiworld.com/xpedit` user flow to treat green proof as meaningful.
+- Harness failure: the current local proof stack does not enforce public-surface parity or sustained TERM++ behavior.
+
+### Required consequence
+
+- Treat the current green results from `tests/e2e/test_browser_flow.py` and Section 3 `classic_xp_lifecycle` as false greens, not acceptance evidence.
+- Do not cite those passes as proof that the rebuild is correct until the proof lane is rewritten around:
+  - public visible labels and control grouping from the frozen public snapshot
+  - explicit Recorder / Skin Test dock / Verification / Session separation
+  - direct source-tool parity on the public path
+  - sustained TERM++ runtime readiness and persistence after `Test This Skin`, not just a successful click plus a short delay
+
+---
+
+## Corrected Failure Timeline Narrative (2026-04-13 to 2026-04-17)
+
+This section exists because the local branch was destroyed after several days of non-git refactor work, and memory-only retellings were already drifting into false certainty.
+
+Rule for this timeline:
+
+- use exact times only where the recovered git history, filesystem timestamps, or saved run artifacts provide them
+- use day-level sequencing where the only surviving evidence is the local failure log / canon narrative
+- do not silently upgrade "recorded locally" into "proven in git"
+
+### Baseline before the collapse
+
+- By 2026-03-23, Milestone 1 was closed in the recovered repo canon.
+- The app was already a hybrid workbench rather than a clean whole-sheet-root editor.
+- This means the later failures were not caused by a previously-pure architecture suddenly regressing; they happened on top of an already-compromised ownership model.
+
+### 2026-04-13 — Last intact git-backed state
+
+Recovered repo: `recovered-xpedit` on `master`.
+
+Exact commit sequence from surviving git history:
+
+| Time (EDT) | Commit | What changed |
+|-----------|--------|--------------|
+| 01:14 | `c4f1ae5` | Fix BUG-12 drag-paint glyph shift-left on release |
+| 01:24 | `8b8b496` | Follow-up `_fullRenderNeeded` fix for paths exposed by the BUG-12 guard |
+| 02:08 | `b697493` | Sync canon docs and commit BUG-06/07/08/11/12 fixes |
+| 02:19 | `9693d8a` | Fix SAR function names, PROVEN count, G-RANDOM gate status |
+| 04:32 | `4247b04` | Add `xp_cat.py`, document G-RANDOM visual-fidelity gap |
+| 04:34 | `7632b6e` | Promote G-RANDOM visual-fidelity research to top priority |
+| 04:47 | `02c6d07` | Add skin-dock visual gate plan and update canon priorities |
+| 13:43 | `029242c` | Make PNG→XP fail open via pure pixel-to-cell fallback on geometry error |
+| 20:22 | `b62af00` | Docs-only commit logging the PNG auto-pipeline slicing blocker |
+
+Correct reading of this day:
+
+- runtime visual fidelity and PNG slicing were now the top known blockers
+- the recovered git repo was still intact and recoverable
+- there were **9** commits on this day, not 8
+- no later 2026-04-14 through 2026-04-16 refactor work exists in recovered git history
+
+### 2026-04-14 — Wrong-frame refactor day
+
+No surviving git history exists for this day in the wiped local branch. The only surviving evidence is the local failure-log/canon narrative.
+
+What the surviving record supports:
+
+- the refactor attacked the wrong level of abstraction
+- the product was still being framed in conversion/grid/frame-nav terms instead of ownership-first terms
+- source/grid/frame-nav work was being treated as if that were the main problem
+- the architecture was still hybrid; whole-sheet was more visible, but not the singular product root
+
+What this section does **not** support:
+
+- it does **not** support a precise hour-by-hour chronology for this day
+- it does **not** support claiming that the hard deletion of source box/cut ownership happened on 2026-04-14
+
+Correction to earlier retellings:
+
+- the surviving failure log places the hard deletion of the old source-panel manual box/cut owner on **2026-04-16**, not on 2026-04-14
+
+Best-supported summary:
+
+- 2026-04-14 is the day the refactor was already operating inside the wrong product frame
+- that wrong frame set up the later delete/rebuild cascade
+
+### 2026-04-15 — Formal deletion plan and review shock
+
+Exact surviving filesystem timestamp:
+
+- `docs/handoff-deletion-pass-2026-04-15.md` modified at **2026-04-15 05:45:10 EDT**
+
+What that handoff explicitly said:
+
+- delete every old owner and spec-violating path first
+- do not preserve backward compatibility
+- the app is expected to break
+- broken is cleaner than contradictory
+
+The same day, the failure log records a code review artifact:
+
+- `.context/compound-engineering/ce-review/20260415-070856-7524f161/`
+
+What the review recorded:
+
+- 12 reviewers
+- 63 active findings
+- 4 P0 findings were logged
+
+Important correction:
+
+- this should not be retold as "4 clean independent P0 test failures"
+- one listed P0 row in the surviving failure log is explicitly marked a false alarm
+- another P0 row groups several broken tests under one root-cause finding
+
+Best-supported summary:
+
+- by 2026-04-15, the delete-first architecture plan existed in writing
+- the work already underway was also clearly not safe
+- the repo had reached the point where "delete first and accept breakage" was considered cleaner than preserving the hybrid shell
+
+### 2026-04-16 — Cascade day
+
+This is the day the surviving top-level canon/failure docs describe the major local collapse. Exact per-event timestamps are not recoverable from git because this work happened in the wiped non-git branch, so the sequence below is day-ordered rather than hour-ordered.
+
+#### Phase 1 — Browser owner misidentified
+
+The surviving failure log says the cleanup trimmed obvious sub-owners but left the real browser owner alive:
+
+- `web/workbench.html`
+- `web/workbench.js`
+
+Completion was then claimed while those files still existed and still owned the product shell/controller boundary.
+
+#### Phase 2 — User-forced hard reset of the browser owner
+
+The surviving failure log records that the correct reset was finally forced:
+
+- `web/workbench.html` deleted from the working tree
+- `web/workbench.js` deleted from the working tree
+- `/workbench` intentionally broken until rebuild
+
+This is the hard ownership cut that should have happened first.
+
+#### Phase 3 — Rebuild from blank boundary
+
+The local failure log then records a fresh browser-owner rebuild around the surviving root editor.
+
+The rebuilt shell did achieve narrow structural proof:
+
+- `node --check web/workbench.js` — PASS
+- Python parse/tests for the narrow contract paths — PASS
+- `npx playwright test tests/playwright/step4-root-proof.spec.js --reporter=list` — PASS (6/6)
+
+Important correction:
+
+- this was real **boundary proof**
+- it was **not** product-parity proof
+- it did not prove public/local parity, direct source-tool parity, Recorder / Verification / Session separation, or durable TERM++ behavior
+
+#### Phase 4 — Runtime drawer regression
+
+The rebuilt layout then hid the TERM++ surface:
+
+- `activeDrawer: "source"` at boot
+- runtime hidden behind a generic drawer labeled `Runtime`
+- visible top-level UI no longer made TERM++ / Skin explicit
+
+This means the main user-visible runtime lane regressed immediately after the rebuild.
+
+#### Phase 5 — Partial fix leaked debug harness into product UI
+
+The next fix re-exposed runtime, but the wrong way:
+
+- `Open Skin Lab` was surfaced as a peer user action inside `/workbench`
+
+That created a new false runtime owner:
+
+- debug harness path `/termpp-skin-lab`
+- product path `Test This Skin`
+
+The failure log explicitly classifies this as a product-boundary/process failure, not a valid repair.
+
+#### Phase 6 — Public/local divergence became explicit
+
+The top-level failure log then records a direct public/local comparison:
+
+- public: `https://rikiworld.com/xpedit`
+- local: `/workbench`
+
+What was clearly wrong locally:
+
+- `Open Skin Lab` leaked into the product UI
+- the runtime lane was fragmented instead of centered on `Test This Skin`
+- public direct source tools (`Select`, `Draw Box`, `Drag Row`, `Drag Column`, `Vertical Cut`, `Find Sprites`) were missing locally
+- Recorder / Skin Test dock / Verification / Session were over-collapsed locally
+
+#### Phase 7 — Localhost UI still wrong after the patch stack
+
+Even after the runtime drawer cleanup and Skin Lab removal, the top-level failure log still records the local `/workbench` as structurally wrong.
+
+Best-supported summary of 2026-04-16:
+
+- the old browser owner was only truly deleted after earlier completion claims
+- the rebuild achieved narrow root-owner proof, not product correctness
+- the runtime lane was hidden
+- the fix for that hid-nothing regression introduced a new debug-harness leak
+- the local UI was then proven to diverge from the public page and remain misframed even after cleanup
+
+### 2026-04-17 — False-green recognition, wipe, and partial recovery
+
+Exact surviving timestamps in the wiped/reset tree:
+
+- `PLAYWRIGHT_FAILURE_LOG.md` modified at **2026-04-17 00:20:34 EDT**
+- `mirror/xpedit` created at **2026-04-17 00:31:49 EDT**
+- `recovered-xpedit/.conductor/context/PROJECT_CONTEXT.md` modified at **2026-04-17 00:45:47 EDT**
+
+#### 00:20 EDT — False-green recognition lands in the failure log
+
+The top-level failure log now explicitly records:
+
+- green local proof was misinterpreted
+- `tests/e2e/test_browser_flow.py` is only a structural smoke
+- `classic_xp_lifecycle` can pass without proving durable runtime behavior
+- Step 4 remains boundary proof only
+
+This is the point where the local proof story is formally demoted from "evidence of rebuild success" to "false green."
+
+#### 00:31 EDT — attempted mirror capture did not complete
+
+The directory `mirror/xpedit` exists but is empty.
+
+Best-supported reading:
+
+- there was an attempt to preserve or reconstruct state
+- it did not become a usable codebase snapshot
+
+#### 00:45 EDT — recovered session context is blank
+
+`recovered-xpedit/.conductor/context/PROJECT_CONTEXT.md` is only the blank template scaffold.
+
+Best-supported reading:
+
+- no meaningful local branch/session state was carried over into the recovered repo
+
+#### Recovery artifacts from the recovered repo
+
+The recovered repo then produced three concrete run artifacts.
+
+1. `recovered-xpedit/output/xp-fidelity-test/run-2026-04-17T04-50-30Z-full-recreation-prefixed/result.json`
+   - filesystem timestamp: **2026-04-17 00:54:01 EDT**
+   - result: `overall_pass: true`
+   - but also:
+     - `mode: "diagnostic"`
+     - `setup_mode: "user_ui_import"`
+
+   Correction:
+
+   - this was **not** a true blank-start full recreation proof
+   - it imported an XP through the UI first, then validated from that loaded state
+
+2. `recovered-xpedit/output/playwright/workbench-png-to-skin-2026-04-17T04-53-49-295Z/result.json`
+   - filesystem timestamp: **2026-04-17 00:54:01 EDT**
+   - result shows the recovered repo could still do a meaningful headless PNG-to-skin run:
+     - runtime loaded
+     - movement happened
+     - no crash signals
+
+3. `recovered-xpedit/output/xp-fidelity-test/run-2026-04-17T04-57-22Z-full-recreation-prefixed-headed/result.json`
+   - this headed artifact exists in the recovered repo
+   - result: `overall_pass: false`
+   - failure: Playwright click path was blocked by pointer-event interception from overlapping UI surfaces
+
+   Correction:
+
+- the headed recovery did **not** "complete cleanly"
+- the recovered repo was usable enough to run meaningful headless proof again
+- the headed "full recreation" lane was still failing
+
+### What actually changed, day by day
+
+#### 2026-04-13
+
+- last intact remote/gitted state
+- major focus moved to visual runtime proof and PNG slicing reality
+- repo remained fully recoverable
+
+#### 2026-04-14
+
+- refactor operated inside the wrong product frame
+- ownership problem was still not being attacked cleanly
+
+#### 2026-04-15
+
+- delete-first plan formalized
+- review made it obvious the branch was already unsafe
+
+#### 2026-04-16
+
+- old browser owner finally hard-deleted
+- rebuild achieved narrow boundary proof only
+- runtime lane regressed
+- patch for runtime regression leaked debug harness into product UI
+- public/local mismatch became undeniable
+
+#### 2026-04-17
+
+- green proof was formally reclassified as false green
+- local tree had already been wiped
+- attempted mirror capture was incomplete
+- recovered repo restored the last intact remote codebase
+- recovered headless runtime proof worked
+- recovered headed recreation proof still failed
+
+### Why this matters now
+
+This corrected timeline means:
+
+1. The last trustworthy codebase state is the recovered remote repo, not the wiped local branch.
+2. The 2026-04-14 through 2026-04-16 local refactor story must not be remembered as "almost done but buggy." It was a sequence of frame errors, false completion claims, and proof misinterpretation.
+3. The recovered repo is not "perfect," but it is the last intact state with git history, deploy wiring, backend, and working headless runtime proof.
+4. Any future refactor must treat 2026-04-16 as the negative pattern to avoid:
+   - no owner move without hard deletion first
+   - no narrow proof presented as product acceptance
+   - no debug harness surfaced as product UI
+   - no local parity claim without direct comparison to the frozen public page

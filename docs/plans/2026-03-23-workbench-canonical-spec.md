@@ -1,597 +1,1817 @@
 # Workbench Canonical Spec
 
-**Authority:** This is one of the 3 canonical authority docs for this repo. See Section 6 below.
+**Authority:** this file and `PLAYWRIGHT_FAILURE_LOG.md` are the only active canon docs for the browser workbench.
 
-**Last updated:** 2026-04-13
-**Branch:** master @ 02c6d07
+**Last updated:** 2026-04-16
+**Branch baseline:** `master @ 6cb839d`
+**Audit scope:** current master after the root-owner and Section 2 runtime-proof slices, plus local runtime assets, sprites, and archive docs already cloned into this repo
 
----
+## Application Statement
 
-## 1. Milestone Definitions & Pass Criteria
+Asciicker XPEdit is a browser-based XP sprite-sheet authoring workbench for the Asciicker / TERM++ game runtime.
 
-### Milestone 1: Bundle-Native New-XP Authoring Viability
+It currently does all of the following:
 
-**Status: CLOSED** (2026-03-23)
+- creates blank template-backed authoring sessions
+- imports existing `.xp` files
+- uploads `.png` source art as reference input
+- optionally runs backend source loading to populate XP/session geometry
+- edits XP cells and layers in an embedded whole-sheet editor
+- shows source images and canonical layout state in a separate source panel
+- provides a separate frame-navigation/grid surface for preview, selection, and metadata operations around the root sheet
+- saves and exports `.xp`
+- injects authored XP or bundle payloads into the embedded Skin Dock/runtime preview
+- can stage native TERM++ diagnostic skin runs from repo-local assets
 
-Evidence: `PLAYWRIGHT_FAILURE_LOG.md` commit 14e8e95 — 7/7 edge workflows PASS, Skin Dock PASS, base-path 0 regressions. M1 is the closed baseline. Do not re-litigate M1 pass criteria; refer to the failure log for the closeout record.
+That is the current shipped application. It is not already a pure whole-sheet-root REXPaint clone, and it is not just a sprite-slicing wrapper.
 
-### Milestone 2: Practical PNG Ingest and Manual Assembly
+The user-facing runtime lane is singular: the current whole-sheet XP editor state is what gets tested in the embedded Skin Dock/runtime preview (`Test This Skin` or the bundle equivalent). Debug-only harnesses such as `/termpp-skin-lab`, raw iframe loaders, or external-XP injection helpers may exist for developers, but they are not part of the `/workbench` product surface and must not appear as peer user actions.
 
-**Status: ACTIVE**
+Public/local parity note: the public behavior-frozen `rikiworld.com/xpedit` page still exposes older direct source-marking controls (`Select`, `Draw Box`, `Drag Row`, `Drag Column`, `Vertical Cut`, `Find Sprites`). The local rebuild currently does not; rebuilding that direct slicer surface remains an open gap rather than current product truth.
 
-M2 passes only when:
+Public/local parity note: the public page also keeps `Recorder`, `Skin Test dock`, `Verification`, and `Session` as distinct user-facing surfaces. The local rebuild currently over-collapses some of those into the runtime drawer; that is a live UI failure, not intended canon direction.
 
-- all user-reachable actions are mapped in a canonical SAR table
-- the SAR model defines starting state, allowed actions, required responses, and valid next states for each workflow family
-- the verifier executes predefined contract-driven workflow sequences on both root-hosted and base-path hosting
-- acceptance-critical M2 lanes pass without errors
+### Application Boundaries And Guardrails
 
-M2 is NOT: perfect automatic slicing, full existing-XP parity, or full REXPaint parity.
+There are only two master application spec sections in this canon:
 
-### Future Milestones
+1. Section 1 — the root editor contract
+2. Section 2 — the Asciicker wrapper/runtime contract layered on top of it
 
-#### Milestone 3: Agent-Native Terminal Sprite Tooling
+Section 3 is the testing harness spec that proves those two application
+sections. It is not a third application owner.
 
-**Status: PLANNED — not started**
+These rules are execution guardrails, not optional advice:
 
-A terminal-first XP sprite viewer and editor, drivable by agents via CLI, MCP, and API. Goal: enable automated and human-supervised sprite authoring and inspection workflows without the browser workbench.
+1. Do not change `rikiworld.com/xpedit` behavior until the refactor is complete and working.
+2. Do not add a new authoritative owner while the old owner still mutates the same behavior.
+3. If an ownership boundary moves, delete or hard-disable the old owner first.
+4. Do not let template, bundle, source-slicing, or runtime proof workflows redefine the root editor contract.
+5. Treat acceptance proof, structural gates, and visual-runtime proof as observation only. They do not establish ownership.
+6. If Section 1 and Section 2 disagree, Section 1 wins for editor ownership and Section 2 wins only for engine filename/runtime truth.
+7. Do not surface debug runtime harnesses as peer product flows inside `/workbench`; if they remain in-repo, keep them explicitly diagnostic and off the primary user path.
 
-**M3 passes when:**
-- An agent can address any cell in any XP file by semantic position (sprite family, animation, angle, frame, layer type) without needing to know raw pixel coordinates
-- An in-terminal viewer renders XP frames navigably in true color with frame/angle/layer context
-- All editing primitives are callable from CLI, MCP tools, and REST API without a browser
+### Canon And Repo Alignment
 
-**Sub-phases:**
+Only two active canon docs exist:
 
-| Sub-phase | Scope | Status |
-|-----------|-------|--------|
-| **M3-A** | Semantic XP indexer: detect frame count, angle count (8-dir isometric), animation names, layer types (metadata/visual/hitbox) per Asciicker sprite conventions. CLI: `python3 scripts/xp_info.py <file.xp>` | NOT STARTED |
-| **M3-B** | Semantic MCP/CLI editing: address cells by frame N, angle K, layer type, relative position (center, edge). Extends existing `mcp__xp-tool__*` surface. | NOT STARTED |
-| **M3-C** | Terminal sprite viewer TUI: in-terminal frame-navigable color renderer. Frame/angle navigation, layer switching, AHSW variant context. | NOT STARTED |
-| **M3-D** | Full TUI editor: semantic cell editing in terminal with sprite-convention enforcement. | NOT STARTED |
+1. `PLAYWRIGHT_FAILURE_LOG.md`
+2. `docs/plans/2026-03-23-workbench-canonical-spec.md`
 
-**Implementation choice for M3-C/D** (decision deferred to M3 start):
-- **Option A — durdraw vendor**: import `durdraw` into `scripts/vendor/durdraw/`, add XP format plugin + Asciicker semantic layer. Reuses durdraw's TUI infrastructure. Risk: durdraw is freeform ASCII art editor — sprite-convention awareness requires significant plugin work.
-- **Option B — custom Python CLI**: build `scripts/xp_tui.py` using Python `curses` or `rich`. Tailored to Asciicker conventions from day one. No vendor dependency. Risk: higher initial build cost.
+All other former doc-state, handoff, claim-verification, and manual/reference
+docs are archive/reference material only.
 
-**Agent drivability contract:**
-- **CLI**: `python3 scripts/xp_cli.py <verb> <file> [args]` — scriptable from shell agents
-- **MCP**: extend `mcp__xp-tool__*` with semantic methods (`read_frame`, `read_angle`, `write_frame_cell`, `list_frames`, `list_angles`)
-- **API**: REST endpoints under `/api/workbench/xp/` matching existing pipeline API pattern
+The 2-doc collapse is true in the live repo, but repo alignment is still
+incomplete:
 
-**Depends on:** M2-A closed, `scripts/xp_core.py` + `scripts/xp_cat.py` (both already in repo)
+1. The active canon files are:
+   - `PLAYWRIGHT_FAILURE_LOG.md`
+   - `docs/plans/2026-03-23-workbench-canonical-spec.md`
+2. `README.md:75-76` still points at retired canonical paths.
+3. `scripts/doc_lifecycle_stitch.sh:24-39`, `scripts/doc_lifecycle_stitch.sh:63-75`, and `scripts/doc_lifecycle_stitch.sh:250-252` still point at retired failure-log/spec paths and the older protected-doc set.
+4. `scripts/git_guardrails.py` is referenced by older doc-health instructions but is absent in this repo, so any startup flow that assumes it exists is stale.
+5. Top-level `AGENTS.md` and `CLAUDE.md` must stay aligned to the 2-doc canon and the deletion-first architecture rule.
 
----
-
-## 2. M2 Sub-Phase Execution Order
-
-| Phase | Scope | Depends On | Status |
-|-------|-------|-----------|--------|
-| **M2-A** | Structural PNG baseline (dims, layers, metadata gates) | M1 closed | ESTABLISHED |
-| **M2-B** | Source panel + grid assembly (draw box, find sprites, drag-to-grid) | M2-A | ESTABLISHED — source-panel 10/10 PASS (5c67ef2); source-to-grid 13/13 PASS (380edee) at root + /xpedit. D1, D2/C2, G1 PROVEN. |
-| **M2-C** | Whole-sheet editor coverage (tools, layers, undo) | M2-A | ESTABLISHED — 16/18 W-actions PROVEN. W15 three-part proof committed (2026-03-24): activeTool + bounds + marching-ants screenshot. W16/W17 DEFERRED. |
-| **M2-D** | Full SAR workflow coverage (all remaining WIRED actions get verifier proof) | M2-B, M2-C | ADVANCING — registry 77/77 entries landed (5c2aab1–d7e791c). 14 executable + 16 stubs. 31 WS selectors. 2 new recipes. W15 PROVEN (three-part). S3-S6/G5-G6/G9-G11 PROVEN. W19-W22 clipboard PROVEN (`431b437`). PB-01 FIXED. PB-03 reclassified (UX hardening). Slice 5 E2E 13/13 PASS. 35/96 actions now PROVEN (was 31). |
-| **M2-E** | Semantic editing (region-based dictionary-driven edits) | M2-D | NOT STARTED |
-| **M2-F** | Analyze/auto-slice (assistive, not authoritative) | M2-D | NOT STARTED |
-
-Execute in dependency order. M2-B and M2-C may run in parallel after M2-A.
-
----
-
-## 3. Current Priority Stack
-
-**Last reviewed:** 2026-04-13
-
-1. **G-RANDOM visual fidelity — render oracle BLOCKED** — **HARD BLOCKER. Nothing proceeds until oracle reliability is resolved.** Custom skin appeared invisible in Skin Dock during seeds 2+3 (2026-04-13). The oracle infrastructure is now wired but produces false positives. Until the oracle can reliably distinguish the custom skin from the native/default sprite, the gate cannot produce valid proof.
-
-   **Goal:** a gate that proves the authored XP content is actually rendered by TERM++ in the Skin Dock, not just that the character model is visible with any sprite.
-
-   **What was built (2026-04-13):**
-   - Phase 0 (injection diagnostics): wired in runner. Reads `#webbuildOut` for per-action `inject.bytes`, fetches live bundle payload for per-action `override_names`. Result: injection bytes > 0 for all 3 actions in all 3 seeds; override names contract verified. **Injection is NOT the bug.**
-   - Phase 2 (render oracle): `scripts/skin_dock_oracle.js` created (~150 lines, single-player). `window.ak_buf` exposed in `runtime/termpp-skin-lab-static/termpp-web-flat/index.html` (1-line patch). Oracle wired into randomized-bundle runner: samples cell buffer every second during 10s runaround, gates on `body_ok >= 3 in ready samples`.
-   - Map changed to `minimal_2x2.a3d` (smaller world, helps debugging).
-   - Source panel state now cleared on action tab switch (UI bug fix).
-
-   **Why the oracle is UNRELIABLE — root cause:**
-   - The oracle scans for glyph 222 (right half-block `▐`) near screen center. Glyph 222 is the dominant glyph in `player-0100.xp` (the reference skin), but it also appears in the DEFAULT/NATIVE runtime sprite. Finding glyph 222 near center proves only that the character model is rendering with *some* sprite — not that the *custom* skin is active.
-   - Seed 2 oracle reported 8/8 `body_ok=true` (59–105 hits/sample). This is a **false positive**: the character was visually invisible with custom skin per prior observation; glyph 222 was the native sprite. The oracle cannot distinguish the two.
-   - Oracle is only non-ambiguous when `idle=new_xp` (glyphs I=73, A=65, D=68 are ASCII letters absent from all native sprites). For `upload_xp` and `upload_png`, half-block glyphs 220–223 are shared between custom and native — oracle proof is invalid.
-
-   **Seed run summary (2026-04-13):**
-   | Seed | idle method | inject.bytes | Oracle result | Verdict |
-   |------|------------|--------------|---------------|---------|
-   | 42   | upload_png | 22153        | null (no glyph) | indeterminate |
-   | 2    | upload_xp  | 1148         | 8/8 body_ok=true | **FALSE POSITIVE** — glyph shared with native sprite |
-   | 3    | upload_xp  | 1148         | 0/8 body_ok=false | failure detected but for unreliable reason |
-
-   **What must happen to unblock:**
-   1. Fix oracle to produce unambiguous proof. Candidate approaches:
-      - **(a) Negative control:** sample cell buffer BEFORE injection and AFTER; compute glyph-distribution delta. If the delta at screen center matches the XP palette, skin was applied.
-      - **(b) Color-based check:** verify the background color of hit cells near center matches the XP's actual palette, not just glyph presence. `ak_buf[offset+1]` is the background color index (not RGB directly — need palette mapping).
-      - **(c) new_xp-only gating:** for oracle reliability, force idle action to `new_xp` in G-RANDOM proof runs (glyph I=73 is absent from all native sprites; finding it proves the custom skin is active). Keep upload_xp/upload_png as non-gated paths.
-   2. Re-run seeds 2, 3, 42 with reliable oracle; all must produce valid (non-ambiguous) `body_ok` verdicts.
-   3. All seeds pass the oracle gate.
-
-   **Success criteria (unchanged):** oracle-backed evidence that distinguishes the custom skin from native/default rendering, produced from the cell buffer near the projected player position. Pixel-presence alone is not sufficient. Color-presence is not sufficient. Glyph-presence with shared glyphs is not sufficient.
-
-   **G-RANDOM gate status: BLOCKED.** Oracle is wired but invalid. No promotion, no milestone progress on G-RANDOM until oracle produces unambiguous proof.
-
-2. **MVP deployment to `rikiworld.com/xpedit`** — LIVE. GitHub Actions run `23479759126` passed all 3 jobs. Bug report → GitHub Issue delivery wired via Secret Manager (verified: Issues #6, #7). Bare `/xpedit` route fixed (`8ede2c6`). Remaining follow-up: refresh Node-20-based GitHub Actions before GitHub's Node 24 cutoff. Pipeline runs on Cloud Run free tier are too slow (>5 min) for verifier tests — UI-only flows work fine.
-2. **Slice 5 manual assembly E2E** — PROVEN 13/13 (2026-03-24). Covers U1→S12→S7→D1→W1→W2→T3→T4. Demonstrates M2-B/C/D functional end-to-end. Runner: `run_manual_assembly_e2e_test.mjs`.
-3. **M2-D full SAR workflow coverage** — 35/96 SAR + 13/13 parity extension PROVEN. W23 select-all now proven (adapter proxy fix + 8/8 PASS). W28-W31 bulk-edit proven (10/10 PASS via `run_whole_sheet_bulkedit_test.mjs`). W24-W27 selection transforms proven (`1828979`). W19-W22 clipboard proven (`431b437`). Inspector demotion Phase 7 now **unblocked**. 31 WS selectors, 77 registry entries, 2 recipes. W15 three-part proof committed. S3-S6/G5-G6/G9-G11 proven. Remaining 48 WIRED actions need committed proof in future M2-D/E passes.
-4. **Workbench UI audit follow-up** — 2026-03-24 audit found 39 user-facing issues after BUG-01 was fixed: 3 critical, 7 high, 14 medium, 15 low. BUG-02, BUG-03, BUG-04, BUG-05, BUG-10 now FIXED. Remaining open bugs: BUG-06 (fetch error), BUG-07 (disabled control contrast), BUG-08 (debug panel exposed).
-5. **Mobile/touch support is now an explicit roadmap requirement** — current mobile behavior may load but is not yet a truthful supported surface. BUG-04 is one concrete blocking symptom, but the broader requirement is: no milestone closeout or product-language upgrade should imply practical mobile support until touch interactions, modal behavior, viewport fit, and control usability are explicitly audited and improved.
-6. **PB-03 UX hardening** — confirm dialog on session-boundary loads. Cross-session undo remains architecturally out of scope. Low-priority UX refinement.
-7. **Bundle-family expansion roadmap is still under-scoped** — the 2026-03-24 player-state parity audit confirmed three concrete gaps: (a) non-bundle override naming mismatch — **FIXED** (BUG-09: all override paths now use per-family W semantics matching the bundle contract), (b) mounted families exist in runtime/debug surfaces but not in bundle templates or native family builders, and (c) the native sandbox overwrite helper is template-agnostic internally while the exposed workbench flow is still session/export driven. Gaps (b) and (c) remain roadmap work.
-
-This stack is execution priority, not timeless truth. Re-evaluate when any sub-phase status changes.
-
-**Note:** PB-01 (anchor undo) FIXED — `pushHistory()` added to `setAnchorFromTarget()`. PB-02 remains CLOSED. PB-06 (W15 visualization) FIXED and PROVEN (three-part evidence committed 2026-03-24).
-
-### Active Bugs
-
-| ID | Summary | Status | Notes |
-|----|---------|--------|-------|
-| BUG-01 | Grid toggle overlay is incorrect — uses simple lines instead of cross marks at intersections; grid size is not user-customizable | FIXED | Fixed in `6fb3375`..`fef0e78` (4 commits). Cross marks at intersections, grid-step select (Frame/1×1–16×16) on both whole-sheet editor and legacy inspector. Default "Frame" shows crosses at sprite frame boundaries. Separate X/Y step for non-square frames. Opacity tuned for visibility. UI-proven via screenshots. |
-| BUG-02 | PNG upload silently fails on decode/load error because the source-image path has no `img.onerror` handler | FIXED | Fixed in `fd6973a`. Added `img.onerror` at both image loading sites (wbUpload + file-change handler). Error clears stale sourceImage, revokes object URL, shows user-visible status message. |
-| BUG-03 | Whole-sheet canvas binds `mouseleave` twice, allowing spurious stroke-complete callbacks and empty undo entries | FIXED | Fixed in `fd6973a`. Removed duplicate mouseleave→_onStrokeEnd binding. _onCanvasMouseLeave now calls _onStrokeEnd() first, then clears hover display. Single handler, no duplicate stroke-complete risk. |
-| BUG-04 | Overlay modal clips content on mobile/tablet because `.overlay-card` relies on `100vh` and a weak internal scrollbar | FIXED | Fixed: `dvh` fallback, `box-sizing: border-box`, `align-items: flex-start` + `overflow-y: auto` on mobile (`@media max-width:600px` and `max-height:500px`). Verified: `run_bug04_mobile_modal_test.mjs` 3/3 PASS (iPhone SE 375x667, iPad 768x1024, phone landscape 667x375). Submit button reachable on all viewports. **Note:** fixing BUG-04 does not solve mobile/touch support broadly — that remains an explicit roadmap requirement per §5. |
-| BUG-05 | Whole-sheet/REXPaint grid draws every cross mark for the entire sheet even when most cells are off-screen | FIXED | Viewport-aware culling added to `_drawGrid()` in `canvas.js`. Computes visible cell range from scroll-container geometry (or offset fallback) with safety margin, only draws cross marks in visible region. Grid test 7/7 PASS at step=1, step=16, with selection, after scroll. No visual regression. |
-| BUG-06 | Bug-report known-issue dropdown fails silently when `fetchKnownBugs()` errors | FIXED | `fetchKnownBugs()` catch block now appends a disabled `"(failed to load known issues)"` option to the dropdown so users know the fetch failed. |
-| BUG-07 | Disabled controls are too visually similar to enabled controls on the dark theme | FIXED | `button:disabled` rule changed from `opacity: 0.5` to `opacity: 0.35; filter: grayscale(0.5)`. Same treatment applied to `select:disabled, input:disabled`. Verified in Playwright: disabled buttons now show opacity 0.35 + grayscale. |
-| BUG-08 | Legacy Char Grid debug panel is exposed in production UI | FIXED | Added `hidden` attribute to `<details id="legacyGridDetails">` in `workbench.html`. Panel is no longer visible to production users. |
-| BUG-09 | Non-bundle skin override paths still use binary W encoding and miss `W=2` equipment variants | FIXED | Non-bundle override generators now align with current product family semantics: shared `FAMILY_W_RANGE` rule applies `all_16` (W∈{0,1,2}) to player/plydie/wolfie and `weapon_gte_1` (W∈{1,2}) to attack/wolack. One rule concept used by all four generators (`_termpp_skin_override_names`, `WEBBUILD_DEFAULT_OVERRIDE_NAMES`, both `DEFAULT_OVERRIDE_SETS`). Override count: 81→105 (full parity), 49→65 (mounted mode). For enabled bundle families (player/attack/plydie), non-bundle names exactly equal bundle-path names. Tests pass. **Open residual:** committed native attack/wolack sprite inventory on disk (W=1 only) is narrower than the generated override contract (W∈{1,2}); this is an inherited runtime-truth question, not a naming bug. |
-| BUG-10 | G-BUNDLE Skin Dock button stays disabled despite "3/3 actions ready" | FIXED | Root cause: `persistBundleActionStatus()` called `updateBundleUI()` (text only) but not `updateWebbuildUI()` (which manages button disabled state). Fix: added `updateWebbuildUI()` call in `persistBundleActionStatus()` (`6af8b86`). Verified: `quickBtnDisabled: false` in bundle test snapshot, G-RANDOM seed 42 PASS with skin_dock=true. |
-| BUG-11 | G-BUNDLE deterministic Skin Dock readiness path often never reaches playable state | FIXED | Root cause: headless Chromium lacked a WebGL context. The Asciicker runtime calls `canvas.getContext("webgl")` → null in headless, so the font texture chain stalls and `_wasmReady` stays false. Fix: (1) added `--enable-webgl --use-gl=angle` to runner `chromium.launch` args in headless mode; (2) added `_wasmReady` safety gate to `detectWebbuildReady()` in workbench.js. Verified: G-BUNDLE 3/3 consecutive PASS, G-RANDOM seed 42 PASS (no regression). |
-| BUG-12 | Drag-paint glyph shifts left on release (Issue #8) — Safari visual corruption on mouseup | FIXED | Root cause: `render()` in `canvas.js` fell through to a full clear+redraw on mouseup when `dirtyCells.size === 0` and no full-render flag was set, causing a gratuitous full redraw that visually shifted painted content. Fix (`c4f1ae5`): added early return when `!needsFull && dirtyCells.size === 0`. Follow-up (`8b8b496`): `setFontSize`, `setOffset`, and `syncFromState` relied on the old fallthrough — added explicit `_fullRenderNeeded = true` in those paths so the early-return guard does not skip them. |
-
-**UI audit note:** the 2026-03-24 workbench UI audit found 39 verified issues total (3 critical, 7 high, 14 medium, 15 low). The active-bug table above promotes the critical issues and highest-signal open production issues into canon; the broader severity breakdown is preserved in `PLAYWRIGHT_FAILURE_LOG.md`.
-
-### Whole-Sheet Parity Gap (2026-03-25 audit)
-
-The 2026-03-25 REXPaint parity audit identified that the shipped whole-sheet editor surface (whole-sheet-init.js) lacked clipboard, selection-transform, and bulk-edit operations. All gaps are now closed:
-
-- Clipboard (W19-W22): **PROVEN** (`431b437`)
-- Selection transforms (W24-W27): **PROVEN** (`1828979`, 9/9 PASS)
-- Bulk-edit (W28-W31): **PROVEN** (`run_whole_sheet_bulkedit_test.mjs`, 10/10 PASS)
-
-Inspector demotion Phase 7 is **unblocked**.
-
-**Structural finding:** whole-sheet-init.js does NOT use EditorApp. It imports tool classes directly. W19-W22 (clipboard: copy/paste/cut/delete) were implemented directly in whole-sheet-init.js (landed `0383b31`, proven `431b437`). W23 (select all) now **PROVEN** — root cause was missing SelectToolAdapter proxy methods for `startSelection`/`updateSelection`/`endSelection`; fix added 3 proxy methods, 8/8 PASS. W24-W27 (selection transforms) implemented and proven (`6af8b86`, `1828979`): 4 shipped sidebar buttons (Rot CW, Rot CCW, Flip H, Flip V) + keyboard shortcuts `]`/`[` for rotate. W28-W31 (bulk-edit) implemented and proven: 3 shipped sidebar buttons (Fill Sel, Repl FG, Repl BG) + collapsible Find & Replace sidebar section. Match-source contract for Replace FG/BG: `lastSampledCell` is set only by the eyedropper tool. W31 Find & Replace scope: 'selection' (current selection) or 'canvas' (entire whole-sheet canvas). Each bulk-edit operation is a single undo operation.
-
-#### Planned Whole-Sheet Actions (post-audit parity extension)
-
-These are tracked as a planned parity extension outside the existing 96-action SAR count (see `m2-capability-canon-inventory.md` Family 7 post-audit section). They will be folded into the SAR denominator at the next canon rebaseline.
-
-| ID | Action | Code Basis | Priority | Notes |
-|----|--------|-----------|----------|-------|
-| W19 | Copy selection (Ctrl+C) | Implemented in whole-sheet-init.js | HIGH | **PROVEN** `431b437` — UI-driven proof via `run_whole_sheet_clipboard_test.mjs`. Copies selected cell data to internal clipboard. |
-| W20 | Paste selection (Ctrl+V) | Implemented in whole-sheet-init.js | HIGH | **PROVEN** `431b437` — Ctrl+V enters paste mode, click places clipboard content at target position. Paste mode exits after placement. |
-| W21 | Cut selection (Ctrl+X) | Implemented in whole-sheet-init.js | HIGH | **PROVEN** `431b437` — Copies selection to clipboard, clears source region. Both clipboard population and source clearing verified. |
-| W22 | Delete/clear selection (Del) | Implemented in whole-sheet-init.js | HIGH | **PROVEN** `431b437` — Delete key clears selected cells to glyph=0. Undo integration via stroke-complete callback. |
-| W23 | Select all (Ctrl+A) | Implemented in whole-sheet-init.js | MEDIUM | **PROVEN** — Root cause was missing `startSelection`/`updateSelection`/`endSelection` proxy methods on `SelectToolAdapter`. Fix: added 3 proxy methods. 8/8 PASS `run_whole_sheet_clipboard_test.mjs` (W23 now blocking). Selection bounds verified: `{x:0, y:0, width:gridCols, height:gridRows}`. |
-| W24 | Rotate selection CW | Implemented in whole-sheet-init.js (`6af8b86`) | MEDIUM | **PROVEN** `1828979` — Button `#wsRotateCW` + keyboard `]`. Single undo op, bounds updated after rotate. 9/9 PASS via `run_whole_sheet_transform_test.mjs`. |
-| W25 | Rotate selection CCW | Implemented in whole-sheet-init.js (`6af8b86`) | MEDIUM | **PROVEN** `1828979` — Button `#wsRotateCCW` + keyboard `[`. Restores original from CW-rotated state. |
-| W26 | Flip selection H | Implemented in whole-sheet-init.js (`6af8b86`) | MEDIUM | **PROVEN** `1828979` — Button `#wsFlipH`. Undo reverts as single operation. |
-| W27 | Flip selection V | Implemented in whole-sheet-init.js (`6af8b86`) | MEDIUM | **PROVEN** `1828979` — Button `#wsFlipV`. Cell positions verified via diagnostic observation. |
-| W28 | Fill selection | Implemented in whole-sheet-init.js — `_fillSelection()` | MEDIUM | **PROVEN** — Button `#wsFillSel`. Fills selection with active glyph/fg/bg. Single undo. 10/10 PASS `run_whole_sheet_bulkedit_test.mjs`. |
-| W29 | Replace FG in selection | Implemented in whole-sheet-init.js — `_replaceSelectionColor('fg')` | MEDIUM | **PROVEN** — Button `#wsReplaceFg`. Match source: `lastSampledCell.fg` (eyedropper). Replacement: current `drawFg`. |
-| W30 | Replace BG in selection | Implemented in whole-sheet-init.js — `_replaceSelectionColor('bg')` | MEDIUM | **PROVEN** — Button `#wsReplaceBg`. Match source: `lastSampledCell.bg` (eyedropper). Replacement: current `drawBg`. |
-| W31 | Find & Replace | Implemented in whole-sheet-init.js — `_findReplace()` + sidebar UI | LOW | **PROVEN** — Sidebar collapsible section, button `#wsFrApply`. Scope: 'selection' or 'canvas' (whole-sheet canvas, not inspector "frame"). |
-
-#### Parity Decision Items (ownership undecided)
-
-These inspector operations work at the frame level, not the whole-sheet canvas level. The product must decide whether they become grid-panel actions, whole-sheet actions, or remain inspector-only residuals.
-
-| Operation | Inspector Function | Decision Needed |
-|-----------|-------------------|----------------|
-| Copy frame | `copyInspectorFrame()` | Grid panel action? Inspector-only residual? |
-| Paste frame | `pasteInspectorFrame()` | Same |
-| Flip frame H | `flipInspectorFrameHorizontal()` | Same |
-| Clear frame | `clearInspectorFrame()` | Same |
-
-#### Inspector-Only Residuals (intentionally not ported)
-
-| Operation | Reason |
-|-----------|--------|
-| Half-cell paint (top/bottom color) | Inspector-specific; not a REXPaint or whole-sheet concept |
-| Cell inspect tool (hover readout) | Replaced by WS Info panel |
-| Per-cell glyph/color hover preview | WS Eyedropper covers the sampling use case |
-
-#### Inspector Demotion Status
-
-**Fully unblocked.** Clipboard (W19-W22), transforms (W24-W27), and bulk-edit (W28-W31) are now PROVEN.
-
-- Phase 1 (collapse inspector to `<details>` tag): **can proceed**
-- Phase 2-6 (progressive capability absorption): **all parity actions PROVEN** — W19-W22 (`431b437`), W24-W27 (`1828979`), W28-W31 (`run_whole_sheet_bulkedit_test.mjs` 10/10 PASS)
-- Phase 7 (full demotion — never auto-open inspector): **unblocked** — all bulk-edit operations are now in the shipped whole-sheet surface
-
-The whole-sheet editor has full parity with the inspector for clipboard, transform, and bulk-edit operations. The "whole-sheet editor should become the primary correction surface" claim is now operationally achievable.
+These are repo-health failures. They are separate from, and additive to, the
+Section 1 and Section 2 architecture failures.
 
 ---
 
-## 3a. Player-State Bundle Expansion Goals
+## Section 1 — Fundamental REXPaint-Parity Spec
 
-These are roadmap goals, not current completion claims. They exist because current
-product truth still targets only `player`, `attack`, and `plydie`, while the runtime
-and research surfaces already require broader player-state coverage.
+This section is the root editor canon.
 
-### Expansion Axis 1: Runtime Families
+Everything in Section 2 is subordinate to this section. Sprite-sheet slicing, bundle/template helpers, Skin Dock, and runtime injection are wrappers over the editor contract defined here. They are not allowed to redefine the root owner or the base editor workflow.
 
-The family-expansion roadmap must explicitly cover:
+### 1.1 Embedded Local REXPaint Manual (Verbatim)
 
-- `player-nude`
-- `player`
-- `attack`
-- `plydie`
-- `wolfie`
-- `wolack`
+The local manual is embedded here wholesale so the parity target lives inside the canon spec instead of in a separate active doc.
 
-This axis is about **which filename families are authorable and overridable at all**.
-It is distinct from gameplay-state coverage.
+```text
+=================================================================
+ REXPaint v1.70 - Manual
+=================================================================
 
-### Expansion Axis 2: Gameplay / State Coverage
+A powerful and user-friendly ASCII art editor.
 
-The gameplay/state roadmap must explicitly cover:
 
-- unmounted vs mounted
-- nude/spawn vs equipped
-- weapon/no-weapon and ternary weapon states where they exist
-- attack / death transitions
-- wearable/equipment state transitions across AHSW
-- item/world/inventory visuals as a separate non-player track
+-----------------------------------------------------------------
+ Background
+-----------------------------------------------------------------
 
-This axis is about **when the engine switches between families/variants during play**.
-It is distinct from family-count expansion.
+There are a number of ASCII art editors available on the web, but most suffer from poor usability or small feature sets (one notable exception being eigenbom's awesome fork of ASCII Paint). For development of my own projects, I needed an application equipped with a wide range of tools for quickly drawing and manipulating ASCII art, as well as the ability to easily browse the images created as stored in their native format. Thus REXPaint was born.
 
-### Required Roadmap Goals
+Over the years since its first public release, REXPaint has found use as a general purpose ASCII art editor, as well as a roguelike development tool for mockups, mapping, and design. I love seeing what people create with this program, so send me a link/copy if you've made something cool! (Or share it with us on the forums: www.gridsagegames.com/forums/index.php?board=8.0)
 
-1. **Full player-state bundle parity**
-   - expand from the current 3-family product truth to the full player-state set:
-     `player-nude`, `player`, `attack`, `plydie`, `wolfie`, `wolack`
-   - include ternary `W=0/1/2` coverage anywhere the runtime actually distinguishes it
-   - ~~remove remaining binary-only debug assumptions from browser override lists~~ **DONE** (BUG-09)
 
-2. **Mounted/unmounted parity as a first-class milestone goal**
-   - mounted idle/walk and mounted attack must not fall back to native defaults
-   - transitions between unmounted and mounted states must preserve skin identity
+-----------------------------------------------------------------
+ Features
+-----------------------------------------------------------------
 
-3. **Equipment/wearable state parity**
-   - AHSW transitions must map cleanly through the bundle/runtime contract
-   - equipping armor/helmet/shield/weapon must not expose fallback-native frames
+An overview of REXPaint's major features:
+* Edit characters, foreground, and background colors separately
+* Draw shapes and text
+* Copy/cut/paste areas
+* Undo/redo changes
+* Preview effects simply by hovering the cursor over the canvas
+* Palette manipulation
+* Image-wide color tweaking and palette swaps
+* True-color RGB/HSV color picker
+* Create multi-layered images
+* Zooming: Scale an image by changing font size on the fly
+* Custom fonts and support for extended characters and tilesets
+* Browse art assets and begin editing at the press of a button
+* Images highly compressed
+* Export PNGs for use in other programs or on the web
+* Import/export .ANS files for ANSI art
+* Other exportable formats: TXT, CSV, XML, XPM, BBCode, C:DDA
+* Import .TXT files
+* Skinnable interface
 
-4. **Template-less native-runtime apply**
-   - support applying a skin/session to the native runtime without forcing a template-shaped
-     workbench action model first
-   - this is a distinct product goal from browser/webbuild debug injection
 
-5. **Separate non-player family track**
-   - `item-*`, `grid-*`, and similar non-player assets must be tracked separately from
-     player-skin bundle expansion
-   - do not blur item/UI family work into player-state parity claims
+-----------------------------------------------------------------
+ Table of Contents
+-----------------------------------------------------------------
 
-6. **Native-runtime parity over browser-debug parity**
-   - browser/webbuild override modes are useful diagnostics
-   - native runtime behavior is the authority for “does the skin system actually work”
+* Canvas
+    Resizing
+    Shifting
+* Drawing
+    Apply
+    Draw Modes
+    Text Input
+    Preview
+    Undo
+* Fonts
+    Glyphs
+    Glyph Swapping
+    Custom and Extended Fonts
+    Custom Glyph Mirroring
+    Custom Unicode Codepoints
+* Palettes
+    Selection & Editing
+    Color Picker
+    Palette Files
+    Extraction
+    Adding
+    Organization
+    Palette Swapping
+    Transparency
+* Layers
+    Control
+    Active Layer
+    Order
+    Visibility & Locking
+    Merging
+    Extended Layers Mode
+* Browsing
+    File/Image Control
+    Viewing & Editing
+    Saving
+    Exporting
+* Customization
+    Options
+    Skins
+* Commands
+* Appendix A: Known Issues
+* Appendix B: .xp Format Specification
+* Appendix C: External Libraries and Tools
+* Appendix D: ANSI Art (.ans)
+* Appendix E: Exportable Text Formats (.txt, .csv., .xml, BBCode)
+* Appendix F: Importing Text Files
+* Appendix G: Importing PNGs
+* Appendix H: Additional Command Line Options
+* Appendix I: Exporting ANSI art for C:DDA
 
-### Current Gap Statement
+-----------------------------------------------------------------
+ Canvas
+-----------------------------------------------------------------
 
-Current config still exposes only:
+The black area to the right of the tool menus is the canvas view where all image editing occurs, and the image itself initially appears as a box outline that defaults to the size of the entire canvas view.
 
-- `player`
-- `attack`
-- `plydie`
+ Resizing
+----------
+Resize the image as necessary (Ctrl-r), ideally before starting to draw so that later changes are not affected by a change in image dimensions. Resizing can be done at any time, but the dimensions are always based from the top-left corner of an image, so make sure the portion of a larger image you wish to retain is based in the top-left corner before shrinking it (move the relevant section with the copy tool).
 
-via `ENABLED_FAMILIES` in `src/pipeline_v2/config.py`.
+ Shifting
+----------
+To view different parts of a large image (or reposition a smaller one), hold spacebar while left-clicking on the image and moving the mouse to drag it (Photoshop style). The numpad can also be used for eight-directional shifting of the image, Enter resets its location, and Ctrl-Enter centers it.
 
-Research already shows the larger real player-state map and the current missing areas:
 
-- `player-nude`
-- `wolfie`
-- `wolack`
-- browser override parity gaps for ternary weapon state coverage
+-----------------------------------------------------------------
+ Drawing
+-----------------------------------------------------------------
 
-So the roadmap must explicitly upgrade from a **3-family bundle model** to a
-**full player-state bundle parity model**.
+ Apply
+-------
+The apply menu determines what is actually produced by the current draw mode when you left-click on the image. Glyphs (characters), foreground color, and background color are each drawn/edited separately, and can be individually toggled on and off via the menu buttons or 'g', 'f', and 'b'. Thus if you activate "glyph" and deactivate "fore" and "back," when you draw only the current glyph will be applied, while the image's colors remain unchanged. Activating all modes will overwrite the glyph and both foreground and background colors when drawing. (Turning all apply modes off would draw... nothing, and be completely pointless!)
+    The colors to be applied are shown to the right of their button, and the current glyph is that highlighted/chosen among the characters in the font box. Change the glyph by left-clicking on a different one in the font box, and change the colors by either left-clicking on the color square (see Color Picker explanation further below) or chosing a color from the palette (LMB choses a color for the foreground, RMB for the background).
 
-### 2026-03-24 Audit Findings (Evidence-Backed)
+ Draw Modes
+------------
+Drawing modes define the shape and area of the image affected while drawing. Only one mode can be active at a time, and some modes have an alternate setting that changes their behavior (left-click on the active mode to toggle its secondary feature, or cycle through them if more than one).
+    Cell ('c'): Applies the effect to a single "cell" (space) on the image. Hold LMB and move the cursor to keep drawing. Alternate mode: Auto-wall/auto-box drawing.
+    Line ('l'): Applies the effect to a line. Left-click at the line's start and release the button at its end, or press RMB/ESC before releasing the button to cancel the line.
+    Rect ('r'): Applies the effect to a rectangular area. Left-click at one corner of the rectangle and release the button at the opposite corner, or press RMB/ESC before releasing the button to cancel the rectangle. Alternate mode: Fills the entire rectangle instead of drawing an outline.
+    Oval ('o'): Like rect mode, but draws ovals. Alternate mode fills the oval. By default ovals are centered on the point chosen; to instead draw from any corner switch the oval drawing method via Alt-o.
+    Fill ('i'): Applies the effect to all like cells attached to the one under the cursor. Alternate Mode: Fill search is performed in 8 directions rather than 4.
+    Text ('t'): Types text onto the image.
+    Copy (Ctrl-c): Copies a rectangular area of the image into the clipboard for later pasting. Alternate mode: Cut (Ctrl-x).
+    Paste (Ctrl-v): Paste the clipboard contents to the image. Alternate modes: Flip clipboard contents horizontally, vertically, or both.
 
-The player-state parity audit established these current truths:
+ Preview
+---------
+While the cursor is hovering over the image, applicable draw modes (cell, fill, paste) will show a preview of what the image will look like assuming a left-click at that location.
 
-1. **Current authoring contract = one PNG per family action, not per AHSW variant.**
-   - The product converts one authored PNG to one exported XP for a given family/action, then
-     broadcasts those same XP bytes to every generated override filename for that family.
-   - Users do not currently author helmet/shield/weapon variants separately.
+ Undo
+------
+All image manipulation actions can be undone/redone (Ctrl-z/Ctrl-y, or just z/y). Undo histories are also saved separately for each image.
 
-2. **AHSW is a filename-selection contract in the current product, not a workbench composition system.**
-   - Equipment state is encoded in sprite filenames such as `player-0102.xp`.
-   - The current custom-skin contract flattens equipment visual differentiation by stamping the
-     same XP across those variants.
 
-3. **Mounted families are partially present but not productized.**
-   - `wolfie` and `wolack` exist in committed sprites and in debug/native override name lists.
-   - They are not in `ENABLED_FAMILIES`, not in `template_registry.json`, and have no native
-     layer builders in `_build_native_layers()`.
+-----------------------------------------------------------------
+ Fonts
+-----------------------------------------------------------------
 
-4. **Template-less native overwrite already exists internally, but not as a first-class user flow.**
-   - `_stage_termpp_skin_sandbox()` copies an exported XP across runtime override filenames
-     without consulting template metadata.
-   - The exposed workbench entrypoint still requires `session_id -> export -> xp_path`, so the
-     user-facing flow remains template/session driven today.
+Images themselves do not store font information, instead remembering only what glyph/character index belongs at each position. This means you can dynamically change the size and/or appearance of an image by simply switching the font (Ctrl-PgUp/Dn or '<'/'>').
 
-5. **W-encoding parity now aligns with product family semantics (BUG-09 FIXED).**
-   - All override generators use a shared per-family W-range rule: `all_16` (W∈{0,1,2}) for
-     player/plydie/wolfie, `weapon_gte_1` (W∈{1,2}) for attack/wolack.
-   - Non-bundle names exactly equal bundle-path names for enabled families.
-   - **Open residual:** committed native attack/wolack sprite inventory on disk has W=1 only,
-     while the generated override contract includes W=2. This is an inherited runtime-truth
-     question, not a naming bug.
+ Glyphs
+--------
+Select a glyph to draw with by clicking on it in the font window. Right-click on a cell in the image to pick up its glyph and colors.
+    Toggle highlighting of all used glyphs by pressing 'u'. To see where a specific glyph has been used, hold Alt while hovering over it in the font window.
 
-### Wolfie / Wolack Template Specs (Proven from Committed XP)
+ Glyph Swapping
+----------------
+To replace every occurence of a glyph in all visible unlocked layers, Shift-LMB on it in the font window, then Shift-LMB on the new glyph to replace it with.
 
-Extracted from committed sprites on 2026-03-24. Full evidence at `/tmp/claude-mounted-family-specs.md`.
+ Custom and Extended Fonts
+---------------------------
+By default, both the GUI and images use a standard 256-glyph Code Page 437 font. REXPaint makes this same font available at several sizes. You can edit these fonts (in the "data/fonts/" directory), and/or add new ones by creating a new .png bitmap and listing it in the "data/fonts/_config.xt" text file. Fonts do not require square glyphs (rectangles are okay), but both the GUI and Art font must use the same glyph dimensions.
+    Although the default number of rows in a font bitmap is 16, fonts with additional rows are supported, essentially allowing space for an unlimited number of glyphs in an image. Simply specify the proper number of rows available for the relevant art font in _config.xt.
 
-| Property | wolfie (mounted idle) | wolack (mounted attack) |
-|----------|----------------------|------------------------|
-| Files | 24 (all_16, W=0/1/2) | 8 (W=1 only) |
-| Width | 180 | 160 |
-| Height | 96 (H=0) / 104 (H=1) | 104 (fixed) |
-| Angles | 8 | 8 |
-| Projs | 2 | 2 |
-| Anims | [1,8] | [8] |
-| cell_w | 10 | 10 |
-| cell_h | 12 (H=0) / 13 (H=1) | 13 |
-| Layers | 3–7 (variable by equip) | 5–8 (variable by equip) |
-| L0 metadata | "8","1","8" | "8","8" |
-| ahsw_range | all_16 | weapon_gte_1 |
 
-**Key structural differences from player/attack/plydie:**
-- Variable layer counts driven by equipment overlay complexity (player=4, attack=4, plydie=3 — all fixed).
-- wolfie height depends on helmet state (H digit), requiring two dimension variants.
-- wolack has no W=2 variants (same as attack).
+-----------------------------------------------------------------
+ Palette
+-----------------------------------------------------------------
 
-### Remaining Open Design Questions
+Palettes in REXPaint are tools intended purely for color selection and organization, thus images themselves do not store palettes (i.e., image colors are not "indexed").
 
-- Does the original runtime ever compose equipment visuals dynamically, or are the committed
-  per-AHSW XP files always the whole contract? Current repo evidence only proves filename-level
-  selection in the custom-skin pipeline.
-- Which non-bundle fallback states are acceptable during phased rollout, and which must be
-  treated as blocking parity gaps?
-- What is the minimal lightweight validation contract for a first-class template-less native
-  apply path once session/template coupling is removed from the user flow?
-- How should the template registry handle wolfie's variable dimensions (two xp_dims entries?
-  per-variant layer counts?) and wolack's restricted W range?
+ Selection & Editing
+---------------------
+Left-clicking on a palette color selects it as the foreground color; right-clicking selects it as the background color. Clicking on the same color again will allow you to edit it in the color picker.
 
-### Legacy Runtime Lane Classification
+ Color Picker
+--------------
+Left-click on a color to select it, and click on it again to accept it. Choose a precise color by specifying HSV/RGB number values (click on the number, or press 'h'/'s'/'v'/'r'/'g'/'b').
 
-The native TERM++ "run around for 10 seconds" path is an **external diagnostic lane**, not
-acceptance. It depends on an external `game_term` binary and `legacy_verify_e2e.py` script
-that are not committed to this repo.
+ Palette Files
+---------------
+Any number of palettes can be created by clicking on the '+' button (switch between them with the buttons or '['/']' keys). Stored in text format in the "data/palettes/" directory.
 
-**Classification:** external diagnostic — visual runtime verification only, never acceptance evidence.
+ Transparency
+--------------
+Background color 255,0,255 (hot pink) identifies transparent cells. Draw using the transparent background color to create a transparent cell/area.
 
-**Preserved wiring (regression-guarded in `test_contracts.py`):**
 
-| Surface | Location |
-|---------|----------|
-| Test This Skin button | `web/workbench.html:313` (canon-proven R1) |
-| `verifyProfile = legacy_verify_e2e` | `web/workbench.html:375`, `web/workbench.js:621` |
-| Command template generation | `src/pipeline_v2/service.py:2496` |
-| `/api/workbench/open-termpp-skin` | `src/pipeline_v2/app.py:638` |
-| `/api/workbench/termpp-stream/start` | `src/pipeline_v2/app.py:673` |
+-----------------------------------------------------------------
+ Layers
+-----------------------------------------------------------------
 
-**Canonical in-repo proof lane** for skin testing is the iframe Skin Dock (Test This Skin / R1),
-which requires no external binary.
+ Control
+---------
+Each image automatically comes with one base layer (required). More can be created with Ctrl-l or by clicking on the layer window's '+' button. A single image can have up to nine separate layers, and all newly created layers are automatically filled with transparent cells (255,0,255).
 
----
+ Active Layer
+--------------
+The "active layer" is the one which effects are applied to when drawing. Change the active layer by clicking on a different number, pressing 1~9, or using the mouse wheel while the cursor is over the canvas area.
 
-## 4. Acceptance vs Diagnostic Boundary
+ Order
+-------
+Layers are listed in top to bottom order, and their order determines which are drawn on top. The relative order of layers can be changed by clicking on the arrow buttons.
 
-The canonical verifier path (`truth_table → recipe → run`) is the only source of acceptance evidence. See `docs/AGENT_PROTOCOL.md` Section 13 for the full protocol.
+ Visibility & Locking
+----------------------
+Individual layers can be hidden from view. Locked layers (Shift-# or the "Lck" button) prevent editing.
 
-Project-specific narrowing:
+ Merging
+---------
+Use Ctrl-Shift-m to merge the active layer downward.
 
-- **Acceptance mode** (`--mode acceptance`): user-reachable actions through the shipped whole-sheet editor surface only. Inspector-only and debug-only actions are refused.
-- **Diagnostic mode** (`--mode diagnostic`): may use inspector-primary actions for implementation debugging. Results must be labeled diagnostic.
-- Ad hoc scripts, `page.evaluate()` probes, and `window.__wb_debug` calls are diagnostic-only — never acceptance evidence.
-- If the verifier cannot express a required workflow, that is a verifier bug, not permission to bypass it.
 
-### Runner Classification (2026-03-23 reconciliation)
+-----------------------------------------------------------------
+ Browsing
+-----------------------------------------------------------------
 
-| Runner | Action Path | Observation | Classification |
-|--------|------------|-------------|----------------|
-| `run_fidelity_test.mjs` | XP import via file input; painting via canvas mouse events (acceptance mode) | Cell reads via `readFrameCell()`/`frameSignature()` | UI-driven with diagnostic observation layer |
-| `run_bundle_fidelity_test.mjs` | Tab switch via DOM click; painting via canvas mouse events | State waits via `_state()`, readiness via `getState()` | Mixed — UI actions + diagnostic observation. M1 historical evidence only. |
-| `run_randomized_bundle_test.mjs` | Tab switch, 3 authoring methods (new_xp draw, upload_xp import, upload_png pipeline), WS random actions (paint/fill/rect/line/erase), Skin Dock test, 10s runaround crash detection | `_state()` for actionStates, `__ak_diag` for crash/RAF probes | Mixed — UI actions + diagnostic observation. Randomized smoke gate. |
-| `run_edge_workflow_test.mjs` | Tab switch via DOM click; button clicks; DOM waits | Core state via `getState()` + `_state()` | Mixed — UI actions + diagnostic observation. M1 historical evidence only. |
-| `run_structural_baseline_test.mjs` | ALL actions via `fetch()` API calls — zero DOM interaction | API response JSON | Structural-contract only (per `PNG_STRUCTURAL_BASELINE_CONTRACT.md`). NOT UI proof. |
-| `run_source_panel_workflow_test.mjs` | ALL actions via DOM clicks, canvas drags, file input, context menu | State reads via `getState()` | UI-driven with diagnostic observation layer |
-| `run_source_to_grid_workflow_test.mjs` | ALL actions via DOM clicks, canvas drags, file input, context menu, cross-panel drag/drop | State reads via `getState()` + `readFrameSignature()` | UI-driven with diagnostic observation layer |
-| `run_whole_sheet_layer_test.mjs` | ALL actions via DOM clicks on layer panel buttons/rows | State reads via `__wholeSheetEditor.getState()` + DOM class checks | UI-driven with diagnostic observation layer |
-| `run_whole_sheet_tools_test.mjs` | ALL actions via DOM clicks, grid dblclick, canvas mouse events | State reads via `readFrameCell()` | UI-driven with diagnostic observation layer |
-| `workbench_agents.mjs` (subagents) | DOM clicks + file inputs | `getState()` reads + request interception | Diagnostic / subagent coverage |
-| `workbench_coverage_agent.mjs` | DOM clicks, drags, screenshots | Element probes via `evaluate()` | Diagnostic coverage |
+Switch between paint mode and browse mode with Tab. Browse mode allows you to view all the images in the "images/" directory and subdirectories.
 
-**Standard for M2 UI acceptance (2026-03-23):**
+ File/Image Control
+--------------------
+New images: Ctrl-n or New button. Rename (RMB), duplicate (Shift-LMB) and delete (Ctrl-Shift-Alt-LMB).
+    Reload all image files: Ctrl-Shift-r or the "R" button.
 
-1. **UI-driven actions are required.** Every user-facing workflow step (click button, drag on canvas, select file, switch tab) must be performed through the shipped DOM surface — not via `fetch()` or `page.evaluate(async => ...)` action calls.
-2. **Read-only diagnostic observation is tolerated.** Using `getState()`, `readFrameCell()`, or `frameSignature()` to *verify* outcomes after a UI action is acceptable. The observation layer does not replace user actions — it confirms their effect.
-3. **`fetch()` / API action driving is not acceptance for workflow slices** unless a live structural contract (e.g., `PNG_STRUCTURAL_BASELINE_CONTRACT.md`) explicitly defines that API-backed path for a narrow structural-safety purpose.
+ Viewing & Editing
+-------------------
+Images do not need to be explicitly opened. When the program starts, all images are loaded into memory. Browse through them by clicking on their name or pressing up/down.
 
-**Rule:** Only runners classified as "UI-driven" may produce evidence labeled as acceptance. Structural-contract runners prove API/gate contracts only. Mixed runners are M1 historical evidence — not pure UI-driven acceptance going forward.
+ Saving
+--------
+Save with Ctrl-s or the Save button.
 
-### Verification Gates
+ Exporting
+-----------
+Export PNG: Ctrl-e. Export TXT: Ctrl-t. Export CSV: Ctrl-k. Export ANS: Ctrl-a. Export XML: Ctrl-m. Export XPM: Ctrl-p. Export BBCode: Ctrl-b.
 
-These gates must pass before any milestone closeout or deployment.
 
-| Gate | Runner | Pass Criteria | Classification |
-|------|--------|---------------|----------------|
-| G-BUNDLE | `run_bundle.sh` | Deterministic 3-action bundle (idle/attack/death) passes with fidelity + Skin Dock playable + 10s runaround 0 crashes | Regression — fixed inputs. BUG-11 FIXED: 3/3 consecutive PASS (2026-03-25). |
-| G-RANDOM | `run_randomized_bundle.sh` | Randomized 3-action bundle passes with all 3 authoring methods (new_xp/upload_xp/upload_png), Skin Dock playable, 10s runaround 0 crashes. Must pass on at least 3 different seeds. | Smoke — randomized inputs. **PARTIALLY MET: stability proven on 3/3 seeds, visual fidelity NOT proven.** Custom skin appeared invisible in Skin Dock during seeds 2+3. Gate proves pipeline does not crash; does NOT prove the custom skin is visually rendered. See PLAYWRIGHT_FAILURE_LOG.md § "G-RANDOM Gate: Visual Fidelity Gap". |
+-----------------------------------------------------------------
+ Commands
+-----------------------------------------------------------------
 
-**G-RANDOM details:**
-- Each run randomly permutes 3 authoring methods across 3 actions (6 possible combinations)
-- `new_xp`: random WS editor scribbles with action-specific glyph (I/A/D), random colors, random tools (paint/fill/rect/line/erase). Render suppressed during rapid drawing (performance optimization — cells are painted, visual update deferred until unsuppress).
-- `upload_xp`: imports reference XP via UI file input
-- `upload_png`: uploads PNG from baseline pool → server pipeline conversion
-- Seeded RNG (`--seed`) for reproducibility. Failing seed must be recorded.
-- Stubbed actions (copy/paste, select, undo/redo) are excluded until WS editor supports them
-- **Stability runs (3/3):**
-  - seed 42 (idle=upload_png, attack=upload_xp, death=new_xp) — commit `7ce9d72`
-  - seed 2 (idle=upload_xp, attack=upload_png, death=new_xp) — PASS 2026-04-13 (stability only)
-  - seed 3 (idle=upload_xp, attack=upload_png, death=new_xp) — PASS 2026-04-13 (stability only)
-- **Visual fidelity:** NOT PROVEN. Custom skin invisible in Skin Dock — root cause under investigation.
-- **Current required proof path:** injection diagnostics + render oracle. A simple pixel-presence probe may be used diagnostically, but it is not sufficient for closure under the current execution directive.
-- **Gate: PARTIALLY MET** — stability proven, visual fidelity gap unresolved. Gate cannot be fully cleared until the oracle-backed render check is added and logged in `PLAYWRIGHT_FAILURE_LOG.md`.
+ Font
+------
+Ctrl-PgUp/Dn / </>      Change Font (Scale Image/UI)
+LMB                     Select Glyph
+Arrows                  Shift Selection
+u                       Toggle Used Glyph Highlighting
+Alt (hold)              Highlight Hovered Glyph in Current Layer
+Shift-LMB x2            Swap Occurences of Glyph 1 with Glyph 2
 
----
+ Palette
+---------
+[/]                     Change Palette
+LMB (x2)                Set (Edit) Foreground Color
+RMB (x2)                Set (Edit) Background Color
+Shift-LMB x2            Swap Occurences of Color 1 with Color 2
+Ctrl-Shift-o            Organize Palette
+Ctrl-Shift-e            Extract Image Palette
+Ctrl-Shift-p            Purge Unused Colors
+Ctrl-LMB x2             Swap Palette Colors
 
-## 5. Unified M2 Verifier Architecture
+ Drawing
+---------
+c (x2)                  Cell (Auto-walls)
+l                       Line
+r (x2)                  Rectangle (Filled)
+o (x2)                  Oval (Filled)
+Alt-o                   Toggle oval drawing method (center/corner)
+i (x2)                  Fill (8-direction)
+t                       Text
+Ctrl-c                  Copy
+Ctrl-x                  Cut
+Ctrl-v (x2)             Paste (Flip)
+ESC / RMB               Stop/Cancel
 
-### The Problem
+ Text Tool
+-----------
+Enter                   Confirm
+Ctrl-Enter              New line below
+Escape                  Cancel
+Left/Right Arrow        Move caret
+Backspace               Delete before caret
+Delete                  Delete at caret
+Up/Down                 Cycle text history
+Ctrl-v                  Paste from clipboard
 
-M1 used hand-written runners with inline readiness patterns. This worked because M1 scope was small (7 edge workflows, 1 fidelity test, 1 bundle test). M2 has 96+ SAR-enumerated actions across 13 families — hand-writing a runner per workflow does not scale.
+ Apply
+-------
+g (G)                   Toggle (Solo) Glyph
+f (F)                   Toggle (Solo) Foreground Color
+b (B)                   Toggle (Solo) Background Color
+RMB                     Add Color to Palette
+Alt-w                   Swap Foreground/Background Colors
+d                       Increment Copy/Cut/Paste Layer Depth
 
-### Required Architecture: Capability Canon → Recipe → Run → Proof
+ Canvas
+--------
+Spacebar (hold)         Enter Drag Mode
+LMB                     Hold Canvas to Drag
+RMB                     Copy Cell Contents (Applied Modes Only)
+Shift/Alt (hold)        Hide Preview
+z/Ctrl-z                Undo
+y/Ctrl-y                Redo
+Ctrl-d                  Toggle Rect Dimension Display
+Ctrl-g                  Toggle Grid
+Ctrl-Tab                Switch between current/latest image
+Ctrl-Up/Down            Edit Previous/Next Image
 
-The M2 verifier is a pipeline with five stages:
+ Layers
+--------
+Ctrl-l                  New Layer
+Wheel                   Cycle Active Layer
+1~9                     Activate Layer
+Ctrl-1~9                Toggle Layer Hide
+Shift-1~9               Toggle Layer Lock
+Ctrl-Shift-m            Merge Active Layer
+Ctrl-Shift-l            Toggle Extended Layers Mode
 
+ Browse
+--------
+Wheel / PgUp/Dn         Scroll List
+LMB                     View Image
+Up/Down                 View Previous/Next Image
+RMB                     Rename Image
+Shift-LMB               Duplicate Image
+Ctrl-Shift-Alt-LMB      Delete Image
+Ctrl-Shift-r            Reload All Image Files
+Home/End                First/Last Image
+
+ Image
+-------
+Ctrl-n                  New (in Base Path)
+Ctrl-r                  Resize
+Ctrl-s                  Save
+Ctrl-e                  Export PNG
+Ctrl-t                  Export TXT
+Ctrl-k                  Export CSV
+Ctrl-a                  Export ANS
+Ctrl-m                  Export XML
+Ctrl-p                  Export XPM
+Ctrl-b                  Export BBCode
+
+ General
+---------
+Tab                     Toggle Paint/Browse
+F1 / ?                  Commands
+F3                      Options
+F4                      Change Skin
+Alt-F4                  Exit
+Alt-Enter               Fullscreen
+
+
+-----------------------------------------------------------------
+ Appendix B: .xp Format Specification
+-----------------------------------------------------------------
+
+The .xp files are deflated with zlib (gzipped); once decompressed the format is binary:
+
+#-----xp format version (32)
+A-----number of layers (32)
+ /----image width (32)
+ |    image height (32)
+ |  /-ASCII code (32) (little-endian!)
+B|  | foreground color red (8)
+ |  | foreground color green (8)
+ |  | foreground color blue (8)
+ | C| background color red (8)
+ |  | background color green (8)
+ \--\-background color blue (8)
+
+Data stored in column-major order. Transparent cells identified by background color 255,0,255.
+
+
+-----------------------------------------------------------------
+ Appendix H: Additional Command Line Options
+-----------------------------------------------------------------
+
+ Exporting PNGs
+----------------
+-exportAll              Export every .xp file as PNG
+-export:XXX             Export individual .xp file as PNG
+
+ Creating/Opening Images
+-------------------------
+-create:XXX             Create new .xp file
+-open:XXX               Open REXPaint with .xp file preselected
+-txt2xp:XXX             Convert .txt file to .xp
+-png2xp:XXX             Convert .png file to .xp (filename must include _WWWxHHH)
+-uniqueGlyphs           Use unique glyphs for different characters in png2xp
+
+
+-----------------------------------------------------------------
+ Key Configuration Reference
+-----------------------------------------------------------------
+
+REXPaint.cfg options:
+* unlimitedFontSize: Load all fonts even if too large for screen
+* txtOutputUTF8: UTF8 encoding for TXT export
+* baseImagePath: Base path for image loading (relative to .exe)
+* exportsToBase: Export to base path vs source subdirectory
+* ignorePath: Paths to exclude from browser
+* ansiMode: Enable ANSI art restrictions
+* fontKeyColorOverride: Override font background color detection
+* glyphScrollRowCount: Mouse scroll rate for glyph area
+* glyphSelectAlwaysAutoscrolls: Auto-scroll to selected glyph
+* noSaveForOutOfBoundsGlyphs: Block saving images with OOB glyphs
+* ansOutputNoCursorShift: Disable cursor shift in ANS export
 ```
-┌─────────────────────┐
-│ 1. Capability Canon  │  docs/plans/2026-03-23-m2-capability-canon-inventory.md
-│    (human-curated)   │  Action families, status, code evidence, proof evidence
-└──────────┬──────────┘
-           │ machine-readable extraction
-           ▼
-┌─────────────────────┐
-│ 2. Action Registry   │  scripts/xp_fidelity_test/action_registry.json
-│    (generated)       │  Per-action: id, family, selectors, preconditions, postconditions
-└──────────┬──────────┘
-           │ recipe generation
-           ▼
-┌─────────────────────┐
-│ 3. Recipe Generator  │  scripts/xp_fidelity_test/recipe_generator.mjs
-│    (UI-only recipes) │  Combines actions into bounded workflow sequences
-│                      │  Each step = DOM selector + user gesture (click/drag/input)
-│                      │  No page.evaluate() action calls — UI gestures only
-└──────────┬──────────┘
-           │ execution
-           ▼
-┌─────────────────────┐
-│ 4. DOM Runner        │  scripts/xp_fidelity_test/dom_runner.mjs
-│    (Playwright)      │  Executes recipe steps via Playwright actions
-│                      │  Uses verifier_lib.mjs for readiness, base-path, reporting
-└──────────┬──────────┘
-           │ read-only observation
-           ▼
-┌─────────────────────┐
-│ 5. Observation Layer │  getState() primary, _state() fallback (actionStates only)
-│    + Proof Artifacts │  Per docs/plans/2026-03-23-state-capture-contract.md
-│                      │  Output: structured report JSON + failure-log entries
-└─────────────────────┘
-```
 
-### Stage Details
+### 1.2 Northstar Product Goal
 
-**Stage 1 — Capability Canon** is human-curated and already exists (`m2-capability-canon-inventory.md`). It classifies every action as PROVEN/WIRED/PARTIAL/PLANNED/BLOCKED/DEFERRED and tracks code evidence and proof evidence.
+The long-range product target is:
 
-**Stage 2 — Action Registry** (`action_registry.json`) exists and was expanded in the current M2-D pass. Machine-readable extraction of the capability canon: one entry per action with `id`, `family`, `selectorKey` (reference into `selectors.mjs`), `gestureType` (constrained enum), `paramBindings` (preparatory input steps), `preconditions`, `postconditions`, `acceptanceEligible`, and `generatorReadiness`. Schema: `action_registry_schema.json` (JSON Schema draft-07). Current coverage: 47 READY-family actions; M2-D pass adds 30 more (14 executable + 16 stubs).
+1. a web-based, mobile-accessible, REXPaint-class XP editor
+2. with Asciicker-specific sprite/bundle/runtime helpers layered on top of it
+3. without letting those helpers own the root image/session model
 
-**Stage 3 — Recipe Generator** (`recipe_generator.mjs`) exists. Reads the action registry and composes bounded workflow sequences. A recipe is an ordered list of `{ actionId, params, expectedOutcome }` steps with `_derived` metadata for runner consumption. Currently produces 8 fixed regression recipes for READY-family workflows. Import-safe (no side effects on module import). Bounded-random generation is future work.
+This means the current workbench must be treated as a transitional hybrid, not as
+the final architecture.
 
-**Stage 4 — DOM Runner** (`dom_runner.mjs`) exists (committed 85ff3b8). Executes recipe steps via Playwright DOM actions — never `page.evaluate()` for action driving. Supports gestures: click, setInputFiles, selectOption, fill. Enforces recipe-level precondition gates, refuses blocked gestures, constrains main gestures to value-less types (click, rightClick). Uses `verifier_lib.mjs` for `openWorkbench()`, `captureState()`, base-path resolution, and structured reporting. Proof: 3 recipes pass (bundle_template_apply, bug_report_dismiss, xp_import_roundtrip).
+Two corollaries are mandatory:
 
-**Stage 5 — Observation Layer** exists via `getState()` and the state-capture contract. Known debt: `actionStates` still requires `_state()` fallback (see state-capture contract §4). The DOM runner captures state after each recipe step and evaluates postconditions using operator-based assertions (eq, gt, truthy, changed, etc.).
+1. `rikiworld.com/xpedit` stays behavior-frozen until the deletion-first refactor is complete and working.
+2. No design or implementation choice in Section 2 may override the root editor contract in Section 1.
 
-### Selector Infrastructure
+### 1.3 Derived Non-Negotiable Parity Contract
 
-`selectors.mjs` centralizes DOM selectors used by both the action registry and runners. 102+ selector keys verified against `web/workbench.html`. Gesture types defined with blocked flags for canvas/keyboard. M2-D pass adds 31 whole-sheet selectors.
+The embedded manual yields the following non-negotiable editor contract:
 
-### Relationship to Existing Infrastructure
+1. The image/canvas is the primary object.
+2. `New`, open/import, resize, save, and export are image actions.
+3. Paint mode and browse mode are peer modes of the same editor.
+4. Layers are intrinsic to every image and must be directly controllable.
+5. Apply modes split glyph, foreground, and background behavior.
+6. The active tool operates on the active image and active layer.
+7. Undo/redo are editor-level operations, not wrapper-only helpers.
+8. PNG/source workflows are helpers around the editor, not replacements for the editor.
+9. The browser implementation must converge on pointer-device-agnostic interaction for mouse, touch, and pen. Detailed mobile UX remains a research-backed design phase, but the requirement itself is already part of the canon.
 
-| Existing | Role in M2 Architecture |
-|----------|------------------------|
-| `truth_table.py` | XP fidelity oracle — orthogonal to SAR; kept for export/cell truth |
-| `verifier_lib.mjs` | Foundation for DOM runner (readiness, state capture, reporting) |
-| `run_source_panel_workflow_test.mjs` | M2-B source-panel proof runner — will be replaced by generated recipe + DOM runner |
-| `run_source_to_grid_workflow_test.mjs` | M2-B source-to-grid proof runner (D1/D2/G1) — will be replaced by generated recipe + DOM runner |
-| `run_structural_baseline_test.mjs` | Structural-contract only — stays standalone, not part of SAR pipeline |
-| M1 runners (fidelity, bundle, edge-workflow) | Frozen — M1 is closed, do not refactor |
+### 1.4 Canonical Root Behavior Families
 
-### Known Design Debt
+The root editor SAR tree must be organized around editor behavior, not around
+template or pipeline remnants:
 
-- `actionStates` not yet in `getState()` — requires `_state()` fallback (state-capture contract §4)
-- Tab hydration readiness uses `_state().activeActionKey` — should migrate to `getState()` P3 batch
-- Canvas-coordinate actions (source panel drawing, grid drag) need a selector abstraction beyond CSS — likely `{ type: "canvas", target: "sourceCanvas", gesture: "drag", from: [x1,y1], to: [x2,y2] }`
-- Dual-button branching: G3 (row up/down), G4 (col left/right), W18 (undo/redo) each map one canon ID to two physical buttons. Current schema's `paramBindings` only supports input-setting gestures, not conditional click dispatch. Needs schema evolution or canon ID split.
-- inputRange gesture: S18 (source zoom), G13 (grid zoom) need `inputRange` added to dom_runner.mjs gesture executors.
-- Alias rows: S15=C3, S16=C4, G7=C6, G8=C7 are distinct canon IDs sharing selectors/gestures. Schema allows separate entries; deferred to alias-row pass.
+1. **Image Lifecycle**
+   - new
+   - open/import
+   - resize
+   - save
+   - export
+2. **Mode Control**
+   - paint mode
+   - browse mode
+3. **Canvas Navigation**
+   - pan/shift
+   - zoom/font scale
+   - grid toggle
+4. **Apply State**
+   - glyph on/off
+   - foreground on/off
+   - background on/off
+5. **Draw Tools**
+   - cell
+   - line
+   - rect
+   - oval
+   - fill
+   - text
+   - copy/cut/paste
+6. **Glyph and Palette**
+   - glyph selection
+   - palette selection/edit
+   - eyedrop/sample semantics
+7. **Layers**
+   - create
+   - select active
+   - visibility
+   - locking
+   - ordering
+   - merge
+8. **Browse**
+   - list images
+   - select image
+   - rename
+   - duplicate
+   - delete
+   - reload
+9. **History**
+   - undo
+   - redo
 
-### Implementation Status
+Everything in this tree belongs to Section 1. Source slicing, template/bundle
+state, engine-family routing, and runtime injection belong to Section 2.
 
-| # | Component | Status | Commit |
-|---|-----------|--------|--------|
-| 1 | `selectors.mjs` | **Done** | foundation landed earlier; expanded in `5c2aab1` |
-| 2 | `action_registry_schema.json` | **Done** | foundation landed earlier |
-| 3 | `action_registry.json` | **Done** — 77 entries (47 foundation + 30 M2-D expansion) | current master; latest M2-D expansion in `757cf74`, reconciled in `d7e791c` |
-| 4 | `recipe_generator.mjs` | **Done** (8 fixed recipes) | current master; latest addition `70da189` |
-| 5 | `dom_runner.mjs` | **Done** (click, setInputFiles, selectOption, fill) | foundation landed earlier |
-| 6 | M2-D registry expansion | **Done** — 31 selectors, 14 executable + 16 stub entries, W15 fix, 2 recipes | `5c2aab1`–`d7e791c` |
+### 1.5 Canonical Owner Graph
+
+The target owner graph is:
+
+1. an image/session is created or loaded
+2. the whole-sheet XP editor owns the image, layers, mode, and history
+3. browse is a peer mode inside that same owner
+4. source panel and frame navigation are views or overlays on that owner
+5. save/export emit from that owner
+6. bundle/runtime helpers observe or adapt that owner, but never become a parallel owner
+
+No wrapper feature is allowed to replace this graph.
+
+### 1.6 Current Section-1 Misalignment Ledger
+
+The Step 2-7 deletion slices removed several earlier root-owner violations:
+template-first startup, template-gated blank creation, legacy inspector fallback,
+the deferred-browse placeholder state, raw-vs-XP source flipping,
+viewport-hit-test drop targeting, duplicate frame-nav ownership, and the old
+local history owner are no longer the current blockers. The Step 4 mirror-sync
+owner (`FL-STEP4-01` / `FL-STEP4-06`) was also removed on `2026-04-16`; the
+remaining live misalignments are below.
+
+The live code is still misaligned in these exact ways:
+
+| Finding | Current evidence | Why this is misaligned |
+|---------|------------------|------------------------|
+| Wrapper views are now demoted into in-root drawers rather than peer sections | `web/workbench.html`, `web/workbench.js` | The standalone alpha/header peer shell was deleted on 2026-04-16, and source/frame/runtime/obs surfaces now open as toggleable drawers inside `#wholeSheetPanel` instead of living as separate top-level browser sections. RESOLVED. |
+| Canonical manifest authoring now exists, but it is still JSON-first | `web/workbench.html:133-145`, `web/workbench.js:2196-2377`, `web/workbench.js:3278-3367`, `src/pipeline_v2/app.py:496-525`, `src/pipeline_v2/service.py:3831-3887` | The deleted source overlay owner was replaced with a manifest JSON draft editor, saved-manifest routes, and guide/region rendering on the source canvas. The remaining gap is ergonomic interactive slicer tooling; authoring is still a JSON-first wrapper flow. |
+| Source panel now reloads canonical PNG/manifest without grid geometry | `web/workbench.js:2242-2305`, `web/workbench.js:3278-3367`, `web/workbench.js:4310-4332`, `src/pipeline_v2/app.py:496-525` | The source panel now reads `source_path` / `source_manifest` directly, reloads the PNG through `/api/workbench/source-image`, and can render manifest geometry before the PNG finishes loading. This Step 5 projection dependency is resolved. |
+| Sprite-by-sprite source-to-frame drag is still only partially proven | `web/workbench.js`, `PLAYWRIGHT_FAILURE_LOG.md` fix-attempt entry dated `2026-04-17` | The narrow `Find Sprites` browser proof exists for one auto-found box, but the broader user contract is every visible per-sprite source box path. Until those flows are proven, the authoring lane remains partial. |
+| Frame-slot deletion semantics are still missing | `web/workbench.html`, `web/workbench.js` | `Delete Selected` clears frame contents, but there is no separate `Delete Frame` action with semantic-slot removal and left-shift/repack behavior. |
+| Panel topology and panel IDs are not yet canon-stable | `web/workbench.html`, `web/styles.css`, `web/whole-sheet-init.js` | The user needs a stable visual naming system for every visible/clickable UI region. Grid/frame navigation placement is also still under correction: the intended layout is below Source (`8`) and in sequence before Whole Sheet (`10`), while child IDs must follow a documented parent-child numbering convention. |
+
+These are architectural failures. They are not just missing buttons.
+
+**AUDITOR FOUND GAP (2026-04-15):** The five ownership misalignments above are not the only Section 1 failures. The 2026-04-15 parallel audit found that parity contract items 2, 3, 4, 5, and 9 are also unimplemented or broken. These are feature gaps, not just ownership gaps. They must be tracked alongside the ownership items:
+
+| Finding | Evidence | Why this violates the parity contract |
+|---------|----------|---------------------------------------|
+| Resize action completely missing | No Ctrl-r handler, no resize UI, no logic in `web/workbench.js` or `web/whole-sheet-init.js` | Parity item 2: resize is a first-class image action |
+| Browse mode non-functional — Tab toggle not wired | `web/whole-sheet-init.js:1086-1091` renders a `BROWSE` button, but there is no mode state, no click binding, and no `Tab` handler in `web/whole-sheet-init.js:885-992` | Parity item 3: paint and browse are peer modes, Tab toggles them |
+| Undo/redo surface is broken after the deletion pass | `web/whole-sheet-init.js:219-238`, `web/whole-sheet-init.js:896-901`, `web/workbench.js:5410-5509` | The whole-sheet UI still renders Undo/Redo controls and shortcuts, but `workbench.js` no longer supplies `onUndo`/`onRedo`, so Family 9 history has no live owner. |
+| Apply mode keyboard shortcuts not bound | `applyGlyph`/`applyFg`/`applyBg` state exists; g/f/b handlers do not | Parity item 5: apply modes split glyph/fg/bg behavior |
+| Draw tool set is still incomplete | `web/whole-sheet-init.js:16-20`, `web/whole-sheet-init.js:905-916`, `web/whole-sheet-init.js:965-992` | Cell/erase/eyedropper/line/rect/fill/select and clipboard shortcuts now exist, but Oval and Text are still absent, so the Family 5 draw-tool set and full keyboard map are incomplete. |
+| Mouse-only input — touch and pen events absent | `web/whole-sheet-init.js` uses mousedown/mousemove/mouseup only | Parity item 9: pointer-device-agnostic interaction |
+| Zoom / font-scale not implemented | No zoom control or font-scale handler in `web/whole-sheet-init.js` | Family 3 in Section 1.4: canvas navigation includes zoom |
+| Grid control is only partially implemented | `web/whole-sheet-init.js:1241-1279` provides a sidebar toggle and step selector, but there is no Ctrl-g authority and no zoom/grid persistence contract | Family 3 in Section 1.4 requires grid control as a direct canvas-navigation behavior |
+| Layer control is only partially implemented | `web/whole-sheet-init.js:1757-1850`, `web/workbench.js:3498-3505` | Click-based visibility/lock/reorder UI exists, but Ctrl-l / 1~9 / Ctrl-1~9 / Shift-1~9 / Ctrl-Shift-m / wheel authority is missing and lock state is not part of the root session save contract. |
+
+These gaps must be explicitly designed before implementation begins. Do not implement piecemeal. See Unified Sequence Of Actions for the corrected task sequence.
+
+### 1.7 Section-1 Refactor Rule
+
+Do not add a new owner while leaving the old owner alive.
+
+The deletion-first order for Section 1 was:
+
+1. remove template-first blank-image assumptions
+2. promote whole-sheet image/session ownership to the root
+3. make browse/new/save/export true image actions at that root
+4. demote source and frame-nav into overlays/views on that root
+5. only then preserve or rebuild wrapper features from Section 2
+
+**AUDITOR FOUND GAP (2026-04-15):** These slices are NOT largely complete. The 2026-04-15 parallel audit found that the Section 1 parity alignment rate is 28% fully aligned, 44% partial, and 28% gap or missing. The ownership inversion is partially done (whole-sheet canvas exists) but the root owner contract (whole-sheet owns history/layers/mode, workbench.js is subordinate) is not met. Feature completeness (resize, browse, tools, shortcuts, touch) is also not met. The current state is a hybrid that passes structural syntax checks but does not deliver the behavioral contract. The current remaining sequence from this state is tracked in Unified Sequence Of Actions.
+
+### 1.8 Section-1 Feature Behavioral Contract
+
+This subsection is the required Step 2 design artifact from the Unified Sequence Of Actions. Step 3
+and Step 4 implementation work must follow this contract; they are not allowed
+to invent a second behavior model in code.
+
+#### 1.8.1 Root Document And Surface Contract
+
+1. The authoritative in-memory editor document contains:
+   - geometry: `gridCols`, `gridRows`, frame geometry, viewport position, zoom
+   - image data: ordered layers plus per-layer visibility and lock state
+   - editor state: active layer, current mode, current tool, draw glyph/colors,
+     apply toggles, selection, clipboard, and undo/redo history
+2. `whole-sheet-init.js` is the owner of that document. `workbench.js` may
+   request commands and observe snapshots, but it may not directly mutate
+   layers, history, mode, tool state, or panel visibility.
+3. The whole-sheet panel is always present as the root editor surface. When no
+   image is loaded, it shows an empty-state root surface and image actions. It
+   must not disappear merely because no session is mounted.
+4. Frame focus, source selection, bundle navigation, and preview helpers are
+   overlays on this owner. They may pan/select within the root canvas, but they
+   do not decide whether the editor exists.
+
+#### 1.8.2 Image Action Contract
+
+1. `New` is a root image action. It creates a blank document through the
+   whole-sheet owner after an explicit geometry prompt. Section 2 templates may
+   seed the initial layer set, but they do so by calling the same root command.
+2. `Open` / `Import XP` are root image actions. They replace the active
+   document in the same whole-sheet owner; they do not mount a second editor.
+3. `Resize` is a root image action. It opens a geometry dialog seeded from the
+   current image size. Confirming resize:
+   - applies one transaction to every layer
+   - anchors preservation at top-left
+   - fills new cells with transparent/blank cells when growing
+   - crops right/bottom extents when shrinking
+   - clips or clears selections outside the new bounds
+   - recomputes frame/grid overlays derived from image geometry
+4. Section 2 may warn that a resize breaks template/runtime expectations, but
+   it may not block or own the resize behavior itself.
+5. `Save` persists the current root document/session without download.
+6. `Export XP` serializes the same root-document snapshot. If the document is
+   dirty, export flushes save/autosave first, then exports from that snapshot.
+
+#### 1.8.3 Mode Model: Paint And Browse
+
+1. `PAINT` and `BROWSE` are peer modes inside the same whole-sheet owner.
+2. `Tab` toggles between them. Clicking the mode buttons performs the same
+   toggle.
+3. `PAINT` exposes editing tools and allows canvas mutation.
+4. `BROWSE` exposes the image list and image CRUD actions while keeping the
+   whole-sheet canvas as the single preview/edit surface. Browse is not a
+   second editor and not a separate workbench owner.
+5. Browse mode supports list/select/open/rename/duplicate/delete/reload over
+   the current image collection, regardless of whether that collection is
+   backed by server sessions, local drafts, or file-picker imports.
+
+#### 1.8.4 Apply, Tool, Selection, And Clipboard Contract
+
+1. Apply channels are authoritative root-editor state. `g`, `f`, and `b`
+   toggle glyph, foreground, and background application respectively.
+2. `Shift-g`, `Shift-f`, and `Shift-b` solo the selected channel by turning it
+   on and turning the other two off. Pressing the same solo key again while
+   already solo restores all three channels.
+3. The editor must never enter an all-off apply state. Attempting to disable
+   the final active channel is a no-op.
+4. The required tool set is:
+   - cell
+   - line
+   - rect
+   - oval
+   - fill
+   - text
+   - eyedropper
+   - erase
+   - selection
+5. Only one primary tool is active at a time. Required plain-key bindings are:
+   `c`, `l`, `r`, `o`, `i`, `t`, plus additive browser-specific aliases `d`
+   (eyedropper), `e` (erase), and `s` (selection).
+6. Copy/cut/paste operate on a rectangular document selection, not on a frame
+   tile abstraction. The clipboard preserves cells for every visible layer in
+   the selected bounds, and paste commits as one transaction.
+7. `Delete` / `Backspace` clear the current selection as one transaction.
+8. `Esc` cancels in-progress line/rect/oval/text/paste interactions without
+   emitting a history entry.
+9. `Text` tool contract:
+   - click sets the insertion anchor on the active unlocked layer
+   - printable keys emit glyphs using current apply/color state
+   - `Enter` moves to the next line from the anchor column
+   - `Backspace` removes the previous typed cell inside the current text edit
+   - `Esc` commits and exits text mode
+
+#### 1.8.5 Keyboard Authority Map
+
+The whole-sheet editor owns the following command map. Browser-default handlers
+must be intercepted where necessary.
+
+| Command family | Required keys |
+|----------------|---------------|
+| Image actions | `Ctrl-n` new, `Ctrl-o` open/import, `Ctrl-r` resize, `Ctrl-s` save, `Ctrl-Shift-s` export XP |
+| Mode | `Tab` toggle paint/browse |
+| Apply | `g` / `f` / `b` toggle, `Shift-g` / `Shift-f` / `Shift-b` solo |
+| Draw tools | `c` cell, `l` line, `r` rect, `o` oval, `i` fill, `t` text, `d` eyedropper, `e` erase, `s` select |
+| Selection / clipboard | `Ctrl-c`, `Ctrl-x`, `Ctrl-v`, `Delete`, `Backspace`, `Esc`, `[` rotate CCW, `]` rotate CW |
+| History | `Ctrl-z` undo, `Ctrl-y` redo |
+| Layers | `Ctrl-l` add, `1-9` select active, `Ctrl-1-9` toggle visibility, `Shift-1-9` toggle lock, `Ctrl-Shift-m` merge active downward, mouse wheel over canvas cycles active layer |
+| Viewport | `Ctrl-g` grid toggle, `<` / `>` and `Ctrl-PgUp` / `Ctrl-PgDn` zoom/font-scale, `Space` + drag pan |
+
+#### 1.8.6 Layer And History Contract
+
+1. Layers are owned by the root document, not by workbench mirror state.
+2. Layer add/delete/reorder/visibility/lock/merge are document mutations and
+   therefore produce history transactions.
+3. `Ctrl-l` creates a transparent layer matching current image geometry
+   immediately above the active layer and makes it active.
+4. Hidden layers remain part of the document and export payload; hiding affects
+   viewport rendering and clipboard capture, not document existence.
+5. Locked layers reject all mutating commands: draw, fill, text, paste,
+   selection transforms, and merge targets.
+6. Lock state, visibility, ordering, and layer names are part of session/draft
+   persistence even if `.xp` export cannot encode every editor-only flag.
+7. Undo/redo history is owned by the whole-sheet editor. Each of these is one
+   history transaction:
+   - one drag stroke
+   - one fill
+   - one text-edit session commit
+   - one paste/cut/delete/transform command
+   - one resize
+   - one layer add/delete/reorder/visibility/lock/merge command
+8. Viewport pan/zoom, active tool, browse selection, and other non-document UI
+   state are not history transactions.
+9. Each open image keeps its own undo journal. Switching images in browse mode
+   swaps journals with the active document.
+
+#### 1.8.7 Pointer, Pan, Zoom, And Grid Contract
+
+1. Pointer input follows Section 1.9.1 exactly: Pointer Events are the only
+   authoritative input model for canvas interaction.
+2. One active pointer drives the current tool. Two active pointers are reserved
+   for viewport pan/zoom and must never paint.
+3. The canvas root owns `touch-action` and must prevent browser gesture capture
+   on the active editing surface while tool input is active.
+4. Mouse/pen panning uses `Space` + drag. Touch panning/zooming uses the
+   two-pointer gesture path from Section 1.9.1.
+5. Zoom changes viewport font scale only; it never changes XP cell geometry or
+   export data. Required discrete zoom levels are `50%`, `75%`, `100%`,
+   `150%`, `200%`, `300%`, and `400%`.
+6. Grid display is viewport decoration, not document data. `Ctrl-g` toggles
+   it. Grid spacing may switch between frame-aligned and cell-step modes, but
+   grid lines must remain cell-aligned under pan, resize, and zoom.
+7. Zoom level, pan offset, and grid visibility are editor-session state. They
+   persist in drafts/sessions when possible, but never alter `.xp` export.
+
+### 1.9 Research Requirements And Decisions
+
+This subsection folds the former global research section into Section 1. The
+relevant research areas for the root editor are:
+
+1. mobile pointer model
+2. browser/mobile persistence
+3. small-screen editor layout
+4. comparative editor behavior
+
+These are design decisions for the refactor, not proof that the current code
+already behaves this way.
+
+#### 1.9.1 Touch / Mobile Interaction Contract
+
+Evidence:
+
+- MDN Pointer Events says pointer events provide a single DOM event model for
+  mouse, pen, and touch, and expose `pointerType` for device-specific handling.
+- MDN `touch-action` says the browser will otherwise take over panning/pinch
+  gestures, fire `pointercancel`, and that custom-gesture intent should be
+  declared on the top-level interactive element before handlers run.
+- MDN pinch-zoom guidance shows two-pointer gesture detection via cached pointer
+  events and explicit pinch-distance tracking.
+- `xero/text0wnz` documents mouse/touch drawing support and explicit touch
+  gesture control in a browser-first ASCII editor.
+
+Decision (inference from sources):
+
+1. The whole-sheet canvas remains the single mobile editing surface.
+2. All editor interaction moves to Pointer Events. Do not keep a separate
+   mouse-only path as the authoritative editor path.
+3. Single-pointer contact on the canvas is tool input. Two active pointers are
+   reserved for viewport pan/zoom only and must never paint.
+4. The canvas root gets explicit `touch-action` ownership. Final implementation
+   should use `touch-action: none` on the editor canvas while paint/select tools
+   are active, with browser scrolling left enabled only on surrounding chrome.
+5. Hover-only affordances are not acceptable as the sole UX. Any hover preview
+   must have a touch equivalent: tap-hold inspect, explicit selection handles,
+   or a visible status strip.
+6. Context actions on touch use an explicit selection toolbar first. Long-press
+   can open the same menu, but long-press is an accelerator, not the only path.
+
+Sources:
+
+- https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events
+- https://developer.mozilla.org/en-US/docs/Web/CSS/touch-action
+- https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events/Pinch_zoom_gestures
+- https://github.com/xero/text0wnz
+
+#### 1.9.2 Browser Persistence Contract
+
+Evidence:
+
+- MDN File System API says picker-based file access is secure-context only and
+  exposes `showOpenFilePicker()` / `showSaveFilePicker()`.
+- MDN says OPFS is private to the origin, not visible to the user, optimized
+  for performance, and supports synchronous worker access.
+- MDN install-prompt guidance uses `beforeinstallprompt` and `appinstalled` as
+  the browser-managed install lifecycle hooks.
+- `xero/text0wnz` uses local storage plus IndexedDB auto-save/restore and also
+  documents platform-specific open flows for desktop, Android share sheet, and
+  iPad/iOS file picker.
+- `ASCII_Art_Paint` is explicitly offline-in-browser and TXT-file oriented.
+- `ASCIIFlow` is client-side only, which is useful as a low-friction baseline
+  but insufficient for multi-layer XP sessions and undo/history durability.
+
+Decision (inference from sources):
+
+1. Persistence is three-tier:
+   - Tier A: always-on draft persistence for the active image and undo history.
+   - Tier B: explicit user-facing import/open/save/export.
+   - Tier C: optional PWA install/offline shell.
+2. Tier A uses browser-local storage, with OPFS and/or IndexedDB for drafts and
+   undo journals. OPFS is for internal durability, not for user-visible export.
+3. Tier B prefers file pickers when available in secure contexts. When picker
+   APIs are unavailable, the fallback is import via file input plus export via
+   Blob download/share flows.
+4. The editor must not require installation to work. PWA install is optional
+   acceleration only, surfaced only after `beforeinstallprompt`.
+5. Mobile persistence cannot assume desktop-class "save back to same file".
+   Final mobile UX must always offer an explicit export/share path.
+
+Sources:
+
+- https://developer.mozilla.org/en-US/docs/Web/API/File_System_API
+- https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system
+- https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt
+- https://github.com/xero/text0wnz
+- https://github.com/Kirilllive/ASCII_Art_Paint
+- https://github.com/lewish/asciiflow
+
+#### 1.9.3 Small-Screen Layout Contract
+
+Evidence:
+
+- REXPaint keeps the image/canvas as the primary workflow and treats browse/file
+  operations as image-level actions, not as the main surface.
+- `xero/text0wnz` keeps browser-native file handling, zoom, grid, and
+  touch-capable drawing on one primary canvas experience.
+- `ASCII_Art_Paint` exposes explicit hand/scroll, brush, fill, and selection
+  shortcuts and keeps a simple editor-first layout.
+
+Decision (inference from sources):
+
+1. On narrow screens the whole-sheet canvas stays primary and visible. Do not
+   preserve the current desktop two-column panel layout as the mobile baseline.
+2. Layers, frame navigation, source helpers, and file/browse actions become
+   drawers, sheets, or segmented overlays that can be summoned over the canvas.
+3. Only one dense support panel may be expanded at a time on mobile:
+   `layers`, `frames`, `source`, or `browse/files`.
+4. The default small-screen chrome is:
+   - top bar: file/new/save/export + mode toggle
+   - center: canvas
+   - bottom bar: tool switch + current layer + frame/location status
+   - drawers/sheets: source helpers, frame nav, browse, layer management
+5. The frame-navigation view should become a compact logical strip/filmstrip on
+   mobile, not a second full grid competing with the canvas for space.
+
+Sources:
+
+- https://www.gridsagegames.com/rexpaint/features.html
+- https://github.com/xero/text0wnz
+- https://github.com/Kirilllive/ASCII_Art_Paint
+
+#### 1.9.4 Comparative Editor Decisions
+
+Evidence:
+
+- REXPaint advertises layers, hover preview, browse, and image-first control.
+- Durdraw documents mouse input, selection, undo/redo, frame-based animation,
+  configurable undo size, and export paths.
+- ASCIIFlow is a client-side-only ASCII diagram editor.
+- `ASCII_Art_Paint` combines a graphic editor with bitmap-to-text conversion and
+  uses plain TXT save/load compatibility.
+- `xero/text0wnz` demonstrates a browser-first, offline-first ASCII editor with
+  touch, IndexedDB persistence, and platform-specific open flows.
+
+Decision (inference from sources):
+
+- Borrow from REXPaint:
+  image-first ownership, intrinsic layers, browse as a peer mode, and
+  `New` / `Save` / `Export` as image actions.
+- Borrow from Durdraw:
+  strong undo/redo expectations, explicit selection workflows, frame/animation
+  mental model, and mouse-assisted editing.
+- Borrow from `xero/text0wnz`:
+  offline-first browser durability, touch-capable tooling, and multi-platform
+  open/install behavior.
+- Use `ASCII_Art_Paint` as source-helper inspiration only:
+  bitmap-to-text conversion and simple built-in text affordances are useful,
+  but its TXT-first persistence model must not replace XP-root image ownership.
+- Reject ASCIIFlow as the editor baseline:
+  it is useful as proof that low-friction client-side drawing works, but it is
+  too diagram-centric and too shallow for layer/history/browse/runtime needs.
+- Reject terminal-era menu/chord UX as the mobile baseline:
+  Durdraw is valuable for editor behavior, but Esc-heavy terminal interaction is
+  not the touch/browser contract.
+
+Sources:
+
+- https://www.gridsagegames.com/rexpaint/features.html
+- https://github.com/cmang/durdraw
+- https://github.com/lewish/asciiflow
+- https://github.com/Kirilllive/ASCII_Art_Paint
+- https://github.com/xero/text0wnz
 
 ---
 
-## 6. Document Authority Model
+## Section 2 — Asciicker Engine Sprite Wrapper Spec
 
-This repo uses a 3-doc canonical authority model:
+The Asciicker runtime now resolves character sprites through a canonical
+`skin_family` axis plus presentation state and appearance bits. The final asset
+filenames still follow `{family}-{AHSW}.xp`, where the suffix encodes equipment
+state, but prefix selection is no longer the only family concept in the system:
+main-game `engine/game.cpp` now derives those prefixes from `SkinFamilyDefinition`
+tables. Base families are currently `human` and `green`; on-foot prefixes are
+`player` / `plydie` / `attack` and `player-green` / `plydie-green` /
+`attack-green`, while mounted/bee-related prefixes such as `wolfie`, `wolack`,
+and `bigbee` still live on the human side with fallback behavior from green.
 
-| # | Doc | Role |
-|---|-----|------|
-| 1 | `PLAYWRIGHT_FAILURE_LOG.md` | Reality/failure/proof log — what actually happened |
-| 2 | This doc (`docs/plans/2026-03-23-workbench-canonical-spec.md`) | Normative requirements, roadmap, priority, policy |
-| 3 | `docs/plans/2026-03-23-m2-capability-canon-inventory.md` | Capability inventory, truth-table, SAR canon |
+Section 2 defines the complete authoring pipeline that produces those files from
+source art and gets them into the runtime for proof. An artist starts with a
+PNG sprite sheet; Section 2 provides tooling to mark which pixel regions map to
+the correct action/prefix slots, converts those regions into the engine's XP
+cell format, maps the result into the correct runtime filenames, runs
+structural gates that enforce dimensions, layer count, and the L0 metadata row
+the engine requires, and then bundles and injects the validated files for a
+live runtime smoke test. The goal is a repeatable, validated path from raw
+source art to a runtime-proven skin — but Section 2 is only ever a set of tools
+layered on top of the root XP editor (Section 1). It helps; it does not own.
 
-### Doc Classifications
+This section defines the sprite-family, sprite-sheet, bundle, and runtime wrapper
+behavior layered on top of Section 1.
 
-| Classification | Rule |
-|---------------|------|
-| **Canonical** | Only source of active truth; update in-place |
-| **Structural Contract** | Stable normative contracts; update only on milestone boundary |
-| **Reference** | Stable reference material; does not claim active state |
-| **Worksheet** | Temporary session/plan docs; retire via `scripts/doc_lifecycle_stitch.sh` after completion |
-| **Archive** | `docs/WORKBENCH_DOCS_ARCHIVE.md` — retired worksheets, append-only via stitch script |
+The asset pipeline is the part of the project responsible for taking raw sprite artwork — character animations like "wolfie" and "wolack" — and converting them into the engine's runtime format. The intended flow is: an artist authors an XP (experience pack) by feeding it source sprite sheets, the pipeline slices and maps those sheets into per-action, per-angle frames, runs them through a series of structural quality gates (geometry density, non-empty content checks, ap handoff population), and exports a final bundle the game engine can load. A local web-based workbench server is the primary UI for this authoring loop.
 
-### Retirement Policy
+From the launcher's perspective, this would have appeared as a top-level menu option — [3] ASSET PIPELINE — giving you three choices: launch the workbench server and open its URL in a browser, check pipeline server health and reachability, and configure the server path and port. The idea is that a content creator could sit down, run the launcher, start the workbench, drag in new sprites, see them validated, and export them into the game without touching code. The workbench also connects back into the game's Skin Dock and TERM++ sandbox for runtime observation of the converted result.
 
-- Completed or superseded worksheets MUST be retired using `scripts/doc_lifecycle_stitch.sh`.
-- The script appends to the archive, rewrites repo-wide references, deletes the original, and logs to the failure log.
-- Canonical docs and structural contracts are protected — the script refuses to archive them.
-- Do not create new authority docs. If a canonical doc is insufficient, update it in-place.
+In practice, the pipeline is still gated from claiming more than it can prove. The node slot [3] remains reserved until the launcher path, export gates, and visual/runtime proof all agree. The refactor has already added mounted-family template definitions, so `wolfie` and `wolack` are no longer absent because of missing registry entries; the remaining question is how broadly family coverage should extend beyond the currently declared template sets. The spec's position is still clear: do not surface the launcher option as shipped capability until the whole wrapper path is proven.
+
+The asset pipeline wizard (`scripts/pipeline/wizard/`) is a 6-screen questionary-based TUI that walks you through creating or converting a game asset step by step. It opens with an Intent screen — you pick what you're trying to do: create a new character, convert a sprite sheet into XP format, render from a Blender scene, import a 3D mesh, or modify an existing XP. It then walks you through Asset Type → Template → Source → Input Path → Summary, accumulating your answers in a state dict and maintaining a full back-navigation history stack so you can press ← Back at any point. At the Summary screen you confirm, and it fires the actual `AssetPipeline.run()` call.
+
+The wizard is intentionally dual-mode. The `WizardEngine` (`engine.py`) is a pure state machine with no I/O — it takes `submit_answer()` calls and returns the next screen's metadata. The questionary TUI is just one driver; `mcp/wizard_mcp_server.py` is the other: it exposes `wizard_start`, `wizard_submit`, `wizard_get_status`, and `wizard_execute` as MCP tools, so an AI agent can step through the exact same wizard flow programmatically. The wizard also handles a special `ai_batch` source type that routes through `nanobanana_batch.run_batch()` instead of `AssetPipeline`, for bulk AI-generated frames.
+
+The TUI wizard is entirely separate from the launcher's [3] ASSET PIPELINE menu node — it's the underlying interactive interface that node would eventually invoke via Launch Workbench. Currently, because [3] is still deferred (FL-813), the wizard is only accessible by running `python3 scripts/pipeline/wizard/main.py` directly or by invoking the MCP tools. It is not surfaced from the launcher.
+
+Section 2 is not allowed to own the image/session root. It may only:
+
+- help ingest source art
+- help map sheet regions into engine families/actions
+- validate exported XP against engine expectations
+- inject/test authored XP in runtime surfaces
+
+### 2.1 Engine Truth: `skin_family`, Prefixes, And AHSW Naming
+
+The main game no longer treats player appearance as a presentation-state-only
+lookup. The canonical runtime dispatch is now:
+
+- `skin_family`
+- `presentation_state`
+- `appearance_bits`
+
+The engine carries base-family identity as a separate `skin_family` axis and
+routes sprite lookup through `SkinFamilyDefinition` tables in `engine/game.cpp`.
+That is now the engine/runtime authority, not this repo's older flat prefix
+tables.
+
+The engine-facing filename convention for animated equipment-bearing strips is
+still `{family}-{AHSW}.xp`, where:
+
+- `A` = armor, binary `0/1`
+- `H` = helmet, binary `0/1`
+- `S` = shield, binary `0/1`
+- `W` = weapon, ternary `0/1/2`
+
+Critical clarification from the engine re-audit:
+
+1. The 4-character suffix is an equipment index, not animation frames.
+2. Directions and animation frames live inside the XP file and its layer-0
+   metadata, not in the filename suffix.
+3. The canonical preview file for an animated family/prefix is
+   `{family}-0001.xp`, not `{family}-0000.xp`.
+
+The current base-family mapping in the main game is:
+
+- `human`
+  - on-foot idle/walk prefix: `player`
+  - on-foot fall/death prefix: `plydie`
+  - on-foot attack prefix: `attack`
+  - mounted / bee-related prefixes: `wolfie`, `wolack`, `bigbee`
+- `green`
+  - on-foot idle/walk prefix: `player-green`
+  - on-foot fall/death prefix: `plydie-green`
+  - on-foot attack prefix: `attack-green`
+  - mounted/bee strips are not independently authored yet; missing strips fall
+    back to `human`
+
+Current engine-side evidence:
+
+- main-game `engine/game.cpp` `SkinFamilyDefinition` tables
+- main-game B-18 / FL-869 browser-family audit
+
+### 2.2 Engine Browser Schema And Active Workbench Gap
+
+For launcher/browser purposes, sprites now group by engine-derived filename
+prefix, not by this repo's old flat template list. The engine/browser-relevant
+animated prefix groups are:
+
+| Prefix Group | Base `skin_family` | Runtime role | Canonical preview file | Current pipeline-v2 state |
+|-------------|--------------------|--------------|------------------------|---------------------------|
+| `player` | `human` | on-foot idle/walk | `player-0001.xp` | authorable |
+| `attack` | `human` | on-foot attack | `attack-0001.xp` | authorable |
+| `plydie` | `human` | on-foot fall/death | `plydie-0001.xp` | authorable |
+| `player-green` | `green` | on-foot idle/walk | `player-green-0001.xp` | runtime/proof-only, not authorable |
+| `attack-green` | `green` | on-foot attack | `attack-green-0001.xp` | runtime/proof-only, not authorable |
+| `plydie-green` | `green` | on-foot fall/death | `plydie-green-0001.xp` | runtime/proof-only, not authorable |
+| `wolfie` | `human` (green falls back here today) | mounted idle/walk | `wolfie-0001.xp` | authorable |
+| `wolack` | `human` (green falls back here today) | mounted attack | `wolack-0001.xp` | authorable |
+| `bigbee` | `human` | bee-mount / NPC path | `bigbee-0001.xp` | runtime-real, not authorable |
+
+`player-nude.xp` remains a special runtime file, but it is not the canonical
+animated preview representative for browser grouping.
+
+Current mismatch:
+
+1. The engine/browser canon now has a base `skin_family` axis (`human`,
+   `green`) plus prefix groups (`player`, `player-green`, `wolfie`, etc.).
+2. The primary wrapper code now carries explicit `filename_prefix` plus
+   `skin_family` metadata; that split is required so wrapper authoring follows
+   engine truth instead of redefining it.
+3. The remaining gap is no longer the core schema split itself. It is the
+   product-scope choice to keep green authoring and broader family/item
+   coverage out of the current template surface.
+
+Current evidence:
+
+- `config/template_registry.json` explicit `filename_prefix` / `skin_family`
+  fields plus the `preview_xp` vs `l0_ref` split
+- `src/pipeline_v2/service.py` `_PREFIX_W_RANGE`, `_PREFIX_SKIN_FAMILY`,
+  `_RUNTIME_SCOPE_PREFIXES`, and `_template_action_identity`
+- `web/workbench.js` and `web/termpp_skin_lab.js` prefix-group override sets
+  plus green-safe override-name filtering
+- `scripts/workbench_mcp_server.py` hyphenated AHSW regex
+- `scripts/workbench_png_to_skin_test_playwright.mjs` prefix-based proof helper
+
+This is a wrapper-scope gap, not a justification for letting the wrapper own the
+editor root.
+
+**AUDITOR FOUND (2026-04-16):** `template_registry.json` now includes mounted
+template sets and explicit `filename_prefix` / `skin_family` metadata, so the
+old `wolfie`/`wolack` absence and flat-family schema claim are resolved. The
+remaining family-model limitation is narrower: green prefixes are now valid in
+runtime/proof helpers, but green remains proof-only because the repo still
+lacks checked-in green template/reference assets.
+
+**Re-audit note (2026-04-16):** The main-game engine schema is now answerable
+from source. The remaining limitation is narrower but real: the sprite registry
+is still compiled into C++ (`engine/game.cpp`), so adding new families still
+requires engine-side code/assets. The `green` family proves the new dispatch
+path; it does not mean the family registry is data-driven yet.
+
+### 2.3 Wrapper Layers
+
+Section 2 wrapper behavior has four layers:
+
+1. **Source-wrapper layer**
+   - upload PNG or load source art
+   - mark sprite regions, cuts, and selections
+   - optionally populate grid/session state from source
+2. **Family/action wrapper layer**
+   - map authored XP into action/family wrappers
+   - enforce family dimensions, layer counts, and metadata contracts
+3. **Runtime injection layer**
+   - emit web payloads or native sandbox staging
+   - write override filenames
+4. **Proof/test layer**
+   - Skin Dock / webbuild preview
+   - native TERM++ sandbox launch
+   - failure-log-aware visual/runtime gates
+
+None of these layers may replace the Section 1 owner graph.
+
+**STEP 5 DESIGN OUTPUT (2026-04-15):** The source-wrapper layer is now defined by the four contracts below. These decisions unblock Step 6 and Step 7, but they do not by themselves implement either step.
+
+#### 2.3.1 Source Sprite Sheet Layout Contract
+
+1. Section 2 accepts exactly two source-layout modes:
+   - `uniform_grid`: the only valid naked-PNG mode
+   - `explicit_regions`: manifest-required mode for ad hoc or multi-action sheets
+2. `uniform_grid` means:
+   - one source PNG describes one logical sprite sheet
+   - rows top-to-bottom map to angle indices `0..angles-1`
+   - columns left-to-right map to frame slots
+   - when `source_projs == 2`, columns are grouped as `[all proj0 frames][all proj1 frames]`, matching the current `run_pipeline()` arithmetic and output packing
+   - when `source_projs == 1` but target output needs two projections, projection 1 is a derived mirror of projection 0 rather than a second independently-authored source track
+3. A naked PNG may use `uniform_grid` only if the declared layout is evenly divisible by the target slot count (`image_w % (frames * source_projs) == 0`, `image_h % angles == 0`) and every required slot is present. If not, the sheet must be represented as `explicit_regions`.
+4. `explicit_regions` is the canonical answer for irregular atlases, multi-action sheets, or any source where angle/frame/projection boundaries are not already encoded by a uniform grid. No implicit geometry guess is authoritative in this mode; the manifest must enumerate the regions explicitly.
+5. Source pixels do not define engine geometry. Template/action geometry still comes from `template_registry.json` and the active action spec. The source-layout contract only defines how PNG-space maps into those target slots.
+
+#### 2.3.2 Source Manifest Contract
+
+1. The canonical Section 2 authority is a JSON sidecar adjacent to the source PNG: `<source>.asciicker-source.json`.
+2. The sidecar is the only manifest authority. Workbench sessions may cache a snapshot of the current manifest for local editing continuity, but that snapshot is a mirror, not the source of truth.
+3. The manifest root must contain:
+   - `version`
+   - `source`: path, sha256, image width, image height
+   - `template_set_key`
+   - `layout_mode`: `uniform_grid` or `explicit_regions`
+   - `layout`: the mode-specific declaration
+   - `guides`: optional editorial guides
+   - `regions`: canonical target mappings
+4. `layout` rules:
+   - for `uniform_grid`, it declares `angles`, `frames`, `source_projs`, optional `angle_labels`, and optional `action_key` default
+   - for `explicit_regions`, it may declare only shared sheet metadata; export/import behavior must come from `regions`
+5. Each `regions[]` entry must contain:
+   - stable `id`
+   - `source_rect`: `[x, y, w, h]` in PNG pixels
+   - `target`: `action_key`, `angle`, `frame`, `projection`
+   - optional `notes`, `tags`, and `confidence`
+6. `regions[]` are the only manifest entries that may drive conversion/import/export. Editorial helpers are separate:
+   - `guides.anchor_rect`
+   - `guides.cuts_v`
+   - `guides.cuts_h`
+   - `guides.detected_boxes`
+7. Step 6 must demote live `extractedBoxes`, `sourceCutsV`, and `sourceCutsH` into these `guides` fields or derive them from `regions`; they may no longer be independent session authority once the manifest contract is implemented.
+
+#### 2.3.3 Agent/Human Slicing Workflow Contract
+
+1. Source slicing is a wrapper workflow layered over the Section 1 root editor. It may never export XP directly without first materializing a root-editor document/session snapshot.
+2. Human workflow:
+   - load PNG and existing sidecar if present
+   - choose `uniform_grid` or `explicit_regions`
+   - use the source panel as a slicer surface that edits manifest draft state
+   - commit confirmed mappings into `regions[]`
+   - materialize a target action into the root editor for inspection/editing
+3. Agent workflow:
+   - read or write the same sidecar manifest through MCP/HTTP tools
+   - request manifest validation and action materialization using the same contract the UI uses
+   - never rely on hidden session-local source arrays
+4. `apply_action_grid()` remains a compatibility wrapper only. Its long-term contract is:
+   - if given only `source_path`, it creates an ephemeral `uniform_grid` manifest from the template action geometry and then calls the generic manifest-driven materializer
+   - if given a manifest in a later step, the manifest path/doc becomes authoritative and `source_path` is only provenance
+5. The slicer produces root-editor documents, not final runtime files. Family/action export still happens only after the root editor snapshot exists and passes the wrapper gates.
+6. Until Step 11 lands, MCP/HTTP tooling may still be missing. That is an implementation gap, not a design gap. The contract is now explicit even though the agent-facing surface is not yet built.
+
+**RESOLVED (FL-STEP4-03, 2026-04-16):** `/api/workbench/create-blank-session` again accepts the legacy blank-root entry point. Bare `{}` now creates the default generic 126x80 root session, `blank_session` payloads are accepted for explicit geometry, and the template-backed `template_set_key`/`action_key` path still works for mounted authoring.
+
+#### 2.3.4 Conversion Quality And Agent Vision Substitute Contract
+
+1. Section 2 quality validation must return a machine-readable report with `PASS`, `WARN`, or `FAIL`.
+2. `FAIL` means any of the following:
+   - a required target slot is unmapped or multiply mapped
+   - manifest rectangles fall outside the declared source image
+   - `uniform_grid` divisibility/layout requirements are violated
+   - any required structural gate fails (`G7` through `G12`, or their direct replacement)
+   - conversion falls back to the generic whole-image fit path during agent-autonomous export
+3. `WARN` means the conversion is structurally legal but suspicious and needs human review or explicit override. Warning-class signals include:
+   - fallback conversion used in a human-guided run
+   - duplicate-frame clusters
+   - large source-to-XP occupancy deltas
+   - low non-empty coverage in otherwise mapped frames
+4. `PASS` means:
+   - every required `(action, angle, frame, projection)` slot is mapped exactly once
+   - the declared layout mode is internally consistent
+   - the conversion did not require warning-class fallback
+   - the validation report contains no `FAIL` or `WARN` signals
+5. The quality report must include enough signal for non-visual agent loops to decide deterministically:
+   - required slot count, mapped slot count, unmapped slot count
+   - fallback-used boolean
+   - per-gate results for `G7`-`G12`
+   - per-slot non-empty coverage summary
+   - duplicate-frame or near-empty-frame findings
+6. `xp_cat.py` or preview PNGs may remain human aids, but they are not the canonical agent proof surface. Agents proceed automatically only on `PASS`; `WARN` requires explicit human acceptance or a higher-level override policy.
+
+**CONTRACT CLARIFICATION (2026-04-16):** `/api/workbench/validate-xp` remains intentionally non-exporting, but it now returns a predicted `xp_path` for compatibility together with `checksum`, `xp_size_bytes`, and `exported=false`. Callers that need an actual filesystem artifact must still use `/api/workbench/export-xp`; callers that need lightweight quality proof may use `/api/workbench/validate-xp` without causing a write. This is now locked by tracked coverage.
+
+#### 2.3.5 Family Expansion Policy
+
+1. Main-game `SkinFamilyDefinition` tables are the engine/runtime authority for base `skin_family`, filename-prefix inventory, and fallback behavior. Pipeline-v2 may not invent a new base family or prefix group by template-only change.
+2. `config/template_registry.json` is the sole pipeline-v2 authoring-surface authority. Its action entries now carry explicit `filename_prefix` and `skin_family` metadata. A prefix is authorable here if and only if the active template set contains an action spec for it.
+3. The harness action registry seed is proof/instrumentation only. This checkout tracks the schema at `scripts/xp_fidelity_test/action_registry_schema.json`; the seed artifact consumed by the harness may mirror coverage families for tests, but it may not define workbench geometry, layer count, L0 metadata, or enable a family for export.
+4. Prefix contracts are action-scoped, not family-scanned. Each authorable action entry must declare the full contract:
+   - `filename_prefix`
+   - `skin_family`
+   - `xp_dims`
+   - `angles`
+   - `frames`
+   - `projs`
+   - `cell_w`
+   - `cell_h`
+   - `layers`
+   - `ahsw_range`
+   - `preview_xp`
+   - `preview_xp_sha256`
+   - `l0_ref`
+   - `l0_ref_sha256`
+5. `preview_xp` is the canonical representative-preview authority. `l0_ref`
+   remains the structural metadata authority. G12 or its direct replacement
+   must derive expected L0 row-0 metadata from the referenced XP contract, not
+   from a second handwritten family table when a reference XP is available.
+6. Local sprite inventory is evidence, not authority. Re-audit of committed `sprites/*.xp` shows canonical AHSW files vary within a family, so Step 9 may not infer a family contract by scanning disk; it must use the declared template/action contract plus engine-family truth.
+7. Initial mounted-family Step 9 scope is explicit and limited:
+   - `wolfie` idle/walk: `filename_prefix=wolfie`, `skin_family=human`, `xp_dims=[180,96]`, `angles=8`, `frames=[1,8]`, `projs=2`, `cell_w=10`, `cell_h=12`, `layers=4`, `ahsw_range=all_16`, `preview_xp=sprites/wolfie-0001.xp`, `l0_ref=sprites/wolfie-0000.xp`
+   - `wolack` attack: `filename_prefix=wolack`, `skin_family=human`, `xp_dims=[160,104]`, `angles=8`, `frames=[8]`, `projs=2`, `cell_w=10`, `cell_h=13`, `layers=5`, `ahsw_range=weapon_gte_1`, `preview_xp=sprites/wolack-0001.xp`, `l0_ref=sprites/wolack-0001.xp`
+8. Green proof-prefix support now exists in runtime/proof helpers. The
+   remaining boundary is deliberate: pipeline-v2 does not become
+   `green`-authorable until the repo ships checked-in green template/reference
+   assets.
+9. Step 9 mounted-family authoring reuses the existing wrapper export model: one authored XP per action is fanned out to that action's AHSW override filenames. Step 9 does not promise per-equipment-variant geometry synthesis or full raw-sprite parity across all historical runtime files.
+10. `player-nude.xp` remains a special runtime filename derived from the human on-foot contract. It is not a separate family-expansion mechanism, and it is not the canonical browser preview representative for animated families.
+11. `bigbee` is explicitly deferred. It is runtime-real but outside the current mounted-player proof surface and not a Step 9 authoring target.
+12. UI/MCP/runtime implications:
+    - `/api/workbench/templates`, bundle action tabs, blank-session creation, bundle export, and validation must derive authorable scope from template-set actions
+    - browser/launcher grouping should follow engine-derived filename prefixes (B-18), not old flat template labels
+    - runtime override helpers are downstream name writers only
+    - absence from the active template set means "not authorable here", even if runtime naming code knows the prefix
+    - legacy saved sessions/jobs may still be read through `family` fallback, but new outward payloads use `filename_prefix` / `skin_family`
+
+### 2.4 Structural Gate, Export, And Injection Contract
+
+Current wrapper-side structural gates are:
+
+- G10 dimension match
+- G11 layer count match
+- G12 L0 row-0 metadata glyphs
+
+Current gate/export code path:
+
+1. `workbench_export_bundle()` exports each ready action XP
+2. `_run_structural_gates()` checks dims, layers, and L0 metadata
+3. failing actions hard-stop bundle export or payload generation
+
+Current evidence:
+
+- `src/pipeline_v2/service.py:2829-2864`
+- `src/pipeline_v2/service.py:2867-2918`
+- `src/pipeline_v2/service.py:2921-2934`
+
+These gates are wrapper safeguards. They do not define the editor root contract.
+
+**AUDITOR FOUND (2026-04-15):** Three issues with the current gate and registry implementation:
+
+1. **G7/G8/G9 still do not guard bundle export.** G7 (geometry cell count), G8 (non-empty content ≥5%), and G9 (handoff population) run during `run_pipeline()`, but they are NOT called from `workbench_export_bundle()`. Only G10/G11/G12 are active at bundle export time. These gates are the only programmatic substitute for visual quality inspection, so their absence from the export gate is especially significant for agent-driven workflows.
+
+2. **The quality contract now exists in Section 2.3.4, but it is not yet enforced.** The missing work is implementation: `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()` still do not evaluate the full Step 5 quality report, and there is still no lightweight single-XP validation endpoint for agent loops.
+
+3. **Registry roles are now fixed, and the workbench client no longer depends on `enabled_families`.** `config/template_registry.json` drives workbench bundle authoring (template sets, per-action dims, l0_ref, family scope). The harness action registry seed is fidelity test instrumentation only. The remaining implementation gap is broader mounted-family and item/wearable follow-through, not a separate client-side family gate.
+
+4. **FL-STEP4-04 resolved on `2026-04-16`: dead `force_fallback` and `crop_box` removed from `RunConfig`.** The live `/api/run` and `/pipeline/run` contracts no longer advertise fields the handlers ignore; legacy callers now get an explicit `unsupported_run_fields` error if they still send those keys.
+
+### 2.5 Current Section-2 Misalignment Ledger
+
+The live wrapper architecture is still misaligned in these exact ways after the
+`2026-04-16` removal of the Step 4 mirror-sync owner:
+
+| Finding | Current evidence | Why this is misaligned |
+|---------|------------------|------------------------|
+| Canonical manifest authoring now exists, but it is still JSON-first | `web/workbench.html:133-145`, `web/workbench.js:2196-2377`, `web/workbench.js:3278-3367`, `src/pipeline_v2/app.py:496-525`, `src/pipeline_v2/service.py:3831-3887`, `scripts/workbench_mcp_server.py` | Source guides/regions are now edited through the canonical sidecar and rendered on the source canvas without reviving session-local box/cut ownership, MCP exposes manifest read/write/region-marking tools against the same sidecar contract, and the source panel can now seed a canonical `uniform_grid` draft from the active run/template geometry for the common naked-PNG case. The remaining gap is interactive slicer tooling and richer manifest editing ergonomics. |
+| Source panel now reloads canonical PNG/manifest without grid geometry | `web/workbench.js:2242-2305`, `web/workbench.js:3278-3367`, `web/workbench.js:4310-4332`, `src/pipeline_v2/app.py:496-525` | The source projection can now stand alone from `source_path` / `source_manifest`; it no longer requires pre-populated root grid geometry. RESOLVED. |
+| Primary runtime/template helpers now model explicit `filename_prefix` + `skin_family`, and new outward payloads no longer mirror legacy `family` aliases | `src/pipeline_v2/service.py`, `src/pipeline_v2/app.py` | The core wrapper owner no longer treats prefix as the only family concept, the Playwright proof helper now injects by prefix, and new template/run/session responses no longer emit `family` / `enabled_families` compatibility aliases. Read-only fallback for older persisted records remains. RESOLVED. |
+| MCP override-name validation now accepts engine-valid hyphenated prefixes | `scripts/workbench_mcp_server.py` | `_AHSW_RE` now accepts `player-green-0001.xp`-style names. RESOLVED. |
+| Canonical `0001` representative-file follow-through is now explicit via `preview_xp`, while `l0_ref` preserves the structural layer contract | `config/template_registry.json`, `scripts/xp_fidelity_test/run_bundle.sh`, `scripts/xp_fidelity_test/run_bundle_split.sh`, `scripts/xp_fidelity_test/run_randomized_bundle_test.mjs`, `scripts/xp_fidelity_test/recipe_generator.mjs` | Representative preview ownership now lives in `preview_xp` / `preview_xp_sha256`; structural blank-session/export ownership stays on `l0_ref`. The legacy proof helpers now read their default fixtures from that split. RESOLVED. |
+| Green proof coverage now exists, but green authoring remains deliberately proof-only until green reference assets exist | `src/pipeline_v2/service.py`, `config/template_registry.json`, `scripts/workbench_png_to_skin_test_playwright.mjs`, `web/workbench.js` | Runtime/proof helpers now preserve and inject `player-green` / `attack-green` / `plydie-green`, but the template authoring surface stays human-only by explicit boundary. This is a product-scope limitation, not a missing proof-path owner. |
+| Skin Dock proof is now explicit, but it is still wrapper proof rather than editor proof | `src/pipeline_v2/service.py:2898-2921`, `web/workbench.js:1453-1558`, `web/workbench.html:320-404` | Single-session runtime scope and structural-vs-runtime verification are now explicit, but runtime proof still does not establish Section 1 editor correctness. |
+| Wrapper run paths now materialize and consume canonical manifests end-to-end | `src/pipeline_v2/app.py:438-446`, `src/pipeline_v2/app.py:599-621`, `src/pipeline_v2/service.py:1437-1660`, `src/pipeline_v2/service.py:2558-2710`, `tests/test_workbench_validation.py` | Step 5 is now manifest-backed all the way through conversion: `/api/run`, `/pipeline/run`, and bundle action-apply persist canonical manifests before conversion, and `run_pipeline()` now dispatches to explicit `uniform_grid` / `explicit_regions` builders that reject invalid geometry instead of silently resizing. RESOLVED. |
+| G7/G8/G9 now enforced at export boundary | `src/pipeline_v2/service.py` | G7–G12 all run inside `_build_quality_report()` which is called from `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`. RESOLVED by Steps 6–7. |
+| Agent quality contract implemented as `/api/workbench/validate-xp` | `src/pipeline_v2/app.py`, `src/pipeline_v2/service.py` | `POST /api/workbench/validate-xp` returns a PASS/WARN/FAIL report with per-slot coverage and gate results. The endpoint remains non-exporting, but now returns a predicted `xp_path`, `checksum`, `xp_size_bytes`, and `exported=false` for compatibility; callers that need a real file on disk must still use `/api/workbench/export-xp`. |
+| Agent session inspection is MCP-reachable | `scripts/workbench_mcp_server.py` | MCP now exposes `get_cell(session_id, x, y, layer=2)` for cell-level verification and `validate_session(session_id)` as a session-centric alias to `validate_xp(session_id)`. |
+| Template registry is the documented authoring authority, and the workbench client now derives scope from template actions | `config/template_registry.json`, `src/pipeline_v2/app.py:399-401`, `web/workbench.js` | Step 8 fixed the registry distinction in canon, and the current workbench client no longer fail-closes on `enabled_families`. The remaining gap is broader mounted-family follow-through plus wearable/item coverage, not a separate client-side family gate. |
+| Y9-2 HTTP API contract now exists | `src/pipeline_v2/app.py:317-325`, `src/pipeline_v2/app.py:562-587`, `src/pipeline_v2/service.py:3913-4027` | The server now exposes `GET /health`, `GET /pipeline/templates`, `POST /pipeline/run`, and `POST /pipeline/validate_xp`. The remaining Y9-2 gap is launcher/wizard wiring, not missing backend endpoints. |
+| Y9-2 wizard not wired as launcher sub-action | `Y9-2 scripts/launcher.py`, `Y9-2 scripts/pipeline/wizard/engine.py` | `WizardEngine` exists but has no `_execute_action` branch in `launcher.py`; `[3] ASSET PIPELINE` node is fully absent rather than showing as `[DEFERRED]`. Tracked as Y9-2 DESIGN OPEN B-13. |
+| **GAP: No wearable or item templates in template registry** | `config/template_registry.json` | Character template coverage now includes the player and initial mounted sets, but there are still no template sets for wearable items (armor, helmets, shields, weapons as standalone assets) or item sprites. The authoring surface has no entry point for equipment items as independent assets; only full character+equipment AHSW combos are authorable. Tracked as S2-FAM-04. |
+
+### 2.6 Section-2 Scope Boundary
+
+Section 2 must respect the following boundary:
+
+1. The game engine selects sprites by filename and family/state rules.
+2. The workbench wrapper may help author and inject those files.
+3. The wrapper must not pretend its template model is the engine truth.
+4. The wrapper must not pretend its action/bundle flow is the editor truth.
+5. Family expansion and runtime parity are wrapper responsibilities only after Section 1 ownership is correct.
+
+This means:
+
+- templates are workbench constraints, not engine law
+- bundle/session/action state is workbench state management, not runtime truth
+- runtime proof is wrapper proof, not proof that the root editor architecture is correct
+
+### 2.7 Section-2 Behavior Tree
+
+The canonical Section 2 wrapper behavior tree is:
+
+1. author or load an XP image through Section 1
+2. optionally use source-wrapper tools to mark/import sheet content
+3. map authored XP into family/action wrappers
+4. run structural gates for engine-safe export
+5. export single XP or bundle payload
+6. inject/test via:
+   - web Skin Dock/runtime iframe
+   - native TERM++ sandbox launcher
+7. observe runtime/failure results
+8. return to Section 1 editor ownership for correction
+
+**AUDITOR FOUND (2026-04-15, updated 2026-04-15):** Step 2 of the behavior tree is now designed but not implemented for agents. The authoritative future path is manifest-driven: UI slicer edits and MCP/HTTP edits must both write the same sidecar manifest and then materialize the result into the root editor. Until Step 11 lands, agent automation is still operationally blocked on missing tools, but the blocking issue is now implementation, not undefined design.
+
+**Y9-2 dual-path note:** When the Section 2.10 HTTP API contract is implemented, this behavior tree will have two client paths that share steps 3–8:
+- **Human TUI path:** Y9-2 launcher `[3] Create / Convert Asset` → `WizardEngine` questionary screens → `POST /pipeline/run` → result shown in terminal.
+- **Agent MCP path:** AI agent → `mcp/wizard_mcp_server.py` (`wizard_start` / `wizard_submit` / `wizard_execute` / `wizard_validate_xp`) → same `WizardEngine` state machine → same `POST /pipeline/run` endpoint.
+Step 2 (source region marking) remains the human-only bottleneck until the Step 5 design contract in Section 2.3.1-2.3.4 is implemented and a `POST /pipeline/mark_regions` or equivalent MCP tool is added in Step 11.
+
+### 2.8 Section-2 Rebuild Update (2026-04-15)
+
+The current Section 2 rebuild on top of the root-editor owner graph now has
+these explicit contracts:
+
+1. **Root-session save contract**
+   - the whole-sheet/root-editor save path must persist `grid_cols`,
+     `grid_rows`, `cell_w`, `cell_h`, full layers/cells, and canonical source
+     manifest authority (`source_manifest_path`, `source_manifest`)
+   - Section 2 wrapper state must not keep a stale geometry owner or any legacy
+     source-overlay owner after the root editor changes the document
+2. **Single-session runtime proof scope**
+   - Skin Dock/web runtime proof must declare one explicit `runtime_scope`
+   - `player_only` = safest single-session smoke for player filenames only
+   - `mounted_default` = mounted-family proof (`player`, `wolfie`, `wolack`)
+   - `full_parity` = debug-only five-family override scope
+3. **Bundle/runtime flow**
+   - bundle payloads do not use the single-session scope selector
+   - bundle payload generation remains per-action/per-family
+   - G10-G12 structural gates must pass before bundle runtime injection
+4. **Proof separation**
+   - built-in local XP sanity is structural proof only
+   - Skin Dock and TERM++ command/native launch are runtime proof paths
+   - neither structural proof nor runtime proof establishes Section 1
+     ownership
+
+### 2.9 Research Requirements And Decisions
+
+This subsection folds the Section 2 research requirement into the wrapper spec.
+The relevant research area is local Asciicker engine truth:
+
+1. mounted family authoring requirements
+2. runtime filename coverage vs active workbench family coverage
+3. proof harness requirements for unambiguous skin application
+
+#### 2.9.1 Mounted-Family / Runtime Scope Decision
+
+Evidence:
+
+- Runtime naming and override logic already cover `player`, `attack`,
+  `plydie`, `wolfie`, and `wolack`:
+  `src/pipeline_v2/service.py`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js`,
+  and `web/workbench.js`.
+- Active workbench phase gating still only enables `player`, `attack`, and
+  `plydie` via `src/pipeline_v2/config.py`.
+- `web/workbench.js` documents that mounted default preview uses
+  `player + wolfie + wolack`, while `full_parity` is debug-only because the
+  override path is FS-global and can bleed into NPCs.
+- Current verification profiles still separate local structural sanity from
+  runtime proof in `src/pipeline_v2/service.py`.
+
+Decision (inference from sources):
+
+1. Do not treat mounted-family runtime coverage and workbench authoring coverage
+   as already aligned. They are not.
+2. Shipping authoring scope stays narrower than raw runtime filename truth until
+   create/export/apply/verify all cover the same family set.
+3. Runtime proof must be two-stage:
+   - stage 1: structural XP sanity/export checks
+   - stage 2: explicit runtime application proof with isolated override names
+4. `full_parity` remains debug-only until the NPC/shared-filename contamination
+   risk is removed. It is not valid as the default acceptance path.
+5. The default proof path for user-facing work should prefer the smallest
+   unambiguous override set possible, then expand only when mounted-family
+   authoring and verification are reconciled.
+
+Sources:
+
+- `src/pipeline_v2/config.py`
+- `src/pipeline_v2/service.py`
+- `runtime/termpp-skin-lab-static/termpp_skin_lab.js`
+- `web/workbench.js`
+
+### 2.10 Y9-2 Launcher Integration Contract
+
+The Y9-2 repo (`asciicker-Y9-2`) contains a terminal wizard (`scripts/pipeline/wizard/engine.py`) and an MCP server (`mcp/wizard_mcp_server.py`) that are intended to be thin HTTP clients over this server. This subsection defines what pipeline-v2 must expose for that integration to work. **This contract is unimplemented — it is the design target for Unified Sequence Step 11.**
+
+**Integration model:** The Y9-2 `WizardEngine` drives the same questionary TUI state machine whether invoked from the launcher (`[3] Create / Convert Asset`) or via MCP tool calls from an AI agent (`mcp/wizard_mcp_server.py`). Both paths call this server at a configured `PIPELINE_SERVER_URL`. This server is the execution backend; the Y9-2 wizard is the front-end orchestrator. This does not give Y9-2 any ownership over the XP editor root (Section 1) or the wrapper architecture (Section 2) — those boundaries are unchanged. The HTTP API contract is the versioning surface between the two repos; pipeline-v2 internals can change without requiring Y9-2 wizard changes, as long as the API contract holds.
+
+**Required HTTP endpoints (design target for Unified Sequence Step 11):**
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/health` | GET | Server liveness; used by Y9-2 launcher status bar and `[3] Pipeline Status` sub-action |
+| `/pipeline/templates` | GET | List available templates; accepts `?type=character\|item\|ui\|custom`; replaces local `WizardEngine._get_templates_by_type()` |
+| `/pipeline/run` | POST | Execute pipeline with wizard nav state JSON; replaces local `AssetPipeline.run()` / `run_batch()`; returns output path on success |
+| `/pipeline/validate_xp` | POST | Lightweight single-XP gate check (G7–G12); returns gate results, quality score, and PASS/FAIL verdict; used by Y9-2 `wizard_validate_xp` MCP tool for agent quality loops |
+
+**Design decisions required before Step 11 implementation:**
+- Auth model: localhost-only assumed initially vs bearer token (cross-tracked as Y9-2 DESIGN OPEN B-12)
+- Error shape: structured JSON for all responses so agents can parse failures deterministically; bare HTTP status codes are not sufficient
+- Execution model: whether `POST /pipeline/run` is synchronous (returns output path on completion) or async (returns job ID + polling endpoint); async is safer for long conversions but increases Y9-2 wizard complexity
+- Config key placement: `PIPELINE_SERVER_URL` in Y9-2 `server.env` (extension) vs dedicated `pipeline.env`
+
+**Agent-interactability requirement:** All four endpoints must be usable by AI agents without human input. `POST /pipeline/validate_xp` must return a machine-readable quality score that an agent can evaluate programmatically — this directly resolves the agent vision gap from Section 2.5 for the single-XP validation case.
+
+**Current state:** DESIGN OPEN. Cross-tracked in Y9-2 canon spec Section 2 [5] as DESIGN OPEN B-12 (API contract), B-13 (wizard launcher wiring), B-14 (agent gateway scope).
 
 ---
 
-## 7. Non-Negotiable Constraints
+## Section 3 — User-Reachable Action Harness Spec
 
-- **Self-containment**: No runtime, test, or build dependency on external folders. Enforced by `scripts/self_containment_audit.py`.
-- **Claim discipline**: No "fixed" / "restored" / "working" claims without branch, commit, and verification evidence. See `docs/AGENT_PROTOCOL.md` Section 8.
-- **Drift guardrail**: Do not build M2 work on drifted verifier code or stale planning docs. See `AGENTS.md` § Drift Guardrail.
+This section defines the acceptance harness for the shipped workbench UI. It
+exists because the product surface is a many-action editor and UI regressions
+are easy to hide behind narrow scripted demos. The harness must prove that
+real user-reachable actions can drive the editor from valid starting states to
+valid goal artifacts. It is not an XP repaint oracle, not an inspector
+replayer, and not a license to mutate browser state through hidden debug hooks
+and call that acceptance.
+
+### 3.1 Purpose And Terminology
+
+The correct model is:
+
+1. **User-Reachable Action Graph**
+   - the complete action surface a real user can reach in the shipped UI,
+     including controls that only appear after prior actions such as tabs,
+     context menus, tool modes, drawers, modal buttons, and submenu items
+2. **Goal Artifact Contract**
+   - the golden artifact set that defines success for a workflow, such as an
+     exact XP sheet, a bundle payload, or a mounted runtime result derived from
+     a representative input set
+3. **Recipe Synthesizer**
+   - the planner that chooses valid action sequences from the action graph
+     toward the goal artifact contract
+4. **Runner**
+   - the executor that performs those actions through real browser gestures and
+     records checkpoints, artifacts, and failure evidence
+
+This replaces the older “truth table -> repaint recipe” framing. The old
+truth-table lane described XP cells directly and then generated layer-2-centric
+repaint steps. That model is not authoritative for a modern whole-sheet-root
+editor because the acceptance problem is not “can we repaint these cells?” The
+acceptance problem is “can a real user, through the shipped UI, reach the
+required artifact state without cheating?”
+
+### 3.2 Authoritative Inputs
+
+The harness has two required inputs.
+
+1. **Input A: User-Reachable Action Graph**
+   - authoritative inventory of every user-reachable action
+   - each action entry must declare:
+     - stable `action_id`
+     - user-facing label or semantic purpose
+     - gesture type (`click`, `fill`, `check`, `keypress`, `canvasClick`,
+       `canvasDrag`, `contextMenu`, or equivalent future additions)
+     - target selector or gesture target
+     - preconditions
+     - postconditions / expected state deltas
+     - whether the action is acceptance-eligible
+     - whether the action is eligible for bounded random exploration
+     - whether the action is blocked by missing design or missing runner
+       support
+   - actions revealed only after prior actions are still first-class members of
+     the graph; they are not optional edge cases
+
+2. **Input B: Goal Artifact Contract**
+   - authoritative definition of the finished target
+   - each goal case must declare:
+     - starting state contract
+     - required checkpoints
+     - final artifact comparator
+     - allowed tolerances, if any
+     - required export/runtime proof stage, if any
+   - for this product, goal cases must include both:
+     - recreation of a known-good XP sheet from a blank XP/root session path
+     - recreation of a known-good XP sheet or bundle from representative PNG
+       source sheets through the Section 2 wrapper path
+   - the input list must be extensible. Refactors or new template sets must be
+     able to add new goal cases without rewriting the harness model.
+
+### 3.3 Recipe Synthesizer Contract
+
+The recipe synthesizer is a state-transition planner, not a brute-force
+Cartesian enumerator and not a machine-learning authority.
+
+1. It consumes:
+   - the current editor/workflow state
+   - the User-Reachable Action Graph
+   - one Goal Artifact Contract
+   - an optional seed and search budget
+2. It emits:
+   - a valid user-reachable recipe
+   - deterministic checkpoint boundaries
+   - any bounded random-exploration windows inserted between checkpoints
+3. It chooses actions by planning over state transitions:
+   - actions map to reachable state deltas and prerequisite satisfaction, not
+     directly to target pixels
+   - a good next action is one that satisfies a missing prerequisite, advances
+     to the next checkpoint, or measurably reduces distance to the goal
+4. Bounded random exploration is mandatory as a first-class mode:
+   - the synthesizer may inject short seeded random segments between scripted
+     checkpoints
+   - random segments may only choose actions whose preconditions currently hold
+   - random segments must have explicit length and seed recorded in the report
+   - random exploration is for reachable-surface coverage, not for replacing
+     the deterministic checkpoint contract
+5. Acceptable planning implementations include beam search, A*, bounded DFS,
+   Monte Carlo tree search, or other explicit search/planning methods. If a
+   learned ranker is ever added, it may prioritize candidates but may not
+   replace the explicit action graph, checkpoint contracts, or final artifact
+   comparator.
+
+### 3.4 Runner And Acceptance Contract
+
+1. Acceptance execution must use real browser interactions:
+   - DOM clicks
+   - form input
+   - keyboard input
+   - canvas pointer gestures
+   - context-menu flows
+   - drag/selection gestures
+2. Direct `window.__wb_debug` calls, direct API mutation, and `page.evaluate`
+   state edits are diagnostic-only. They may help develop the harness or gather
+   evidence, but they are not acceptance actions.
+3. JS REPL is allowed as the interactive exploration engine for harness
+   development because it can keep a persistent Playwright/browser session
+   alive, execute seeded search loops, and shrink failures. Acceptance proof
+   still requires committed runner scripts that can replay the same recipe and
+   seed outside the REPL.
+4. The runner must support the full action-graph gesture surface. `click` and
+   `fill` alone are insufficient. The committed support target includes at
+   minimum:
+   - `click`
+   - `fill`
+   - `check`
+   - `keypress`
+   - `canvasClick`
+   - `canvasDrag`
+   - `contextMenu`
+5. Every acceptance run must emit:
+   - the selected goal case
+   - the recipe / action trace
+   - checkpoint outcomes
+   - final artifact compare result
+   - screenshots or other failure artifacts when a checkpoint or final compare
+     fails
+
+### 3.5 State Capture And Artifact Oracles
+
+1. Intermediate checkpoints are required. Final artifact equality alone is not
+   enough because many editor regressions appear before export.
+2. Checkpoints may assert:
+   - action enablement / visibility
+   - document geometry
+   - layer, tool, and selection state
+   - manifest/session state
+   - undo/redo availability
+   - bundle/runtime gating state
+3. Final artifact comparators must be explicit and deterministic:
+   - XP compare: geometry, layers, cell content, colors, metadata rows, and any
+     other declared contract fields
+   - bundle compare: expected ready/error states plus exported XP contract per
+     action
+   - runtime compare: only when the goal case explicitly includes runtime proof
+4. The authoritative agent-readable proof surface is the structured report plus
+   artifact comparator output. Screenshots aid humans but are not the sole
+   oracle.
+
+### 3.6 Current File Ownership Mapping
+
+The current repo maps onto this harness model as follows:
+
+1. The harness action registry seed and `action_registry_schema.json`
+   - keep
+   - this is the current seed of the User-Reachable Action Graph; this checkout no longer tracks a literal `action_registry.json` file
+   - adapt by expanding conditional reachability, gesture coverage, checkpoint
+     tags, and random-exploration eligibility
+2. `scripts/xp_fidelity_test/recipe_generator.mjs`
+   - keep
+   - this is temporary synthesizer scaffolding
+   - adapt by replacing fixed recipes with goal-directed stateful synthesis
+3. `scripts/xp_fidelity_test/dom_runner.mjs`
+   - keep
+   - this is temporary runner scaffolding
+   - adapt by adding real keyboard/canvas/context-menu gesture support and
+     deterministic checkpoint execution
+4. `scripts/xp_fidelity_test/verifier_lib.mjs`
+   - keep
+   - this is shared harness infrastructure
+   - adapt by tightening readiness waits, formalizing the public state-capture
+     contract, and removing `_state()` dependency from acceptance capture
+5. `scripts/workbench_bundle_manual_watchdog.mjs`
+   - keep as downstream runtime smoke only
+   - it is not the Section 3 acceptance oracle
+6. `scripts/xp_fidelity_test/recipe_generator.py`,
+   `truth_table.py`, `run.sh`, `run_fidelity_test.mjs`,
+   `run_bundle.sh`, `run_bundle_split.sh`, and
+   `run_bundle_fidelity_test.mjs`
+   - legacy truth-table lane
+   - these may remain available only for historical reproduction or diagnostic
+     comparison
+   - they are not the future acceptance architecture and must be marked as
+     legacy wherever they remain in-tree
+
+### 3.7 Consequence For The Task Sequence
+
+1. The Section 3 harness contract is a required design artifact before further
+   verifier/watchdog expansion.
+2. Legacy truth-table entrypoints must be demoted out of the primary acceptance
+   path before new coverage claims are made.
+3. Future verifier work must be described in the Unified Sequence Of Actions as Section 3 harness
+   implementation, not as a continuation of the old repaint-fidelity lane.
 
 ---
 
-## 8. Structural Contract Pointers
+## Unified Sequence Of Actions
 
-- `docs/XP_EDITOR_ACCEPTANCE_CONTRACT.md` — canonical acceptance contract for XP-editor parity
-- `docs/PNG_STRUCTURAL_BASELINE_CONTRACT.md` — non-regression contract for the PNG structural ingest path
+The original Step 2-8 deletion sequence has already landed in these commits:
 
----
+1. `b8df3af` — blank root image path (`New XP`)
+2. `790b63f` — whole-sheet root session ownership
+3. `359c508` — root image actions routed through whole-sheet
+4. `8da9c16` — source panel as root overlay
+5. `c0d387f` — single frame-nav owner
+6. `5014671` — research-backed editor/runtime decisions captured in Section 1.9 and Section 2.9
+7. `5d5af15` — explicit Section 2 runtime-proof scope and full root save shape
 
-## 9. Canonical Read Order
+**AUDITOR FOUND GAP (2026-04-15):** The prior task sequence conflated design and implementation within each step, and treated design decisions as if they were part of the implementation step that required them. This caused implementation work to proceed before the behavioral contract was specified. The corrected sequence below promotes design to its own explicit phase before any implementation step that depends on it. Steps marked **DESIGN** produce a written spec/decision. Steps marked **IMPLEMENT** must not begin until the preceding DESIGN step is documented.
 
-Agents must read in this order at session start:
+From the current state, the corrected sequence is:
 
-1. `AGENTS.md` — startup guardrails
-2. `docs/INDEX.md` — doc hub and navigation
-3. `docs/AGENT_PROTOCOL.md` — behavioral rules
-4. This doc — normative spec and policy
-5. `PLAYWRIGHT_FAILURE_LOG.md` — reality log
-6. `docs/plans/2026-03-23-m2-capability-canon-inventory.md` — capability canon
-7. Task-specific reference docs as needed
+1. **HOUSEKEEPING** — Keep production behavior frozen on `rikiworld.com/xpedit`. Do not ship partial ownership changes. Keep the canon layer strict: only `PLAYWRIGHT_FAILURE_LOG.md` and `docs/plans/2026-03-23-workbench-canonical-spec.md` are active authority docs.
+
+2. **DESIGN — Section 1 feature contract** — Before any Section 1 implementation, write the behavioral contract for every gap item in the 1.6 auditor table. This step produces a written spec for:
+   - Resize: dialog UX, geometry change semantics, downstream state cascade
+   - Browse mode: peer-mode interaction contract, image CRUD operations, Tab toggle lifecycle
+   - Apply mode toggles: g/f/b keyboard authority, solo-mode behavior, UI representation
+   - Draw tool completeness: Oval, Text, Copy/Cut/Paste — interaction contract for each
+   - Keyboard authority map: complete keybinding table for the whole-sheet editor
+   - Pointer model: adopt the Section 1.9.1 touch contract as the implementation target; specify how existing mouse handlers migrate to Pointer Events
+   - Layer locking: lock state semantics, locked-layer draw rejection contract
+   - Zoom/font-scale: zoom levels, persistence, grid alignment
+   Do not begin Step 3 until this design output exists.
+
+3. **IMPLEMENT — Section 1 structural cleanup** — **IMPLEMENTED, UNVERIFIED (2026-04-15, commit c836cde)** — `syncRootStateFromWholeSheet()` and all callsites deleted. Old history/future owner deleted. Legacy inspector deleted. Grep confirms no matches for `syncRootStateFromWholeSheet`, `state.history`, `state.future`, `pushHistory`, `renderInspector`, `closeInspector`, `inspectorOpen`. No behavioral proof run yet.
+
+4. **IMPLEMENT — Section 1 feature completeness** — **COMPLETE (2026-04-16, commits `51f3a40`–`712735f`, plus local uncommitted completion pass)**.
+   - Wired in live code: keyboard authority, resize, open/import, browse toggle, oval, text, pointer events, zoom/grid viewport persistence.
+    - The local heavy-contract fix pass closes the highest-risk save/interaction regressions that were still contaminating Step 4:
+      - pending whole-sheet debounced saves now flush/checkpoint before `loadSession()` or `loadFromJob()` replace the active session
+      - dirty sessions are checkpointed before replacement instead of only clearing the timer
+      - active text sessions now arm debounced saves while typing and are quiesced before remount/session switch
+      - two-finger pinch back to one-finger touch now resumes tool ownership instead of leaving the surviving touch inert
+      - rejected root resize saves now roll the whole-sheet editor back to the prior snapshot instead of leaving client geometry diverged
+      - session load/save payload translation now runs through whole-sheet (`loadSessionPayload()` / `buildSessionPayload()`), and `workbench.js` derives mirror state from the root document after load
+      - the viewport wire contract (`viewport_x`/`viewport_y` on the API, `scrollLeft`/`scrollTop` in the client) is now explicitly documented at the save/load boundary, and Python zoom normalization now matches client rounding semantics
+    - Verification evidence for this local pass:
+      - `python3 -m pytest tests/test_workbench_flow.py -k save_session_round_trips_root_owner_metadata` — PASS
+      - `node --check web/workbench.js` — PASS
+      - `node --experimental-vm-modules -e "const fs=require('fs'); const vm=require('vm'); new vm.SourceTextModule(fs.readFileSync('web/whole-sheet-init.js','utf8'));"` — PASS
+      - `python3 -m py_compile src/pipeline_v2/service.py` — PASS
+      - `PW_SKIP_WEBSERVER=1 npx playwright test tests/playwright/step4-root-proof.spec.js --reporter=list` — PASS
+        - proves root-owner load/save payload translation, session-switch text persistence, touch gesture handoff, pointer-cancel vs lost-capture behavior, resize rollback, and concurrent remount undo single-fire
+    - Fixes landed in the CE review pass (`20260415-112338-b515fe54`):
+      - enabled_families fail-close removed — `getEnabledActions` now derives scope from template action entries only (browser-proven: bundle tabs render correctly)
+    - Local browser-owner cleanup on `2026-04-16`:
+      - the deprecated `/wizard` browser UI is hard-disabled to redirect to `/workbench`; only the external Y9-2 TUI/MCP wizard remains in scope
+      - the workbench Load Source panel no longer owns geometry via `wbAngles` / `wbFrames` / `wbSourceProjs`, and the deleted `wbAnalyze` step is gone from the live browser/harness path
+      - `wbRun` is now the visible `Apply Source` action, and source-image preview loading is fail-open instead of blocking upload/session activation
+      - verification evidence for this cleanup:
+        - `python3 -m pytest tests/e2e/test_browser_flow.py -q` — PASS
+        - `npx playwright test tests/playwright/full-workflow-with-game.spec.js --list` — PASS (spec parses and enumerates the updated template-backed flow)
+      - concurrent load race closed — `withSessionLoadLock` + `state.sessionLoadInFlight` guard wraps both `loadFromJob` and `loadSession` (browser-proven: overlapping loads return `[true, false]`)
+      - partial-state-before-await fixed — `applyLoadedSessionSideState` deferred after root load; `previousRootPayload` rollback wired on mirror-sync failure
+      - `_wsDrawSaveTimer` added to state initializer
+      - `syncRootOwnerMirrorsFromDocument()` deleted on `2026-04-16` — render/debug read paths now consume whole-sheet snapshots, and the mid-load double-sync path is gone with it
+    - Completion pass landed on `2026-04-16`:
+      - **FL-STEP4-02 fixed:** `_normalize_storage_id()` now preserves integer `0` instead of coercing it to an empty string.
+      - **FL-STEP4-03 fixed:** `/api/workbench/create-blank-session` again accepts bare `{}` and explicit `blank_session` payloads for generic root sessions while retaining template-backed creation.
+      - **FL-STEP4-04 fixed:** dead `force_fallback` / `crop_box` fields were deleted from `RunConfig`, and `/api/run` plus `/pipeline/run` now reject those legacy fields with `unsupported_run_fields` instead of silently ignoring them.
+      - **FL-STEP4-05 resolved by contract:** `/api/workbench/validate-xp` is now explicitly documented and tested as a non-exporting checksum/quality endpoint that returns a predicted `xp_path` plus `exported=false` for compatibility, without writing an export artifact.
+      - agent-native text parity now exists on the MCP/HTTP path through `save_session(..., text_input={x,y,text})`.
+      - inspector edits now execute inside whole-sheet external-edit transactions, so one inspector action creates one whole-sheet undo snapshot and is reversible through the root undo contract.
+    - Verification evidence for the completion pass:
+      - `python3 -m pytest tests/test_workbench_flow.py -k "root_blank_session_legacy_route_defaults or root_blank_session_rejects_invalid_geometry or save_session_text_input_writes_root_authoritative_text or validate_xp_contract_returns_predictable_path_without_exporting or save_session_rejects_inconsistent_sheet_geometry or normalize_storage_id_preserves_integer_zero or save_session_round_trips_root_owner_metadata" -q` — PASS
+      - `python3 -m pytest tests/test_base_path.py -k "create_root_blank_session_under_prefix or save_and_export_root_blank_session_under_prefix" -q` — PASS
+      - `python3 -m pytest tests/test_workbench_mcp_server.py -q` — PASS
+      - `python3 -m pytest tests/test_workbench_validation.py -k "validate_xp_does_not_create_export_artifact or api_run_rejects_removed_legacy_fields or pipeline_run_rejects_removed_legacy_fields" -q` — PASS
+      - `node --check web/workbench.js` — PASS
+      - `node --experimental-vm-modules -e "const fs=require('fs'); const vm=require('vm'); new vm.SourceTextModule(fs.readFileSync('web/whole-sheet-init.js','utf8'));"` — PASS
+      - `python3 -m py_compile src/pipeline_v2/app.py src/pipeline_v2/service.py src/pipeline_v2/models.py scripts/workbench_mcp_server.py tests/test_workbench_flow.py` — PASS
+      - live browser proof against a local `pipeline_v2.app` server on `127.0.0.1:5082`:
+        - inspector action wrote glyph `65`
+        - whole-sheet `canUndo` transitioned `false -> true`
+        - undo restored the glyph to `0` and `canUndo` returned to `false`
+
+5. **DESIGN — Section 2 input contract** — **IMPLEMENTED (2026-04-15)** — Section 2.3.1-2.3.4 now define:
+   - source-layout modes (`uniform_grid` vs `explicit_regions`)
+   - sidecar manifest authority (`<source>.asciicker-source.json`)
+   - human and agent slicing workflow on top of the root editor
+   - PASS/WARN/FAIL quality contract for non-visual agent loops
+   Step 7 and Step 8 may proceed, but only by implementing this contract rather than inventing a second source-wrapper model.
+
+6. **DESIGN — Section 3 action harness contract** — **IMPLEMENTED (2026-04-15)** — Section 3 now defines:
+   - the User-Reachable Action Graph as the authoritative action inventory
+   - the Goal Artifact Contract as the authoritative success target
+   - the Recipe Synthesizer as a state-transition planner rather than a truth-table repaint generator
+   - deterministic checkpoints plus bounded random-exploration windows between checkpoints
+   - the acceptance boundary: real browser gestures only, with `__wb_debug` and direct API mutation limited to diagnostics
+   - the active/legacy file split for `scripts/xp_fidelity_test/` and related watchdog tooling
+   Legacy truth-table recipe entrypoints are now explicitly demoted out of the primary acceptance path. Future verifier work must implement this contract rather than extending the old repaint lane.
+
+7. **IMPLEMENT — UI identity map and panel-topology correction** — This is the immediate next task from the 2026-04-17 authoring pass.
+   - Tag every user-visible and user-clickable workbench surface with a stable on-screen identifier.
+   - Use a parent-child naming system for panels, sub-panels, tabs, buttons, mode toggles, context actions, and reusable overlays.
+   - Preserve stable lineage-oriented child labels where useful for user communication, even if the child surface moves visually. Example: `10A wsFrameNav` may remain valid as a child-ID family label if the numbering scheme explicitly documents that lineage.
+   - Reconcile panel topology so the grid/frame-navigation region sits in the intended working order relative to Source (`8`) and Whole Sheet (`10`), rather than drifting as an orphaned layout artifact.
+   - This step is documentation plus visible UI tagging first. Do not fold `Delete Frame` or broader drag-behavior changes into the tagging pass.
+
+8. **IMPLEMENT — Demote session-local source state** — Once the Step 5 contract exists:
+   - Demote session-local `extractedBoxes`, `sourceCutsV`, `sourceCutsH` from ad hoc authority into manifest-backed or clearly-derived overlays
+
+9. **IMPLEMENT — Quality enforcement at export boundary** — Based on Step 5 quality contract:
+   - Move G7/G8/G9 (or their replacement) into `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`
+   - Add a lightweight single-XP validation endpoint for agent loops
+
+10. **DESIGN — Family expansion policy** — RESOLVED in Section 2.3.5:
+   - main-game `SkinFamilyDefinition` / B-18 schema is the engine authority for base `skin_family` and filename-prefix grouping
+   - `template_registry.json` remains the workbench authoring-surface authority, now with explicit `filename_prefix` / `skin_family` metadata plus `preview_xp` vs `l0_ref` ownership
+   - initial mounted scope here remains `wolfie` idle/walk + `wolack` attack; `bigbee` deferred; green proof-prefix support exists, but green authoring remains proof-only until green reference assets ship in-repo
+   - the harness action registry seed remains verifier-only
+
+11. **IMPLEMENT — Engine Family Schema Alignment + Mounted-Family Authoring** — Based on Step 10 policy:
+   - Separate engine `skin_family` truth from filename-prefix authoring in backend, frontend, MCP, and browser/runtime helpers
+   - Update preview/browser assumptions to canonical `{family}-0001.xp`
+   - Then enable supported mounted / proof-family prefixes consistently across backend, frontend, template registry, and runtime proof paths
+
+12. **IMPLEMENT — Interaction completion after UI identity map** — Only after Step 7 is landed and visible in the browser:
+   - Finish sprite-by-sprite drag coverage for every visible source-box path, not just the narrow auto-found proof case.
+   - Add a distinct `Delete Frame` action with semantic-slot removal and left-shift/repack behavior, separate from clear-content deletion.
+   - Re-run headed browser proof so drag/drop and frame-slot deletion are evidenced through shipped UI actions only.
+
+13. **IMPLEMENT — MCP/automation support and Y9-2 HTTP API** — Only after Steps 5-12 are explicit:
+   - Add MCP tools for region marking, manifest persistence, and quality validation
+   - Implement the Section 2.10 Y9-2 integration HTTP API: `GET /health`, `GET /pipeline/templates`, `POST /pipeline/run`, `POST /pipeline/validate_xp`
+   - The Y9-2 `mcp/wizard_mcp_server.py` is the agent-facing gateway that calls these endpoints; this server exposes the execution surface that gateway calls. Implement the API contract before adding further pipeline-side MCP tools so both surfaces are coherent.
+   - Resolve Section 2.10 design decisions (auth model, error shape, sync vs async execution, config key placement) before writing implementation
+
+14. **IMPLEMENT — Small-screen layout and browser persistence** — Use the Section 1 research decisions:
+   - Finish the Pointer Events / touch-action migration
+   - Implement the three-tier persistence model (draft / explicit / PWA)
+   - Finish the narrow-screen layout contract from Section 1.9.3
+
+**Ship gate:** Steps 1–2 (housekeeping and Section 1 design) are unblocked and do not require pipeline-v2 server changes. Implementation steps 3–14 are post-release relative to the Y9-2 launcher ship gate. Do not surface the `[3] ASSET PIPELINE` launcher node until Step 3 is at minimum proven complete. FL-813 (asset pipeline lacks a shippable supported surface) blocks launcher promotion and is resolved only when Step 3 is proven, the Section 2.10 HTTP API contract is implemented (Step 13), and the Y9-2 Step 7.12 VERIFY gate passes.

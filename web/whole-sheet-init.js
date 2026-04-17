@@ -202,8 +202,6 @@ let editorState = {
   onDeleteLayer: null,
   onMoveLayer: null,
   _strokeDirty: false,
-  _originalGridParent: null,
-  _originalGridNextSibling: null,
   // Clipboard state (W19-W22 parity)
   clipboard: null,       // {cells: [{x, y, glyph, fg, bg}, ...], bounds: {x, y, w, h}}
   pasteMode: false,
@@ -261,15 +259,6 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
   canvasEl.style.imageRendering = 'pixelated';
   canvasEl.style.cursor = 'crosshair';
   scrollWrap.appendChild(canvasEl);
-
-  // Secondary frame navigation region (spec §3.8)
-  const frameNav = document.createElement('div');
-  frameNav.className = 'ws-frame-nav';
-  frameNav.id = 'wsFrameNav';
-  const frameNavLabel = document.createElement('h4');
-  frameNavLabel.textContent = 'Frame Navigation';
-  frameNav.appendChild(frameNavLabel);
-  canvasArea.appendChild(frameNav);
 
   layout.appendChild(canvasArea);
   container.appendChild(layout);
@@ -415,14 +404,6 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
   _updateInfoDrawState();
   _updateInfoApplyModes();
 
-  // Integrate frame navigation into the layout (spec §3.8)
-  const gridPanel = document.getElementById('gridPanel');
-  const frameNavEl = document.getElementById('wsFrameNav');
-  if (gridPanel && frameNavEl) {
-    editorState._originalGridParent = gridPanel.parentElement;
-    editorState._originalGridNextSibling = gridPanel.nextSibling;
-    frameNavEl.appendChild(gridPanel);
-  }
 }
 
 // ── Stroke tracking ──
@@ -2070,18 +2051,6 @@ function unmount() {
     }
     if (typeof editorState.canvas.dispose === 'function') editorState.canvas.dispose();
   }
-  // Restore frame grid to original location
-  if (editorState._originalGridParent) {
-    const gridPanel = document.getElementById('gridPanel');
-    if (gridPanel) {
-      if (editorState._originalGridNextSibling) {
-        editorState._originalGridParent.insertBefore(gridPanel, editorState._originalGridNextSibling);
-      } else {
-        editorState._originalGridParent.appendChild(gridPanel);
-      }
-    }
-  }
-
   if (editorState.containerEl) editorState.containerEl.innerHTML = '';
 
   editorState = {
@@ -2118,8 +2087,6 @@ function unmount() {
     onUndo: null,
     onRedo: null,
     _strokeDirty: false,
-    _originalGridParent: null,
-    _originalGridNextSibling: null,
     clipboard: null,
     pasteMode: false,
     _pasteInterceptor: null,

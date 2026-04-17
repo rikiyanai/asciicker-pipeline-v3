@@ -2052,6 +2052,75 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _resample_frame_matrix(
+    src_matrix: list[list[Cell]],
+    dst_w: int,
+    dst_h: int,
+    *,
+    flip_h: bool = False,
+) -> list[list[Cell]]:
+    src_h = len(src_matrix)
+    src_w = len(src_matrix[0]) if src_h else 0
+    if src_w <= 0 or src_h <= 0 or dst_w <= 0 or dst_h <= 0:
+        return [[_transparent_cell() for _ in range(max(1, dst_w))] for _ in range(max(1, dst_h))]
+    out = [[_transparent_cell() for _ in range(dst_w)] for _ in range(dst_h)]
+    for dy in range(dst_h):
+        sy = min(src_h - 1, int((dy * src_h) / dst_h))
+        for dx in range(dst_w):
+            sx = min(src_w - 1, int((dx * src_w) / dst_w))
+            if flip_h:
+                sx = src_w - 1 - sx
+            out[dy][dx] = src_matrix[sy][sx]
+    return out
+
+
+def _expand_visual_cells_for_export(
+    *,
+    cells_layer2: list[Cell],
+    cols: int,
+    rows: int,
+    angles: int,
+    anims: list[int],
+    source_projs: int,
+    projs: int,
+    req_id: str,
+) -> list[Cell]:
+    if source_projs >= projs:
+        return list(cells_layer2)
+    if source_projs != 1 or projs != 2:
+        raise ApiError(
+            f"unsupported source/export projection expansion: source_projs={source_projs}, projs={projs}",
+            "unsupported_projection_expansion", "workbench", req_id, 422,
+        )
+    semantic_frames = sum(int(x) for x in anims)
+    if semantic_frames <= 0 or angles <= 0:
+        raise ApiError("invalid semantic export geometry", "invalid_export_geometry", "workbench", req_id, 422)
+    src_frame_cols = semantic_frames * source_projs
+    dst_frame_cols = semantic_frames * projs
+    if cols % src_frame_cols != 0 or rows % angles != 0 or cols % dst_frame_cols != 0:
+        raise ApiError(
+            f"session geometry incompatible with semantic export expansion: cols={cols}, rows={rows}, "
+            f"angles={angles}, semantic_frames={semantic_frames}, source_projs={source_projs}, projs={projs}",
+            "export_geometry_incompatible", "workbench", req_id, 422,
+        )
+    src_frame_w = cols // src_frame_cols
+    dst_frame_w = cols // dst_frame_cols
+    frame_h = rows // angles
+    src_grid = [list(cells_layer2[y * cols:(y + 1) * cols]) for y in range(rows)]
+    dst_grid = [[_transparent_cell() for _ in range(cols)] for _ in range(rows)]
+    for angle in range(angles):
+        sy0 = angle * frame_h
+        for frame in range(semantic_frames):
+            sx0 = frame * src_frame_w
+            src_matrix = [row[sx0:sx0 + src_frame_w] for row in src_grid[sy0:sy0 + frame_h]]
+            for proj in range(projs):
+                dst_matrix = _resample_frame_matrix(src_matrix, dst_frame_w, frame_h, flip_h=(proj == 1))
+                dx0 = (frame + (proj * semantic_frames)) * dst_frame_w
+                for y in range(frame_h):
+                    dst_grid[sy0 + y][dx0:dx0 + dst_frame_w] = dst_matrix[y]
+    return [dst_grid[y][x] for y in range(rows) for x in range(cols)]
+
+
 def workbench_load_session(session_id: str, req_id: str) -> dict[str, Any]:
     p = _session_path(session_id)
     if not p.exists():
@@ -2171,7 +2240,7 @@ def workbench_create_blank_session(template_set_key: str, action_key: str, req_i
     )
     sess_dict = sess.to_dict()
     sess_dict["family"] = family
-    sess_dict["source_projs"] = int(action_spec.get("projs", projs))
+    sess_dict["source_projs"] = int(action_spec.get("source_projs", action_spec.get("projs", projs)))
     sess_dict["template_set_key"] = template_set_key
     sess_dict["action_key"] = action_key
     save_json(_session_path(session_id), sess_dict)
@@ -2247,10 +2316,17 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
     rows = int(sess["grid_rows"])
     expected_cells = cols * rows
 
-    # B4: If session has persisted real layers (from uploaded XP), export them
-    # directly instead of fabricating L0/L1/L3 from templates.
+    family = str(sess.get("family", "player"))
+    angles = int(sess.get("angles", 1))
+    anims = [int(x) for x in sess.get("anims", [1])]
+    projs = int(sess.get("projs", 1))
+    source_projs = int(sess.get("source_projs", projs))
+
+    # Uploaded XP sessions preserve their real layer set directly. Template
+    # sessions rebuild native layers so semantic-slot authoring can expand
+    # source_projs -> projs during export.
     persisted_layers = sess.get("layers")
-    if persisted_layers and isinstance(persisted_layers, list) and len(persisted_layers) >= 1:
+    if family == "uploaded" and persisted_layers and isinstance(persisted_layers, list) and len(persisted_layers) >= 1:
         # Hard-fail: every layer must have exactly cols*rows cells
         layers: list[list[Cell]] = []
         for li, raw_layer in enumerate(persisted_layers):
@@ -2284,8 +2360,17 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
         if len(cells) != expected_cells:
             raise ApiError("session cell geometry mismatch", "session_geometry_invalid", "workbench", req_id, 422)
 
-        # Read family from session metadata; default to "player" for pre-existing sessions
-        family = str(sess.get("family", "player"))
+        if source_projs < projs:
+            cells = _expand_visual_cells_for_export(
+                cells_layer2=cells,
+                cols=cols,
+                rows=rows,
+                angles=angles,
+                anims=anims,
+                source_projs=source_projs,
+                projs=projs,
+                req_id=req_id,
+            )
 
         layers = _build_native_layers(
             family=family, cells_layer2=cells, cols=cols, rows=rows,
@@ -3036,6 +3121,11 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
         if projs not in (1, 2):
             raise ApiError("projs must be 1 or 2", "invalid_projs", "workbench", req_id, 422)
         sess["projs"] = projs
+    if "source_projs" in payload:
+        source_projs = int(payload.get("source_projs"))
+        if source_projs not in (1, 2):
+            raise ApiError("source_projs must be 1 or 2", "invalid_source_projs", "workbench", req_id, 422)
+        sess["source_projs"] = source_projs
 
     if "row_categories" in payload:
         row_categories = payload.get("row_categories")
@@ -3080,6 +3170,7 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
         "grid_rows": int(sess["grid_rows"]),
         "angles": int(sess["angles"]),
         "anims": [int(x) for x in sess["anims"]],
+        "source_projs": int(sess.get("source_projs", sess["projs"])),
         "projs": int(sess["projs"]),
         "cell_count": len(sess["cells"]),
         "source_boxes": len(sess.get("source_boxes", [])) if isinstance(sess.get("source_boxes"), list) else 0,

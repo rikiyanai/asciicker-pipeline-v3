@@ -39,6 +39,30 @@ body {
   margin-bottom: 14px;
 }
 
+.panel[data-panel-number] {
+  position: relative;
+  padding-top: 34px;
+}
+
+.panel[data-panel-number]::before {
+  content: attr(data-panel-number);
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid #4c5c7b;
+  background: #182131;
+  color: #b8c9e7;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
 .runtime-preflight-banner {
   border-color: #7a5a1f;
   background: linear-gradient(180deg, rgba(122, 90, 31, 0.28), rgba(21, 25, 34, 0.95));
@@ -915,7 +939,27 @@ label.inline {
   background: #0d1118;
   max-height: 200px;
   overflow: auto;
-  padding: 6px 8px;
+  padding: 28px 8px 6px;
+  position: relative;
+}
+
+.ws-frame-nav[data-panel-number]::before {
+  content: attr(data-panel-number) " " attr(data-panel-tag);
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid #4c5c7b;
+  background: #182131;
+  color: #b8c9e7;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-sizing: border-box;
+  pointer-events: none;
 }
 
 .ws-frame-nav h4 {

@@ -2073,8 +2073,7 @@
   }
 
   function recomputeFrameGeometry() {
-    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
-    const frameCols = Math.max(1, semanticFrames * Math.max(1, state.projs));
+    const frameCols = authoringFrameCols();
     const frameRows = Math.max(1, state.angles);
     const computedW = Math.max(1, Math.floor(state.gridCols / frameCols));
     const computedH = Math.max(1, Math.floor(state.gridRows / frameRows));
@@ -2496,6 +2495,18 @@
     return [...state.selectedCols].sort((a, b) => a - b);
   }
 
+  function authoringProjectionCount() {
+    return Math.max(1, Number(state.sourceProjs || 1));
+  }
+
+  function semanticFrameCount() {
+    return Math.max(1, state.anims.reduce((a, b) => a + b, 0));
+  }
+
+  function authoringFrameCols() {
+    return Math.max(1, semanticFrameCount() * authoringProjectionCount());
+  }
+
   function angleNameForIndex(i) {
     const idx = Math.max(0, Number(i || 0));
     if (state.angles === 8) {
@@ -2513,7 +2524,7 @@
   function semanticFrameLabel(row, col) {
     const info = frameColInfo(col);
     const angleName = angleNameForIndex(row);
-    return `A${row} ${angleName} F${info.frame}${state.projs > 1 ? ` P${info.proj}` : ""}`;
+    return `A${row} ${angleName} F${info.frame}${authoringProjectionCount() > 1 ? ` P${info.proj}` : ""}`;
   }
 
   function makeFrameCanvas(row, col, selected, rowSelected, groupSelected) {
@@ -2569,7 +2580,7 @@
     const label = document.createElement("div");
     label.className = "frame-label";
     label.textContent = semanticFrameLabel(row, col);
-    frame.title = `Angle ${row} (${angleNameForIndex(row)}), Frame ${frameColInfo(col).frame}${state.projs > 1 ? `, Proj ${frameColInfo(col).proj}` : ""}`;
+    frame.title = `Angle ${row} (${angleNameForIndex(row)}), Frame ${frameColInfo(col).frame}${authoringProjectionCount() > 1 ? `, Proj ${frameColInfo(col).proj}` : ""}`;
     frame.appendChild(canvas);
     if (dragHover && Number(dragHover.row) === Number(row) && Number(dragHover.col) === Number(col)) {
       const overlay = document.createElement("div");
@@ -2620,8 +2631,7 @@
   }
 
   function selectWholeRow(row) {
-    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
-    const frameCols = semanticFrames * Math.max(1, state.projs);
+    const frameCols = authoringFrameCols();
     state.selectedRow = row;
     state.selectedCols = new Set();
     for (let c = 0; c < frameCols; c++) state.selectedCols.add(c);
@@ -2656,8 +2666,7 @@
   function renderFrameGrid() {
     const panel = $("gridPanel");
     panel.innerHTML = "";
-    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
-    const frameCols = semanticFrames * Math.max(1, state.projs);
+    const frameCols = authoringFrameCols();
     updateGridPanelZoomUI();
     panel.style.gridTemplateColumns = `${gridPanelHeaderPx()}px repeat(${frameCols}, ${gridPanelTilePx()}px)`;
     for (let row = 0; row < state.angles; row++) {
@@ -2694,7 +2703,7 @@
   }
 
   function renderSession() {
-    const frameColsVal = (state.anims || []).reduce((a, b) => a + b, 0) * (state.projs || 1);
+    const frameColsVal = authoringFrameCols();
     const frameRowsVal = state.angles || 1;
     const summary = {
       session_id: state.sessionId,
@@ -2703,6 +2712,7 @@
       anims: state.anims,
       source_projs: state.sourceProjs,
       projs: state.projs,
+      semantic_frame_cols: semanticFrameCount(),
       grid_cols: state.gridCols,
       grid_rows: state.gridRows,
       cell_w: state.cellWChars,
@@ -2817,7 +2827,7 @@
   function renderPreviewFrame(row, frame) {
     const canvas = $("previewCanvas");
     const ctx = canvas.getContext("2d");
-    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
+    const semanticFrames = semanticFrameCount();
     const col = Math.min(Math.max(0, frame), semanticFrames - 1);
     const pixW = state.frameWChars;
     const pixH = state.frameHChars * 2;
@@ -2840,7 +2850,7 @@
   }
 
   function frameColInfo(col) {
-    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
+    const semanticFrames = semanticFrameCount();
     const proj = Math.floor(col / semanticFrames);
     const frame = col % semanticFrames;
     return { semanticFrames, proj, frame };
@@ -2880,8 +2890,8 @@
 
   function inspectorCurrentFrameCoord() {
     const row = Math.max(0, Math.min(state.angles - 1, Number(state.inspectorRow || 0)));
-    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
-    const maxCol = Math.max(0, semanticFrames * Math.max(1, state.projs) - 1);
+    const semanticFrames = semanticFrameCount();
+    const maxCol = Math.max(0, authoringFrameCols() - 1);
     const col = Math.max(0, Math.min(maxCol, Number(state.inspectorCol || 0)));
     return { row, col, semanticFrames, maxCol };
   }
@@ -3518,8 +3528,8 @@
     $("inspectorZoomValue").textContent = `${zoom}x`;
 
     const row = Math.max(0, Math.min(state.angles - 1, state.inspectorRow));
-    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
-    const maxCol = Math.max(0, semanticFrames * Math.max(1, state.projs) - 1);
+    const semanticFrames = semanticFrameCount();
+    const maxCol = Math.max(0, authoringFrameCols() - 1);
     const col = Math.max(0, Math.min(maxCol, state.inspectorCol));
 
     const pixW = state.frameWChars;
@@ -3589,7 +3599,7 @@
     const info = frameColInfo(col);
     $("cellInspectorInfo").textContent = [
       `row=${row} col=${col}`,
-      `angle=${row} proj=${info.proj} frame=${info.frame}/${Math.max(0, info.semanticFrames - 1)}`,
+      `angle=${row}${authoringProjectionCount() > 1 ? ` proj=${info.proj}` : ""} frame=${info.frame}/${Math.max(0, info.semanticFrames - 1)}`,
       `active_layer=${state.activeLayer} visible_layers=[${[...state.visibleLayers].sort((a, b) => a - b).join(",")}]`,
       `frame_chars=${state.frameWChars}x${state.frameHChars * 2}`,
       `tool=${state.inspectorTool} sel=${inspectorSelectionLabel()} glyph=${clampInspectorGlyphCode(state.inspectorGlyphCode)} fg=${rgbToHex(state.inspectorGlyphFgColor)} bg=${rgbToHex(state.inspectorGlyphBgColor)} half=${rgbToHex(state.inspectorPaintColor)} grid=${state.inspectorShowGrid ? 1 : 0} checker=${state.inspectorShowChecker ? 1 : 0}`,
@@ -3613,8 +3623,8 @@
     const cy = Math.floor(halfY / 2);
     if (cx < 0 || cy < 0 || cx >= state.frameWChars || cy >= state.frameHChars) return null;
     const row = Math.max(0, Math.min(state.angles - 1, Number(state.inspectorRow || 0)));
-    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
-    const maxCol = Math.max(0, semanticFrames * Math.max(1, state.projs) - 1);
+    const semanticFrames = semanticFrameCount();
+    const maxCol = Math.max(0, authoringFrameCols() - 1);
     const col = Math.max(0, Math.min(maxCol, Number(state.inspectorCol || 0)));
     return { row, col, cx, cy, half };
   }
@@ -3711,7 +3721,7 @@
     stopPreview();
     const fps = Math.max(1, Number($("fpsInput").value || 8));
     const row = Math.max(0, Math.min(state.angles - 1, Number($("previewAngle").value || 0)));
-    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
+    const semanticFrames = semanticFrameCount();
     state.previewTimer = setInterval(() => {
       renderPreviewFrame(row, state.previewFrameIdx % semanticFrames);
       state.previewFrameIdx += 1;
@@ -3724,7 +3734,7 @@
     const readOnly = !editableLayerActive();
     $("rowUpBtn").disabled = readOnly || !hasRow || state.selectedRow <= 0;
     $("rowDownBtn").disabled = readOnly || !hasRow || state.selectedRow >= state.angles - 1;
-    const maxCol = Math.max(0, state.anims.reduce((a, b) => a + b, 0) * state.projs - 1);
+    const maxCol = Math.max(0, authoringFrameCols() - 1);
     const minSel = hasSelection ? Math.min(...state.selectedCols) : 0;
     const maxSel = hasSelection ? Math.max(...state.selectedCols) : 0;
     $("colLeftBtn").disabled = readOnly || !hasSelection || minSel <= 0;
@@ -3772,6 +3782,7 @@
         layers: (state.layers && state.layers.length > 0) ? state.layers : undefined,
         angles: state.angles,
         anims: state.anims,
+        source_projs: state.sourceProjs,
         projs: state.projs,
         row_categories: state.rowCategories,
         frame_groups: state.frameGroups,
@@ -4608,6 +4619,20 @@
       state.sourceSelectedCut = null;
       const primary = sourceSelectionPrimaryBox() || hit;
       const handle = sourceHandleAtPoint(primary, pt);
+      if (mode === "select" && (!handle || handle === "move")) {
+        state.sourceDrag = {
+          type: "drag_source_selection_to_grid",
+          startClientX: e.clientX,
+          startClientY: e.clientY,
+          lastClientX: e.clientX,
+          lastClientY: e.clientY,
+          moved: false,
+        };
+        state.sourceDragHoverFrame = null;
+        renderSourceCanvas();
+        status("Drag selected source sprites to a grid frame cell", "ok");
+        return;
+      }
       pushHistory();
       state.sourceDrag = { type: "box_edit", boxId: Number(primary.id), handle: handle || "move", anchor: pt, original: { ...primary } };
       renderSourceCanvas();
@@ -5221,7 +5246,7 @@
   }
 
   function totalGridFrameCols() {
-    return Math.max(1, state.anims.reduce((a, b) => a + b, 0) * Math.max(1, state.projs));
+    return authoringFrameCols();
   }
 
   function addGridFrameSlot() {
@@ -5235,7 +5260,7 @@
     }
     const beforeDirty = !!state.sessionDirty;
     pushHistory();
-    const charColsPerSemanticFrame = Math.max(1, Number(state.frameWChars || 1) * Math.max(1, Number(state.projs || 1)));
+    const charColsPerSemanticFrame = Math.max(1, Number(state.frameWChars || 1) * Math.max(1, authoringProjectionCount()));
     if (!Array.isArray(state.anims) || !state.anims.length) state.anims = [1];
     else state.anims[state.anims.length - 1] = Math.max(1, Number(state.anims[state.anims.length - 1] || 1) + 1);
     const resized = resizeGridCharCanvas(Number(state.gridCols || 0) + charColsPerSemanticFrame, state.gridRows || 1);
@@ -5265,7 +5290,7 @@
     state.selectedRow = nextRow;
     renderFrameGrid();
     renderJitterInfo();
-    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
+    const semanticFrames = semanticFrameCount();
     const firstCol = Math.max(0, Math.min(totalGridFrameCols() - 1, selectedFrameColsSorted()[0] ?? 0));
     renderPreviewFrame(nextRow, Math.max(0, Math.min(semanticFrames - 1, firstCol % semanticFrames)));
     return true;
@@ -5579,7 +5604,7 @@
     }
     if (state.selectedCols.size === 0) return;
     const cols = [...state.selectedCols].sort((a, b) => a - b);
-    const maxCol = Math.max(0, state.anims.reduce((a, b) => a + b, 0) * state.projs - 1);
+    const maxCol = Math.max(0, authoringFrameCols() - 1);
     if (delta < 0 && cols[0] <= 0) return;
     if (delta > 0 && cols[cols.length - 1] >= maxCol) return;
     pushHistory();
@@ -5665,7 +5690,7 @@
     }
     renderFrameGrid();
     renderJitterInfo();
-    const semanticFrames = Math.max(1, state.anims.reduce((a, b) => a + b, 0));
+    const semanticFrames = semanticFrameCount();
     renderPreviewFrame(row, Math.max(0, Math.min(semanticFrames - 1, col % semanticFrames)));
     panWholeSheetToFrame(row, col);
   }
@@ -6841,7 +6866,10 @@
     $("sourceCanvas").addEventListener("mouseup", onSourceMouseUp);
     window.addEventListener("mouseup", onSourceMouseUp);
     $("srcCtxAddSprite").addEventListener("click", () => {
-      if (state.sourceContextTarget?.type === "draft") commitDraftToSource("manual");
+      const box = state.sourceContextTarget?.type === "draft"
+        ? commitDraftToSource("manual")
+        : null;
+      if (box) setSourceMode("row_select");
       hideSourceContextMenu();
     });
     $("srcCtxAddToRow").addEventListener("click", () => {
