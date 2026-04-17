@@ -157,6 +157,64 @@ stack after the semantic-frame-authoring change landed.
 
 ---
 
+## Fix Attempt — Headed Source-Panel / 9A Drag Coverage Expansion (2026-04-17)
+
+This entry records a verifier-only expansion for the source-panel / `9A`
+frame-navigation drag workflows after the headed-only guardrail landed.
+
+### What changed
+
+1. **The stale legacy source-panel workflow runner was corrected to use the visible source canvas.**
+   - `scripts/xp_fidelity_test/run_source_panel_workflow_test.mjs` now scrolls
+     `#sourceCanvas` into view before source click/drag/context-menu gestures.
+   - This fixes the headed runner mismatch where the source canvas sat below the
+     visible viewport and the first draw-box gesture never reached the live
+     canvas.
+
+2. **The dedicated source-to-grid runner now proves uploaded-PNG auto-detected drag, not just manual boxes.**
+   - `scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs` still proves:
+     - manual draw-box -> add-to-row sequence
+     - manual committed-box drag to `9A`
+   - It now also proves:
+     - clear manual boxes
+     - `Find Sprites` on uploaded PNG
+     - select one auto-detected source box
+     - switch to row-select
+     - drag that uploaded-PNG source box into `9A`
+
+### Headed proof results
+
+1. **Legacy source-panel workflow runner now passes headed.**
+   - Command:
+     - `node scripts/xp_fidelity_test/run_source_panel_workflow_test.mjs --headed --out-dir output/source_panel_headed_repro_v2`
+   - Result:
+     - `10/10` steps passed
+   - Report artifact:
+     - `output/source_panel_headed_repro_v2/report.json`
+
+2. **Expanded source-to-grid runner now passes headed with both manual and uploaded-PNG drag paths.**
+   - Command:
+     - `node scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs --headed --out-dir output/source_to_grid_workflow_headed_auto_png`
+   - Result:
+     - `19/19` steps passed
+     - includes `d1_drag_auto` from uploaded PNG `Find Sprites` output into `9A`
+   - Report artifact:
+     - `output/source_to_grid_workflow_headed_auto_png/report.json`
+
+### What this proves
+
+- Manual source-box insertion and drag into `9A` are headed-proven.
+- Uploaded-PNG `Find Sprites` single-box selection and drag into `9A` are also headed-proven.
+- The old failure state was no longer a product bug in this path; it was partly stale verifier behavior.
+
+### What this does NOT prove
+
+- It does NOT yet prove grouped multi-box row/column selection drag as a complete family.
+- It does NOT add `Delete Frame` semantics.
+- It does NOT resolve panel-topology / panel-ID canon issues.
+
+---
+
 ## Fix Attempt — Semantic Frame Authoring / Deferred Projection Model (2026-04-17)
 
 This entry records the current fix attempt for the source-to-frame authoring lane after the previous frame-nav edits exposed the wrong product model.

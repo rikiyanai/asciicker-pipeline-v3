@@ -75,11 +75,18 @@ function assert(condition, failFn, cls, message, extra = {}) {
   return true;
 }
 
+async function ensureSourceCanvasVisible(page) {
+  const canvas = page.locator('#sourceCanvas');
+  await canvas.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(100);
+}
+
 /**
  * Drag on the source canvas from (x1,y1) to (x2,y2).
  * Uses Playwright mouse API for precise control.
  */
 async function canvasDrag(page, x1, y1, x2, y2) {
+  await ensureSourceCanvasVisible(page);
   const box = await page.locator('#sourceCanvas').boundingBox();
   if (!box) throw new Error('sourceCanvas not found or not visible');
   const startX = box.x + x1;
@@ -97,6 +104,7 @@ async function canvasDrag(page, x1, y1, x2, y2) {
  * Right-click the source canvas at element-relative (x,y) to open context menu.
  */
 async function canvasRightClick(page, x, y) {
+  await ensureSourceCanvasVisible(page);
   await page.locator('#sourceCanvas').click({
     position: { x, y },
     button: 'right',
@@ -348,6 +356,7 @@ async function stepSelectSourceBox(page, fail, outDir) {
   // Switch to select mode first
   await page.click('#sourceSelectBtn');
   await page.waitForTimeout(200);
+  await ensureSourceCanvasVisible(page);
 
   // Click on the center of the first source box
   const box = pre.sourceBoxes[0];
@@ -373,6 +382,52 @@ async function stepSelectSourceBox(page, fail, outDir) {
   );
 
   return { step: 'd1_select_source_box', pass, pre, post, selectedBoxId, clickedBox: box };
+}
+
+async function stepClearSourceBoxes(page, fail, outDir) {
+  const pre = await captureState(page, 'pre_clear_source_boxes');
+
+  await page.click('#sourceSelectBtn');
+  await page.waitForTimeout(200);
+  await page.click('#deleteBoxBtn');
+  await page.waitForTimeout(250);
+  await page.click('#deleteBoxBtn');
+  await page.waitForTimeout(250);
+
+  const post = await captureState(page, 'post_clear_source_boxes');
+  await screenshot(page, outDir, 'step_clear_source_boxes');
+
+  const pass = assert(
+    post.extractedBoxes === 0,
+    fail,
+    'clear_source_boxes',
+    `Expected all source boxes cleared before Find Sprites phase, got ${post.extractedBoxes}`,
+    { pre_boxes: pre.extractedBoxes, post_boxes: post.extractedBoxes, post_selection: post.sourceSelection }
+  );
+
+  return { step: 'clear_source_boxes', pass, pre, post };
+}
+
+async function stepFindSprites(page, fail, outDir) {
+  const pre = await captureState(page, 'pre_find_sprites');
+
+  await page.click('#sourceSelectBtn');
+  await page.waitForTimeout(200);
+  await page.click('#extractBtn');
+  await page.waitForTimeout(700);
+
+  const post = await captureState(page, 'post_find_sprites');
+  await screenshot(page, outDir, 'step_find_sprites');
+
+  const pass = assert(
+    post.extractedBoxes > 0,
+    fail,
+    'find_sprites',
+    `Find Sprites should detect source boxes, got ${post.extractedBoxes}`,
+    { pre_boxes: pre.extractedBoxes, post_boxes: post.extractedBoxes, post_source_boxes: post.sourceBoxes }
+  );
+
+  return { step: 'find_sprites', pass, pre, post };
 }
 
 /**
@@ -666,8 +721,46 @@ async function main() {
     allPass = false;
   }
 
-  // Step 13: Source isolation invariant (covers both D2/C2 and D1 phases)
-  console.log('=== Step 13: Source isolation invariant ===');
+  // Step 13: Clear manual source boxes so the uploaded-PNG Find Sprites phase
+  // starts from auto-detected boxes, not the earlier manual draft/commit path.
+  console.log('=== Step 13: Clear manual source boxes ===');
+  steps.clear_source_boxes = await stepClearSourceBoxes(page, fail, outDir);
+  if (!steps.clear_source_boxes.pass) allPass = false;
+
+  // Step 14: Run Find Sprites against the uploaded PNG.
+  console.log('=== Step 14: Find Sprites on uploaded PNG ===');
+  steps.find_sprites = await stepFindSprites(page, fail, outDir);
+  if (!steps.find_sprites.pass) allPass = false;
+
+  // Step 15: Select one auto-detected source box.
+  console.log('=== Step 15: Select auto-detected source box ===');
+  steps.d1_select_auto = await stepSelectSourceBox(page, fail, outDir);
+  if (!steps.d1_select_auto.pass) allPass = false;
+
+  // Step 16: Switch the detected sprite to row-select mode.
+  console.log('=== Step 16: Switch auto-detected source box to row_select ===');
+  steps.d1_row_select_auto = await stepSwitchToRowSelect(page, fail, outDir);
+  if (!steps.d1_row_select_auto.pass) allPass = false;
+
+  // Step 17: Select a fresh target row for the uploaded-PNG drag proof.
+  console.log('=== Step 17: Select grid row 1 ===');
+  steps.grid_select_row_1 = await stepSelectGridRow(page, fail, outDir, 1);
+  if (!steps.grid_select_row_1.pass) allPass = false;
+
+  // Step 18: Drag the auto-detected source sprite into 9A frame navigation.
+  console.log('=== Step 18: Drag auto-detected source box to grid ===');
+  const autoSourceBox = steps.d1_select_auto.clickedBox;
+  if (autoSourceBox) {
+    steps.d1_drag_auto = await stepDragToGrid(page, fail, outDir, autoSourceBox, 0);
+    if (!steps.d1_drag_auto.pass) allPass = false;
+  } else {
+    fail('d1_drag_auto', 'No auto-detected source box available for uploaded-PNG drag proof');
+    steps.d1_drag_auto = { step: 'd1_drag_auto_to_grid', pass: false };
+    allPass = false;
+  }
+
+  // Step 19: Source isolation invariant (covers both D2/C2 and manual+auto D1 phases)
+  console.log('=== Step 19: Source isolation invariant ===');
   const finalState = await captureState(page, 'final');
   const isolationPass = checkSourceIsolationInvariant(preInsertState, finalState, fail);
   steps.source_isolation = { step: 'source_isolation_invariant', pass: isolationPass };
