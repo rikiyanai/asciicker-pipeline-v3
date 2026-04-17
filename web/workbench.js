@@ -7819,3 +7819,123 @@
   renderSourceCanvas();
   if (state.jobId) loadFromJob();
 })();
+
+// ── Workbench ID Overlay ─────────────────────────────────────────────────────
+// Shows the id= value of every button, input, select, textarea, canvas, and
+// iframe as a small fixed badge. Toggle with Alt+I or the "hide IDs" button.
+// Call window.rebuildWbIdOverlay() after dynamic content is added.
+(function wbIdOverlay() {
+  'use strict';
+
+  const SELECTORS = [
+    'button[id]',
+    'input[id]:not([type="hidden"])',
+    'select[id]',
+    'textarea[id]',
+    'canvas[id]',
+    'iframe[id]',
+  ].join(',');
+
+  const BADGE_BASE = [
+    'position:fixed',
+    'z-index:99999',
+    'pointer-events:none',
+    'font-size:8px',
+    'font-family:Consolas,monaco,monospace',
+    'font-weight:700',
+    'line-height:11px',
+    'padding:0 3px',
+    'white-space:nowrap',
+    'background:rgba(10,16,28,0.92)',
+    'color:#7ab4e0',
+    'border:1px solid #233345',
+    'box-sizing:border-box',
+  ].join(';');
+
+  const EXCLUDE = new Set(['wb-id-toggle-btn']);
+
+  let on = true;
+  let entries = [];
+  let raf = null;
+
+  function collect() {
+    entries.forEach(function(e) { e.b.remove(); });
+    entries = [];
+    var seen = new Set(EXCLUDE);
+    document.querySelectorAll(SELECTORS).forEach(function(el) {
+      if (!el.id || seen.has(el.id)) return;
+      seen.add(el.id);
+      var b = document.createElement('span');
+      b.style.cssText = 'display:none';
+      b.textContent = el.id;
+      document.body.appendChild(b);
+      entries.push({ el: el, b: b });
+    });
+  }
+
+  function layout() {
+    raf = null;
+    entries.forEach(function(e) {
+      var r = e.el.getBoundingClientRect();
+      if (!on || r.width === 0 || r.height === 0) {
+        e.b.style.display = 'none';
+      } else {
+        e.b.style.cssText = BADGE_BASE +
+          ';left:' + r.left + 'px' +
+          ';top:' + r.top + 'px';
+      }
+    });
+  }
+
+  function schedule() {
+    if (!raf) raf = requestAnimationFrame(layout);
+  }
+
+  function setOn(v) {
+    on = v;
+    schedule();
+    var btn = document.getElementById('wb-id-toggle-btn');
+    if (btn) btn.textContent = v ? 'hide IDs' : 'show IDs';
+  }
+
+  // Fixed toggle button (bottom-right corner)
+  var toggleBtn = document.createElement('button');
+  toggleBtn.id = 'wb-id-toggle-btn';
+  toggleBtn.textContent = 'hide IDs';
+  toggleBtn.style.cssText = [
+    'position:fixed',
+    'bottom:10px',
+    'right:10px',
+    'z-index:100000',
+    'font-size:9px',
+    'font-family:Consolas,monaco,monospace',
+    'font-weight:700',
+    'padding:2px 7px',
+    'background:#182131',
+    'border:1px solid #4c5c7b',
+    'color:#b8c9e7',
+    'cursor:pointer',
+    'border-radius:0',
+  ].join(';');
+  toggleBtn.addEventListener('click', function() { setOn(!on); });
+  document.body.appendChild(toggleBtn);
+
+  // Alt+I keyboard shortcut
+  document.addEventListener('keydown', function(e) {
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'i') {
+      e.preventDefault();
+      setOn(!on);
+    }
+  });
+
+  collect();
+  layout();
+
+  document.addEventListener('scroll', schedule, { passive: true, capture: true });
+  window.addEventListener('resize', schedule, { passive: true });
+
+  // Rebuild after dynamic content (e.g. bundle action tabs populated after Apply Template)
+  setTimeout(function() { collect(); layout(); }, 900);
+
+  window.rebuildWbIdOverlay = function() { collect(); layout(); };
+})();

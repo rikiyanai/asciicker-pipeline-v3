@@ -978,6 +978,31 @@ label.inline {
   background: transparent;
 }
 
+/* Sub-panel badge for frame-grid (e.g. 9B grid-panel) */
+.frame-grid[data-panel-tag] {
+  position: relative;
+  padding-top: 26px;
+}
+
+.frame-grid[data-panel-tag]::before {
+  content: attr(data-panel-number) " " attr(data-panel-tag);
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  padding: 0 6px;
+  height: 18px;
+  border: 1px solid #4c5c7b;
+  background: #182131;
+  color: #b8c9e7;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 1;
+}
+
 @media (max-width: 1100px) {
   .two-col {
     grid-template-columns: 1fr;
