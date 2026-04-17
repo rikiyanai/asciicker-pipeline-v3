@@ -15,6 +15,10 @@ def _upload(client, path: Path, prefix: str = ""):
         return client.post(f"{prefix}/api/upload", data={"file": (f, path.name)}, content_type="multipart/form-data")
 
 
+def _blank_cells(count: int):
+    return [{"idx": idx, "glyph": 0, "fg": [0, 0, 0], "bg": [255, 0, 255]} for idx in range(count)]
+
+
 def test_run_to_workbench_to_export(client):
     fixture = Path(__file__).parent / "fixtures" / "known_good" / "cat_sheet.png"
     up = _upload(client, fixture).get_json()
@@ -288,6 +292,135 @@ def test_workbench_browse_crud_endpoints(client):
     after_ids = {item["session_id"] for item in list_after.get_json()["sessions"]}
     assert duplicated["session_id"] not in after_ids
     assert session_a in after_ids
+
+
+def test_root_blank_session_defaults(client):
+    create_resp = client.post(
+        "/api/workbench/create-blank-session",
+        data=json.dumps({}),
+        content_type="application/json",
+    )
+    assert create_resp.status_code == 201
+    payload = create_resp.get_json()
+    assert payload["grid_cols"] == 126
+    assert payload["grid_rows"] == 80
+    assert payload["angles"] == 8
+    assert payload["anims"] == [9]
+    assert payload["source_projs"] == 1
+    assert payload["projs"] == 2
+    assert payload["layer_count"] == 4
+
+
+def test_root_blank_session_accepts_explicit_geometry(client):
+    create_resp = client.post(
+        "/api/workbench/create-blank-session",
+        data=json.dumps({
+            "blank_session": {
+                "angles": 4,
+                "anims": [3],
+                "source_projs": 2,
+                "cell_w": 6,
+                "cell_h": 8,
+            },
+        }),
+        content_type="application/json",
+    )
+    assert create_resp.status_code == 201
+    payload = create_resp.get_json()
+    assert payload["grid_cols"] == 36
+    assert payload["grid_rows"] == 32
+    assert payload["angles"] == 4
+    assert payload["anims"] == [3]
+    assert payload["source_projs"] == 2
+    assert payload["projs"] == 2
+
+
+def test_save_session_persists_explicit_geometry(client):
+    create_resp = client.post(
+        "/api/workbench/create-blank-session",
+        data=json.dumps({}),
+        content_type="application/json",
+    )
+    session_id = create_resp.get_json()["session_id"]
+    count = 36 * 32
+    save_resp = client.post(
+        "/api/workbench/save-session",
+        data=json.dumps({
+            "session_id": session_id,
+            "grid_cols": 36,
+            "grid_rows": 32,
+            "cell_w": 6,
+            "cell_h": 8,
+            "angles": 4,
+            "anims": [3],
+            "source_projs": 2,
+            "projs": 2,
+            "cells": _blank_cells(count),
+            "layers": [_blank_cells(count) for _ in range(4)],
+        }),
+        content_type="application/json",
+    )
+    assert save_resp.status_code == 200
+    saved = save_resp.get_json()
+    assert saved["grid_cols"] == 36
+    assert saved["grid_rows"] == 32
+    assert saved["angles"] == 4
+    assert saved["anims"] == [3]
+    assert saved["source_projs"] == 2
+    assert saved["projs"] == 2
+
+    load_resp = client.post(
+        "/api/workbench/load-session",
+        data=json.dumps({"session_id": session_id}),
+        content_type="application/json",
+    )
+    assert load_resp.status_code == 200
+    loaded = load_resp.get_json()
+    assert loaded["grid_cols"] == 36
+    assert loaded["grid_rows"] == 32
+    assert loaded["cell_w"] == 6
+    assert loaded["cell_h"] == 8
+    assert loaded["angles"] == 4
+    assert loaded["anims"] == [3]
+
+
+def test_run_pipeline_honors_explicit_target_geometry(client):
+    fixture = Path(__file__).parent / "fixtures" / "known_good" / "cat_sheet.png"
+    up = _upload(client, fixture).get_json()
+
+    run_resp = client.post(
+        "/api/run",
+        data=json.dumps({
+            "source_path": up["source_path"],
+            "name": "explicit_target_geometry",
+            "angles": 4,
+            "frames": "3",
+            "source_projs": 2,
+            "render_resolution": 12,
+            "target_cols": 72,
+            "target_rows": 32,
+            "native_compat": False,
+        }),
+        content_type="application/json",
+    )
+    assert run_resp.status_code == 200
+    job_id = run_resp.get_json()["job_id"]
+
+    load_resp = client.post(
+        "/api/workbench/load-from-job",
+        data=json.dumps({"job_id": job_id}),
+        content_type="application/json",
+    )
+    assert load_resp.status_code == 201
+    payload = load_resp.get_json()
+    assert payload["grid_cols"] == 72
+    assert payload["grid_rows"] == 32
+    assert payload["angles"] == 4
+    assert payload["anims"] == [3]
+    assert payload["source_projs"] == 2
+    assert payload["projs"] == 2
+    assert payload["cell_w"] == 12
+    assert payload["cell_h"] == 8
 
 
 def test_web_skin_payload_maps_four_angle_sessions_to_cardinal_native_rows(client, tmp_path: Path):

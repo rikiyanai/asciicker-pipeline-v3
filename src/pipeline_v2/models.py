@@ -53,6 +53,14 @@ class RunConfig:
             raise ApiError("bg_mode must be key_color|alpha|none", "invalid_bg_mode", "run", request_id, 422)
         if self.bg_tolerance < 0:
             raise ApiError("bg_tolerance must be >= 0", "invalid_bg_tolerance", "run", request_id, 422)
+        if (self.target_cols is None) != (self.target_rows is None):
+            raise ApiError(
+                "target_cols and target_rows must be provided together",
+                "invalid_target_geometry",
+                "run",
+                request_id,
+                422,
+            )
         if self.target_cols is not None and self.target_cols < 1:
             raise ApiError("target_cols must be >= 1", "invalid_target_cols", "run", request_id, 422)
         if self.target_rows is not None and self.target_rows < 1:

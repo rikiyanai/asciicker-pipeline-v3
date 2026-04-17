@@ -1368,7 +1368,7 @@ The live wrapper architecture is still misaligned in these exact ways after the
 | G7/G8/G9 now enforced at export boundary | `src/pipeline_v2/service.py` | G7–G12 all run inside `_build_quality_report()` which is called from `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`. RESOLVED by Steps 6–7. |
 | Agent quality contract implemented as `/api/workbench/validate-xp` | `src/pipeline_v2/app.py`, `src/pipeline_v2/service.py` | `POST /api/workbench/validate-xp` returns a PASS/WARN/FAIL report with per-slot coverage and gate results. The endpoint remains non-exporting, but now returns a predicted `xp_path`, `checksum`, `xp_size_bytes`, and `exported=false` for compatibility; callers that need a real file on disk must still use `/api/workbench/export-xp`. |
 | Agent session inspection is MCP-reachable | `scripts/workbench_mcp_server.py` | MCP now exposes `get_cell(session_id, x, y, layer=2)` for cell-level verification and `validate_session(session_id)` as a session-centric alias to `validate_xp(session_id)`. |
-| Upload/conversion helper still reintroduces geometry-first wrapper ownership | `web/workbench.html:89-98`, `web/workbench.js:6408-6429`, `web/workbench.js:6847-6852` | The three-day failed refactor was driven by treating the product as conversion-first. The current branch still exposes `Analyze`, `Angles`, `Frames CSV`, and `Source Projs` as visible browser controls and still posts them through `/api/run`, so Step 4's claimed removal of upload-panel geometry ownership is not true in the live tree. |
+| Classic conversion no longer reintroduces geometry-first wrapper ownership | `web/workbench.html`, `web/workbench.js`, `src/pipeline_v2/app.py`, `src/pipeline_v2/service.py`, `tests/test_workbench_flow.py` | The upload panel remains source-only, while classic root geometry now enters through `Session Ops` / `New XP` and the active session. `Use Auto-Plan` is advisory only. `wbRun()` now requires an active session and posts explicit target geometry (`target_cols` / `target_rows`) into `/api/run`, and the backend honors that exact non-native target grid. RESOLVED for the browser-owned geometry path; richer frame-nav row/cell editing is still a separate product gap. |
 | Template registry is the documented authoring authority, but the workbench client still fail-closes on `enabled_families` | `src/pipeline_v2/app.py:383-384`, `web/workbench.js:6465-6474` | The server still emits the legacy `enabled_families` compatibility alias and the client still hides actions when that array is absent. That reintroduces the exact authority split the canon says Step 11 was supposed to delete. |
 | Y9-2 HTTP API contract now exists | `src/pipeline_v2/app.py:317-325`, `src/pipeline_v2/app.py:562-587`, `src/pipeline_v2/service.py:3913-4027` | The server now exposes `GET /health`, `GET /pipeline/templates`, `POST /pipeline/run`, and `POST /pipeline/validate_xp`. The remaining Y9-2 gap is launcher/wizard wiring, not missing backend endpoints. |
 | Y9-2 wizard not wired as launcher sub-action | `Y9-2 scripts/launcher.py`, `Y9-2 scripts/pipeline/wizard/engine.py` | `WizardEngine` exists but has no `_execute_action` branch in `launcher.py`; `[3] ASSET PIPELINE` node is fully absent rather than showing as `[DEFERRED]`. Tracked as Y9-2 DESIGN OPEN B-13. |
@@ -1784,7 +1784,11 @@ From the current state, the corrected sequence is:
    - The earlier Step 4 reopen from the 2026-04-17 re-audit is now resolved in live code:
      - `BROWSE` is a live whole-sheet owner mode again, with click + `Tab` toggle and saved-session browse actions backed by the new `/api/workbench/browse/*` routes
      - the upload panel no longer exposes `wbAnalyze`, `wbAngles`, `wbFrames`, `wbSourceProjs`, or `wbRenderRes`
-     - `wbRun()` now derives its conversion plan from `/api/analyze` internally instead of letting the browser own geometry inputs
+     - classic direct conversion is now session-first:
+       - `Session Ops` is the front-door geometry creator for classic root sessions
+       - `Use Auto-Plan` copies `/api/analyze` suggestions into those fields as advice only
+       - `wbRun()` now requires an active session and sends the active session geometry (`angles`, `anims`, `source_projs`, `target_cols`, `target_rows`) into `/api/run`
+       - `/api/run` now honors explicit non-native target geometry so direct classic conversion populates the active session grid instead of re-deriving a fresh one from analyzer-owned render heuristics
    - Boundary-vs-product rule after this closeout:
      - Step 4 is no longer blocked by the deferred/reintroduced browser surfaces
      - Step 7 remains the separate public/workflow-grouping proof burden; do not reuse this Step 4 closeout as Step 7 acceptance proof
@@ -1814,7 +1818,7 @@ From the current state, the corrected sequence is:
       - `syncRootOwnerMirrorsFromDocument()` deleted on `2026-04-16` — render/debug read paths now consume whole-sheet snapshots, and the mid-load double-sync path is gone with it
    - Reopen correction from `2026-04-17` is now fixed on this branch:
       - the stronger claim that upload-panel geometry ownership and `wbAnalyze` were already deleted was false at re-audit time
-      - `b435ed5` now removes that surface and moves planning authority behind `wbRun()`
+      - `b435ed5` removes that surface, and the follow-through pass finishes the ownership move by making classic geometry explicit in `Session Ops` rather than hidden behind `wbRun()`
    - Completion pass landed on `2026-04-16`:
       - **FL-STEP4-02 fixed:** `_normalize_storage_id()` now preserves integer `0` instead of coercing it to an empty string.
       - **FL-STEP4-03 fixed:** `/api/workbench/create-blank-session` again accepts bare `{}` and explicit `blank_session` payloads for generic root sessions while retaining template-backed creation.
@@ -1836,10 +1840,12 @@ From the current state, the corrected sequence is:
         - undo restored the glyph to `0` and `canUndo` returned to `false`
    - Verification evidence for the reopened Step 4 blockers:
       - `python3 -m pytest tests/test_workbench_flow.py -k "browse_crud_endpoints or browse_delete_rejects_bundle_owned_session" -q` — PASS
+      - `python3 -m pytest tests/test_workbench_flow.py -k "root_blank_session_defaults or root_blank_session_accepts_explicit_geometry or save_session_persists_explicit_geometry or run_pipeline_honors_explicit_target_geometry or run_to_workbench_to_export" -q` — PASS
+      - `python3 -m pytest tests/test_base_path.py -k "create_blank_session_under_prefix or create_root_blank_session_under_prefix" -q` — PASS
       - `node --check web/workbench.js` — PASS
       - `node --experimental-vm-modules -e "const fs=require('fs'); const vm=require('vm'); new vm.SourceTextModule(fs.readFileSync('web/whole-sheet-init.js','utf8'));"` — PASS
       - `rg -n "Browse mode \\(deferred\\)|browseBtn\\.disabled|wbAnalyze|wbAngles|wbFrames|wbSourceProjs|wbRenderRes" web/workbench.html web/workbench.js web/whole-sheet-init.js` — no matches
-      - non-gating regression note: `python3 -m pytest tests/test_workbench_flow.py -k run_to_workbench_to_export -q` still fails on the pre-existing `native_compat_dims_gate` (`96x8` vs expected `126x80`); that failure is unrelated to this Step 4 closeout
+      - contract note: classic row-count/cell-size editing is still front-doored through `Session Ops`; frame-nav remains the geometry owner conceptually, but the branch has not yet replaced those classic root-geometry controls with pure frame-nav row/cell authoring
 
 5. **DESIGN — Section 2 input contract** — **IMPLEMENTED (2026-04-15)** — Section 2.3.1-2.3.4 now define:
    - source-layout modes (`uniform_grid` vs `explicit_regions`)

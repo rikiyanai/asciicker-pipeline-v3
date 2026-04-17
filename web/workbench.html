@@ -23,7 +23,7 @@
   <div id="firstStepsGuide" class="panel" data-panel-number="2 guide" style="border-left: 3px solid var(--accent);">
     <h3 style="margin-bottom:8px; color:var(--accent);">Getting Started</h3>
     <ol style="margin:0; padding-left:2ch; line-height:1.8; color:var(--fg);">
-      <li><strong>Choose a template</strong> &mdash; select <em>Player Skin (Idle Only)</em> or <em>Player Skin (Full Bundle)</em>, then click <strong>Apply Template</strong>.</li>
+      <li><strong>Create session geometry</strong> &mdash; either select a template and click <strong>Apply Template</strong>, or set classic geometry in <strong>Session Ops</strong> and click <strong>New XP</strong>.</li>
       <li><strong>Add your art</strong> &mdash; click <strong>Upload PNG</strong> to import a sprite sheet, or <strong>Import XP</strong> to load a REXPaint file.</li>
       <li><strong>Edit</strong> &mdash; click <strong>Focus Whole-Sheet</strong> or double-click any frame tile to open the XPEdit cell editor.</li>
       <li><strong>Test</strong> &mdash; click <strong>Test This Skin</strong> to preview your skin running in the game engine below.</li>
@@ -68,6 +68,33 @@
       <span style="margin-left:16px; border-left:1px solid #555; padding-left:16px;"></span>
       <input id="xpImportFile" type="file" accept=".xp">
       <button id="xpImportBtn" class="primary">Import XP</button>
+    </div>
+    <div id="classicGeometryWrap" class="row hidden" style="margin-top:8px; align-items:flex-end; flex-wrap:wrap; gap:10px;">
+      <div>
+        <label>Angles</label>
+        <input id="classicGeomAngles" type="number" min="1" max="35" value="8">
+      </div>
+      <div>
+        <label>Frames</label>
+        <input id="classicGeomFrames" value="9" placeholder="e.g. 3 or 1,8">
+      </div>
+      <div>
+        <label>Source Projs</label>
+        <select id="classicGeomSourceProjs">
+          <option value="1" selected>1</option>
+          <option value="2">2</option>
+        </select>
+      </div>
+      <div>
+        <label>Cell W</label>
+        <input id="classicGeomCellW" type="number" min="1" value="7">
+      </div>
+      <div>
+        <label>Cell H</label>
+        <input id="classicGeomCellH" type="number" min="1" value="10">
+      </div>
+      <button id="classicGeomAutoPlanBtn">Use Auto-Plan</button>
+      <div id="classicGeometryHint" class="small" style="min-width:260px;">Classic root geometry for New XP.</div>
     </div>
     <div id="wbStatus" class="small warn">No active session</div>
   </div>

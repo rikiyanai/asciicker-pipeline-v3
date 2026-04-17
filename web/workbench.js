@@ -3782,6 +3782,10 @@
         session_id: state.sessionId,
         cells: saveCells,
         layers: (state.layers && state.layers.length > 0) ? state.layers : undefined,
+        grid_cols: state.gridCols,
+        grid_rows: state.gridRows,
+        cell_w: state.cellWChars,
+        cell_h: state.cellHChars,
         angles: state.angles,
         anims: state.anims,
         source_projs: state.sourceProjs,
@@ -3830,6 +3834,7 @@
     renderMeta();
     renderJitterInfo();
     renderSession();
+    updateClassicGeometryControls();
     renderSourceCanvas();
     const row = state.selectedRow === null ? 0 : state.selectedRow;
     renderPreviewFrame(Math.max(0, Math.min(state.angles - 1, row)), 0);
@@ -3886,6 +3891,7 @@
       $("btnSave").disabled = false;
       $("btnExport").disabled = false;
       if (state.templateSetKey) $("btnNewXp").disabled = false;
+      updateClassicGeometryControls();
       // Use real layers from backend when available (B3: persisted layers are
       // the source of truth for uploaded XP sessions).
       if (Array.isArray(j.layers) && j.layers.length > 0) {
@@ -4115,10 +4121,6 @@
 
   async function newXp() {
     const templateKey = state.templateSetKey;
-    if (!templateKey) {
-      status("Apply a template first", "err");
-      return;
-    }
     if (state.sessionDirty && state.sessionId) {
       const saveRes = await saveSessionState("pre-new-xp", { wait_for_idle: true, timeout_ms: 15000 });
       if (!saveRes || !saveRes.ok) {
@@ -4126,6 +4128,18 @@
         status("New XP blocked: session save failed/timed out", "err");
         return;
       }
+    }
+    if (!templateKey) {
+      status("Creating new blank root XP...", "warn");
+      try {
+        const geometry = readClassicGeometryInputs();
+        const j = await createBlankRootSession(geometry);
+        await loadSession(j.session_id, { reason: "New blank root session..." });
+        status(`New XP ready: ${j.grid_cols}x${j.grid_rows}`, "ok");
+      } catch (e) {
+        status(`New XP failed: ${e}`, "err");
+      }
+      return;
     }
     const actionKey = state.activeActionKey || "idle";
     status(`Creating new blank XP for ${actionKey}...`, "warn");
@@ -6494,7 +6508,7 @@
     if ($("wbAutoPlan")) {
       $("wbAutoPlan").textContent = "Derived automatically from the uploaded PNG at convert time.";
     }
-    $("wbRun").disabled = false;
+    updateRunButtonState();
     status("Upload ready", "ok");
   }
 
@@ -6529,6 +6543,114 @@
     state.uploadAnalysis = j;
     setUploadPlanSummary(j);
     return j;
+  }
+
+  function formatAnimsCsv(anims) {
+    return (Array.isArray(anims) && anims.length ? anims : [1]).map((x) => Number(x)).join(",");
+  }
+
+  function deriveProjsForGeometry(angles, sourceProjs) {
+    const safeAngles = Math.max(1, Number(angles || 1));
+    const safeSourceProjs = Math.max(1, Number(sourceProjs || 1));
+    if (safeAngles <= 1 && safeSourceProjs !== 1) {
+      throw new Error("Source Projs must be 1 when Angles is 1.");
+    }
+    return safeAngles <= 1 ? 1 : (safeSourceProjs === 1 ? 2 : safeSourceProjs);
+  }
+
+  function readClassicGeometryInputs() {
+    const angles = Math.max(1, parseInt(String($("classicGeomAngles")?.value || "1"), 10));
+    const anims = String($("classicGeomFrames")?.value || "")
+      .split(",")
+      .map((x) => parseInt(x.trim(), 10))
+      .filter((x) => Number.isFinite(x) && x > 0);
+    if (!anims.length) throw new Error("Frames must be a comma-separated list of positive integers.");
+    const sourceProjs = Math.max(1, parseInt(String($("classicGeomSourceProjs")?.value || "1"), 10));
+    const cellW = Math.max(1, parseInt(String($("classicGeomCellW")?.value || "1"), 10));
+    const cellH = Math.max(1, parseInt(String($("classicGeomCellH")?.value || "1"), 10));
+    const projs = deriveProjsForGeometry(angles, sourceProjs);
+    const semanticFrames = anims.reduce((sum, len) => sum + len, 0);
+    return {
+      angles,
+      anims,
+      source_projs: sourceProjs,
+      projs,
+      cell_w: cellW,
+      cell_h: cellH,
+      grid_cols: semanticFrames * projs * cellW,
+      grid_rows: angles * cellH,
+    };
+  }
+
+  function setClassicGeometryInputs(geometry) {
+    if (!geometry) return;
+    if ($("classicGeomAngles")) $("classicGeomAngles").value = String(Math.max(1, Number(geometry.angles || 1)));
+    if ($("classicGeomFrames")) $("classicGeomFrames").value = formatAnimsCsv(geometry.anims || [1]);
+    if ($("classicGeomSourceProjs")) $("classicGeomSourceProjs").value = String(Math.max(1, Number(geometry.source_projs || 1)));
+    if ($("classicGeomCellW")) $("classicGeomCellW").value = String(Math.max(1, Number(geometry.cell_w || 1)));
+    if ($("classicGeomCellH")) $("classicGeomCellH").value = String(Math.max(1, Number(geometry.cell_h || 1)));
+    updateClassicGeometryHint();
+  }
+
+  function updateClassicGeometryHint() {
+    const hint = $("classicGeometryHint");
+    if (!hint) return;
+    try {
+      const geometry = readClassicGeometryInputs();
+      hint.textContent = `New XP will create ${geometry.grid_cols}x${geometry.grid_rows} (${geometry.angles} angle${geometry.angles === 1 ? "" : "s"} · frames ${formatAnimsCsv(geometry.anims)} · source projs ${geometry.source_projs} · cell ${geometry.cell_w}x${geometry.cell_h}).`;
+    } catch (e) {
+      hint.textContent = String(e);
+    }
+  }
+
+  async function applyClassicGeometryAutoPlan() {
+    if (!state.sourcePath) {
+      status("Upload a PNG first to use Auto Plan as a suggestion", "warn");
+      return;
+    }
+    try {
+      const plan = await ensureUploadAnalysis({ force: true });
+      setClassicGeometryInputs({
+        angles: Number(plan?.suggested_angles || 1),
+        anims: Array.isArray(plan?.suggested_frames) && plan.suggested_frames.length ? plan.suggested_frames : [1],
+        source_projs: Number(plan?.suggested_source_projs || 1),
+        cell_w: Number(plan?.suggested_cell_w || 1),
+        cell_h: Number(plan?.suggested_cell_h || 1),
+      });
+      status("Auto Plan copied into classic geometry fields", "ok");
+    } catch (e) {
+      status(`Auto Plan failed: ${e}`, "err");
+    }
+  }
+
+  function updateRunButtonState() {
+    const btn = $("wbRun");
+    if (!btn) return;
+    if (isBundleMode()) {
+      btn.disabled = !state.sourcePath;
+      return;
+    }
+    btn.disabled = !(state.sourcePath && state.sessionId);
+  }
+
+  function updateClassicGeometryControls() {
+    const wrap = $("classicGeometryWrap");
+    const genericClassic = !isBundleMode() && !state.templateSetKey;
+    if (wrap) wrap.classList.toggle("hidden", !genericClassic);
+    if (genericClassic && state.sessionId) {
+      setClassicGeometryInputs({
+        angles: state.angles,
+        anims: state.anims,
+        source_projs: state.sourceProjs,
+        cell_w: state.cellWChars,
+        cell_h: state.cellHChars,
+      });
+    } else if (genericClassic) {
+      updateClassicGeometryHint();
+    }
+    const newXpBtn = $("btnNewXp");
+    if (newXpBtn && genericClassic) newXpBtn.disabled = false;
+    updateRunButtonState();
   }
 
   // ── Bundle / Template helpers ──
@@ -6779,6 +6901,24 @@
     return j;
   }
 
+  async function createBlankRootSession(blankSession) {
+    const r = await fetch(bp("/api/workbench/create-blank-session"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blank_session: blankSession || {} }),
+    });
+    const j = await r.json();
+    $("sessionOut").textContent = JSON.stringify({
+      ...j,
+      cells: undefined,
+      cell_count: Array.isArray(j.cells) ? j.cells.length : 0,
+    }, null, 2);
+    if (!r.ok) {
+      throw new Error(j.error || "blank root session creation failed");
+    }
+    return j;
+  }
+
   function updateBundleUI() {
     const bundleStatus = $("bundleStatus");
     const templateStatus = $("templateStatus");
@@ -6806,11 +6946,14 @@
       if (bundleStatus) bundleStatus.classList.add("hidden");
       if (templateStatus) templateStatus.textContent = "Classic (single XP)";
       if (templateGuide) {
-        templateGuide.innerHTML = `Classic workflow: <strong>Apply Template</strong> to create a blank session, or <strong>Upload PNG</strong>/<strong>Import XP</strong> to populate one. Use <strong>Focus Whole-Sheet</strong> or double-click a frame tile to edit on the primary editor surface.`;
+        templateGuide.innerHTML = state.templateSetKey
+          ? `Classic workflow: <strong>Apply Template</strong> creates the authoring geometry. <strong>Upload PNG</strong> is source input only, and <strong>Convert to XP</strong> populates the active session geometry. Use <strong>Focus Whole-Sheet</strong> or double-click a frame tile to edit on the primary editor surface.`
+          : `Classic workflow: set root geometry in <strong>Session Ops</strong>, click <strong>New XP</strong>, then <strong>Upload PNG</strong> and <strong>Convert to XP</strong>. Auto Plan is advisory only; the active session owns geometry.`;
       }
       if (uploadLabel) uploadLabel.textContent = "Workbench Direct";
       if (quickBtn) quickBtn.textContent = "Test This Skin";
     }
+    updateClassicGeometryControls();
   }
 
   async function applyTemplate() {
@@ -6942,26 +7085,31 @@
       await wbRunBundleAction();
       return;
     }
-    status("Auto-planning conversion...", "warn");
-    let analysis;
+    if (!state.sessionId) {
+      $("wbRunOut").textContent = JSON.stringify({
+        error: "Create or load a session first. In classic mode, Session Ops owns geometry.",
+        stage: "missing_session_geometry",
+      }, null, 2);
+      status("Convert blocked: no active session geometry", "err");
+      return;
+    }
+    let analysis = null;
+    let analysisError = null;
     try {
       analysis = await ensureUploadAnalysis();
     } catch (e) {
-      $("wbRunOut").textContent = JSON.stringify({ error: String(e), stage: "auto_plan" }, null, 2);
-      status("Auto-plan failed", "err");
-      return;
+      analysisError = String(e);
     }
     status("Running conversion...", "warn");
     const payload = {
       source_path: state.sourcePath,
       name: $("wbName").value || "wb_sprite",
-      angles: parseInt(String(analysis?.suggested_angles || 1), 10),
-      frames: Array.isArray(analysis?.suggested_frames) && analysis.suggested_frames.length
-        ? analysis.suggested_frames.join(",")
-        : "1",
-      source_projs: parseInt(String(analysis?.suggested_source_projs || 1), 10),
-      render_resolution: parseInt(String(analysis?.suggested_render_resolution || 12), 10),
-      // Direct workbench converts must preserve authoring-friendly per-frame geometry.
+      angles: Math.max(1, Number(state.angles || 1)),
+      frames: formatAnimsCsv(state.anims),
+      source_projs: Math.max(1, Number(state.sourceProjs || 1)),
+      render_resolution: Math.max(1, Number(state.cellWChars || state.cellHChars || 1)),
+      target_cols: Math.max(1, Number(state.gridCols || 1)),
+      target_rows: Math.max(1, Number(state.gridRows || 1)),
       native_compat: false,
     };
     const r = await fetch(bp("/api/run"), {
@@ -6970,7 +7118,23 @@
       body: JSON.stringify(payload),
     });
     const j = await r.json();
-    $("wbRunOut").textContent = JSON.stringify({ auto_plan: analysis, run: j }, null, 2);
+    $("wbRunOut").textContent = JSON.stringify({
+      geometry_source: "active_session",
+      active_session: {
+        session_id: state.sessionId,
+        grid_cols: state.gridCols,
+        grid_rows: state.gridRows,
+        angles: state.angles,
+        anims: state.anims,
+        source_projs: state.sourceProjs,
+        projs: state.projs,
+        cell_w: state.cellWChars,
+        cell_h: state.cellHChars,
+      },
+      auto_plan: analysis,
+      auto_plan_error: analysisError,
+      run: j,
+    }, null, 2);
     if (!r.ok) {
       status("Run failed", "err");
       return;
@@ -7057,6 +7221,11 @@
     $("templateApplyBtn")?.addEventListener("click", applyTemplate);
     $("wbUpload").addEventListener("click", wbUpload);
     $("wbRun").addEventListener("click", wbRun);
+    $("classicGeomAutoPlanBtn")?.addEventListener("click", applyClassicGeometryAutoPlan);
+    ["classicGeomAngles", "classicGeomFrames", "classicGeomSourceProjs", "classicGeomCellW", "classicGeomCellH"].forEach((id) => {
+      $(id)?.addEventListener("input", updateClassicGeometryHint);
+      $(id)?.addEventListener("change", updateClassicGeometryHint);
+    });
     $("wbFile").addEventListener("change", () => {
       const f = $("wbFile").files[0];
       if (!f) return;
@@ -8088,6 +8257,7 @@
   fetchRuntimePreflight().catch((_e) => {});
   updateSourceCanvasZoomUI();
   updateGridPanelZoomUI();
+  updateClassicGeometryControls();
   renderSourceCanvas();
   if (state.jobId) loadFromJob();
 })();

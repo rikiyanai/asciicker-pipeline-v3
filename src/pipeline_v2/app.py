@@ -494,6 +494,8 @@ def create_app() -> Flask:
                 bg_mode=str(payload.get("bg_mode", "key_color")),
                 bg_tolerance=int(payload.get("bg_tolerance", 8)),
                 native_compat=_as_bool(payload.get("native_compat"), default=True),
+                target_cols=(int(payload.get("target_cols")) if payload.get("target_cols") is not None else None),
+                target_rows=(int(payload.get("target_rows")) if payload.get("target_rows") is not None else None),
             )
             return jsonify(run_pipeline(cfg, req_id)), 200
         except ApiError as e:
@@ -590,11 +592,12 @@ def create_app() -> Flask:
             payload = request.get_json(silent=True) or {}
             template_set_key = str(payload.get("template_set_key", "")).strip()
             action_key = str(payload.get("action_key", "")).strip()
-            if not template_set_key:
-                raise ApiError("template_set_key is required", "missing_template_set_key", "workbench", req_id, 400)
-            if not action_key:
-                raise ApiError("action_key is required", "missing_action_key", "workbench", req_id, 400)
-            return jsonify(workbench_create_blank_session(template_set_key, action_key, req_id)), 201
+            blank_session = payload.get("blank_session")
+            if template_set_key:
+                if not action_key:
+                    raise ApiError("action_key is required", "missing_action_key", "workbench", req_id, 400)
+                return jsonify(workbench_create_blank_session(template_set_key, action_key, None, req_id)), 201
+            return jsonify(workbench_create_blank_session("", "", blank_session, req_id)), 201
         except ApiError as e:
             return _err(e)
 

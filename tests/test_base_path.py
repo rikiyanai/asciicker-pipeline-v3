@@ -305,6 +305,19 @@ class TestPrefixedWorkflowSmoke:
         j = r.get_json()
         assert "session_id" in j
 
+    def test_create_root_blank_session_under_prefix(self):
+        r = self.client.post(
+            "/xpedit/api/workbench/create-blank-session",
+            json={},
+            content_type="application/json",
+        )
+        assert r.status_code == 201
+        j = r.get_json()
+        assert j["grid_cols"] == 126
+        assert j["grid_rows"] == 80
+        assert j["angles"] == 8
+        assert j["anims"] == [9]
+
     def test_save_and_export_under_prefix(self):
         # Create session
         r = self.client.post(

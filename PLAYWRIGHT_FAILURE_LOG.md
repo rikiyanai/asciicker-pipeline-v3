@@ -631,10 +631,10 @@ This pass re-audited the live browser surface against the current canon and dele
 
 2. **The workbench Load Source panel no longer owns layout geometry.**
    - Evidence: `web/workbench.html` no longer exposes `wbAngles`, `wbFrames`, or `wbSourceProjs`.
-   - Evidence: `web/workbench.js::wbRun()` now materializes geometry only from canonical `source_manifest` layout or the active root-session/template geometry.
+   - Evidence: `web/workbench.js::wbRun()` now requires an active session and materializes geometry from that session or the active template-backed session, not from browser-owned upload fields.
 
 3. **The deleted `wbAnalyze` owner is gone from the live browser and proof surface.**
-   - Evidence: `web/workbench.html` has no `wbAnalyze`, `wbRun` is the visible `Apply Source` action, and browser harnesses/scripts were updated from `Upload → Analyze → Convert` to template-backed `Load Source → Apply Source`.
+   - Evidence: `web/workbench.html` has no `wbAnalyze`, `wbRun` is the visible `Convert to XP` action, and browser harnesses/scripts were updated away from the old `Upload → Analyze → Convert` split.
 
 4. **Source preview loading no longer blocks upload or session activation.**
    - Evidence: `web/workbench.js::loadSourceImageFromServer()` / `previewLocalSourceImage()` now fail open on timeout, and upload/session-manifest paths no longer await preview image fetch before enabling the next authoritative action.
@@ -8100,8 +8100,21 @@ the 2026-04-17 canon re-audit.
      - `wbFrames`
      - `wbSourceProjs`
      - `wbRenderRes`
-   - `wbRun()` now calls `/api/analyze` internally and passes the derived plan
-     straight into `/api/run`.
+   - The follow-through ownership pass on this branch then moved classic
+     geometry creation into `Session Ops` instead of leaving it implicit behind
+     `Convert to XP`:
+     - `/api/workbench/create-blank-session` again accepts both bare `{}`
+       and explicit `blank_session` geometry payloads for classic root sessions
+     - classic `Session Ops` now exposes `Angles`, `Frames`, `Source Projs`,
+       `Cell W`, and `Cell H` for `New XP`
+     - `Use Auto-Plan` copies `/api/analyze` suggestions into those fields, but
+       does not run conversion or silently own the session geometry
+     - classic `wbRun()` now hard-blocks without an active session and posts
+       the active session geometry (`angles`, `anims`, `source_projs`,
+       `target_cols`, `target_rows`) into `/api/run`
+     - `/api/run` now honors explicit non-native target geometry, so direct
+       classic conversion populates the active session grid instead of deriving
+       a fresh one from analyzer-only render heuristics
    - The visible upload surface is now:
      - `Upload PNG`
      - `Convert to XP`
@@ -8123,10 +8136,19 @@ the 2026-04-17 canon re-audit.
    - `rg -n "Browse mode \\(deferred\\)|browseBtn\\.disabled|wbAnalyze|wbAngles|wbFrames|wbSourceProjs|wbRenderRes" web/workbench.html web/workbench.js web/whole-sheet-init.js`
    - Result: no matches
 
+4. **Classic root-session geometry and explicit target-grid runs are covered by
+   focused tests.**
+   - `python3 -m pytest tests/test_workbench_flow.py -k "root_blank_session_defaults or root_blank_session_accepts_explicit_geometry or save_session_persists_explicit_geometry or run_pipeline_honors_explicit_target_geometry or browse_crud_endpoints or web_skin_payload_maps_four_angle_sessions_to_cardinal_native_rows or run_to_workbench_to_export" -q`
+   - Result: `8 passed`
+   - `python3 -m pytest tests/test_base_path.py -k "create_blank_session_under_prefix or create_root_blank_session_under_prefix" -q`
+   - Result: `2 passed`
+
 ### What this does prove
 
 - The specific Step 4 blockers that reopened the step in the 2026-04-17 audit
   are now removed from live code.
+- Classic direct conversion is now session-first: auto-plan is advisory, while
+  `Session Ops` + the active session own geometry.
 - Step 7 is now the next product-proof burden again, rather than Step 4 still
   being blocked by a deferred browse button or browser-owned geometry fields.
 
@@ -8135,9 +8157,9 @@ the 2026-04-17 canon re-audit.
 - It does NOT prove Step 7 public/local grouping parity.
 - It does NOT resolve the still-open `enabled_families` authority split from
   Step 11.
-- It does NOT resolve the unrelated export regression where
-  `tests/test_workbench_flow.py -k run_to_workbench_to_export -q` still fails on
-  `native_compat_dims_gate` (`96x8` vs expected `126x80`).
+- It does NOT prove that classic row-count/cell-size editing is complete inside
+  frame-nav itself; the current branch still uses `Session Ops` as the
+  front-door root-geometry creator for classic mode.
 
 ---
 

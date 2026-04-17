@@ -50,6 +50,15 @@ NATIVE_COLS = 126
 NATIVE_ROWS = 80
 NATIVE_ANGLES = 8
 NATIVE_CELL_H = 10  # rows per angle block (80 / 8)
+DEFAULT_ROOT_BLANK_SESSION = {
+    "angles": 8,
+    "anims": [9],
+    "source_projs": 1,
+    "projs": 2,
+    "cell_w": 7,
+    "cell_h": 10,
+    "family": "player",
+}
 WORKBENCH_VERIFY_DIR = ROOT / "output" / "workbench_verify"
 WORKBENCH_TERMPP_DIR = ROOT / "output" / "termpp_skin_runs"
 WORKBENCH_STREAM_DIR = ROOT / "output" / "termpp_stream"
@@ -1163,7 +1172,7 @@ def create_bundle(template_set_key: str, req_id: str) -> dict[str, Any]:
     for act_key, act_spec in ts["actions"].items():
         family = str(act_spec.get("family", "")).strip()
         if family in ENABLED_FAMILIES:
-            blank = workbench_create_blank_session(template_set_key, act_key, req_id)
+            blank = workbench_create_blank_session(template_set_key, act_key, None, req_id)
             actions[act_key] = BundleActionState(
                 action_key=act_key,
                 session_id=str(blank["session_id"]),
@@ -1909,10 +1918,18 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
             bg_rgb = _estimate_bg_rgb(im)
             signal_mode = _infer_signal_mode(im)
 
+            explicit_non_native_target = (
+                (not cfg.native_compat)
+                and cfg.target_cols is not None
+                and cfg.target_rows is not None
+            )
             # Determine target dims early — needed for both normal path and fallback.
             if cfg.native_compat:
                 eff_cols: int = cfg.target_cols if cfg.target_cols is not None else NATIVE_COLS
                 eff_rows: int = cfg.target_rows if cfg.target_rows is not None else NATIVE_ROWS
+            elif explicit_non_native_target:
+                eff_cols = int(cfg.target_cols or 0)
+                eff_rows = int(cfg.target_rows or 0)
             else:
                 eff_cols = 0
                 eff_rows = 0
@@ -1920,12 +1937,20 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
             # Geometry validation: set use_fallback instead of raising so any
             # valid image always produces output (dumb convert + upper-left placement).
             use_fallback = src_w < source_frame_cols or src_h < cfg.angles
+            if explicit_non_native_target and use_fallback:
+                raise ApiError(
+                    f"explicit target geometry requires at least {source_frame_cols} source columns and {cfg.angles} source rows; got {src_w}x{src_h}",
+                    "invalid_target_geometry",
+                    "run",
+                    req_id,
+                    422,
+                )
 
             if not use_fallback:
                 frame_px_w = max(1, src_w // source_frame_cols)
                 angle_px_h = max(1, src_h // cfg.angles)
                 aspect = frame_px_w / max(1, angle_px_h)
-                if not cfg.native_compat and (aspect < 0.35 or aspect > 1.2):
+                if not cfg.native_compat and not explicit_non_native_target and (aspect < 0.35 or aspect > 1.2):
                     use_fallback = True
                 if not use_fallback and cfg.native_compat:
                     cell_h_chars = eff_rows // max(1, cfg.angles)
@@ -1935,6 +1960,34 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
                         use_fallback = True
                     elif cfg.angles != NATIVE_ANGLES:
                         use_fallback = True
+                elif not use_fallback and explicit_non_native_target:
+                    total_tile_cols = semantic_frames * cfg.projs
+                    if eff_rows % max(1, cfg.angles) != 0:
+                        raise ApiError(
+                            f"target_rows {eff_rows} must be divisible by angles {cfg.angles}",
+                            "invalid_target_geometry",
+                            "run",
+                            req_id,
+                            422,
+                        )
+                    if eff_cols % max(1, total_tile_cols) != 0:
+                        raise ApiError(
+                            f"target_cols {eff_cols} must be divisible by frame columns {total_tile_cols}",
+                            "invalid_target_geometry",
+                            "run",
+                            req_id,
+                            422,
+                        )
+                    cell_h_chars = eff_rows // max(1, cfg.angles)
+                    cell_w_chars = eff_cols // max(1, total_tile_cols)
+                    if cell_w_chars < 1 or cell_h_chars < 1:
+                        raise ApiError(
+                            "target geometry resolves to zero-sized cells",
+                            "invalid_target_geometry",
+                            "run",
+                            req_id,
+                            422,
+                        )
                 elif not use_fallback:
                     cell_w_chars = max(1, int(math.ceil(frame_px_w / max(1, cfg.render_resolution))))
                     cell_h_chars = max(1, int(math.ceil(angle_px_h / max(1, cfg.render_resolution))))
@@ -2211,6 +2264,155 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _wire_layers(layers: list[list[Cell]]) -> list[list[dict[str, Any]]]:
+    return [
+        [
+            {"idx": idx, "glyph": int(glyph), "fg": list(fg), "bg": list(bg)}
+            for idx, (glyph, fg, bg) in enumerate(layer)
+        ]
+        for layer in layers
+    ]
+
+
+def _coerce_projection_geometry(
+    *,
+    angles: int,
+    source_projs: int,
+    projs: int | None,
+    req_id: str,
+    stage: str,
+) -> tuple[int, int]:
+    if source_projs not in (1, 2):
+        raise ApiError("source_projs must be 1 or 2", "invalid_source_projs", stage, req_id, 422)
+    if angles <= 1 and source_projs != 1:
+        raise ApiError(
+            "source_projs must be 1 when angles <= 1",
+            "invalid_source_projs",
+            stage,
+            req_id,
+            422,
+        )
+    resolved_projs = (1 if angles <= 1 else (2 if source_projs == 1 else source_projs)) if projs is None else int(projs)
+    if resolved_projs not in (1, 2):
+        raise ApiError("projs must be 1 or 2", "invalid_projs", stage, req_id, 422)
+    if resolved_projs < source_projs:
+        raise ApiError("projs must be >= source_projs", "invalid_projs", stage, req_id, 422)
+    if source_projs < resolved_projs and not (source_projs == 1 and resolved_projs == 2):
+        raise ApiError(
+            "unsupported source/export projection expansion",
+            "invalid_projs",
+            stage,
+            req_id,
+            422,
+        )
+    return source_projs, resolved_projs
+
+
+def _derive_session_grid_geometry(
+    *,
+    angles: int,
+    anims: list[int],
+    projs: int,
+    cell_w: int,
+    cell_h: int,
+    req_id: str,
+    stage: str,
+) -> tuple[int, int]:
+    semantic_frames = sum(anims)
+    if angles < 1:
+        raise ApiError("angles must be >= 1", "invalid_angles", stage, req_id, 422)
+    if semantic_frames < 1 or any(int(x) < 1 for x in anims):
+        raise ApiError("anims must be non-empty positive integers", "invalid_anims", stage, req_id, 422)
+    if cell_w < 1 or cell_h < 1:
+        raise ApiError("cell_w/cell_h must be >= 1", "invalid_geometry", stage, req_id, 422)
+    return semantic_frames * projs * cell_w, angles * cell_h
+
+
+def _build_root_metadata_layer(cols: int, rows: int, angles: int, anims: list[int]) -> list[Cell]:
+    layer = [_transparent_cell() for _ in range(cols * rows)]
+    if cols <= 0 or rows <= 0:
+        return layer
+    meta_fg = (255, 255, 255)
+    meta_bg = (0, 0, 0)
+    layer[0] = (_digit_to_glyph(angles), meta_fg, meta_bg)
+    for idx, anim in enumerate(anims[: max(0, cols - 1)], start=1):
+        layer[idx] = (_digit_to_glyph(int(anim)), meta_fg, meta_bg)
+    return layer
+
+
+def _build_root_blank_layers(cols: int, rows: int, angles: int, anims: list[int]) -> list[list[Cell]]:
+    blank = [_transparent_cell() for _ in range(cols * rows)]
+    return [
+        _build_root_metadata_layer(cols, rows, angles, anims),
+        list(blank),
+        list(blank),
+        list(blank),
+    ]
+
+
+def _blank_session_spec(blank_session: Any, req_id: str) -> dict[str, Any]:
+    payload = blank_session if isinstance(blank_session, dict) else {}
+    default = DEFAULT_ROOT_BLANK_SESSION
+    raw_anims = payload.get("anims", default["anims"])
+    if not isinstance(raw_anims, list) or not raw_anims:
+        raise ApiError("blank_session.anims must be a non-empty list", "invalid_anims", "workbench", req_id, 422)
+    anims = [int(x) for x in raw_anims]
+    if any(x < 1 for x in anims):
+        raise ApiError("blank_session.anims must be >= 1", "invalid_anims", "workbench", req_id, 422)
+
+    angles = int(payload.get("angles", default["angles"]))
+    cell_w = int(payload.get("cell_w", default["cell_w"]))
+    cell_h = int(payload.get("cell_h", default["cell_h"]))
+    source_projs, projs = _coerce_projection_geometry(
+        angles=angles,
+        source_projs=int(payload.get("source_projs", default["source_projs"])),
+        projs=payload.get("projs", default["projs"]),
+        req_id=req_id,
+        stage="workbench",
+    )
+    grid_cols, grid_rows = _derive_session_grid_geometry(
+        angles=angles,
+        anims=anims,
+        projs=projs,
+        cell_w=cell_w,
+        cell_h=cell_h,
+        req_id=req_id,
+        stage="workbench",
+    )
+    supplied_cols = payload.get("grid_cols")
+    supplied_rows = payload.get("grid_rows")
+    if supplied_cols is not None and int(supplied_cols) != grid_cols:
+        raise ApiError(
+            f"blank_session.grid_cols mismatch: got {int(supplied_cols)}, expected {grid_cols}",
+            "invalid_geometry",
+            "workbench",
+            req_id,
+            422,
+        )
+    if supplied_rows is not None and int(supplied_rows) != grid_rows:
+        raise ApiError(
+            f"blank_session.grid_rows mismatch: got {int(supplied_rows)}, expected {grid_rows}",
+            "invalid_geometry",
+            "workbench",
+            req_id,
+            422,
+        )
+    family = str(payload.get("family", default["family"])).strip() or str(default["family"])
+    if family not in ("player", "attack", "plydie"):
+        raise ApiError(f"unknown family: {family}", "invalid_family", "workbench", req_id, 422)
+    return {
+        "angles": angles,
+        "anims": anims,
+        "source_projs": source_projs,
+        "projs": projs,
+        "cell_w": cell_w,
+        "cell_h": cell_h,
+        "grid_cols": grid_cols,
+        "grid_rows": grid_rows,
+        "family": family,
+    }
+
+
 def _resample_frame_matrix(
     src_matrix: list[list[Cell]],
     dst_w: int,
@@ -2424,7 +2626,41 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
     return _session_payload(sess_dict)
 
 
-def workbench_create_blank_session(template_set_key: str, action_key: str, req_id: str) -> dict[str, Any]:
+def workbench_create_blank_session(
+    template_set_key: str,
+    action_key: str,
+    blank_session: dict[str, Any] | None,
+    req_id: str,
+) -> dict[str, Any]:
+    if not template_set_key:
+        spec = _blank_session_spec(blank_session, req_id)
+        cols = int(spec["grid_cols"])
+        rows = int(spec["grid_rows"])
+        angles = int(spec["angles"])
+        anims = [int(x) for x in spec["anims"]]
+        projs = int(spec["projs"])
+        wire_layers = _wire_layers(_build_root_blank_layers(cols, rows, angles, anims))
+        cells = list(wire_layers[2] if len(wire_layers) > 2 else wire_layers[0])
+        session_id = str(uuid.uuid4())
+        sess = WorkbenchSession(
+            session_id=session_id,
+            job_id="",
+            angles=angles,
+            anims=anims,
+            projs=projs,
+            cell_w=int(spec["cell_w"]),
+            cell_h=int(spec["cell_h"]),
+            grid_cols=cols,
+            grid_rows=rows,
+            cells=cells,
+            layers=wire_layers,
+        )
+        sess_dict = sess.to_dict()
+        sess_dict["family"] = str(spec["family"])
+        sess_dict["source_projs"] = int(spec["source_projs"])
+        save_json(_session_path(session_id), sess_dict)
+        return _session_payload(sess_dict)
+
     reg = load_template_registry()
     ts = reg.get("template_sets", {}).get(template_set_key)
     if ts is None:
@@ -2463,12 +2699,7 @@ def workbench_create_blank_session(template_set_key: str, action_key: str, req_i
         stage="workbench",
         req_id=req_id,
     )
-    wire_layers: list[list[dict[str, Any]]] = []
-    for layer in layers:
-        wire_layers.append([
-            {"idx": idx, "glyph": int(glyph), "fg": list(fg), "bg": list(bg)}
-            for idx, (glyph, fg, bg) in enumerate(layer)
-        ])
+    wire_layers = _wire_layers(layers)
     cells = list(wire_layers[2] if len(wire_layers) > 2 else wire_layers[0])
     session_id = str(uuid.uuid4())
     sess = WorkbenchSession(
@@ -3316,10 +3547,67 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
     if not p.exists():
         raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
     sess = load_json(p)
+    next_anims = [int(x) for x in sess.get("anims", [1])]
+    next_angles = int(sess.get("angles", 1))
+    next_source_projs = int(sess.get("source_projs", sess.get("projs", 1)))
+    next_projs = int(sess.get("projs", 1))
+    next_cell_w = int(sess.get("cell_w", 1))
+    next_cell_h = int(sess.get("cell_h", 1))
 
-    cols = int(sess["grid_cols"])
-    rows = int(sess["grid_rows"])
-    expected_cells = cols * rows
+    if "anims" in payload:
+        raw_anims = payload.get("anims")
+        if not isinstance(raw_anims, list) or not raw_anims:
+            raise ApiError("anims must be non-empty list", "invalid_anims", "workbench", req_id, 422)
+        next_anims = [int(x) for x in raw_anims]
+        if any(x < 1 for x in next_anims):
+            raise ApiError("anims must be >=1", "invalid_anims", "workbench", req_id, 422)
+    if "angles" in payload:
+        next_angles = int(payload.get("angles"))
+        if next_angles < 1:
+            raise ApiError("angles must be >=1", "invalid_angles", "workbench", req_id, 422)
+    if "source_projs" in payload:
+        next_source_projs = int(payload.get("source_projs"))
+    if "projs" in payload:
+        next_projs = int(payload.get("projs"))
+    next_source_projs, next_projs = _coerce_projection_geometry(
+        angles=next_angles,
+        source_projs=next_source_projs,
+        projs=next_projs,
+        req_id=req_id,
+        stage="workbench",
+    )
+    if "cell_w" in payload:
+        next_cell_w = int(payload.get("cell_w"))
+    if "cell_h" in payload:
+        next_cell_h = int(payload.get("cell_h"))
+    derived_cols, derived_rows = _derive_session_grid_geometry(
+        angles=next_angles,
+        anims=next_anims,
+        projs=next_projs,
+        cell_w=next_cell_w,
+        cell_h=next_cell_h,
+        req_id=req_id,
+        stage="workbench",
+    )
+    next_cols = int(payload.get("grid_cols", sess["grid_cols"]))
+    next_rows = int(payload.get("grid_rows", sess["grid_rows"]))
+    if next_cols != derived_cols or next_rows != derived_rows:
+        raise ApiError(
+            f"session geometry mismatch: grid={next_cols}x{next_rows}, expected {derived_cols}x{derived_rows}",
+            "session_geometry_invalid",
+            "workbench",
+            req_id,
+            422,
+        )
+    expected_cells = next_cols * next_rows
+    sess["grid_cols"] = next_cols
+    sess["grid_rows"] = next_rows
+    sess["cell_w"] = next_cell_w
+    sess["cell_h"] = next_cell_h
+    sess["angles"] = next_angles
+    sess["anims"] = next_anims
+    sess["source_projs"] = next_source_projs
+    sess["projs"] = next_projs
 
     raw_cells = payload.get("cells")
     if raw_cells is not None:
@@ -3373,30 +3661,6 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
                 coerced_layer.append({"idx": idx, "glyph": glyph, "fg": fg, "bg": bg})
             coerced_layers.append(coerced_layer)
         sess["layers"] = coerced_layers
-
-    if "anims" in payload:
-        raw_anims = payload.get("anims")
-        if not isinstance(raw_anims, list) or not raw_anims:
-            raise ApiError("anims must be non-empty list", "invalid_anims", "workbench", req_id, 422)
-        anims = [int(x) for x in raw_anims]
-        if any(x < 1 for x in anims):
-            raise ApiError("anims must be >=1", "invalid_anims", "workbench", req_id, 422)
-        sess["anims"] = anims
-    if "angles" in payload:
-        angles = int(payload.get("angles"))
-        if angles < 1:
-            raise ApiError("angles must be >=1", "invalid_angles", "workbench", req_id, 422)
-        sess["angles"] = angles
-    if "projs" in payload:
-        projs = int(payload.get("projs"))
-        if projs not in (1, 2):
-            raise ApiError("projs must be 1 or 2", "invalid_projs", "workbench", req_id, 422)
-        sess["projs"] = projs
-    if "source_projs" in payload:
-        source_projs = int(payload.get("source_projs"))
-        if source_projs not in (1, 2):
-            raise ApiError("source_projs must be 1 or 2", "invalid_source_projs", "workbench", req_id, 422)
-        sess["source_projs"] = source_projs
 
     if "row_categories" in payload:
         row_categories = payload.get("row_categories")
