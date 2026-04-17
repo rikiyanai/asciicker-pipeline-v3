@@ -601,15 +601,16 @@ local history owner are no longer the current blockers. The Step 4 mirror-sync
 owner (`FL-STEP4-01` / `FL-STEP4-06`) was also removed on `2026-04-16`; the
 remaining live misalignments are below.
 
-The live code is still misaligned in these exact ways:
+The audit below tracks the previously misaligned areas and whether they remain
+open or are now resolved:
 
 | Finding | Current evidence | Why this is misaligned |
 |---------|------------------|------------------------|
 | Wrapper views are now demoted into in-root drawers rather than peer sections | `web/workbench.html`, `web/workbench.js` | The standalone alpha/header peer shell was deleted on 2026-04-16, and source/frame/runtime/obs surfaces now open as toggleable drawers inside `#wholeSheetPanel` instead of living as separate top-level browser sections. RESOLVED. |
 | Canonical manifest authoring now exists, but it is still JSON-first | `web/workbench.html:133-145`, `web/workbench.js:2196-2377`, `web/workbench.js:3278-3367`, `src/pipeline_v2/app.py:496-525`, `src/pipeline_v2/service.py:3831-3887` | The deleted source overlay owner was replaced with a manifest JSON draft editor, saved-manifest routes, and guide/region rendering on the source canvas. The remaining gap is ergonomic interactive slicer tooling; authoring is still a JSON-first wrapper flow. |
 | Source panel now reloads canonical PNG/manifest without grid geometry | `web/workbench.js:2242-2305`, `web/workbench.js:3278-3367`, `web/workbench.js:4310-4332`, `src/pipeline_v2/app.py:496-525` | The source panel now reads `source_path` / `source_manifest` directly, reloads the PNG through `/api/workbench/source-image`, and can render manifest geometry before the PNG finishes loading. This Step 5 projection dependency is resolved. |
-| Sprite-by-sprite source-to-frame drag is still only partially proven | `web/workbench.js`, `scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs`, `PLAYWRIGHT_FAILURE_LOG.md` fix-attempt entries dated `2026-04-17` | Headed proof now exists for single manual committed boxes, single auto-detected `Find Sprites` boxes, and grouped uploaded-PNG row-select drags into `9A`. The remaining gap is grouped column-select drag coverage, so the authoring lane is now substantially broader but still not fully complete. |
-| Frame-slot deletion semantics are still missing | `web/workbench.html`, `web/workbench.js` | `Delete Selected` clears frame contents, but there is no separate `Delete Frame` action with semantic-slot removal and left-shift/repack behavior. |
+| Sprite-by-sprite source-to-frame drag coverage is now first-class in the official headed runner | `scripts/xp_fidelity_test/verifier_lib.mjs`, `scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs`, `tests/fixtures/known_good/source_grid_multirow.png`, `PLAYWRIGHT_FAILURE_LOG.md` entries dated `2026-04-17` | The canonical runner now proves all currently visible source-box families through shipped UI actions only: manual single-box, auto-detected single-box, grouped row-select, and grouped column-select drags into `9A`. RESOLVED on `2026-04-17`. |
+| Frame-slot deletion semantics now exist as a separate shipped action | `web/workbench.html:142-146`, `web/workbench.js:3741-3744`, `web/workbench.js:5250-5443`, `scripts/xp_fidelity_test/run_m2d_action_proof_test.mjs` | `Clear Selected` remains the clear-content action. `Delete Frame` now removes semantic frame slots, shrinks geometry, left-shifts surviving frames, repairs selection, and is headed-proven through the official M2-D runner. RESOLVED on `2026-04-17`. |
 | Panel topology and panel IDs are not yet canon-stable | `web/workbench.html`, `web/styles.css`, `web/whole-sheet-init.js` | The user needs a stable visual naming system for every visible/clickable UI region. Grid/frame navigation placement is also still under correction: the intended layout is below Source (`8`) and in sequence before Whole Sheet (`10`), while child IDs must follow a documented parent-child numbering convention. |
 
 These are architectural failures. They are not just missing buttons.
@@ -1607,6 +1608,14 @@ Cartesian enumerator and not a machine-learning authority.
    - final artifact compare result
    - screenshots or other failure artifacts when a checkpoint or final compare
      fails
+   - workflow-specific action artifacts whenever the workflow depends on
+     geometry-sensitive drag/drop or slot-deletion behavior
+     - source-to-grid drag artifacts must include selected source IDs,
+       grouping shape, target row/col, expected changed rows/cols,
+       frame-signature deltas, and visible status text
+     - semantic slot deletion artifacts must include selected semantic frame
+       IDs, before/after geometry, left-shift signature checks, repaired
+       selection state, and visible status text
 
 ### 3.5 State Capture And Artifact Oracles
 
@@ -1619,6 +1628,8 @@ Cartesian enumerator and not a machine-learning authority.
    - manifest/session state
    - undo/redo availability
    - bundle/runtime gating state
+   - workflow-family invariants such as grouped drag span, target origin, or
+     semantic-slot repack behavior
 3. Final artifact comparators must be explicit and deterministic:
    - XP compare: geometry, layers, cell content, colors, metadata rows, and any
      other declared contract fields
@@ -1638,24 +1649,36 @@ The current repo maps onto this harness model as follows:
    - this is the current seed of the User-Reachable Action Graph; this checkout no longer tracks a literal `action_registry.json` file
    - adapt by expanding conditional reachability, gesture coverage, checkpoint
      tags, and random-exploration eligibility
-2. `scripts/xp_fidelity_test/recipe_generator.mjs`
+2. `scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs`
+   - keep
+   - this is the current contract-driven source-to-grid workflow runner
+   - grouped row-select and grouped column-select lanes are now first-class and
+     headed-proven through shipped UI drag paths
+3. `scripts/xp_fidelity_test/run_m2d_action_proof_test.mjs`
+   - keep
+   - this is the current grid/action proof runner
+   - it must continue to prove `clear_selected_contents` and
+     `delete_frame_slot` as distinct actions
+4. `scripts/xp_fidelity_test/recipe_generator.mjs`
    - keep
    - this is temporary synthesizer scaffolding
    - adapt by replacing fixed recipes with goal-directed stateful synthesis
-3. `scripts/xp_fidelity_test/dom_runner.mjs`
+5. `scripts/xp_fidelity_test/dom_runner.mjs`
    - keep
    - this is temporary runner scaffolding
    - adapt by adding real keyboard/canvas/context-menu gesture support and
      deterministic checkpoint execution
-4. `scripts/xp_fidelity_test/verifier_lib.mjs`
+6. `scripts/xp_fidelity_test/verifier_lib.mjs`
    - keep
    - this is shared harness infrastructure
-   - adapt by tightening readiness waits, formalizing the public state-capture
-     contract, and removing `_state()` dependency from acceptance capture
-5. `scripts/workbench_bundle_manual_watchdog.mjs`
+   - it now owns headed cross-panel drag preparation, frame-signature capture,
+     and visible status capture for official source/grid proofs
+   - continue tightening readiness waits and reducing `_state()` dependence in
+     acceptance-facing state capture
+7. `scripts/workbench_bundle_manual_watchdog.mjs`
    - keep as downstream runtime smoke only
    - it is not the Section 3 acceptance oracle
-6. `scripts/xp_fidelity_test/recipe_generator.py`,
+8. `scripts/xp_fidelity_test/recipe_generator.py`,
    `truth_table.py`, `run.sh`, `run_fidelity_test.mjs`,
    `run_bundle.sh`, `run_bundle_split.sh`, and
    `run_bundle_fidelity_test.mjs`
@@ -1798,10 +1821,16 @@ From the current state, the corrected sequence is:
    - Update preview/browser assumptions to canonical `{family}-0001.xp`
    - Then enable supported mounted / proof-family prefixes consistently across backend, frontend, template registry, and runtime proof paths
 
-12. **IMPLEMENT — Interaction completion after UI identity map** — Only after Step 7 is landed and visible in the browser:
-   - Finish sprite-by-sprite drag coverage for every visible source-box path, not just the narrow auto-found proof case.
-   - Add a distinct `Delete Frame` action with semantic-slot removal and left-shift/repack behavior, separate from clear-content deletion.
-   - Re-run headed browser proof so drag/drop and frame-slot deletion are evidenced through shipped UI actions only.
+12. **IMPLEMENT — Interaction completion after UI identity map** — **IMPLEMENTED OUT OF ORDER (2026-04-17, commits `3dd7042`, `2ec2238`)**.
+   - The Step 7 UI identity-map/topology pass is still open, but the concrete interaction slice requested here has now landed.
+   - The official source-to-grid runner now proves manual single-box, auto single-box, grouped row-select, and grouped column-select drags through shipped headed UI actions only.
+   - The product now has a distinct `Delete Frame` action with semantic-slot removal and left-shift/repack behavior, separate from `Clear Selected`.
+   - The official M2-D runner now proves `clear_selected_contents` and `delete_frame_slot` as separate actions, with artifact evidence for geometry shrink and signature repack.
+   - Current headed evidence:
+     - `output/source_panel_after_delete_frame_v1/report.json`
+     - `output/source_to_grid_after_delete_frame_v1/report.json`
+     - `output/m2d_action_proof_delete_frame_v2/report.json`
+     - `output/m2d_action_proof_delete_frame_v2/g6_delete_frame_contract.json`
 
 13. **IMPLEMENT — MCP/automation support and Y9-2 HTTP API** — Only after Steps 5-12 are explicit:
    - Add MCP tools for region marking, manifest persistence, and quality validation

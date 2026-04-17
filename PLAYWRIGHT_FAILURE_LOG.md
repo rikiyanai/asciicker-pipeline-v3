@@ -4866,6 +4866,11 @@ W15 SelectTool visualization confirmed with three-part proof:
 **Date:** 2026-03-24
 **Status:** 11 actions PROMOTED WIRED → PROVEN
 
+**Superseded on 2026-04-17 by the current headed runner refresh.**
+- Current runner: `scripts/xp_fidelity_test/run_m2d_action_proof_test.mjs`
+- Current artifact: `output/m2d_action_proof_delete_frame_v2/report.json`
+- Current result: `13/13` passed headed on `2026-04-17`
+
 **Source Panel Mode Actions (S3-S6):**
 - S3 (row_select mode): `#rowSelectBtn` click → `sourceMode === 'row_select'` PASS
 - S4 (col_select mode): `#colSelectBtn` click → `sourceMode === 'col_select'` PASS
@@ -4875,15 +4880,17 @@ W15 SelectTool visualization confirmed with three-part proof:
 **Historical note (superseded on 2026-04-16):** the `addFrameBtn` and `applyGroupsToAnimsBtn` controls referenced below were deleted with the local frame-metadata owner.
 
 **Grid Panel Actions (G5-G6):**
-- G6 (delete selected frames): `#deleteCellBtn` click on non-empty frame → frame signature changed (content cleared) PASS
+- G5 (add frame): `#addFrameBtn` click → `gridCols` increased PASS in the refreshed headed runner
+- G6a (clear selected contents): `#deleteCellBtn` click on selected frame → frame signature changed while `gridCols` stayed constant PASS
+- G6b (delete frame slot): `#deleteFrameBtn` click on selected frame → semantic frame count decreased, `gridCols` shrank, left-shift/repack signature checks passed, and selection repaired PASS
 
 **Grid Metadata Actions (G9-G11):**
 - G9 (assign row category): `#assignAnimCategoryBtn` click → `rowCategories[0]` set PASS
 - G10 (assign frame group): `#assignFrameGroupBtn` click with name → `frameGroups` contains entry PASS
 
-**Runner:** removed on `2026-04-16` with the deleted owner-specific action set.
-**Result:** historical proof only; do not treat G5/G11 as current controls.
-**Artifact:** `output/m2d_action_proof/report.json`
+**Runner:** current and official again as of `2026-04-17`.
+**Artifact:** `output/m2d_action_proof/report.json` (historical) plus `output/m2d_action_proof_delete_frame_v2/report.json` and `output/m2d_action_proof_delete_frame_v2/g6_delete_frame_contract.json` (current)
+**Correction:** do not collapse clear-content deletion and frame-slot deletion into one claim. The official runner now proves them separately.
 
 **W12-W13 (add/delete layer):** Already PROVEN at commit 7bdab92 via `run_whole_sheet_layer_test.mjs`. No new work needed.
 
@@ -6283,6 +6290,12 @@ $("srcCtxAddSprite").addEventListener("click", () => {
 5. Apply that guard to all dimension-changing actions, including the existing `addGridFrameSlot()`.
 
 **Files changed:** `workbench.js`, `workbench.html` once the product semantics are split into distinct actions.
+
+**Resolution on 2026-04-17:**
+- `#deleteCellBtn` remains the clear-content action, now relabeled `Clear Selected`.
+- `#deleteFrameBtn` now exists as a separate shipped UI action for semantic-slot removal.
+- Headed proof lives in `output/m2d_action_proof_delete_frame_v2/report.json`.
+- The runner artifact `output/m2d_action_proof_delete_frame_v2/g6_delete_frame_contract.json` records before/after geometry, repaired selection, status text, and left-shift signature checks.
 
 ---
 
@@ -7977,3 +7990,32 @@ This corrected timeline means:
    - no narrow proof presented as product acceptance
    - no debug harness surfaced as product UI
    - no local parity claim without direct comparison to the frozen public page
+
+---
+
+## 2026-04-17 Interaction Slice Refresh: grouped column + Delete Frame
+
+**Status:** COMMITTED PROOF
+
+**Commits:**
+- `3dd7042` `Refactor grouped drag verifier contracts`
+- `2ec2238` `Add semantic Delete Frame action`
+
+**What changed:**
+- The official headed source-to-grid runner now includes grouped row-select and grouped column-select lanes as first-class contract-driven scenarios.
+- The verifier library now provides the reusable headed cross-panel drag prep and artifact capture that those lanes require.
+- The product now exposes separate shipped actions:
+  - `#deleteCellBtn` / `Clear Selected` = clear frame contents only
+  - `#deleteFrameBtn` / `Delete Frame` = remove semantic slot, shrink geometry, left-shift/repack, repair selection
+- The official M2-D runner now proves those two delete behaviors separately.
+
+**Headed evidence:**
+- `output/source_panel_after_delete_frame_v1/report.json` → 10/10 PASS
+- `output/source_to_grid_after_delete_frame_v1/report.json` → 21/21 PASS
+- `output/m2d_action_proof_delete_frame_v2/report.json` → 13/13 PASS
+- `output/m2d_action_proof_delete_frame_v2/g6_delete_frame_contract.json` records selected semantic frame IDs, target origin, expected changed cols, frame-signature deltas, and visible status text
+
+**Correction to the old gap list:**
+- grouped column-select drag proof is no longer missing
+- `Delete Frame` is no longer design-only
+- the remaining major open item from this area is still the Step 7 UI identity-map / panel-topology pass
