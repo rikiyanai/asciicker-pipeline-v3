@@ -430,6 +430,29 @@ async function stepFindSprites(page, fail, outDir) {
   return { step: 'find_sprites', pass, pre, post };
 }
 
+async function stepRowSelectDetectedBoxes(page, fail, outDir, rect, label = 'detected_row') {
+  const pre = await captureState(page, `pre_row_select_${label}`);
+
+  await page.click('#rowSelectBtn');
+  await page.waitForTimeout(200);
+  await canvasDrag(page, rect.x1, rect.y1, rect.x2, rect.y2);
+  await page.waitForTimeout(300);
+
+  const post = await captureState(page, `post_row_select_${label}`);
+  await screenshot(page, outDir, `step_row_select_${label}`);
+
+  const selectedCount = Array.isArray(post.sourceSelection) ? post.sourceSelection.length : 0;
+  const pass = assert(
+    selectedCount > 1,
+    fail,
+    'row_select_group',
+    `Expected multi-box row selection after dragging ${label}, got ${selectedCount}`,
+    { pre_selection: pre.sourceSelection, post_selection: post.sourceSelection, post_boxes: post.sourceBoxes }
+  );
+
+  return { step: `row_select_${label}`, pass, pre, post, selectedCount };
+}
+
 /**
  * Switch to row_select mode. sourceSelection must persist (A2 verified).
  *
@@ -759,8 +782,46 @@ async function main() {
     allPass = false;
   }
 
-  // Step 19: Source isolation invariant (covers both D2/C2 and manual+auto D1 phases)
-  console.log('=== Step 19: Source isolation invariant ===');
+  // Step 19: Re-select the uploaded-PNG row as a grouped source selection.
+  console.log('=== Step 19: Row-select detected sprite group ===');
+  steps.row_select_detected = await stepRowSelectDetectedBoxes(
+    page,
+    fail,
+    outDir,
+    { x1: 1, y1: 4, x2: 191, y2: 44 },
+    'detected_group'
+  );
+  if (!steps.row_select_detected.pass) allPass = false;
+
+  // Step 20: Pick a fresh target row for grouped drag proof.
+  console.log('=== Step 20: Select grid row 2 ===');
+  steps.grid_select_row_2 = await stepSelectGridRow(page, fail, outDir, 2);
+  if (!steps.grid_select_row_2.pass) allPass = false;
+
+  // Step 21: Drag one selected member of the row-selected group into 9A.
+  console.log('=== Step 21: Drag grouped detected source boxes to grid ===');
+  const groupedBox = (steps.row_select_detected.post?.sourceBoxes || [])[3] || (steps.row_select_detected.post?.sourceBoxes || [])[0] || null;
+  if (groupedBox) {
+    steps.d1_drag_grouped = await stepDragToGrid(page, fail, outDir, groupedBox, 0);
+    if (!steps.d1_drag_grouped.pass) allPass = false;
+    const groupedCols = steps.d1_drag_grouped.post?.selectedCols || [];
+    const groupedPass = assert(
+      Array.isArray(groupedCols) && groupedCols.length > 1,
+      fail,
+      'd1_drag_grouped',
+      `Grouped drag should leave multiple target cols selected, got ${JSON.stringify(groupedCols)}`,
+      { post_selected_cols: groupedCols, post_source_selection: steps.d1_drag_grouped.post?.sourceSelection }
+    );
+    steps.d1_drag_grouped.selection_span_pass = groupedPass;
+    if (!groupedPass) allPass = false;
+  } else {
+    fail('d1_drag_grouped', 'No grouped source box available for row-selected uploaded-PNG drag proof');
+    steps.d1_drag_grouped = { step: 'd1_drag_grouped_to_grid', pass: false };
+    allPass = false;
+  }
+
+  // Step 22: Source isolation invariant (covers manual, auto single-box, and grouped drag phases)
+  console.log('=== Step 22: Source isolation invariant ===');
   const finalState = await captureState(page, 'final');
   const isolationPass = checkSourceIsolationInvariant(preInsertState, finalState, fail);
   steps.source_isolation = { step: 'source_isolation_invariant', pass: isolationPass };

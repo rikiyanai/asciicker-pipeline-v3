@@ -215,6 +215,49 @@ frame-navigation drag workflows after the headed-only guardrail landed.
 
 ---
 
+## Fix Attempt — Headed Grouped Row Drag Proof For Uploaded PNG Source Boxes (2026-04-17)
+
+This entry records the next verifier-only expansion after single-box uploaded-PNG
+drag was proven.
+
+### What changed
+
+1. **The dedicated source-to-grid runner now proves grouped uploaded-PNG row drag into `9A`.**
+   - `scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs` now adds:
+     - `Find Sprites` on uploaded PNG
+     - row-select drag across the detected source row
+     - selection assertion for multiple source boxes
+     - grouped drag from one selected member into `9A`
+     - post-drop assertion that multiple target frame columns are selected
+
+### Headed proof result
+
+- Command:
+  - `node scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs --headed --out-dir output/source_to_grid_workflow_headed_grouped`
+- Result:
+  - `22/22` steps passed
+  - includes:
+    - manual single-box add/drag
+    - uploaded-PNG single-box drag
+    - uploaded-PNG grouped row-select drag
+- Report artifact:
+  - `output/source_to_grid_workflow_headed_grouped/report.json`
+
+### What this proves
+
+- Uploaded-PNG grouped **row** selection drag into `9A` works headed.
+- The source-panel / `9A` authoring lane is now headed-proven for:
+  - manual single-box paths
+  - auto-detected single-box paths
+  - auto-detected grouped row paths
+
+### What this does NOT prove
+
+- It does NOT yet prove grouped **column** selection drag as a separate family.
+- It does NOT add `Delete Frame` semantics.
+
+---
+
 ## Fix Attempt — Semantic Frame Authoring / Deferred Projection Model (2026-04-17)
 
 This entry records the current fix attempt for the source-to-frame authoring lane after the previous frame-nav edits exposed the wrong product model.
