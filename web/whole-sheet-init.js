@@ -183,10 +183,12 @@ let editorState = {
   rectTool: null,
   fillTool: null,
   selectTool: null,
+  mode: 'paint',
   activeTool: 'cell',
   gridCols: 0,
   gridRows: 0,
   containerEl: null,
+  currentSessionId: '',
   drawGlyph: 64,
   drawFg: [255, 255, 255],
   drawBg: [0, 0, 0],
@@ -201,10 +203,23 @@ let editorState = {
   onAddLayer: null,
   onDeleteLayer: null,
   onMoveLayer: null,
+  onSave: null,
+  onExport: null,
+  onUndo: null,
+  onRedo: null,
+  onBrowseList: null,
+  onBrowseOpen: null,
+  onBrowseRename: null,
+  onBrowseDuplicate: null,
+  onBrowseDelete: null,
   _strokeDirty: false,
   // Clipboard state (W19-W22 parity)
   clipboard: null,       // {cells: [{x, y, glyph, fg, bg}, ...], bounds: {x, y, w, h}}
   pasteMode: false,
+  browseItems: [],
+  browseSelectedId: '',
+  browseLoading: false,
+  browseError: '',
   // Match-source cell for Replace FG/BG (W29/W30 parity).
   // Set only from explicit sample actions (eyedropper).
   // Contract: lastSampledCell.fg is the match target for Replace FG,
@@ -214,7 +229,7 @@ let editorState = {
 
 // ── mount ──
 
-async function mount({ container, gridCols, gridRows, frameW, frameH, layers, layerNames, activeLayer, visibleLayers, onCellEdited, onStrokeStart, onStrokeComplete, onActiveLayerChanged, onLayerVisibilityChanged, onAddLayer, onDeleteLayer, onMoveLayer, onSave, onExport, onUndo, onRedo }) {
+async function mount({ container, gridCols, gridRows, frameW, frameH, layers, layerNames, activeLayer, visibleLayers, currentSessionId, onCellEdited, onStrokeStart, onStrokeComplete, onActiveLayerChanged, onLayerVisibilityChanged, onAddLayer, onDeleteLayer, onMoveLayer, onSave, onExport, onUndo, onRedo, onBrowseList, onBrowseOpen, onBrowseRename, onBrowseDuplicate, onBrowseDelete }) {
   if (editorState.mounted) unmount();
 
   editorState.gridCols = gridCols;
@@ -222,6 +237,7 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
   editorState.frameW = frameW || gridCols;
   editorState.frameH = frameH || gridRows;
   editorState.containerEl = container;
+  editorState.currentSessionId = String(currentSessionId || '').trim();
   editorState.onCellEdited = onCellEdited || null;
   editorState.onStrokeStart = onStrokeStart || null;
   editorState.onStrokeComplete = onStrokeComplete || null;
@@ -234,6 +250,11 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
   editorState.onExport = onExport || null;
   editorState.onUndo = onUndo || null;
   editorState.onRedo = onRedo || null;
+  editorState.onBrowseList = onBrowseList || null;
+  editorState.onBrowseOpen = onBrowseOpen || null;
+  editorState.onBrowseRename = onBrowseRename || null;
+  editorState.onBrowseDuplicate = onBrowseDuplicate || null;
+  editorState.onBrowseDelete = onBrowseDelete || null;
 
   // Build DOM — REXPaint-style sidebar + canvas layout
   container.innerHTML = '';
@@ -403,6 +424,8 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
   _renderPaletteGrid();
   _updateInfoDrawState();
   _updateInfoApplyModes();
+  _applyModeUI();
+  void _refreshBrowseItems({ preserveSelection: false });
 
 }
 
@@ -867,8 +890,35 @@ function _updateToolUI() {
 
 function _onKeyDown(e) {
   if (!editorState.mounted) return;
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key === 'Tab') {
+    _setMode(editorState.mode === 'paint' ? 'browse' : 'paint');
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
   const tag = e.target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+  if (editorState.mode === 'browse') {
+    if (e.key === 'ArrowDown') {
+      _moveBrowseSelection(1);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      _moveBrowseSelection(-1);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (e.key === 'Enter') {
+      void _browseOpenSelected();
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    return;
+  }
 
   // Ctrl/Cmd+key shortcuts before tool shortcuts
   if (e.ctrlKey || e.metaKey) {
@@ -1062,20 +1112,98 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   const modeGroup = document.createElement('div');
   modeGroup.className = 'ws-tool-group';
   const paintBtn = document.createElement('button');
+  paintBtn.id = 'wsModePaint';
   paintBtn.textContent = 'PAINT';
   paintBtn.className = 'ws-tool-btn ws-tool-active';
+  paintBtn.addEventListener('click', () => _setMode('paint'));
   const browseBtn = document.createElement('button');
+  browseBtn.id = 'wsModeBrowse';
   browseBtn.textContent = 'BROWSE';
   browseBtn.className = 'ws-tool-btn';
-  browseBtn.disabled = true;
-  browseBtn.title = 'Browse mode (deferred)';
+  browseBtn.title = 'Browse saved sessions';
+  browseBtn.addEventListener('click', () => _setMode('browse'));
   modeGroup.appendChild(paintBtn);
   modeGroup.appendChild(browseBtn);
   modeSection.appendChild(modeGroup);
   sidebar.appendChild(modeSection);
 
+  const browseSection = _buildSection('Browse');
+  browseSection.id = 'wsBrowseSection';
+  browseSection.dataset.modeScope = 'browse';
+
+  const browseControls = document.createElement('div');
+  browseControls.className = 'ws-ta-cols';
+
+  const browsePrimary = document.createElement('div');
+  browsePrimary.className = 'ws-ta-col';
+  const browsePrimaryLabel = document.createElement('span');
+  browsePrimaryLabel.className = 'ws-ta-label';
+  browsePrimaryLabel.textContent = 'Session';
+  browsePrimary.appendChild(browsePrimaryLabel);
+
+  const openBtn = document.createElement('button');
+  openBtn.id = 'wsBrowseOpen';
+  openBtn.className = 'ws-tool-btn';
+  openBtn.textContent = 'Open';
+  openBtn.addEventListener('click', () => { void _browseOpenSelected(); });
+  browsePrimary.appendChild(openBtn);
+
+  const renameBtn = document.createElement('button');
+  renameBtn.id = 'wsBrowseRename';
+  renameBtn.className = 'ws-tool-btn';
+  renameBtn.textContent = 'Rename';
+  renameBtn.addEventListener('click', () => { void _browseRenameSelected(); });
+  browsePrimary.appendChild(renameBtn);
+
+  const browseSecondary = document.createElement('div');
+  browseSecondary.className = 'ws-ta-col';
+  const browseSecondaryLabel = document.createElement('span');
+  browseSecondaryLabel.className = 'ws-ta-label';
+  browseSecondaryLabel.textContent = 'Manage';
+  browseSecondary.appendChild(browseSecondaryLabel);
+
+  const duplicateBtn = document.createElement('button');
+  duplicateBtn.id = 'wsBrowseDuplicate';
+  duplicateBtn.className = 'ws-tool-btn';
+  duplicateBtn.textContent = 'Duplicate';
+  duplicateBtn.addEventListener('click', () => { void _browseDuplicateSelected(); });
+  browseSecondary.appendChild(duplicateBtn);
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.id = 'wsBrowseDelete';
+  deleteBtn.className = 'ws-tool-btn';
+  deleteBtn.textContent = 'Delete';
+  deleteBtn.addEventListener('click', () => { void _browseDeleteSelected(); });
+  browseSecondary.appendChild(deleteBtn);
+
+  browseControls.appendChild(browsePrimary);
+  browseControls.appendChild(browseSecondary);
+  browseSection.appendChild(browseControls);
+
+  const reloadBtn = document.createElement('button');
+  reloadBtn.id = 'wsBrowseReload';
+  reloadBtn.className = 'ws-tool-btn';
+  reloadBtn.textContent = 'Reload List';
+  reloadBtn.style.width = '100%';
+  reloadBtn.style.marginTop = '4px';
+  reloadBtn.addEventListener('click', () => { void _refreshBrowseItems({ preserveSelection: true }); });
+  browseSection.appendChild(reloadBtn);
+
+  const browseStatus = document.createElement('div');
+  browseStatus.id = 'wsBrowseStatus';
+  browseStatus.className = 'ws-placeholder';
+  browseStatus.textContent = 'Loading session list...';
+  browseSection.appendChild(browseStatus);
+
+  const browseList = document.createElement('div');
+  browseList.id = 'wsBrowseList';
+  browseList.className = 'ws-browse-list';
+  browseSection.appendChild(browseList);
+  sidebar.appendChild(browseSection);
+
   // 3.2 Glyph — 16x16 CP437 picker (spec §3.2)
   const glyphSection = _buildSection('Glyph');
+  glyphSection.dataset.modeScope = 'paint';
 
   const pickerCanvas = document.createElement('canvas');
   pickerCanvas.id = 'wsGlyphPickerCanvas';
@@ -1133,6 +1261,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
 
   // 3.3 Palette (spec §3.3: color grid + fg/bg swatches)
   const paletteSection = _buildSection('Palette');
+  paletteSection.dataset.modeScope = 'paint';
 
   const paletteCanvas = document.createElement('canvas');
   paletteCanvas.id = 'wsPaletteCanvas';
@@ -1193,6 +1322,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
 
   // 3.4 Tools / Apply (spec §3.4: two-column layout)
   const toolsSection = _buildSection('Tools / Apply');
+  toolsSection.dataset.modeScope = 'paint';
   const taCols = document.createElement('div');
   taCols.className = 'ws-ta-cols';
 
@@ -1291,6 +1421,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
 
   // 3.5 Image / Draw (spec §3.5: two-column layout)
   const imageDrawSection = _buildSection('Image / Draw');
+  imageDrawSection.dataset.modeScope = 'paint';
   const idCols = document.createElement('div');
   idCols.className = 'ws-ta-cols';
 
@@ -1461,6 +1592,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   // W31: Find & Replace sidebar section (collapsible)
   const frSection = document.createElement('div');
   frSection.className = 'ws-sidebar-section';
+  frSection.dataset.modeScope = 'paint';
   const frDetails = document.createElement('details');
   const frSummary = document.createElement('summary');
   frSummary.textContent = 'Find & Replace';
@@ -1548,6 +1680,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   // 3.9 Info (spec §3.9: cursor pos, dims, active layer, glyph/fg/bg under cursor)
   const statusSection = document.createElement('div');
   statusSection.className = 'ws-sidebar-section ws-status-section';
+  statusSection.dataset.modeScope = 'paint';
   const statusH4 = document.createElement('h4');
   statusH4.textContent = 'Info';
   statusSection.appendChild(statusH4);
@@ -1681,6 +1814,240 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   sidebar.appendChild(statusSection);
 
   return sidebar;
+}
+
+function _selectedBrowseItem() {
+  return editorState.browseItems.find((item) => String(item.session_id || '') === String(editorState.browseSelectedId || '')) || null;
+}
+
+function _setBrowseStatus(text) {
+  const el = document.getElementById('wsBrowseStatus');
+  if (!el) return;
+  el.textContent = String(text || '');
+}
+
+function _updateBrowseControls() {
+  const selected = _selectedBrowseItem();
+  const busy = !!editorState.browseLoading;
+  const isCurrent = !!(selected && String(selected.session_id || '') === String(editorState.currentSessionId || ''));
+  const bundleOwner = selected && selected.bundle_owner ? selected.bundle_owner : null;
+
+  const openBtn = document.getElementById('wsBrowseOpen');
+  const renameBtn = document.getElementById('wsBrowseRename');
+  const duplicateBtn = document.getElementById('wsBrowseDuplicate');
+  const deleteBtn = document.getElementById('wsBrowseDelete');
+  const reloadBtn = document.getElementById('wsBrowseReload');
+
+  if (openBtn) openBtn.disabled = busy || !selected || isCurrent;
+  if (renameBtn) renameBtn.disabled = busy || !selected;
+  if (duplicateBtn) duplicateBtn.disabled = busy || !selected;
+  if (deleteBtn) {
+    deleteBtn.disabled = busy || !selected || !!bundleOwner || isCurrent;
+    if (bundleOwner) {
+      deleteBtn.title = `Delete blocked: bundle ${bundleOwner.bundle_id} owns this session`;
+    } else if (isCurrent) {
+      deleteBtn.title = 'Open another session before deleting the active session';
+    } else {
+      deleteBtn.title = 'Delete selected session';
+    }
+  }
+  if (reloadBtn) reloadBtn.disabled = busy;
+}
+
+function _renderBrowseList() {
+  const listEl = document.getElementById('wsBrowseList');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  if (!editorState.browseItems.length) {
+    const empty = document.createElement('div');
+    empty.className = 'ws-placeholder';
+    empty.textContent = editorState.browseLoading ? 'Loading sessions...' : 'No saved sessions';
+    listEl.appendChild(empty);
+    _updateBrowseControls();
+    return;
+  }
+
+  for (const item of editorState.browseItems) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'ws-browse-item';
+    if (String(item.session_id || '') === String(editorState.browseSelectedId || '')) row.classList.add('ws-browse-item-selected');
+    if (String(item.session_id || '') === String(editorState.currentSessionId || '')) row.classList.add('ws-browse-item-current');
+
+    const title = document.createElement('span');
+    title.className = 'ws-browse-item-title';
+    title.textContent = String(item.label || item.session_id || 'session');
+
+    const details = [];
+    if (item.grid_cols && item.grid_rows) details.push(`${item.grid_cols}x${item.grid_rows}`);
+    if (item.action_key) details.push(String(item.action_key));
+    else if (item.family) details.push(String(item.family));
+    if (item.bundle_owner && item.bundle_owner.bundle_id) {
+      details.push(`bundle ${item.bundle_owner.bundle_id}:${item.bundle_owner.action_key}`);
+    }
+
+    const meta = document.createElement('span');
+    meta.className = 'ws-browse-item-meta';
+    meta.textContent = details.join(' · ') || String(item.session_id || '');
+
+    row.appendChild(title);
+    row.appendChild(meta);
+    row.addEventListener('click', () => {
+      editorState.browseSelectedId = String(item.session_id || '');
+      _renderBrowseList();
+    });
+    row.addEventListener('dblclick', () => { void _browseOpenSelected(); });
+    listEl.appendChild(row);
+  }
+
+  _updateBrowseControls();
+}
+
+async function _refreshBrowseItems({ preserveSelection = true } = {}) {
+  if (typeof editorState.onBrowseList !== 'function') {
+    editorState.browseItems = [];
+    editorState.browseSelectedId = '';
+    _setBrowseStatus('Browse list unavailable');
+    _renderBrowseList();
+    return [];
+  }
+  editorState.browseLoading = true;
+  _setBrowseStatus('Loading sessions...');
+  _updateBrowseControls();
+  try {
+    const payload = await editorState.onBrowseList();
+    const items = Array.isArray(payload) ? payload : (Array.isArray(payload?.sessions) ? payload.sessions : []);
+    editorState.browseItems = items;
+    const selectedStillExists = preserveSelection
+      && items.some((item) => String(item.session_id || '') === String(editorState.browseSelectedId || ''));
+    if (!selectedStillExists) {
+      const current = items.find((item) => String(item.session_id || '') === String(editorState.currentSessionId || ''));
+      editorState.browseSelectedId = String((current || items[0] || {}).session_id || '');
+    }
+    _setBrowseStatus(`${items.length} saved session${items.length === 1 ? '' : 's'}`);
+    _renderBrowseList();
+    return items;
+  } catch (err) {
+    editorState.browseItems = [];
+    editorState.browseSelectedId = '';
+    _setBrowseStatus(`Browse load failed: ${String(err)}`);
+    _renderBrowseList();
+    return [];
+  } finally {
+    editorState.browseLoading = false;
+    _updateBrowseControls();
+  }
+}
+
+function _moveBrowseSelection(delta) {
+  if (!editorState.browseItems.length) return;
+  const ids = editorState.browseItems.map((item) => String(item.session_id || ''));
+  let idx = ids.indexOf(String(editorState.browseSelectedId || ''));
+  if (idx < 0) idx = 0;
+  idx = Math.max(0, Math.min(ids.length - 1, idx + delta));
+  editorState.browseSelectedId = ids[idx];
+  _renderBrowseList();
+}
+
+async function _browseOpenSelected() {
+  const selected = _selectedBrowseItem();
+  if (!selected || typeof editorState.onBrowseOpen !== 'function') return;
+  try {
+    await editorState.onBrowseOpen(String(selected.session_id || ''));
+    editorState.currentSessionId = String(selected.session_id || '');
+    _setMode('paint');
+  } catch (err) {
+    _setBrowseStatus(`Open failed: ${String(err)}`);
+  }
+}
+
+async function _browseRenameSelected() {
+  const selected = _selectedBrowseItem();
+  if (!selected || typeof editorState.onBrowseRename !== 'function') return;
+  const seed = String(selected.name || selected.label || '').trim();
+  const nextName = window.prompt('Rename session', seed);
+  if (nextName === null) return;
+  const clean = String(nextName || '').trim();
+  if (!clean) return;
+  try {
+    await editorState.onBrowseRename(String(selected.session_id || ''), clean);
+    await _refreshBrowseItems({ preserveSelection: true });
+  } catch (err) {
+    _setBrowseStatus(`Rename failed: ${String(err)}`);
+  }
+}
+
+async function _browseDuplicateSelected() {
+  const selected = _selectedBrowseItem();
+  if (!selected || typeof editorState.onBrowseDuplicate !== 'function') return;
+  try {
+    const duplicated = await editorState.onBrowseDuplicate(String(selected.session_id || ''));
+    await _refreshBrowseItems({ preserveSelection: false });
+    if (duplicated && duplicated.session_id) {
+      editorState.browseSelectedId = String(duplicated.session_id);
+      _renderBrowseList();
+    }
+  } catch (err) {
+    _setBrowseStatus(`Duplicate failed: ${String(err)}`);
+  }
+}
+
+async function _browseDeleteSelected() {
+  const selected = _selectedBrowseItem();
+  if (!selected || typeof editorState.onBrowseDelete !== 'function') return;
+  if (selected.bundle_owner) return;
+  if (String(selected.session_id || '') === String(editorState.currentSessionId || '')) return;
+  const ok = window.confirm(`Delete session "${selected.label || selected.session_id}"?`);
+  if (!ok) return;
+  try {
+    await editorState.onBrowseDelete(String(selected.session_id || ''));
+    await _refreshBrowseItems({ preserveSelection: false });
+  } catch (err) {
+    _setBrowseStatus(`Delete failed: ${String(err)}`);
+  }
+}
+
+function _applyModeUI() {
+  const mode = editorState.mode === 'browse' ? 'browse' : 'paint';
+  const paintBtn = document.getElementById('wsModePaint');
+  const browseBtn = document.getElementById('wsModeBrowse');
+  if (paintBtn) paintBtn.classList.toggle('ws-tool-active', mode === 'paint');
+  if (browseBtn) browseBtn.classList.toggle('ws-tool-active', mode === 'browse');
+
+  for (const section of document.querySelectorAll('.ws-sidebar-section[data-mode-scope]')) {
+    const scope = String(section.dataset.modeScope || '');
+    section.style.display = scope === mode ? '' : 'none';
+  }
+
+  const canvasEl = document.getElementById('wholeSheetCanvas');
+  const scrollWrap = document.getElementById('wholeSheetScroll');
+  if (canvasEl) {
+    canvasEl.style.pointerEvents = mode === 'browse' ? 'none' : '';
+    canvasEl.style.opacity = mode === 'browse' ? '0.72' : '1';
+  }
+  if (scrollWrap) {
+    scrollWrap.classList.toggle('ws-browse-preview', mode === 'browse');
+  }
+  if (mode === 'browse') {
+    _onCanvasMouseLeave();
+  } else {
+    _switchTool(editorState.activeTool);
+  }
+  _updateBrowseControls();
+}
+
+function _setMode(mode) {
+  const nextMode = String(mode || '').toLowerCase() === 'browse' ? 'browse' : 'paint';
+  if (editorState.mode === nextMode) {
+    if (nextMode === 'browse') void _refreshBrowseItems({ preserveSelection: true });
+    return;
+  }
+  editorState.mode = nextMode;
+  _applyModeUI();
+  if (nextMode === 'browse') {
+    void _refreshBrowseItems({ preserveSelection: true });
+  }
 }
 
 // ── Toggle button builder ──
@@ -2064,10 +2431,13 @@ function unmount() {
     lineTool: null,
     rectTool: null,
     fillTool: null,
+    selectTool: null,
+    mode: 'paint',
     activeTool: 'cell',
     gridCols: 0,
     gridRows: 0,
     containerEl: null,
+    currentSessionId: '',
     drawGlyph: editorState.drawGlyph,
     drawFg: editorState.drawFg,
     drawBg: editorState.drawBg,
@@ -2086,9 +2456,19 @@ function unmount() {
     onExport: null,
     onUndo: null,
     onRedo: null,
+    onBrowseList: null,
+    onBrowseOpen: null,
+    onBrowseRename: null,
+    onBrowseDuplicate: null,
+    onBrowseDelete: null,
     _strokeDirty: false,
     clipboard: null,
     pasteMode: false,
+    browseItems: [],
+    browseSelectedId: '',
+    browseLoading: false,
+    browseError: '',
+    lastSampledCell: null,
     _pasteInterceptor: null,
   };
 }
@@ -2147,6 +2527,7 @@ function getState() {
     gridCols: editorState.gridCols,
     gridRows: editorState.gridRows,
     layerCount: editorState.layerStack ? editorState.layerStack.layers.length : 0,
+    mode: editorState.mode,
     activeLayerIndex: editorState.layerStack ? editorState.layerStack.activeIndex : 0,
     hasFontLoaded: !!(editorState.cp437Font && editorState.cp437Font.spriteSheet),
     activeTool: editorState.activeTool,
@@ -2154,6 +2535,8 @@ function getState() {
     hasClipboard: !!(editorState.clipboard && editorState.clipboard.cells.length > 0),
     clipboardCellCount: editorState.clipboard ? editorState.clipboard.cells.length : 0,
     pasteMode: editorState.pasteMode,
+    browseItemCount: editorState.browseItems.length,
+    browseSelectedId: editorState.browseSelectedId,
     drawGlyph: editorState.drawGlyph,
     drawFg: editorState.drawFg,
     drawBg: editorState.drawBg,

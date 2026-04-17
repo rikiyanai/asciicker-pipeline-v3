@@ -3995,6 +3995,84 @@
     }
   }
 
+  async function browseListSessions() {
+    const r = await fetch(bp("/api/workbench/browse/list"));
+    const j = await r.json();
+    if (!r.ok) {
+      throw new Error(j.error || "browse list failed");
+    }
+    return j;
+  }
+
+  async function ensureSessionSavedBeforeBrowseOpen(nextSessionId) {
+    const nextId = String(nextSessionId || "").trim();
+    if (!state.sessionDirty || !state.sessionId || !nextId || nextId === String(state.sessionId || "")) {
+      return;
+    }
+    await flushPendingWholeSheetDrawSaveTimer();
+    const saveRes = await saveSessionState("pre-browse-open", { wait_for_idle: true, timeout_ms: 15000 });
+    if (!saveRes || !saveRes.ok) {
+      throw new Error("browse open blocked: current session save failed/timed out");
+    }
+  }
+
+  async function browseOpenSession(sessionId) {
+    const sid = String(sessionId || "").trim();
+    if (!sid || sid === String(state.sessionId || "")) return true;
+    await ensureSessionSavedBeforeBrowseOpen(sid);
+    const ok = await loadSession(sid, { reason: `Opening session ${sid.slice(0, 8)}...` });
+    if (!ok) {
+      throw new Error(`session open failed: ${sid}`);
+    }
+    return true;
+  }
+
+  async function browseRenameSession(sessionId, name) {
+    const r = await fetch(bp("/api/workbench/browse/rename"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: String(sessionId || ""), name: String(name || "") }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      throw new Error(j.error || "browse rename failed");
+    }
+    if (String(sessionId || "") === String(state.sessionId || "")) {
+      status(`Renamed active session to ${j.label || j.name || "session"}`, "ok");
+    }
+    return j;
+  }
+
+  async function browseDuplicateSession(sessionId) {
+    const r = await fetch(bp("/api/workbench/browse/duplicate"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: String(sessionId || "") }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      throw new Error(j.error || "browse duplicate failed");
+    }
+    status(`Duplicated session as ${String(j.session_id || "").slice(0, 8)}...`, "ok");
+    return j;
+  }
+
+  async function browseDeleteSession(sessionId) {
+    const sid = String(sessionId || "").trim();
+    if (!sid) return false;
+    const r = await fetch(bp("/api/workbench/browse/delete"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sid }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      throw new Error(j.error || "browse delete failed");
+    }
+    status(`Deleted session ${sid.slice(0, 8)}...`, "ok");
+    return true;
+  }
+
   async function importXp() {
     const fileInput = $("xpImportFile");
     const file = fileInput && fileInput.files && fileInput.files[0];
@@ -5899,6 +5977,7 @@
       layerNames: state.layerNames,
       activeLayer: state.activeLayer,
       visibleLayers: state.visibleLayers,
+      currentSessionId: state.sessionId,
       onCellEdited: function(x, y, glyph, fg, bg) {
         if (x < 0 || x >= state.gridCols || y < 0 || y >= state.gridRows) return;
         setCell(x, y, { glyph: glyph, fg: fg, bg: bg });
@@ -5994,6 +6073,11 @@
       onExport: function() { exportXp(); },
       onUndo: function() { undo(); },
       onRedo: function() { redo(); },
+      onBrowseList: browseListSessions,
+      onBrowseOpen: browseOpenSession,
+      onBrowseRename: browseRenameSession,
+      onBrowseDuplicate: browseDuplicateSession,
+      onBrowseDelete: browseDeleteSession,
     }).then(() => {
       if (wsStatus) {
         const st = wsEditor.getState();

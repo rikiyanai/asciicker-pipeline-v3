@@ -659,11 +659,63 @@ label.inline {
   max-height: none;
 }
 
+.ws-scroll-wrap.ws-browse-preview {
+  border-color: #4a5366;
+  box-shadow: inset 0 0 0 1px rgba(214, 193, 93, 0.22);
+}
+
 .ws-placeholder {
   font-size: 10px;
   color: #3a4450;
   font-style: italic;
   padding: 2px 0;
+}
+
+.ws-browse-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.ws-browse-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 7px;
+  border: 1px solid #223047;
+  background: #0a0e14;
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+}
+
+.ws-browse-item:hover {
+  background: #121924;
+  border-color: #36507a;
+}
+
+.ws-browse-item-selected {
+  border-color: #4f8fe8;
+  background: #112238;
+}
+
+.ws-browse-item-current {
+  box-shadow: inset 0 0 0 1px rgba(111, 207, 151, 0.6);
+}
+
+.ws-browse-item-title {
+  font-size: 11px;
+  color: var(--fg);
+  font-family: 'DepartureMono-Regular', Consolas, monaco, monospace;
+}
+
+.ws-browse-item-meta {
+  font-size: 9px;
+  color: #7d8ba0;
+  line-height: 1.35;
 }
 
 .ws-glyph-row {
