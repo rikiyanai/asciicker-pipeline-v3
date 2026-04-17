@@ -106,6 +106,9 @@
     cellHChars: 1,
     frameWChars: 1,
     frameHChars: 1,
+    selectedFrames: new Set(),
+    selectionAnchor: null,
+    selectionFocus: null,
     selectedRow: null,
     selectedCols: new Set(),
     rowCategories: {},
@@ -1962,6 +1965,9 @@
       sourceProjs: state.sourceProjs,
       cellWChars: state.cellWChars,
       cellHChars: state.cellHChars,
+      selectedFrames: [...state.selectedFrames],
+      selectionAnchor: state.selectionAnchor ? { ...state.selectionAnchor } : null,
+      selectionFocus: state.selectionFocus ? { ...state.selectionFocus } : null,
       selectedRow: state.selectedRow,
       selectedCols: [...state.selectedCols],
       rowCategories: { ...state.rowCategories },
@@ -2001,8 +2007,13 @@
     state.projs = Number(snap.projs || 1);
     state.cellWChars = Number(snap.cellWChars || state.cellWChars || 1);
     state.cellHChars = Number(snap.cellHChars || state.cellHChars || 1);
-    state.selectedRow = snap.selectedRow;
-    state.selectedCols = new Set((snap.selectedCols || []).map((x) => Number(x)));
+    const legacySelectedFrames = Number.isFinite(Number(snap.selectedRow))
+      ? (snap.selectedCols || []).map((x) => ({ row: Number(snap.selectedRow), col: Number(x) }))
+      : [];
+    state.selectedFrames = new Set((snap.selectedFrames || legacySelectedFrames).map((coord) => `${Number(coord?.row)}:${Number(coord?.col)}`));
+    state.selectionAnchor = snap.selectionAnchor ? { ...snap.selectionAnchor } : null;
+    state.selectionFocus = snap.selectionFocus ? { ...snap.selectionFocus } : null;
+    syncDerivedGridSelectionState();
     state.rowCategories = { ...(snap.rowCategories || {}) };
     state.frameGroups = JSON.parse(JSON.stringify(snap.frameGroups || []));
     state.anchorBox = snap.anchorBox ? { ...snap.anchorBox } : null;
@@ -2493,7 +2504,7 @@
   }
 
   function selectedFrameColsTotal() {
-    return [...state.selectedCols].sort((a, b) => a - b);
+    return selectedColsForRow(state.selectedRow);
   }
 
   function authoringProjectionCount() {
@@ -2506,6 +2517,116 @@
 
   function authoringFrameCols() {
     return Math.max(1, semanticFrameCount() * authoringProjectionCount());
+  }
+
+  function frameSelectionKey(row, col) {
+    return `${Number(row)}:${Number(col)}`;
+  }
+
+  function parseFrameSelectionKey(key) {
+    const [rowPart, colPart] = String(key || "").split(":");
+    const row = Number(rowPart);
+    const col = Number(colPart);
+    if (!Number.isFinite(row) || !Number.isFinite(col)) return null;
+    return { row, col };
+  }
+
+  function normalizeSelectionCoord(coord) {
+    if (!coord) return null;
+    const maxRow = Math.max(0, Number(state.angles || 1) - 1);
+    const maxCol = Math.max(0, authoringFrameCols() - 1);
+    const row = Math.round(Number(coord.row));
+    const col = Math.round(Number(coord.col));
+    if (!Number.isFinite(row) || !Number.isFinite(col)) return null;
+    return {
+      row: Math.max(0, Math.min(maxRow, row)),
+      col: Math.max(0, Math.min(maxCol, col)),
+    };
+  }
+
+  function selectedFrameCoordsSorted() {
+    return [...(state.selectedFrames || [])]
+      .map(parseFrameSelectionKey)
+      .filter(Boolean)
+      .sort((a, b) => (a.row - b.row) || (a.col - b.col));
+  }
+
+  function selectedRowsSorted() {
+    return [...new Set(selectedFrameCoordsSorted().map((coord) => Number(coord.row)))].sort((a, b) => a - b);
+  }
+
+  function selectedColsForRow(row) {
+    if (!Number.isFinite(Number(row))) return [];
+    return selectedFrameCoordsSorted()
+      .filter((coord) => Number(coord.row) === Number(row))
+      .map((coord) => Number(coord.col));
+  }
+
+  function hasGridSelection() {
+    return selectedFrameCoordsSorted().length > 0;
+  }
+
+  function hasSingleSelectedRow() {
+    return selectedRowsSorted().length === 1 && hasGridSelection();
+  }
+
+  function selectionContainsFrame(row, col) {
+    return !!state.selectedFrames?.has(frameSelectionKey(row, col));
+  }
+
+  function rowHasSelectedFrames(row) {
+    return selectedColsForRow(row).length > 0;
+  }
+
+  function syncDerivedGridSelectionState() {
+    const coords = selectedFrameCoordsSorted();
+    if (!coords.length) {
+      state.selectionAnchor = null;
+      state.selectionFocus = null;
+      state.selectedRow = null;
+      state.selectedCols = new Set();
+      return;
+    }
+    const focus = normalizeSelectionCoord(state.selectionFocus);
+    const focusKey = focus ? frameSelectionKey(focus.row, focus.col) : "";
+    const resolvedFocus = focus && state.selectedFrames.has(focusKey)
+      ? focus
+      : { ...coords[coords.length - 1] };
+    state.selectionFocus = { ...resolvedFocus };
+    state.selectedRow = Number(resolvedFocus.row);
+    state.selectedCols = new Set(selectedColsForRow(resolvedFocus.row));
+    if (!state.selectedCols.size) {
+      const first = coords[0];
+      state.selectionFocus = { ...first };
+      state.selectedRow = Number(first.row);
+      state.selectedCols = new Set(selectedColsForRow(first.row));
+    }
+    const anchor = normalizeSelectionCoord(state.selectionAnchor);
+    const anchorKey = anchor ? frameSelectionKey(anchor.row, anchor.col) : "";
+    state.selectionAnchor = anchor && state.selectedFrames.has(anchorKey)
+      ? { ...anchor }
+      : { ...coords[0] };
+  }
+
+  function setGridSelection(coords, opts = {}) {
+    const normalized = [];
+    const seen = new Set();
+    for (const coord of coords || []) {
+      const next = normalizeSelectionCoord(coord);
+      if (!next) continue;
+      const key = frameSelectionKey(next.row, next.col);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      normalized.push(next);
+    }
+    state.selectedFrames = new Set(normalized.map((coord) => frameSelectionKey(coord.row, coord.col)));
+    state.selectionAnchor = opts.anchor ? { ...opts.anchor } : null;
+    state.selectionFocus = opts.focus ? { ...opts.focus } : null;
+    syncDerivedGridSelectionState();
+  }
+
+  function clearGridSelection() {
+    setGridSelection([]);
   }
 
   function angleNameForIndex(i) {
@@ -2603,7 +2724,7 @@
   function makeFrameRowHeader(row, frameCols) {
     const wrap = document.createElement("div");
     wrap.className = "frame-row-header row-header";
-    if (state.selectedRow === row) wrap.classList.add("selected");
+    if (rowHasSelectedFrames(row)) wrap.classList.add("selected");
     wrap.dataset.row = String(row);
     wrap.setAttribute("draggable", "true");
 
@@ -2633,9 +2754,9 @@
 
   function selectWholeRow(row) {
     const frameCols = authoringFrameCols();
-    state.selectedRow = row;
-    state.selectedCols = new Set();
-    for (let c = 0; c < frameCols; c++) state.selectedCols.add(c);
+    const coords = [];
+    for (let c = 0; c < frameCols; c++) coords.push({ row, col: c });
+    setGridSelection(coords, { anchor: { row, col: 0 }, focus: { row, col: 0 } });
     renderFrameGrid();
     renderJitterInfo();
     renderPreviewFrame(row, 0);
@@ -2657,7 +2778,13 @@
       swapRowBlocks(cur, cur + step);
       cur += step;
     }
-    state.selectedRow = to;
+    const cols = rowHasSelectedFrames(from) ? selectedColsForRow(from) : (state.selectedRow === from ? selectedFrameColsSorted() : []);
+    if (cols.length) {
+      setGridSelection(cols.map((col) => ({ row: to, col })), {
+        anchor: { row: to, col: cols[0] },
+        focus: { row: to, col: cols[0] },
+      });
+    }
     renderAll();
     saveSessionState("move-row-to-index");
     status(`Moved row to ${to} (${angleNameForIndex(to)})`, "ok");
@@ -2673,8 +2800,8 @@
     for (let row = 0; row < state.angles; row++) {
       panel.appendChild(makeFrameRowHeader(row, frameCols));
       for (let col = 0; col < frameCols; col++) {
-        const selected = state.selectedRow === row && state.selectedCols.has(col);
-        const rowSelected = state.selectedRow === row;
+        const selected = selectionContainsFrame(row, col);
+        const rowSelected = rowHasSelectedFrames(row);
         const groupSelected = state.frameGroups.some((g) => Number(g.row) === row && (g.cols || []).includes(col));
         const cellEl = makeFrameCanvas(row, col, selected, rowSelected, groupSelected);
         panel.appendChild(cellEl);
@@ -3392,8 +3519,7 @@
     const nextCol = Math.max(0, Math.min(cur.maxCol, cur.col + Number(deltaCol || 0)));
     state.inspectorRow = nextRow;
     state.inspectorCol = nextCol;
-    state.selectedRow = nextRow;
-    state.selectedCols = new Set([nextCol]);
+    setGridSelection([{ row: nextRow, col: nextCol }], { anchor: { row: nextRow, col: nextCol }, focus: { row: nextRow, col: nextCol } });
     renderFrameGrid();
     renderPreviewFrame(nextRow, Math.max(0, Math.min(cur.semanticFrames - 1, nextCol % cur.semanticFrames)));
     renderInspector();
@@ -3731,23 +3857,24 @@
 
   function updateActionButtons() {
     const hasRow = state.selectedRow !== null;
-    const hasSelection = hasRow && state.selectedCols.size > 0;
+    const hasSelection = hasGridSelection();
+    const singleRow = hasSingleSelectedRow();
     const readOnly = !editableLayerActive();
-    $("rowUpBtn").disabled = readOnly || !hasRow || state.selectedRow <= 0;
-    $("rowDownBtn").disabled = readOnly || !hasRow || state.selectedRow >= state.angles - 1;
+    $("rowUpBtn").disabled = readOnly || !singleRow || !hasRow || state.selectedRow <= 0;
+    $("rowDownBtn").disabled = readOnly || !singleRow || !hasRow || state.selectedRow >= state.angles - 1;
     const maxCol = Math.max(0, authoringFrameCols() - 1);
     const minSel = hasSelection ? Math.min(...state.selectedCols) : 0;
     const maxSel = hasSelection ? Math.max(...state.selectedCols) : 0;
-    $("colLeftBtn").disabled = readOnly || !hasSelection || minSel <= 0;
-    $("colRightBtn").disabled = readOnly || !hasSelection || maxSel >= maxCol;
+    $("colLeftBtn").disabled = readOnly || !singleRow || !hasSelection || minSel <= 0;
+    $("colRightBtn").disabled = readOnly || !singleRow || !hasSelection || maxSel >= maxCol;
     if ($("addFrameBtn")) $("addFrameBtn").disabled = readOnly || !(state.gridCols > 0 && state.gridRows > 0);
     $("deleteCellBtn").disabled = readOnly || !hasSelection;
     if ($("deleteFrameBtn")) $("deleteFrameBtn").disabled = readOnly || !hasSelection || semanticFrameCount() <= 1;
     if ($("openInspectorBtn")) $("openInspectorBtn").disabled = !hasSelection;
-    $("assignAnimCategoryBtn").disabled = readOnly || !hasRow;
-    $("assignFrameGroupBtn").disabled = readOnly || !hasSelection;
-    const jitterDisabled = readOnly || !hasSelection;
-    const jitterRowDisabled = readOnly || !hasRow;
+    $("assignAnimCategoryBtn").disabled = readOnly || !singleRow || !hasRow;
+    $("assignFrameGroupBtn").disabled = readOnly || !singleRow || !hasSelection;
+    const jitterDisabled = readOnly || !singleRow || !hasSelection;
+    const jitterRowDisabled = readOnly || !singleRow || !hasRow;
     if ($("autoAlignSelectedBtn")) $("autoAlignSelectedBtn").disabled = jitterDisabled;
     if ($("autoAlignRowBtn")) $("autoAlignRowBtn").disabled = jitterRowDisabled;
     if ($("jitterLeftBtn")) $("jitterLeftBtn").disabled = jitterDisabled;
@@ -3872,8 +3999,7 @@
       );
       state.activeLayer = 2;
       state.visibleLayers = new Set([2]);
-      state.selectedRow = null;
-      state.selectedCols = new Set();
+      clearGridSelection();
       state.history = [];
       state.future = [];
       state.sessionDirty = false;
@@ -5094,7 +5220,7 @@
   }
 
   function selectedFrameColsSorted() {
-    return [...state.selectedCols].map((c) => Number(c)).sort((a, b) => a - b);
+    return selectedColsForRow(state.selectedRow);
   }
 
   function frameVisualBounds(row, col) {
@@ -5237,6 +5363,10 @@
       status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
       return false;
     }
+    if (!hasSingleSelectedRow()) {
+      status("Select one or more frames on a single row first", "warn");
+      return false;
+    }
     if (state.selectedRow === null || state.selectedCols.size === 0) {
       status("Select one or more frames on a row first", "warn");
       return false;
@@ -5267,6 +5397,10 @@
   function autoAlignFrameJitter(useEntireRow = false) {
     if (!editableLayerActive()) {
       status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
+      return false;
+    }
+    if (!hasSingleSelectedRow()) {
+      status("Select frames on a single row first", "warn");
       return false;
     }
     if (state.selectedRow === null) {
@@ -5321,8 +5455,12 @@
       jitterRowInput.value = String(state.selectedRow === null ? 0 : Number(state.selectedRow));
       jitterRowInput.disabled = state.angles <= 0;
     }
-    if (state.selectedRow === null || state.selectedCols.size === 0) {
+    if (!hasGridSelection()) {
       el.textContent = "Select one or more grid frames on a row to align/nudge jitter.";
+      return;
+    }
+    if (!hasSingleSelectedRow()) {
+      el.textContent = `Selection spans ${selectedRowsSorted().length} rows. Row jitter actions require a single-row selection.`;
       return;
     }
     const row = Number(state.selectedRow);
@@ -5345,8 +5483,8 @@
 
   function selectedSemanticFrameIndices() {
     return [...new Set(
-      [...state.selectedCols]
-        .map((col) => frameColInfo(col).frame)
+      selectedFrameCoordsSorted()
+        .map((coord) => frameColInfo(coord.col).frame)
         .filter((frame) => Number.isFinite(frame))
     )].sort((a, b) => a - b);
   }
@@ -5466,8 +5604,7 @@
     }
     const lastCol = Math.max(0, totalGridFrameCols() - 1);
     const row = state.selectedRow === null ? 0 : Math.max(0, Math.min(state.angles - 1, Number(state.selectedRow)));
-    state.selectedRow = row;
-    state.selectedCols = new Set([lastCol]);
+    setGridSelection([{ row, col: lastCol }], { anchor: { row, col: lastCol }, focus: { row, col: lastCol } });
     renderAll();
     saveSessionState("grid-add-frame");
     status(`Added frame slot (frames=${state.anims.reduce((a, b) => a + b, 0)})`, "ok");
@@ -5498,6 +5635,8 @@
       return false;
     }
 
+    const selectedRows = selectedRowsSorted();
+    const focusRow = state.selectedRow === null ? 0 : Math.max(0, Math.min(state.angles - 1, Number(state.selectedRow)));
     const beforeDirty = !!state.sessionDirty;
     pushHistory();
     const projections = authoringProjectionCount();
@@ -5518,8 +5657,20 @@
 
     const nextSemanticFrames = semanticFrameCount();
     const selectionFrame = Math.max(0, Math.min(nextSemanticFrames - 1, targetFrames[0]));
-    state.selectedCols = new Set(semanticFrameAuthoringCols(selectionFrame, nextSemanticFrames, projections));
-    state.selectedRow = Math.max(0, Math.min(state.angles - 1, Number(state.selectedRow || 0)));
+    const nextRows = selectedRows.length ? selectedRows : [focusRow];
+    const repairedCoords = [];
+    for (const row of nextRows) {
+      for (const col of semanticFrameAuthoringCols(selectionFrame, nextSemanticFrames, projections)) {
+        repairedCoords.push({ row, col });
+      }
+    }
+    const repairedRow = Math.max(0, Math.min(state.angles - 1, focusRow));
+    const repairedCols = semanticFrameAuthoringCols(selectionFrame, nextSemanticFrames, projections);
+    const repairedCol = repairedCols.length ? repairedCols[0] : 0;
+    setGridSelection(repairedCoords, {
+      anchor: { row: repairedRow, col: repairedCol },
+      focus: { row: repairedRow, col: repairedCol },
+    });
     if (state.inspectorOpen) {
       state.inspectorRow = state.selectedRow;
       state.inspectorCol = Math.min(...state.selectedCols);
@@ -5534,15 +5685,19 @@
     if (!Number.isFinite(Number(row))) return false;
     const nextRow = Math.max(0, Math.min(state.angles - 1, Math.round(Number(row))));
     if (state.angles <= 0) return false;
-    if (state.selectedCols.size <= 0 || state.selectedRow === null) {
+    if (!hasSingleSelectedRow()) {
       selectFrame(nextRow, 0, false);
       return true;
     }
-    state.selectedRow = nextRow;
+    const cols = selectedFrameColsSorted();
+    setGridSelection(cols.map((col) => ({ row: nextRow, col })), {
+      anchor: { row: nextRow, col: cols[0] ?? 0 },
+      focus: { row: nextRow, col: cols[0] ?? 0 },
+    });
     renderFrameGrid();
     renderJitterInfo();
     const semanticFrames = semanticFrameCount();
-    const firstCol = Math.max(0, Math.min(totalGridFrameCols() - 1, selectedFrameColsSorted()[0] ?? 0));
+    const firstCol = Math.max(0, Math.min(totalGridFrameCols() - 1, cols[0] ?? 0));
     renderPreviewFrame(nextRow, Math.max(0, Math.min(semanticFrames - 1, firstCol % semanticFrames)));
     return true;
   }
@@ -5642,8 +5797,10 @@
       }
     }
     if (firstRow !== null && firstRowCols.length) {
-      state.selectedRow = firstRow;
-      state.selectedCols = new Set(firstRowCols);
+      setGridSelection(firstRowCols.map((col) => ({ row: firstRow, col })), {
+        anchor: { row: firstRow, col: firstRowCols[0] },
+        focus: { row: firstRow, col: firstRowCols[0] },
+      });
     }
     renderAll();
     saveSessionState("drop-source-selection-to-grid");
@@ -5699,7 +5856,7 @@
     }
     pushHistory();
     writeSourceCellsToFrame(state.selectedRow, col, cells);
-    state.selectedCols = new Set([col]);
+    setGridSelection([{ row: state.selectedRow, col }], { anchor: { row: state.selectedRow, col }, focus: { row: state.selectedRow, col } });
     renderAll();
     saveSessionState("source-box-to-row-seq");
     status(`Inserted source sprite into row ${state.selectedRow}, col ${col}`, "ok");
@@ -5782,9 +5939,10 @@
       status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
       return;
     }
-    if (state.selectedRow === null || state.selectedCols.size === 0) return;
+    const coords = selectedFrameCoordsSorted();
+    if (!coords.length) return;
     pushHistory();
-    for (const col of state.selectedCols) clearFrame(state.selectedRow, col);
+    for (const coord of coords) clearFrame(coord.row, coord.col);
     renderAll();
     saveSessionState("delete");
   }
@@ -5817,12 +5975,17 @@
       status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
       return;
     }
+    if (!hasSingleSelectedRow()) return;
     if (state.selectedRow === null) return;
     const target = state.selectedRow + delta;
     if (target < 0 || target >= state.angles) return;
     pushHistory();
     swapRowBlocks(state.selectedRow, target);
-    state.selectedRow = target;
+    const cols = selectedFrameColsSorted();
+    setGridSelection(cols.map((col) => ({ row: target, col })), {
+      anchor: { row: target, col: cols[0] ?? 0 },
+      focus: { row: target, col: cols[0] ?? 0 },
+    });
     renderAll();
     saveSessionState("row-move");
   }
@@ -5853,6 +6016,7 @@
       status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
       return;
     }
+    if (!hasSingleSelectedRow()) return;
     if (state.selectedCols.size === 0) return;
     const cols = [...state.selectedCols].sort((a, b) => a - b);
     const maxCol = Math.max(0, authoringFrameCols() - 1);
@@ -5861,7 +6025,11 @@
     pushHistory();
     const work = delta < 0 ? cols : [...cols].reverse();
     for (const c of work) swapColBlocks(c, c + delta);
-    state.selectedCols = new Set(cols.map((c) => c + delta));
+    const nextCols = cols.map((c) => c + delta);
+    setGridSelection(nextCols.map((col) => ({ row: state.selectedRow, col })), {
+      anchor: { row: state.selectedRow, col: nextCols[0] ?? 0 },
+      focus: { row: state.selectedRow, col: nextCols[0] ?? 0 },
+    });
     renderAll();
     saveSessionState("col-move");
   }
@@ -5871,6 +6039,7 @@
       status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
       return;
     }
+    if (!hasSingleSelectedRow()) return;
     if (state.selectedRow === null) return;
     pushHistory();
     state.rowCategories[state.selectedRow] = $("animCategorySelect").value;
@@ -5883,6 +6052,7 @@
       status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
       return;
     }
+    if (!hasSingleSelectedRow()) return;
     if (state.selectedRow === null || state.selectedCols.size === 0) return;
     pushHistory();
     const name = ($("frameGroupName").value || "").trim() || `group_${state.frameGroups.length + 1}`;
@@ -5901,6 +6071,10 @@
   function applyGroupsToAnims() {
     if (!editableLayerActive()) {
       status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
+      return;
+    }
+    if (!hasSingleSelectedRow()) {
+      status("Select frames on one row before applying groups", "warn");
       return;
     }
     const semanticFrames = Math.max(1, Math.floor((state.anims.reduce((a, b) => a + b, 0))));
@@ -5929,21 +6103,29 @@
   }
 
   function selectFrame(row, col, shift) {
-    if (!shift || state.selectedRow === null || state.selectedRow !== row || state.selectedCols.size === 0) {
-      state.selectedRow = row;
-      state.selectedCols = new Set([col]);
+    const next = normalizeSelectionCoord({ row, col });
+    if (!next) return;
+    if (!shift || !hasGridSelection() || !state.selectionAnchor) {
+      setGridSelection([next], { anchor: next, focus: next });
     } else {
-      const anchor = [...state.selectedCols].sort((a, b) => a - b)[0];
-      state.selectedCols = new Set();
-      const lo = Math.min(anchor, col);
-      const hi = Math.max(anchor, col);
-      for (let c = lo; c <= hi; c++) state.selectedCols.add(c);
+      const anchor = normalizeSelectionCoord(state.selectionAnchor) || next;
+      const coords = [];
+      const rowLo = Math.min(anchor.row, next.row);
+      const rowHi = Math.max(anchor.row, next.row);
+      const colLo = Math.min(anchor.col, next.col);
+      const colHi = Math.max(anchor.col, next.col);
+      for (let r = rowLo; r <= rowHi; r++) {
+        for (let c = colLo; c <= colHi; c++) {
+          coords.push({ row: r, col: c });
+        }
+      }
+      setGridSelection(coords, { anchor, focus: next });
     }
     renderFrameGrid();
     renderJitterInfo();
     const semanticFrames = semanticFrameCount();
-    renderPreviewFrame(row, Math.max(0, Math.min(semanticFrames - 1, col % semanticFrames)));
-    panWholeSheetToFrame(row, col);
+    renderPreviewFrame(next.row, Math.max(0, Math.min(semanticFrames - 1, next.col % semanticFrames)));
+    panWholeSheetToFrame(next.row, next.col);
   }
 
   function openInspectorForSelectedFrame() {
@@ -5956,10 +6138,11 @@
   }
 
   function selectedPrimaryFrameCoord() {
-    if (state.selectedRow === null || state.selectedCols.size <= 0) return null;
+    const focus = normalizeSelectionCoord(state.selectionFocus);
+    if (!focus || !selectionContainsFrame(focus.row, focus.col)) return null;
     return {
-      row: Number(state.selectedRow),
-      col: Number(Math.min(...state.selectedCols)),
+      row: Number(focus.row),
+      col: Number(focus.col),
     };
   }
 
@@ -6237,8 +6420,7 @@
       status(`Grid ${mode} made no changes`, "warn");
       return false;
     }
-    state.selectedRow = tr;
-    state.selectedCols = new Set([tc]);
+    setGridSelection([{ row: tr, col: tc }], { anchor: { row: tr, col: tc }, focus: { row: tr, col: tc } });
     renderAll();
     saveSessionState(String(mode) === "swap" ? "grid-cell-swap" : "grid-cell-replace");
     status(String(mode) === "swap"
@@ -6257,7 +6439,7 @@
       if (!cell) return;
       const row = Number(cell.dataset.row);
       const col = Number(cell.dataset.col);
-      const singleSelected = state.selectedRow === row && state.selectedCols.size === 1 && state.selectedCols.has(col);
+      const singleSelected = state.selectedFrames.size === 1 && selectionContainsFrame(row, col);
       if (!e.shiftKey && singleSelected) {
         state.gridCellDrag = {
           fromRow: row,
@@ -7762,8 +7944,7 @@
           state.drawStart = null;
           renderSourceCanvas();
         } else {
-          state.selectedCols = new Set();
-          state.selectedRow = null;
+          clearGridSelection();
           clearSourceSelection();
           renderFrameGrid();
           renderSourceCanvas();
@@ -7848,6 +8029,8 @@
       projs: state.projs,
       frameWChars: state.frameWChars,
       frameHChars: state.frameHChars,
+      selectedFrames: selectedFrameCoordsSorted().map((coord) => ({ row: coord.row, col: coord.col })),
+      selectedRows: selectedRowsSorted(),
       selectedRow: state.selectedRow,
       selectedCols: [...state.selectedCols],
       rowCategories: { ...state.rowCategories },

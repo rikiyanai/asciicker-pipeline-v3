@@ -25,8 +25,8 @@
  *   3. S3-S6: click each mode button, verify sourceMode state change
  *   4. Click grid row header to establish selectedRow >= 0
  *   5. G5: add frame, verify gridCols increased
- *   6. G6a: clear selected contents, verify content changes without shrinking geometry
- *   7. G6b: delete frame slot, verify semantic-slot removal, left-shift, and geometry shrink
+ *   6. G6a: cross-row shift-select + clear selected contents, verify both rows clear without shrinking geometry
+ *   7. G6b: cross-row shift-select + delete frame slot, verify semantic-slot removal, left-shift, geometry shrink, and repaired multi-row selection
  *   8. G9: assign row category, verify state
  *   9. G10: assign frame group, verify frameGroups populated
  *   10. G11: apply groups to anims, verify anims array updated
@@ -87,6 +87,15 @@ async function clickFrameCell(page, row, col) {
   const targetVisible = await targetFrameCell.isVisible().catch(() => false);
   if (!targetVisible) return false;
   await targetFrameCell.click();
+  await page.waitForTimeout(200);
+  return true;
+}
+
+async function shiftClickFrameCell(page, row, col) {
+  const targetFrameCell = page.locator(`.frame-cell[data-row="${Number(row)}"][data-col="${Number(col)}"]`).first();
+  const targetVisible = await targetFrameCell.isVisible().catch(() => false);
+  if (!targetVisible) return false;
+  await targetFrameCell.click({ modifiers: ['Shift'] });
   await page.waitForTimeout(200);
   return true;
 }
@@ -216,6 +225,10 @@ try {
       fail('setup_xp', 'XP import failed', { postImport });
       allPass = false;
     }
+    if (Number(postImport.angles || 0) < 2) {
+      fail('setup_xp', `XP fixture must expose at least two rows for cross-row selection, got angles=${postImport.angles}`, { postImport });
+      allPass = false;
+    }
 
     // ── Select grid row 0 by clicking row header ──
     console.log('=== Setup: Select grid row 0 ===');
@@ -250,60 +263,97 @@ try {
     steps.g5_add_frame = { step: 'add_frame', pass: g5Pass, before: preG5Cols, after: postG5.gridCols };
     if (!g5Pass) allPass = false;
 
-    // ── G6a: Clear selected contents (preserve geometry) ──
+    // ── G6a: Cross-row shift-select + clear selected contents (preserve geometry) ──
     console.log('=== Step 6: G6a Clear selected contents ===');
     await clickFrameCell(page, 0, 0);
+    await shiftClickFrameCell(page, 1, 0);
     const preG6Clear = await captureState(page, 'pre_g6_clear');
-    const preG6ClearSig = await readFrameSignature(page, 0, 0);
-    const preG6ClearCell = await readFrameCell(page, 0, 0, 0, 0);
+    const crossRowSelectionOk =
+      Array.isArray(preG6Clear.selectedRows) &&
+      preG6Clear.selectedRows.includes(0) &&
+      preG6Clear.selectedRows.includes(1) &&
+      Array.isArray(preG6Clear.selectedFrames) &&
+      preG6Clear.selectedFrames.some((coord) => Number(coord?.row) === 0 && Number(coord?.col) === 0) &&
+      preG6Clear.selectedFrames.some((coord) => Number(coord?.row) === 1 && Number(coord?.col) === 0);
+    const preG6ClearSigR0 = await readFrameSignature(page, 0, 0);
+    const preG6ClearSigR1 = await readFrameSignature(page, 1, 0);
+    const preG6ClearCellR0 = await readFrameCell(page, 0, 0, 0, 0);
+    const preG6ClearCellR1 = await readFrameCell(page, 1, 0, 0, 0);
     await page.click('#deleteCellBtn');
     await page.waitForTimeout(500);
     const postG6Clear = await captureState(page, 'post_g6_clear');
-    const postG6ClearSig = await readFrameSignature(page, 0, 0);
-    const postG6ClearCell = await readFrameCell(page, 0, 0, 0, 0);
+    const postG6ClearSigR0 = await readFrameSignature(page, 0, 0);
+    const postG6ClearSigR1 = await readFrameSignature(page, 1, 0);
+    const postG6ClearCellR0 = await readFrameCell(page, 0, 0, 0, 0);
+    const postG6ClearCellR1 = await readFrameCell(page, 1, 0, 0, 0);
     await screenshot(page, outDir, 'step06_g6a_clear_selected_contents');
-    const clearSigChanged = postG6ClearSig !== preG6ClearSig;
-    const clearGlyphChanged = preG6ClearCell?.cell?.glyph !== postG6ClearCell?.cell?.glyph;
+    const clearSigChangedR0 = postG6ClearSigR0 !== preG6ClearSigR0;
+    const clearSigChangedR1 = postG6ClearSigR1 !== preG6ClearSigR1;
+    const clearGlyphChangedR0 = preG6ClearCellR0?.cell?.glyph !== postG6ClearCellR0?.cell?.glyph;
+    const clearGlyphChangedR1 = preG6ClearCellR1?.cell?.glyph !== postG6ClearCellR1?.cell?.glyph;
     const clearGeometryPreserved = postG6Clear.gridCols === preG6Clear.gridCols;
     const g6aPass = assert(
-      (clearSigChanged || clearGlyphChanged) && clearGeometryPreserved,
+      crossRowSelectionOk &&
+        (clearSigChangedR0 || clearGlyphChangedR0) &&
+        (clearSigChangedR1 || clearGlyphChangedR1) &&
+        clearGeometryPreserved,
       fail, 'g6a_clear_selected_contents',
-      `Clear Selected must change frame contents without shrinking gridCols. Sig: "${preG6ClearSig}" → "${postG6ClearSig}", glyph: ${preG6ClearCell?.cell?.glyph} → ${postG6ClearCell?.cell?.glyph}, gridCols: ${preG6Clear.gridCols} → ${postG6Clear.gridCols}`,
-      { preG6Clear, postG6Clear, preG6ClearSig, postG6ClearSig, preG6ClearCell, postG6ClearCell }
+      `Cross-row Clear Selected must clear both selected rows without shrinking gridCols. selection_ok=${crossRowSelectionOk}, row0 sig "${preG6ClearSigR0}" → "${postG6ClearSigR0}", row1 sig "${preG6ClearSigR1}" → "${postG6ClearSigR1}", gridCols: ${preG6Clear.gridCols} → ${postG6Clear.gridCols}`,
+      { preG6Clear, postG6Clear, preG6ClearSigR0, postG6ClearSigR0, preG6ClearSigR1, postG6ClearSigR1, preG6ClearCellR0, postG6ClearCellR0, preG6ClearCellR1, postG6ClearCellR1 }
     );
     steps.g6a_clear_selected_contents = {
       step: 'clear_selected_contents',
       pass: g6aPass,
-      sigChanged: clearSigChanged,
-      glyphChanged: clearGlyphChanged,
+      crossRowSelectionOk,
+      row0: {
+        sigChanged: clearSigChangedR0,
+        glyphChanged: clearGlyphChangedR0,
+        preGlyph: preG6ClearCellR0?.cell?.glyph,
+        postGlyph: postG6ClearCellR0?.cell?.glyph,
+      },
+      row1: {
+        sigChanged: clearSigChangedR1,
+        glyphChanged: clearGlyphChangedR1,
+        preGlyph: preG6ClearCellR1?.cell?.glyph,
+        postGlyph: postG6ClearCellR1?.cell?.glyph,
+      },
       geometryPreserved: clearGeometryPreserved,
-      preGlyph: preG6ClearCell?.cell?.glyph,
-      postGlyph: postG6ClearCell?.cell?.glyph,
       beforeGridCols: preG6Clear.gridCols,
       afterGridCols: postG6Clear.gridCols,
     };
     if (!g6aPass) allPass = false;
 
-    // ── G6b: Delete frame slot (remove semantic slot + shift left) ──
+    // ── G6b: Cross-row shift-select + delete frame slot (remove semantic slot + shift left) ──
     console.log('=== Step 7: G6b Delete frame slot ===');
     await clickFrameCell(page, 0, 0);
+    await shiftClickFrameCell(page, 1, 0);
     const preG6Delete = await captureState(page, 'pre_g6_delete_frame');
     const preG6DeleteStatus = await readWorkbenchStatus(page);
+    const preDeleteSelectionOk =
+      Array.isArray(preG6Delete.selectedRows) &&
+      preG6Delete.selectedRows.includes(0) &&
+      preG6Delete.selectedRows.includes(1) &&
+      Array.isArray(preG6Delete.selectedFrames) &&
+      preG6Delete.selectedFrames.some((coord) => Number(coord?.row) === 0 && Number(coord?.col) === 0) &&
+      preG6Delete.selectedFrames.some((coord) => Number(coord?.row) === 1 && Number(coord?.col) === 0);
     const preSemanticFrames = Array.isArray(preG6Delete.anims)
       ? preG6Delete.anims.reduce((sum, len) => sum + Number(len || 0), 0)
       : 0;
     const projections = Math.max(1, Number(preG6Delete.projs || 1));
     const frameWChars = Math.max(1, Number(preG6Delete.frameWChars || 1));
     const expectedGridColsAfterDelete = preG6Delete.gridCols - (frameWChars * projections);
+    const selectedRows = [0, 1];
     const shiftCoords = [];
     const shiftPairs = [];
     if (preSemanticFrames > 1) {
-      for (let proj = 0; proj < projections; proj += 1) {
-        const beforeCol = (proj * preSemanticFrames) + 1;
-        const afterCol = proj * (preSemanticFrames - 1);
-        shiftCoords.push({ row: 0, col: beforeCol });
-        shiftCoords.push({ row: 0, col: afterCol });
-        shiftPairs.push({ projection: proj, beforeCol, afterCol });
+      for (const row of selectedRows) {
+        for (let proj = 0; proj < projections; proj += 1) {
+          const beforeCol = (proj * preSemanticFrames) + 1;
+          const afterCol = proj * (preSemanticFrames - 1);
+          shiftCoords.push({ row, col: beforeCol });
+          shiftCoords.push({ row, col: afterCol });
+          shiftPairs.push({ row, projection: proj, beforeCol, afterCol });
+        }
       }
     }
     const preDeleteSignatures = await readFrameSignatures(page, shiftCoords);
@@ -314,11 +364,12 @@ try {
     const postSemanticFrames = Array.isArray(postG6Delete.anims)
       ? postG6Delete.anims.reduce((sum, len) => sum + Number(len || 0), 0)
       : 0;
-    const postDeleteSignatures = await readFrameSignatures(page, shiftPairs.map(({ afterCol }) => ({ row: 0, col: afterCol })));
-    const shiftChecks = shiftPairs.map(({ projection, beforeCol, afterCol }) => {
-      const beforeKey = `r0c${beforeCol}`;
-      const afterKey = `r0c${afterCol}`;
+    const postDeleteSignatures = await readFrameSignatures(page, shiftPairs.map(({ row, afterCol }) => ({ row, col: afterCol })));
+    const shiftChecks = shiftPairs.map(({ row, projection, beforeCol, afterCol }) => {
+      const beforeKey = `r${row}c${beforeCol}`;
+      const afterKey = `r${row}c${afterCol}`;
       return {
+        row,
         projection,
         beforeCol,
         afterCol,
@@ -330,20 +381,22 @@ try {
     await screenshot(page, outDir, 'step07_g6b_delete_frame_slot');
     const deleteGeometryShrunk = postG6Delete.gridCols === expectedGridColsAfterDelete;
     const deleteSemanticCountShrunk = postSemanticFrames === Math.max(1, preSemanticFrames - 1);
-    const deleteSelectionRepaired = Array.isArray(postG6Delete.selectedCols)
-      ? shiftPairs.every(({ afterCol }) => postG6Delete.selectedCols.includes(afterCol))
+    const deleteSelectionRepaired = Array.isArray(postG6Delete.selectedFrames)
+      ? shiftPairs.every(({ row, afterCol }) =>
+        postG6Delete.selectedFrames.some((coord) => Number(coord?.row) === row && Number(coord?.col) === afterCol))
       : false;
     const deleteShiftedLeft = shiftChecks.length > 0 && shiftChecks.every((entry) => entry.matched);
     const deleteStatusOk = /Deleted 1 semantic frame slot/.test(String(postG6DeleteStatus?.text || postG6Delete.status || ''));
     const g6bPass = assert(
-      deleteGeometryShrunk && deleteSemanticCountShrunk && deleteSelectionRepaired && deleteShiftedLeft && deleteStatusOk,
+      preDeleteSelectionOk && deleteGeometryShrunk && deleteSemanticCountShrunk && deleteSelectionRepaired && deleteShiftedLeft && deleteStatusOk,
       fail, 'g6b_delete_frame_slot',
-      `Delete Frame must remove one semantic slot, shrink geometry, repair selection, and left-shift surviving signatures. gridCols ${preG6Delete.gridCols} → ${postG6Delete.gridCols}, semanticFrames ${preSemanticFrames} → ${postSemanticFrames}, selection=${JSON.stringify(postG6Delete.selectedCols)}, status="${postG6DeleteStatus?.text || postG6Delete.status || ''}"`,
+      `Cross-row Delete Frame must remove one semantic slot, shrink geometry, repair selection across both rows, and left-shift surviving signatures. selection_ok=${preDeleteSelectionOk}, gridCols ${preG6Delete.gridCols} → ${postG6Delete.gridCols}, semanticFrames ${preSemanticFrames} → ${postSemanticFrames}, selection=${JSON.stringify(postG6Delete.selectedFrames)}, status="${postG6DeleteStatus?.text || postG6Delete.status || ''}"`,
       { preG6Delete, postG6Delete, preG6DeleteStatus, postG6DeleteStatus, shiftChecks, expectedGridColsAfterDelete }
     );
     steps.g6b_delete_frame_slot = {
       step: 'delete_frame_slot',
       pass: g6bPass,
+      preDeleteSelectionOk,
       projections,
       frameWChars,
       beforeGridCols: preG6Delete.gridCols,
@@ -360,11 +413,11 @@ try {
     };
     writeJsonArtifact(outDir, 'g6_delete_frame_contract.json', {
       selected_semantic_frames: [0],
-      grouping_shape: 'single_frame_slot',
-      target_origin: { row: 0, col: 0 },
-      expected_changed_rows_cols: shiftPairs.map(({ projection, beforeCol, afterCol }) => ({
+      grouping_shape: 'multi_row_same_frame_slot',
+      target_origin: { rows: selectedRows, col: 0 },
+      expected_changed_rows_cols: shiftPairs.map(({ row, projection, beforeCol, afterCol }) => ({
+        row,
         projection,
-        row: 0,
         source_col_before: beforeCol,
         target_col_after: afterCol,
       })),
