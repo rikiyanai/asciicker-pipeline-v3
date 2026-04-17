@@ -246,6 +246,253 @@ export async function readFrameCell(page, row, col, cx, cy) {
   }, [row, col, cx, cy]);
 }
 
+/**
+ * Read a set of frame signatures keyed by `r{row}c{col}`.
+ * @param {import('playwright').Page} page
+ * @param {Array<{row:number,col:number}>} coords
+ * @returns {Promise<object>}
+ */
+export async function readFrameSignatures(page, coords) {
+  const out = {};
+  for (const coord of coords || []) {
+    const row = Number(coord?.row ?? 0);
+    const col = Number(coord?.col ?? 0);
+    out[`r${row}c${col}`] = await readFrameSignature(page, row, col);
+  }
+  return out;
+}
+
+/**
+ * Read the visible workbench status banner.
+ * @param {import('playwright').Page} page
+ * @returns {Promise<{text:string,className:string}>}
+ */
+export async function readWorkbenchStatus(page) {
+  return page.evaluate(() => {
+    const el = document.getElementById('wbStatus');
+    return {
+      text: String(el?.textContent || '').trim(),
+      className: String(el?.className || '').trim(),
+    };
+  });
+}
+
+function clusterBoxesByAxis(boxes, axis) {
+  const key = axis === 'x' ? 'x' : 'y';
+  const extent = axis === 'x' ? 'w' : 'h';
+  const edge = axis === 'x'
+    ? (box) => Number(box.x || 0) + Math.max(1, Number(box.w || 1)) - 1
+    : (box) => Number(box.y || 0) + Math.max(1, Number(box.h || 1)) - 1;
+  const sorted = [...(boxes || [])].sort((a, b) => Number(a?.[key] || 0) - Number(b?.[key] || 0));
+  const groups = [];
+  for (const box of sorted) {
+    if (!groups.length) {
+      groups.push({
+        min: Number(box?.[key] || 0),
+        max: edge(box),
+      });
+      continue;
+    }
+    const group = groups[groups.length - 1];
+    const tol = Math.max(4, Math.round(Math.max(1, Number(box?.[extent] || 1)) * 0.35));
+    const start = Number(box?.[key] || 0);
+    if (start <= group.max + tol) {
+      group.min = Math.min(group.min, start);
+      group.max = Math.max(group.max, edge(box));
+    } else {
+      groups.push({ min: start, max: edge(box) });
+    }
+  }
+  return groups.length;
+}
+
+/**
+ * Describe the currently selected source boxes for report artifacts.
+ * @param {object} state
+ * @param {object} opts
+ * @returns {object}
+ */
+export function describeSourceSelection(state, {
+  selectionMode = 'select',
+  sourceFamily = 'manual',
+  expectedSpan = 'single',
+} = {}) {
+  const ids = Array.isArray(state?.sourceSelection)
+    ? state.sourceSelection.map((id) => Number(id))
+    : [];
+  const selected = Array.isArray(state?.sourceBoxes)
+    ? state.sourceBoxes.filter((box) => ids.includes(Number(box.id)))
+    : [];
+  const rowBands = clusterBoxesByAxis(selected, 'y');
+  const colBands = clusterBoxesByAxis(selected, 'x');
+  const bounds = selected.length
+    ? {
+        minX: Math.min(...selected.map((box) => Number(box.x || 0))),
+        minY: Math.min(...selected.map((box) => Number(box.y || 0))),
+        maxX: Math.max(...selected.map((box) => Number(box.x || 0) + Math.max(1, Number(box.w || 1)) - 1)),
+        maxY: Math.max(...selected.map((box) => Number(box.y || 0) + Math.max(1, Number(box.h || 1)) - 1)),
+      }
+    : null;
+  return {
+    selection_mode: selectionMode,
+    source_family: sourceFamily,
+    expected_span: expectedSpan,
+    selected_source_ids: ids,
+    selected_count: selected.length,
+    grouping_shape: {
+      row_bands: rowBands,
+      col_bands: colBands,
+      label: `${rowBands}r x ${colBands}c`,
+    },
+    selection_bounds: bounds,
+  };
+}
+
+/**
+ * Make both source and target panels visible at the same time for cross-panel drag/drop.
+ * @param {import('playwright').Page} page
+ * @param {object} opts
+ * @returns {Promise<object>}
+ */
+export async function prepareCrossPanelDrag(page, {
+  sourceSelector = '#sourceCanvas',
+  targetSelector,
+  viewportWidth = 1400,
+  minViewportHeight = 1400,
+  maxViewportHeight = 2800,
+  padding = 120,
+} = {}) {
+  if (!targetSelector) throw new Error('targetSelector is required');
+  const layout = await page.evaluate(({ sourceSel, targetSel }) => {
+    const source = document.querySelector(sourceSel);
+    const target = document.querySelector(targetSel);
+    if (!(source instanceof Element) || !(target instanceof Element)) return null;
+    const sourceRect = source.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    return {
+      scrollHeight: Math.ceil(Math.max(
+        document.documentElement?.scrollHeight || 0,
+        document.body?.scrollHeight || 0,
+        sourceRect.bottom,
+        targetRect.bottom
+      )),
+    };
+  }, { sourceSel: sourceSelector, targetSel: targetSelector });
+  if (!layout) throw new Error(`Missing source or target for cross-panel drag (${sourceSelector}, ${targetSelector})`);
+  const nextHeight = Math.max(
+    minViewportHeight,
+    Math.min(maxViewportHeight, Number(layout.scrollHeight || minViewportHeight) + padding)
+  );
+  await page.setViewportSize({ width: viewportWidth, height: nextHeight });
+  await page.locator(sourceSelector).scrollIntoViewIfNeeded();
+  await page.locator(targetSelector).scrollIntoViewIfNeeded();
+  await page.waitForTimeout(150);
+  const visibility = await page.evaluate(({ sourceSel, targetSel }) => {
+    const source = document.querySelector(sourceSel);
+    const target = document.querySelector(targetSel);
+    if (!(source instanceof Element) || !(target instanceof Element)) return null;
+    const sourceRect = source.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const vpH = window.innerHeight || document.documentElement?.clientHeight || 0;
+    const vpW = window.innerWidth || document.documentElement?.clientWidth || 0;
+    function visible(rect) {
+      return rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.left >= 0 && rect.bottom <= vpH && rect.right <= vpW;
+    }
+    return {
+      viewport: { width: vpW, height: vpH },
+      sourceRect,
+      targetRect,
+      sourceVisible: visible(sourceRect),
+      targetVisible: visible(targetRect),
+    };
+  }, { sourceSel: sourceSelector, targetSel: targetSelector });
+  return { viewportHeight: nextHeight, ...(visibility || {}) };
+}
+
+/**
+ * Drag the currently selected source boxes to a grid frame cell and capture a structured artifact.
+ * @param {import('playwright').Page} page
+ * @param {object} opts
+ * @returns {Promise<object>}
+ */
+export async function dragSelectedSourceBoxesToFrame(page, {
+  sourceBox,
+  targetRow,
+  targetCol,
+  selectionMode = 'select',
+  sourceFamily = 'manual',
+  expectedSpan = 'single',
+  expectedChangedCells = [{ row: targetRow, col: targetCol }],
+  settleMs = 500,
+} = {}) {
+  const targetSelector = `.frame-cell[data-row="${Number(targetRow)}"][data-col="${Number(targetCol)}"]`;
+  const preState = await captureState(page, 'drag_pre');
+  const preStatus = await readWorkbenchStatus(page);
+  const selection = describeSourceSelection(preState, { selectionMode, sourceFamily, expectedSpan });
+  const layout = await prepareCrossPanelDrag(page, { targetSelector });
+  const preSignatures = await readFrameSignatures(page, expectedChangedCells);
+  const canvasBBox = await page.locator('#sourceCanvas').boundingBox();
+  const targetBBox = await page.locator(targetSelector).boundingBox();
+  if (!canvasBBox || !targetBBox) {
+    throw new Error(`Missing drag bounding boxes for ${targetSelector}`);
+  }
+  const srcX = canvasBBox.x + Number(sourceBox.x || 0) + Math.floor(Math.max(1, Number(sourceBox.w || 1)) / 2);
+  const srcY = canvasBBox.y + Number(sourceBox.y || 0) + Math.floor(Math.max(1, Number(sourceBox.h || 1)) / 2);
+  const midX = srcX + 10;
+  const midY = srcY;
+  const tgtX = targetBBox.x + Math.floor(targetBBox.width / 2);
+  const tgtY = targetBBox.y + Math.floor(targetBBox.height / 2);
+
+  await page.mouse.move(srcX, srcY);
+  await page.mouse.down();
+  await page.mouse.move(midX, midY, { steps: 2 });
+  await page.mouse.move(tgtX, tgtY, { steps: 5 });
+  const dropHit = await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    const frame = el instanceof Element ? el.closest('.frame-cell') : null;
+    return frame
+      ? {
+          ok: true,
+          row: Number(frame.getAttribute('data-row') || -1),
+          col: Number(frame.getAttribute('data-col') || -1),
+          tag: frame.tagName,
+        }
+      : { ok: false, row: null, col: null, tag: el instanceof Element ? el.tagName : null };
+  }, { x: tgtX, y: tgtY });
+  await page.mouse.up();
+  await page.waitForTimeout(settleMs);
+
+  const postState = await captureState(page, 'drag_post');
+  const postStatus = await readWorkbenchStatus(page);
+  const postSignatures = await readFrameSignatures(page, expectedChangedCells);
+  const deltas = (expectedChangedCells || []).map((coord) => {
+    const key = `r${Number(coord.row)}c${Number(coord.col)}`;
+    return {
+      row: Number(coord.row),
+      col: Number(coord.col),
+      changed: preSignatures[key] !== postSignatures[key],
+      before: preSignatures[key],
+      after: postSignatures[key],
+    };
+  });
+  return {
+    target_origin: { row: Number(targetRow), col: Number(targetCol) },
+    selection,
+    expected_changed_cells: (expectedChangedCells || []).map((coord) => ({
+      row: Number(coord.row),
+      col: Number(coord.col),
+    })),
+    frame_signature_deltas: deltas,
+    drag_coords: { srcX, srcY, midX, midY, tgtX, tgtY },
+    layout,
+    drop_hit_before_mouseup: dropHit,
+    pre_status: preStatus,
+    post_status: postStatus,
+    pre: preState,
+    post: postState,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // D2. Whole-sheet mount wait
 // ---------------------------------------------------------------------------

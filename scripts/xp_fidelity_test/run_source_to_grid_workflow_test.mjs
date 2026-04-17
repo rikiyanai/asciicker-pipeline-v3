@@ -38,6 +38,7 @@
 import {
   setupVerifier,
   captureState,
+  dragSelectedSourceBoxesToFrame,
   readFrameSignature,
   writeReport,
   writeJsonArtifact,
@@ -55,12 +56,36 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 // Configuration
 // ---------------------------------------------------------------------------
 
-const PNG_FIXTURE = 'tests/fixtures/known_good/cat_sheet.png';
+const SOURCE_FIXTURES = {
+  single_row: 'tests/fixtures/known_good/cat_sheet.png',
+  multi_row: 'tests/fixtures/known_good/source_grid_multirow.png',
+};
 
 // Box coordinates for cat_sheet.png (192x48).
 // Two manually-chosen boxes that cover distinct sprite regions.
 const BOX_A = { x1: 10, y1: 5, x2: 55, y2: 43 };   // ~45x38
 const BOX_B = { x1: 70, y1: 5, x2: 125, y2: 43 };  // ~55x38
+
+const GROUPED_DRAG_SCENARIOS = [
+  {
+    id: 'row_auto',
+    fixtureKey: 'single_row',
+    selectionMode: 'row_select',
+    sourceFamily: 'auto_detected',
+    expectedSpan: 'cols',
+    targetOrigin: { row: 2, col: 0 },
+    selectionRect: { x1: 1, y1: 4, x2: 191, y2: 44 },
+  },
+  {
+    id: 'column_auto',
+    fixtureKey: 'multi_row',
+    selectionMode: 'col_select',
+    sourceFamily: 'auto_detected',
+    expectedSpan: 'rows',
+    targetOrigin: { row: 4, col: 0 },
+    selectionRect: { x1: 1, y1: 4, x2: 21, y2: 100 },
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -155,24 +180,28 @@ async function stepApplyTemplate(page, fail, outDir) {
   return { step: 'apply_template', pass, pre, post };
 }
 
-async function stepUploadPng(page, fail, outDir, fixturePath) {
-  const pre = await captureState(page, 'pre_upload');
+async function stepUploadPng(page, fail, outDir, fixturePath, label = 'upload') {
+  const pre = await captureState(page, `pre_${label}`);
 
   await page.setInputFiles('#wbFile', fixturePath);
   await page.click('#wbUpload');
   await waitForSourceImage(page);
   await page.waitForTimeout(500);
 
-  const post = await captureState(page, 'post_upload');
-  await screenshot(page, outDir, 'step01_upload');
+  const post = await captureState(page, `post_${label}`);
+  await screenshot(page, outDir, `step_${label}`);
 
   const pass = assert(
     post.sourceImageLoaded === true,
     fail, 'upload', 'sourceImageLoaded should be true after upload',
-    { pre_sourceImageLoaded: pre.sourceImageLoaded, post_sourceImageLoaded: post.sourceImageLoaded }
+    {
+      fixturePath,
+      pre_sourceImageLoaded: pre.sourceImageLoaded,
+      post_sourceImageLoaded: post.sourceImageLoaded,
+    }
   );
 
-  return { step: 'upload_png', pass, pre, post };
+  return { step: `upload_png_${label}`, pass, pre, post, fixturePath };
 }
 
 async function stepSelectGridRow(page, fail, outDir, targetRow) {
@@ -204,16 +233,34 @@ async function stepSelectGridRow(page, fail, outDir, targetRow) {
   return { step: 'select_grid_row', pass, pre, post };
 }
 
+async function stepSwitchSourceMode(page, fail, mode, label = mode) {
+  const pre = await captureState(page, `pre_mode_${label}`);
+  const buttonId = mode === 'col_select' ? '#colSelectBtn'
+    : mode === 'row_select' ? '#rowSelectBtn'
+    : mode === 'draw_box' ? '#drawBoxBtn'
+    : '#sourceSelectBtn';
+  await page.click(buttonId);
+  await page.waitForTimeout(200);
+  const post = await captureState(page, `post_mode_${label}`);
+  const pass = assert(
+    post.sourceMode === mode,
+    fail,
+    'mode_switch',
+    `sourceMode should be "${mode}", got "${post.sourceMode}"`,
+    { label, pre_mode: pre.sourceMode, post_mode: post.sourceMode }
+  );
+  return { step: `switch_mode_${label}`, pass, pre, post, mode };
+}
+
 async function stepSwitchToDrawMode(page, fail, outDir) {
   const pre = await captureState(page, 'pre_draw_mode');
 
-  await page.click('#drawBoxBtn');
-  await page.waitForTimeout(200);
+  const modeStep = await stepSwitchSourceMode(page, fail, 'draw_box', 'draw_mode');
 
   const post = await captureState(page, 'post_draw_mode');
 
   const pass = assert(
-    post.sourceMode === 'draw_box',
+    modeStep.pass && post.sourceMode === 'draw_box',
     fail, 'mode_switch', `sourceMode should be "draw_box", got "${post.sourceMode}"`,
     { pre_mode: pre.sourceMode, post_mode: post.sourceMode }
   );
@@ -384,18 +431,19 @@ async function stepSelectSourceBox(page, fail, outDir) {
   return { step: 'd1_select_source_box', pass, pre, post, selectedBoxId, clickedBox: box };
 }
 
-async function stepClearSourceBoxes(page, fail, outDir) {
-  const pre = await captureState(page, 'pre_clear_source_boxes');
+async function stepClearSourceBoxes(page, fail, outDir, label = 'clear_source_boxes') {
+  const pre = await captureState(page, `pre_${label}`);
 
   await page.click('#sourceSelectBtn');
   await page.waitForTimeout(200);
-  await page.click('#deleteBoxBtn');
-  await page.waitForTimeout(250);
-  await page.click('#deleteBoxBtn');
-  await page.waitForTimeout(250);
-
-  const post = await captureState(page, 'post_clear_source_boxes');
-  await screenshot(page, outDir, 'step_clear_source_boxes');
+  let post = pre;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await page.click('#deleteBoxBtn');
+    await page.waitForTimeout(250);
+    post = await captureState(page, `post_${label}_attempt_${attempt + 1}`);
+    if (post.extractedBoxes === 0) break;
+  }
+  await screenshot(page, outDir, `step_${label}`);
 
   const pass = assert(
     post.extractedBoxes === 0,
@@ -405,19 +453,19 @@ async function stepClearSourceBoxes(page, fail, outDir) {
     { pre_boxes: pre.extractedBoxes, post_boxes: post.extractedBoxes, post_selection: post.sourceSelection }
   );
 
-  return { step: 'clear_source_boxes', pass, pre, post };
+  return { step: label, pass, pre, post };
 }
 
-async function stepFindSprites(page, fail, outDir) {
-  const pre = await captureState(page, 'pre_find_sprites');
+async function stepFindSprites(page, fail, outDir, label = 'find_sprites') {
+  const pre = await captureState(page, `pre_${label}`);
 
   await page.click('#sourceSelectBtn');
   await page.waitForTimeout(200);
   await page.click('#extractBtn');
   await page.waitForTimeout(700);
 
-  const post = await captureState(page, 'post_find_sprites');
-  await screenshot(page, outDir, 'step_find_sprites');
+  const post = await captureState(page, `post_${label}`);
+  await screenshot(page, outDir, `step_${label}`);
 
   const pass = assert(
     post.extractedBoxes > 0,
@@ -427,30 +475,38 @@ async function stepFindSprites(page, fail, outDir) {
     { pre_boxes: pre.extractedBoxes, post_boxes: post.extractedBoxes, post_source_boxes: post.sourceBoxes }
   );
 
-  return { step: 'find_sprites', pass, pre, post };
+  return { step: label, pass, pre, post };
 }
 
-async function stepRowSelectDetectedBoxes(page, fail, outDir, rect, label = 'detected_row') {
-  const pre = await captureState(page, `pre_row_select_${label}`);
+async function stepGroupedSelectDetectedBoxes(page, fail, outDir, scenario) {
+  const pre = await captureState(page, `pre_${scenario.id}_group_select`);
 
-  await page.click('#rowSelectBtn');
-  await page.waitForTimeout(200);
-  await canvasDrag(page, rect.x1, rect.y1, rect.x2, rect.y2);
+  const modeStep = await stepSwitchSourceMode(page, fail, scenario.selectionMode, `${scenario.id}_${scenario.selectionMode}`);
+  await canvasDrag(page, scenario.selectionRect.x1, scenario.selectionRect.y1, scenario.selectionRect.x2, scenario.selectionRect.y2);
   await page.waitForTimeout(300);
 
-  const post = await captureState(page, `post_row_select_${label}`);
-  await screenshot(page, outDir, `step_row_select_${label}`);
+  const post = await captureState(page, `post_${scenario.id}_group_select`);
+  await screenshot(page, outDir, `step_${scenario.id}_group_select`);
 
-  const selectedCount = Array.isArray(post.sourceSelection) ? post.sourceSelection.length : 0;
+  const selectedIds = Array.isArray(post.sourceSelection) ? post.sourceSelection.map((id) => Number(id)) : [];
+  const selectedBoxes = Array.isArray(post.sourceBoxes)
+    ? post.sourceBoxes.filter((box) => selectedIds.includes(Number(box.id)))
+    : [];
+  const selectedCount = selectedBoxes.length;
   const pass = assert(
-    selectedCount > 1,
+    modeStep.pass && selectedCount > 1,
     fail,
-    'row_select_group',
-    `Expected multi-box row selection after dragging ${label}, got ${selectedCount}`,
-    { pre_selection: pre.sourceSelection, post_selection: post.sourceSelection, post_boxes: post.sourceBoxes }
+    `${scenario.id}_group_select`,
+    `Expected multi-box ${scenario.selectionMode} selection after dragging ${scenario.id}, got ${selectedCount}`,
+    {
+      scenario,
+      pre_selection: pre.sourceSelection,
+      post_selection: post.sourceSelection,
+      selected_boxes: selectedBoxes,
+    }
   );
 
-  return { step: `row_select_${label}`, pass, pre, post, selectedCount };
+  return { step: `${scenario.id}_group_select`, pass, pre, post, selectedCount, selectedBoxes };
 }
 
 /**
@@ -462,12 +518,11 @@ async function stepRowSelectDetectedBoxes(page, fail, outDir, rect, label = 'det
 async function stepSwitchToRowSelect(page, fail, outDir) {
   const pre = await captureState(page, 'pre_row_select');
 
-  await page.click('#rowSelectBtn');
-  await page.waitForTimeout(200);
+  const modeStep = await stepSwitchSourceMode(page, fail, 'row_select', 'row_select');
 
   const post = await captureState(page, 'post_row_select');
 
-  const modeCorrect = post.sourceMode === 'row_select';
+  const modeCorrect = modeStep.pass;
   const selectionPreserved = post.sourceSelection && post.sourceSelection.length > 0;
 
   let pass = true;
@@ -497,80 +552,121 @@ async function stepSwitchToRowSelect(page, fail, outDir) {
  *   → gridFrameFromClientPoint (workbench.js:5292-5301)
  *   → insertSourceBoxesIntoGridAt (workbench.js:5236-5290)
  */
-async function stepDragToGrid(page, fail, outDir, sourceBox, targetCol) {
-  const pre = await captureState(page, 'pre_d1_drag');
-
-  // Read frame signature at target before drag
-  const targetRow = pre.selectedRow !== null ? pre.selectedRow : 0;
-  const preSig = await readFrameSignature(page, targetRow, targetCol);
-
-  // Get source canvas bounding box (viewport coords)
-  const canvasBBox = await page.locator('#sourceCanvas').boundingBox();
-  if (!canvasBBox) {
-    fail('d1_drag', 'sourceCanvas not found or not visible');
-    return { step: 'd1_drag_to_grid', pass: false, pre, post: pre };
+function expectedChangedCellsForScenario(scenario, selectedCount) {
+  const total = Math.max(1, Number(selectedCount || 0));
+  if (scenario.expectedSpan === 'rows') {
+    return Array.from({ length: total }, (_unused, idx) => ({
+      row: Number(scenario.targetOrigin.row) + idx,
+      col: Number(scenario.targetOrigin.col),
+    }));
   }
+  return Array.from({ length: total }, (_unused, idx) => ({
+    row: Number(scenario.targetOrigin.row),
+    col: Number(scenario.targetOrigin.col) + idx,
+  }));
+}
 
-  // Source box center in viewport coords
-  const srcX = canvasBBox.x + sourceBox.x + Math.floor(sourceBox.w / 2);
-  const srcY = canvasBBox.y + sourceBox.y + Math.floor(sourceBox.h / 2);
+async function stepDragToGrid(page, fail, outDir, sourceBox, {
+  label = 'd1_drag',
+  selectionMode = 'row_select',
+  sourceFamily = 'manual',
+  expectedSpan = 'single',
+  targetRow = null,
+  targetCol = 0,
+  expectedChangedCells = null,
+} = {}) {
+  const pre = await captureState(page, `pre_${label}`);
+  const resolvedTargetRow = targetRow !== null ? Number(targetRow) : (pre.selectedRow !== null ? Number(pre.selectedRow) : 0);
+  const resolvedExpectedCells = Array.isArray(expectedChangedCells) && expectedChangedCells.length
+    ? expectedChangedCells
+    : [{ row: resolvedTargetRow, col: Number(targetCol) }];
 
-  // Intermediate point: 10px right, still on source canvas (to trigger d.moved)
-  const midX = srcX + 10;
-  const midY = srcY;
+  const drag = await dragSelectedSourceBoxesToFrame(page, {
+    sourceBox,
+    targetRow: resolvedTargetRow,
+    targetCol: Number(targetCol),
+    selectionMode,
+    sourceFamily,
+    expectedSpan,
+    expectedChangedCells: resolvedExpectedCells,
+  });
+  await screenshot(page, outDir, `step_${label}`);
 
-  // Get grid frame cell bounding box
-  const cellSelector = `.frame-cell[data-row="${targetRow}"][data-col="${targetCol}"]`;
-  const cellEl = page.locator(cellSelector).first();
-  const cellVisible = await cellEl.isVisible().catch(() => false);
-  if (!cellVisible) {
-    fail('d1_drag', `Grid frame cell not visible: ${cellSelector}`);
-    return { step: 'd1_drag_to_grid', pass: false, pre, post: pre };
-  }
-  const cellBBox = await cellEl.boundingBox();
-  if (!cellBBox) {
-    fail('d1_drag', `Grid frame cell has no bounding box: ${cellSelector}`);
-    return { step: 'd1_drag_to_grid', pass: false, pre, post: pre };
-  }
-
-  // Grid cell center in viewport coords
-  const tgtX = cellBBox.x + Math.floor(cellBBox.width / 2);
-  const tgtY = cellBBox.y + Math.floor(cellBBox.height / 2);
-
-  // Execute the drag sequence
-  await page.mouse.move(srcX, srcY);
-  await page.mouse.down();
-  // Intermediate move: still on canvas, >3px from start → sets d.moved = true
-  await page.mouse.move(midX, midY, { steps: 2 });
-  // Move to grid cell
-  await page.mouse.move(tgtX, tgtY, { steps: 5 });
-  // Release → window mouseup → dropSelectedSourceBoxesAtClientPoint
-  await page.mouse.up();
-  await page.waitForTimeout(500);
-
-  const post = await captureState(page, 'post_d1_drag');
-  await screenshot(page, outDir, 'step_d1_drag');
-
-  // Verify frame signature changed at target
-  const postSig = await readFrameSignature(page, targetRow, targetCol);
-  const sigChanged = preSig !== postSig;
+  const changedCells = drag.frame_signature_deltas.filter((entry) => entry.changed);
+  const allExpectedChanged = resolvedExpectedCells.length > 0
+    && changedCells.length === resolvedExpectedCells.length
+    && drag.frame_signature_deltas.every((entry) => entry.changed);
 
   let pass = true;
-  pass = assert(sigChanged, fail, 'd1_drag',
-    `Frame signature at (${targetRow},${targetCol}) should change after D1 drag drop`,
-    { preSig: preSig.substring(0, 80), postSig: postSig.substring(0, 80) }) && pass;
+  pass = assert(
+    drag.drop_hit_before_mouseup?.ok === true
+      && Number(drag.drop_hit_before_mouseup.row) === resolvedTargetRow
+      && Number(drag.drop_hit_before_mouseup.col) === Number(targetCol),
+    fail,
+    label,
+    `Drop pointer must resolve to target frame-cell (${resolvedTargetRow},${targetCol}) before mouseup`,
+    { drop_hit_before_mouseup: drag.drop_hit_before_mouseup, layout: drag.layout }
+  ) && pass;
+  pass = assert(
+    allExpectedChanged,
+    fail,
+    label,
+    `Expected frame signature deltas at ${JSON.stringify(resolvedExpectedCells)}, got ${JSON.stringify(drag.frame_signature_deltas.map(({ row, col, changed }) => ({ row, col, changed })))}`,
+    { frame_signature_deltas: drag.frame_signature_deltas, post_status: drag.post_status }
+  ) && pass;
 
   return {
-    step: 'd1_drag_to_grid',
+    step: label,
     pass,
-    pre,
-    post,
-    targetRow,
-    targetCol,
-    preSig,
-    postSig,
-    dragCoords: { srcX, srcY, midX, midY, tgtX, tgtY },
+    targetRow: resolvedTargetRow,
+    targetCol: Number(targetCol),
+    expectedChangedCells: resolvedExpectedCells,
+    changedCells,
+    ...drag,
   };
+}
+
+async function runGroupedDragScenario(page, fail, outDir, fixturePath, scenario) {
+  const result = {
+    scenario,
+    upload: null,
+    clear: null,
+    findSprites: null,
+    selection: null,
+    gridSelect: null,
+    drag: null,
+    pass: false,
+  };
+  result.upload = await stepUploadPng(page, fail, outDir, fixturePath, `${scenario.id}_fixture`);
+  result.clear = await stepClearSourceBoxes(page, fail, outDir, `${scenario.id}_clear`);
+  result.findSprites = await stepFindSprites(page, fail, outDir, `${scenario.id}_find_sprites`);
+  result.selection = await stepGroupedSelectDetectedBoxes(page, fail, outDir, scenario);
+  result.gridSelect = await stepSelectGridRow(page, fail, outDir, scenario.targetOrigin.row);
+  const draggedBox = result.selection.selectedBoxes?.[0] || null;
+  if (!draggedBox) {
+    fail(`${scenario.id}_drag`, `No selected source box available for ${scenario.id} grouped drag`);
+    result.drag = { pass: false, scenario };
+    result.pass = false;
+    return result;
+  }
+  result.drag = await stepDragToGrid(page, fail, outDir, draggedBox, {
+    label: `${scenario.id}_drag`,
+    selectionMode: scenario.selectionMode,
+    sourceFamily: scenario.sourceFamily,
+    expectedSpan: scenario.expectedSpan,
+    targetRow: scenario.targetOrigin.row,
+    targetCol: scenario.targetOrigin.col,
+    expectedChangedCells: expectedChangedCellsForScenario(scenario, result.selection.selectedCount),
+  });
+  result.pass = [
+    result.upload?.pass,
+    result.clear?.pass,
+    result.findSprites?.pass,
+    result.selection?.pass,
+    result.gridSelect?.pass,
+    result.drag?.pass,
+  ].every(Boolean);
+  return result;
 }
 
 /**
@@ -635,16 +731,21 @@ async function main() {
   const { page, browser, report, fail, workbenchUrl, outDir, cliArgs } =
     await setupVerifier('source_to_grid_workflow', { requireOutDir: true });
 
-  const fixturePath = path.resolve(REPO_ROOT, PNG_FIXTURE);
-  if (!fs.existsSync(fixturePath)) {
-    fail('config', `Fixture not found: ${PNG_FIXTURE}`);
-    report.overall_pass = false;
-    writeReport(outDir, 'report.json', report);
-    await browser.close();
-    process.exit(1);
+  const fixturePaths = Object.fromEntries(
+    Object.entries(SOURCE_FIXTURES).map(([key, relPath]) => [key, path.resolve(REPO_ROOT, relPath)])
+  );
+  for (const [key, fixturePath] of Object.entries(fixturePaths)) {
+    if (!fs.existsSync(fixturePath)) {
+      fail('config', `Fixture not found for ${key}: ${SOURCE_FIXTURES[key]}`);
+      report.overall_pass = false;
+      writeReport(outDir, 'report.json', report);
+      await browser.close();
+      process.exit(1);
+    }
   }
 
   const steps = {};
+  const dragContracts = {};
   let allPass = true;
 
   // Capture baseline state
@@ -658,7 +759,7 @@ async function main() {
 
   // Step 2: Upload PNG
   console.log('=== Step 2: Upload PNG ===');
-  steps.upload = await stepUploadPng(page, fail, outDir, fixturePath);
+  steps.upload = await stepUploadPng(page, fail, outDir, fixturePaths.single_row, 'single_row_upload');
   if (!steps.upload.pass) allPass = false;
 
   // Step 3: Select grid row 0 (G1: click grid frame cell)
@@ -736,8 +837,17 @@ async function main() {
   const d1TargetCol = 4;
   const d1SourceBox = steps.d1_select.clickedBox;
   if (d1SourceBox) {
-    steps.d1_drag = await stepDragToGrid(page, fail, outDir, d1SourceBox, d1TargetCol);
+    steps.d1_drag = await stepDragToGrid(page, fail, outDir, d1SourceBox, {
+      label: 'd1_drag_manual',
+      selectionMode: 'row_select',
+      sourceFamily: 'manual',
+      expectedSpan: 'single',
+      targetRow: 0,
+      targetCol: d1TargetCol,
+      expectedChangedCells: [{ row: 0, col: d1TargetCol }],
+    });
     if (!steps.d1_drag.pass) allPass = false;
+    dragContracts.manual_single = steps.d1_drag;
   } else {
     fail('d1_drag', 'No source box available from d1_select step');
     steps.d1_drag = { step: 'd1_drag_to_grid', pass: false };
@@ -774,54 +884,43 @@ async function main() {
   console.log('=== Step 18: Drag auto-detected source box to grid ===');
   const autoSourceBox = steps.d1_select_auto.clickedBox;
   if (autoSourceBox) {
-    steps.d1_drag_auto = await stepDragToGrid(page, fail, outDir, autoSourceBox, 0);
+    steps.d1_drag_auto = await stepDragToGrid(page, fail, outDir, autoSourceBox, {
+      label: 'd1_drag_auto_single',
+      selectionMode: 'row_select',
+      sourceFamily: 'auto_detected',
+      expectedSpan: 'single',
+      targetRow: 1,
+      targetCol: 0,
+      expectedChangedCells: [{ row: 1, col: 0 }],
+    });
     if (!steps.d1_drag_auto.pass) allPass = false;
+    dragContracts.auto_single = steps.d1_drag_auto;
   } else {
     fail('d1_drag_auto', 'No auto-detected source box available for uploaded-PNG drag proof');
     steps.d1_drag_auto = { step: 'd1_drag_auto_to_grid', pass: false };
     allPass = false;
   }
 
-  // Step 19: Re-select the uploaded-PNG row as a grouped source selection.
-  console.log('=== Step 19: Row-select detected sprite group ===');
-  steps.row_select_detected = await stepRowSelectDetectedBoxes(
-    page,
-    fail,
-    outDir,
-    { x1: 1, y1: 4, x2: 191, y2: 44 },
-    'detected_group'
-  );
-  if (!steps.row_select_detected.pass) allPass = false;
-
-  // Step 20: Pick a fresh target row for grouped drag proof.
-  console.log('=== Step 20: Select grid row 2 ===');
-  steps.grid_select_row_2 = await stepSelectGridRow(page, fail, outDir, 2);
-  if (!steps.grid_select_row_2.pass) allPass = false;
-
-  // Step 21: Drag one selected member of the row-selected group into 9A.
-  console.log('=== Step 21: Drag grouped detected source boxes to grid ===');
-  const groupedBox = (steps.row_select_detected.post?.sourceBoxes || [])[3] || (steps.row_select_detected.post?.sourceBoxes || [])[0] || null;
-  if (groupedBox) {
-    steps.d1_drag_grouped = await stepDragToGrid(page, fail, outDir, groupedBox, 0);
-    if (!steps.d1_drag_grouped.pass) allPass = false;
-    const groupedCols = steps.d1_drag_grouped.post?.selectedCols || [];
-    const groupedPass = assert(
-      Array.isArray(groupedCols) && groupedCols.length > 1,
-      fail,
-      'd1_drag_grouped',
-      `Grouped drag should leave multiple target cols selected, got ${JSON.stringify(groupedCols)}`,
-      { post_selected_cols: groupedCols, post_source_selection: steps.d1_drag_grouped.post?.sourceSelection }
-    );
-    steps.d1_drag_grouped.selection_span_pass = groupedPass;
-    if (!groupedPass) allPass = false;
-  } else {
-    fail('d1_drag_grouped', 'No grouped source box available for row-selected uploaded-PNG drag proof');
-    steps.d1_drag_grouped = { step: 'd1_drag_grouped_to_grid', pass: false };
-    allPass = false;
+  // Step 19-20: Parameterized grouped drag lanes.
+  for (const scenario of GROUPED_DRAG_SCENARIOS) {
+    console.log(`=== Grouped Lane: ${scenario.id} (${scenario.selectionMode}) ===`);
+    const lane = await runGroupedDragScenario(page, fail, outDir, fixturePaths[scenario.fixtureKey], scenario);
+    steps[`grouped_${scenario.id}`] = {
+      step: `grouped_${scenario.id}`,
+      pass: lane.pass,
+      scenario,
+      upload: lane.upload?.step,
+      clear: lane.clear?.step,
+      find_sprites: lane.findSprites?.step,
+      selection_count: lane.selection?.selectedCount ?? 0,
+      expected_changed_cells: lane.drag?.expectedChangedCells ?? [],
+    };
+    dragContracts[scenario.id] = lane.drag;
+    if (!lane.pass) allPass = false;
   }
 
-  // Step 22: Source isolation invariant (covers manual, auto single-box, and grouped drag phases)
-  console.log('=== Step 22: Source isolation invariant ===');
+  // Step 21: Source isolation invariant (covers manual, auto single-box, and grouped drag phases)
+  console.log('=== Step 21: Source isolation invariant ===');
   const finalState = await captureState(page, 'final');
   const isolationPass = checkSourceIsolationInvariant(preInsertState, finalState, fail);
   steps.source_isolation = { step: 'source_isolation_invariant', pass: isolationPass };
@@ -832,7 +931,8 @@ async function main() {
   // Build report
   report.steps = steps;
   report.overall_pass = allPass;
-  report.fixture = PNG_FIXTURE;
+  report.fixtures = SOURCE_FIXTURES;
+  report.drag_contract_keys = Object.keys(dragContracts);
   report.steps_total = Object.keys(steps).length;
   report.steps_passed = Object.values(steps).filter(s => s.pass).length;
   report.steps_failed = Object.values(steps).filter(s => !s.pass).length;
@@ -856,6 +956,7 @@ async function main() {
 
   writeJsonArtifact(outDir, 'state_snapshots.json', snapshots);
   writeJsonArtifact(outDir, 'frame_signatures.json', signatureData);
+  writeJsonArtifact(outDir, 'drag_contracts.json', dragContracts);
 
   const reportPath = writeReport(outDir, 'report.json', report);
 
