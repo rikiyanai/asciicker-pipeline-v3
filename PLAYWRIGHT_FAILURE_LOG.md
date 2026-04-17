@@ -8138,3 +8138,52 @@ the 2026-04-17 canon re-audit.
 - It does NOT resolve the unrelated export regression where
   `tests/test_workbench_flow.py -k run_to_workbench_to_export -q` still fails on
   `native_compat_dims_gate` (`96x8` vs expected `126x80`).
+
+---
+
+## Open Regression — Cross-Row Multi-Select Missing, Live Drag/Test State Unclear (2026-04-17)
+
+This entry records the currently observed workbench regression before any new
+fix is attempted.
+
+### What is strictly proven right now
+
+1. **Shift-selection is still row-local in live code. HIGH.**
+   - `web/workbench.js:5917-5927` (`selectFrame`) resets selection unless
+     `state.selectedRow === row`.
+   - Consequence:
+     - `shift+click` does not persist a multi-frame selection when the user
+       moves to the next row.
+     - the current SAR line in this log for `GP-02` overstates the product if
+       read as multi-row selection support.
+
+2. **The live user report on localhost is that four dragged frames are present
+   and nothing else is authored, but `Test This Skin` still behaves as if the
+   frame remains open / oversized content is affecting adjacent state. OPEN.**
+   - User-reported live surface:
+     - `http://127.0.0.1:5082/workbench`
+   - Reported product symptom:
+     - after dragging four source boxes into frame nav tiles, only those four
+       frames should be populated
+     - user suspects the source boxes are larger than the frame bounds and are
+       leaking into adjacent frames
+     - `Test This Skin` still appears to reflect an “open” frame state instead
+       of a bounded four-frame result
+
+### What is not yet proven
+
+- It is not yet proven whether the runtime symptom is:
+  - frame-content bleed past frame bounds during drop/write,
+  - a selection/authoring-state leak,
+  - a save/export/runtime hydration mismatch,
+  - or a false interpretation caused by the currently selected/open frame UI.
+
+### Required next investigation
+
+1. Inspect the live localhost session state and rendered grid/whole-sheet after
+   the reported four-frame drag.
+2. Determine whether `writeFrameCellMatrix` / source-drop insertion is clipping
+   to frame bounds or leaking wide matrices into neighboring tiles.
+3. Check whether `Test This Skin` is consuming unsaved/open-session state,
+   exported XP state, or stale selection focus in a way that misrepresents the
+   authored four-frame result.
