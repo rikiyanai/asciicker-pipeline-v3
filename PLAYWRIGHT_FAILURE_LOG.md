@@ -8317,3 +8317,65 @@ appeared missing.
 - It does NOT close the separate `shift+click` cross-row selection bug.
 - It does NOT prove multi-box drop grouping semantics are correct for all
   intended authoring workflows.
+
+---
+
+## Contract Clarification — Analyzer Must Not Own Geometry (2026-04-17)
+
+This entry records the explicit ownership clarification reached during the
+current audit/review. This is a canon-alignment note, not an implementation
+claim.
+
+### Clarified contract
+
+1. **Source PNG mapping, authoring frame geometry, and runtime/native export are
+   three different problems.**
+   - They must not be collapsed into one hidden analyzer decision.
+
+2. **Analyzer is advisory only.**
+   - It may suggest:
+     - angles
+     - frame counts
+     - projections
+     - guides/cuts
+   - It must not silently become the authority for session geometry.
+
+3. **Frame nav is the authoring geometry owner.**
+   - row count = authored angle count
+   - frame slots = authored semantic frames
+   - projection structure = authored slot layout
+   - add/delete/reorder rows and frames here
+
+4. **Whole-sheet is the canonical document owner.**
+   - frame nav is the semantic index over that sheet
+   - source mapping should target explicit frame slots on that sheet
+   - the whole-sheet state is what gets saved and exported
+
+5. **Template/native/runtime are downstream adapters, not geometry owners.**
+   - templates may seed a starting geometry
+   - runtime/native export may normalize or reject unsupported shapes
+   - they must not redefine the authored session geometry
+
+### Specific geometry ruling from this review
+
+1. **If one dragged source frame is larger than the rest and must fit, the
+   correct action is to enlarge the session’s geometry.**
+   - frame-nav / whole-sheet geometry is enlarged
+   - then every frame slot in that session becomes larger
+
+2. **One larger frame slot inside the same authored sheet is NOT allowed by the
+   contract.**
+   - whole-sheet/L0-style sheet geometry requires one uniform frame size per
+     authored session/action
+   - sprite content may vary within slots, but slot dimensions themselves are
+     session-global
+
+### Consequence for current implementation review
+
+- The direct `Upload + Convert` path is still directionally wrong anywhere it
+  acts as if analyze-derived geometry is the root owner.
+- The correct future direction is:
+  - analyzer suggests
+  - frame nav owns geometry
+  - whole-sheet stores the document
+  - runtime/template adapt downstream

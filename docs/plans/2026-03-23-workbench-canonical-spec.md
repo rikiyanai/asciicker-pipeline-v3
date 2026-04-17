@@ -51,6 +51,47 @@ These rules are execution guardrails, not optional advice:
 6. If Section 1 and Section 2 disagree, Section 1 wins for editor ownership and Section 2 wins only for engine filename/runtime truth.
 7. Do not surface debug runtime harnesses as peer product flows inside `/workbench`; if they remain in-repo, keep them explicitly diagnostic and off the primary user path.
 
+### Geometry Ownership Clarification
+
+The current contract is explicit:
+
+1. Source PNG mapping is one problem.
+2. Authoring frame geometry is another problem.
+3. Runtime/native export is a third problem.
+
+Those three concerns must not be collapsed into one hidden analyzer decision.
+
+Ownership is:
+
+1. **Analyzer = advisory only**
+   - It may suggest angles, frame counts, projections, guides, and likely cuts.
+   - It must not silently become the authority for session geometry.
+2. **Frame nav = geometry owner**
+   - row count = authored angle count
+   - frame slots = authored semantic frames
+   - projection structure = authored slot layout
+   - add/delete/reorder rows and frames here
+3. **Whole-sheet = document owner**
+   - frame nav is the semantic index into the sheet
+   - source boxes map into explicit frame slots on that sheet
+   - the whole-sheet document is the stored authoring truth
+4. **Template/native/runtime = downstream adapters**
+   - templates may seed starting geometry
+   - runtime/native export may normalize or reject unsupported shapes
+   - neither may redefine the authored geometry owner
+
+Uniform-frame-size rule:
+
+1. One authored session/action has one frame-slot size.
+2. Individual sprite content may vary inside those slots, but the slots
+   themselves are uniform across the session.
+3. If one mapped sprite is larger than the rest and must fit without clipping,
+   the correct contract is to enlarge the session/frame-nav/whole-sheet geometry
+   for the whole action.
+4. The system must not create one special larger frame while leaving the other
+   frame slots smaller, because that breaks the whole-sheet/L0-style uniform
+   sheet geometry contract.
+
 ### Canon And Repo Alignment
 
 Only two active canon docs exist:
