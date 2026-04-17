@@ -31,12 +31,13 @@
     </ol>
   </div>
 
-  <div id="runtimePreflightBanner" class="panel runtime-preflight-banner hidden" data-panel-number="3 preflight">
+  <div id="runtimePreflightBanner" class="panel runtime-preflight-banner hidden" data-panel-number="3 runtime-preflight">
     <div class="runtime-preflight-title">Runtime preflight failed for Skin Test dock(Term++ Skin Equiv on asciid)</div>
     <div id="runtimePreflightBannerText" class="small warn">Checking runtime bundle...</div>
   </div>
 
   <div class="panel" id="templatePanel" data-panel-number="4 template">
+    <h3>Template</h3>
     <div class="row">
       <label for="templateSelect">Template</label>
       <select id="templateSelect">
@@ -55,7 +56,8 @@
     </div>
   </div>
 
-  <div class="panel" data-panel-number="5 ops">
+  <div class="panel" data-panel-number="5 session-ops">
+    <h3>Session Ops</h3>
     <div class="row">
       <button id="btnLoad">Load From Job</button>
       <button id="btnSave" disabled>Save</button>
@@ -82,7 +84,7 @@
     <div id="uiRecorderSummary" class="small">0 events</div>
   </details>
 
-  <div class="panel" data-panel-number="7 upload">
+  <div class="panel" data-panel-number="7 upload-convert">
     <h3>Upload + Convert (<span id="uploadPanelLabel">Workbench Direct</span>)</h3>
     <div class="row">
       <input id="wbFile" type="file" accept=".png">
@@ -170,7 +172,7 @@
   </div>
 
   <div class="panel hidden" id="wholeSheetPanel" data-panel-number="10 whole-sheet">
-    <h3>XPEdit <span id="wholeSheetStatus" class="small" style="font-weight:normal;">not loaded</span></h3>
+    <h3>Whole-Sheet XPEdit <span id="wholeSheetStatus" class="small" style="font-weight:normal;">not loaded</span></h3>
     <div class="row" style="justify-content:space-between; align-items:center; gap:12px;">
       <div class="alpha-inline-banner">PRE-ALPHA, PLEASE REPORT ANY BUGS</div>
       <button id="reportBugWholeSheetBtn">Report Bug</button>
@@ -238,7 +240,7 @@
     <div id="grid" class="grid"></div>
   </details>
 
-  <div class="panel" data-panel-number="11 anim">
+  <div class="panel" data-panel-number="11 animation-metadata">
     <h3>Animation + Metadata</h3>
     <div class="row">
       <label>Row Category</label>
@@ -293,7 +295,7 @@
   </div>
 
   <div class="two-col">
-    <div class="panel" data-panel-number="12 preview">
+    <div class="panel" data-panel-number="12 xp-preview">
       <h3>XP Preview</h3>
       <div class="row">
         <button id="playBtn">Play</button>
@@ -310,8 +312,8 @@
     </div>
   </div>
 
-  <div class="panel" id="webbuildDockPanel" data-panel-number="14 skin-dock">
-    <h3>Skin Test dock(Term++ Skin Equiv on asciid)</h3>
+  <div class="panel" id="webbuildDockPanel" data-panel-number="14 skin-test-dock">
+    <h3>Skin Test Dock (Term++ Skin Equiv on asciid)</h3>
     <div class="row">
       <button id="webbuildQuickTestBtn" class="success" disabled>Test This Skin</button>
       <button id="webbuildApplyInPlaceBtn" class="hidden" disabled title="Requires an active session and a ready webbuild runtime">Apply In Place</button>
@@ -336,7 +338,7 @@
     </details>
   </div>
 
-  <div class="panel hidden" id="termppNativePanel" data-panel-number="15 termpp">
+  <div class="panel hidden" id="termppNativePanel" data-panel-number="15 native-termpp">
     <h3>TERM++ Skin (Real Game Instance)</h3>
     <div class="row">
       <label>Binary</label>
@@ -368,7 +370,7 @@
     <pre id="termppSkinOut"></pre>
   </div>
 
-  <div class="panel" id="verificationPanel" data-panel-number="16 verify">
+  <div class="panel" id="verificationPanel" data-panel-number="16 verification">
     <h3>Verification (Term++ / QA)</h3>
     <div class="row">
       <label>Profile</label>
@@ -391,7 +393,7 @@
     <pre id="verifyLogOut"></pre>
   </div>
 
-  <div class="panel" data-panel-number="17 export">
+  <div class="panel" data-panel-number="17 export-tools">
     <h3>Export</h3>
     <div class="small">Export always writes current edited state.</div>
     <div class="row">
@@ -402,7 +404,7 @@
   </div>
 
   <div id="cellInspectorPanel" class="panel hidden" data-panel-number="18 inspector">
-    <h3>XP Editor (Frame) <span id="inspectorDirtyBadge" class="small" style="font-weight:normal;">saved</span></h3>
+    <h3>Frame Inspector <span id="inspectorDirtyBadge" class="small" style="font-weight:normal;">saved</span></h3>
     <div class="row">
       <button id="inspectorCloseBtn">Close</button>
       <button id="inspectorPrevAngleBtn" title="Previous angle row">Prev Angle</button>
