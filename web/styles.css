@@ -239,6 +239,68 @@ pre {
   border: 1px solid #2a3345;
   border-radius: 0;
   padding: 10px;
+  margin: 0;
+}
+
+.subpanel-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 30px 8px 8px;
+  border: 1px solid #2a3345;
+  background: #0d1118;
+  box-sizing: border-box;
+}
+
+.subpanel-shell[data-panel-number]::before {
+  content: attr(data-panel-number) " " attr(data-panel-tag);
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid #4c5c7b;
+  background: #182131;
+  color: #b8c9e7;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.output-shell,
+.canvas-shell,
+.ws-viewport-shell {
+  min-height: 180px;
+  max-height: 70vh;
+  overflow: hidden;
+  resize: vertical;
+}
+
+.output-shell {
+  height: 220px;
+}
+
+.canvas-shell {
+  height: 420px;
+}
+
+.output-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+}
+
+.output-viewport pre {
+  min-height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
 }
 
 a { color: #80bdff; }
@@ -263,9 +325,16 @@ a { color: #80bdff; }
   max-height: 420px;
 }
 
+#sourceCanvasViewport {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
 #sourceCanvas {
   image-rendering: pixelated;
   display: block;
+  margin: 0 auto;
 }
 
 .frame-grid {
@@ -283,7 +352,7 @@ a { color: #80bdff; }
 
 .frame-row-header {
   width: var(--wb-grid-row-header-width);
-  min-height: 68px;
+  min-height: var(--wb-grid-cell-size);
   border: 1px solid #2a3345;
   background: #0a1018;
   border-radius: 0;
@@ -336,6 +405,7 @@ a { color: #80bdff; }
     #121a25;
   flex: 0 0 auto;
   cursor: grab;
+  height: clamp(14px, calc(var(--wb-grid-cell-size) * 0.4), 24px);
 }
 
 .frame-row-header.drag-target {
@@ -451,6 +521,27 @@ a { color: #80bdff; }
   text-overflow: ellipsis;
 }
 
+.frame-grid.frame-grid-compact .frame-label {
+  display: none;
+}
+
+.frame-grid.frame-grid-compact .frame-row-header {
+  gap: 6px;
+  padding: 4px 6px;
+}
+
+.frame-grid.frame-grid-compact .row-name {
+  font-size: 11px;
+}
+
+.frame-grid.frame-grid-micro .row-name {
+  display: none;
+}
+
+.frame-grid.frame-grid-micro .row-index {
+  font-size: 9px;
+}
+
 .hidden { display: none !important; }
 
 #layerVisibility label {
@@ -532,6 +623,31 @@ label.inline {
 }
 .ws-scroll-wrap canvas {
   display: block;
+}
+
+.ws-viewport-shell {
+  height: 520px;
+}
+
+.ws-zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ws-zoom-row label {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.ws-zoom-row input[type="range"] {
+  flex: 1 1 220px;
+}
+
+#wholeSheetCanvas {
+  image-rendering: pixelated;
 }
 .ws-toolbar {
   display: flex;
@@ -989,10 +1105,14 @@ label.inline {
 .ws-frame-nav {
   border-top: 1px solid #232937;
   background: #0d1118;
-  max-height: 200px;
+  min-height: 220px;
+  height: 420px;
+  max-height: 70vh;
   overflow: auto;
   padding: 28px 8px 6px;
   position: relative;
+  resize: vertical;
+  box-sizing: border-box;
 }
 
 .ws-frame-nav[data-panel-number]::before {

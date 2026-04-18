@@ -182,7 +182,7 @@
     gridRowDrag: null, // {fromRow}
     gridCellDrag: null, // {fromRow,fromCol,startX,startY,dragging,hover:{row,col,mode}}
     gridCellDragSuppressClick: false,
-    gridPanelZoom: 1,
+    gridPanelZoom: 0,
     // ── Bundle state ──
     bundleId: null,
     templateSetKey: "player_native_idle_only",
@@ -2809,6 +2809,7 @@
     }
     updateActionButtons();
     renderJitterInfo();
+    enforceGridPanelFit();
   }
 
   function renderMeta() {
@@ -4363,44 +4364,177 @@
     return { w: Math.max(1, c.width || 1), h: Math.max(1, c.height || 1) };
   }
 
+  const FIT_ZOOM = 0;
+  const SOURCE_ZOOM_MIN = 0.25;
+  const SOURCE_ZOOM_MAX = 6;
+  const GRID_ZOOM_MIN = 0.25;
+  const GRID_ZOOM_MAX = 2.5;
+  const GRID_TILE_BASE_PX = 68;
+  const GRID_HEADER_BASE_PX = 92;
+  const GRID_GAP_PX = 4;
+  const GRID_PANEL_PADDING_PX = 8;
+  let viewportResizeObserver = null;
+  let viewportResizeRaf = 0;
+
+  function normalizeFitZoomValue(v, min, max, fallback = FIT_ZOOM) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return fallback;
+    if (n <= FIT_ZOOM) return FIT_ZOOM;
+    return Math.max(min, Math.min(max, n));
+  }
+
   function clampSourceCanvasZoom(v) {
-    return Math.max(1, Math.min(6, Number(v || 1)));
+    return normalizeFitZoomValue(v, SOURCE_ZOOM_MIN, SOURCE_ZOOM_MAX, 1);
   }
 
   function clampGridPanelZoom(v) {
-    return Math.max(0.75, Math.min(2.5, Number(v || 1)));
+    return normalizeFitZoomValue(v, GRID_ZOOM_MIN, GRID_ZOOM_MAX, FIT_ZOOM);
+  }
+
+  function zoomLabel(z) {
+    const n = Number(z || 0);
+    if (!Number.isFinite(n) || n <= 0) return "0x";
+    const fixed = n >= 1 ? n.toFixed(2) : n.toFixed(3);
+    return `${fixed.replace(/\.?0+$/, "")}x`;
+  }
+
+  function sourceCanvasViewportSize() {
+    const viewport = $("sourceCanvasViewport");
+    return {
+      w: Math.max(1, Number(viewport?.clientWidth || 1)),
+      h: Math.max(1, Number(viewport?.clientHeight || 1)),
+    };
+  }
+
+  function resolvedSourceCanvasZoom() {
+    state.sourceCanvasZoom = clampSourceCanvasZoom(state.sourceCanvasZoom);
+    if (state.sourceCanvasZoom > FIT_ZOOM) return state.sourceCanvasZoom;
+    const viewport = sourceCanvasViewportSize();
+    const canvasSize = sourceCanvasSize();
+    const fit = Math.min(viewport.w / canvasSize.w, viewport.h / canvasSize.h);
+    return Math.max(0.05, Math.min(1, Number.isFinite(fit) ? fit : 1));
   }
 
   function updateSourceCanvasZoomUI() {
     state.sourceCanvasZoom = clampSourceCanvasZoom(state.sourceCanvasZoom);
-    const z = state.sourceCanvasZoom;
-    if ($("sourceZoomInput")) $("sourceZoomInput").value = String(z);
-    if ($("sourceZoomValue")) $("sourceZoomValue").textContent = `${z}x`;
+    const sliderZoom = state.sourceCanvasZoom;
+    const resolvedZoom = resolvedSourceCanvasZoom();
+    if ($("sourceZoomInput")) $("sourceZoomInput").value = String(sliderZoom);
+    if ($("sourceZoomValue")) {
+      $("sourceZoomValue").textContent = sliderZoom <= FIT_ZOOM
+        ? `Fit (${zoomLabel(resolvedZoom)})`
+        : zoomLabel(resolvedZoom);
+    }
     const c = $("sourceCanvas");
     if (!c) return;
-    c.style.width = `${Math.max(1, Math.round(Number(c.width || 1) * z))}px`;
-    c.style.height = `${Math.max(1, Math.round(Number(c.height || 1) * z))}px`;
+    c.style.width = `${Math.max(1, Math.round(Number(c.width || 1) * resolvedZoom))}px`;
+    c.style.height = `${Math.max(1, Math.round(Number(c.height || 1) * resolvedZoom))}px`;
+    if (sliderZoom <= FIT_ZOOM) {
+      const viewport = $("sourceCanvasViewport");
+      if (viewport) {
+        viewport.scrollLeft = 0;
+        viewport.scrollTop = 0;
+      }
+    }
   }
 
-  function gridPanelTilePx() {
-    return Math.max(52, Math.round(68 * clampGridPanelZoom(state.gridPanelZoom)));
+  function frameNavViewportSize() {
+    const viewport = $("wsFrameNav");
+    const header = viewport?.querySelector("h4");
+    const headerH = Math.max(0, Number(header?.offsetHeight || 0) + 4);
+    return {
+      w: Math.max(1, Number(viewport?.clientWidth || 1) - 16),
+      h: Math.max(1, Number(viewport?.clientHeight || 1) - headerH - 10),
+    };
   }
 
-  function gridPanelHeaderPx() {
-    return Math.max(84, Math.round(92 * clampGridPanelZoom(state.gridPanelZoom)));
+  function resolvedGridPanelZoom() {
+    state.gridPanelZoom = clampGridPanelZoom(state.gridPanelZoom);
+    if (state.gridPanelZoom > FIT_ZOOM) return state.gridPanelZoom;
+    const frameCols = Math.max(1, authoringFrameCols());
+    const rows = Math.max(1, Number(state.angles || 1));
+    const viewport = frameNavViewportSize();
+    const naturalW = GRID_PANEL_PADDING_PX + GRID_HEADER_BASE_PX + (frameCols * GRID_TILE_BASE_PX) + (frameCols * GRID_GAP_PX);
+    const naturalH = GRID_PANEL_PADDING_PX + (rows * GRID_TILE_BASE_PX) + (Math.max(0, rows - 1) * GRID_GAP_PX);
+    const fit = Math.min(viewport.w / naturalW, viewport.h / naturalH);
+    return Math.max(0.08, Math.min(1, Number.isFinite(fit) ? fit : 1));
+  }
+
+  function gridPanelTilePx(z = resolvedGridPanelZoom()) {
+    return Math.max(18, Math.round(GRID_TILE_BASE_PX * z));
+  }
+
+  function gridPanelHeaderPx(z = resolvedGridPanelZoom()) {
+    return Math.max(36, Math.round(GRID_HEADER_BASE_PX * z));
+  }
+
+  function applyGridPanelSizing(resolvedZoom) {
+    const panel = $("gridPanel");
+    if (!panel) return null;
+    const tile = gridPanelTilePx(resolvedZoom);
+    const header = gridPanelHeaderPx(resolvedZoom);
+    panel.classList.toggle("frame-grid-compact", tile < 48);
+    panel.classList.toggle("frame-grid-micro", tile < 32);
+    panel.style.setProperty("--wb-grid-cell-size", `${tile}px`);
+    panel.style.setProperty("--wb-grid-label-canvas-size", `${Math.max(14, tile - 4)}px`);
+    panel.style.setProperty("--wb-grid-row-header-width", `${header}px`);
+    return { panel, tile, header };
   }
 
   function updateGridPanelZoomUI() {
     state.gridPanelZoom = clampGridPanelZoom(state.gridPanelZoom);
-    const z = state.gridPanelZoom;
-    if ($("gridZoomInput")) $("gridZoomInput").value = String(z);
-    if ($("gridZoomValue")) $("gridZoomValue").textContent = `${z}x`;
-    const panel = $("gridPanel");
-    if (!panel) return;
-    const tile = gridPanelTilePx();
-    panel.style.setProperty("--wb-grid-cell-size", `${tile}px`);
-    panel.style.setProperty("--wb-grid-label-canvas-size", `${Math.max(40, tile - 4)}px`);
-    panel.style.setProperty("--wb-grid-row-header-width", `${gridPanelHeaderPx()}px`);
+    const sliderZoom = state.gridPanelZoom;
+    const resolvedZoom = resolvedGridPanelZoom();
+    if ($("gridZoomInput")) $("gridZoomInput").value = String(sliderZoom);
+    if ($("gridZoomValue")) {
+      $("gridZoomValue").textContent = sliderZoom <= FIT_ZOOM
+        ? `Fit (${zoomLabel(resolvedZoom)})`
+        : zoomLabel(resolvedZoom);
+    }
+    if (!applyGridPanelSizing(resolvedZoom)) return;
+    if (sliderZoom <= FIT_ZOOM) {
+      const viewport = $("wsFrameNav");
+      if (viewport) {
+        viewport.scrollLeft = 0;
+        viewport.scrollTop = 0;
+      }
+    }
+  }
+
+  function enforceGridPanelFit() {
+    if (state.gridPanelZoom > FIT_ZOOM) return;
+    const viewport = $("wsFrameNav");
+    if (!viewport || !$("gridPanel")) return;
+    let correctedZoom = resolvedGridPanelZoom();
+    for (let i = 0; i < 4; i++) {
+      applyGridPanelSizing(correctedZoom);
+      const widthScale = viewport.scrollWidth > 0 ? (viewport.clientWidth / viewport.scrollWidth) : 1;
+      const heightScale = viewport.scrollHeight > 0 ? (viewport.clientHeight / viewport.scrollHeight) : 1;
+      const overflowScale = Math.min(widthScale, heightScale);
+      if (!Number.isFinite(overflowScale) || overflowScale >= 0.995) break;
+      correctedZoom = Math.max(0.05, correctedZoom * overflowScale * 0.98);
+    }
+    if ($("gridZoomValue")) $("gridZoomValue").textContent = `Fit (${zoomLabel(correctedZoom)})`;
+    viewport.scrollLeft = 0;
+    viewport.scrollTop = 0;
+  }
+
+  function scheduleViewportRefit() {
+    if (viewportResizeRaf) cancelAnimationFrame(viewportResizeRaf);
+    viewportResizeRaf = requestAnimationFrame(() => {
+      viewportResizeRaf = 0;
+      updateSourceCanvasZoomUI();
+      if (state.gridPanelZoom <= FIT_ZOOM) renderFrameGrid();
+    });
+  }
+
+  function installViewportResizeObserver() {
+    if (viewportResizeObserver || typeof ResizeObserver !== "function") return;
+    viewportResizeObserver = new ResizeObserver(() => scheduleViewportRefit());
+    const sourceViewport = $("sourceCanvasViewport");
+    const frameNav = $("wsFrameNav");
+    if (sourceViewport) viewportResizeObserver.observe(sourceViewport);
+    if (frameNav) viewportResizeObserver.observe(frameNav);
   }
 
   function resizeGridCharCanvas(newGridCols, newGridRows) {
@@ -7549,7 +7683,7 @@
       updateSourceCanvasZoomUI();
     });
     if ($("gridZoomInput")) $("gridZoomInput").addEventListener("input", () => {
-      state.gridPanelZoom = clampGridPanelZoom($("gridZoomInput").value || 1);
+      state.gridPanelZoom = clampGridPanelZoom($("gridZoomInput").value || 0);
       renderFrameGrid();
     });
     $("assignAnimCategoryBtn").addEventListener("click", assignRowCategory);
@@ -8015,6 +8149,7 @@
     updateVerifyUI();
     updateTermppSkinUI();
     updateWebbuildUI();
+    installViewportResizeObserver();
     window.addEventListener("beforeunload", () => stopTermppStreamPolling());
     window.addEventListener("beforeunload", () => stopWebbuildReadyPoll());
   }
@@ -8057,7 +8192,8 @@
       gridRows: state.gridRows || 0,
       // P2 fields (M2 source panel verifier — VB-02)
       sourceCutsV: Array.isArray(state.sourceCutsV) ? state.sourceCutsV.length : 0,
-      sourceCanvasZoom: state.sourceCanvasZoom || 1,
+      sourceCanvasZoom: typeof state.sourceCanvasZoom === "number" ? state.sourceCanvasZoom : 1,
+      gridPanelZoom: typeof state.gridPanelZoom === "number" ? state.gridPanelZoom : 0,
     }),
     getWebbuildDebugState: () => {
       const frame = $("webbuildFrame");

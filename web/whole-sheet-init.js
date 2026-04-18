@@ -169,6 +169,10 @@ function _forEachTool(fn) {
   }
 }
 
+const FIT_ZOOM = 0;
+const CANVAS_ZOOM_MIN = 0.25;
+const CANVAS_ZOOM_MAX = 6;
+
 // ── Editor state ──
 
 let editorState = {
@@ -220,12 +224,96 @@ let editorState = {
   browseSelectedId: '',
   browseLoading: false,
   browseError: '',
+  canvasZoom: FIT_ZOOM,
+  appliedCanvasZoom: 1,
+  viewportResizeObserver: null,
   // Match-source cell for Replace FG/BG (W29/W30 parity).
   // Set only from explicit sample actions (eyedropper).
   // Contract: lastSampledCell.fg is the match target for Replace FG,
   //           lastSampledCell.bg is the match target for Replace BG.
   lastSampledCell: null,  // {glyph, fg: [r,g,b], bg: [r,g,b]}
 };
+
+function _normalizeCanvasZoomValue(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return FIT_ZOOM;
+  if (n <= FIT_ZOOM) return FIT_ZOOM;
+  return Math.max(CANVAS_ZOOM_MIN, Math.min(CANVAS_ZOOM_MAX, n));
+}
+
+function _zoomLabel(z) {
+  const n = Number(z || 0);
+  if (!Number.isFinite(n) || n <= 0) return '0x';
+  const fixed = n >= 1 ? n.toFixed(2) : n.toFixed(3);
+  return `${fixed.replace(/\.?0+$/, '')}x`;
+}
+
+function _fitCanvasZoom() {
+  const scrollWrap = document.getElementById('wholeSheetScroll');
+  if (!scrollWrap || !editorState.gridCols || !editorState.gridRows) return 1;
+  const baseW = Math.max(1, editorState.gridCols * CELL_SIZE);
+  const baseH = Math.max(1, editorState.gridRows * CELL_SIZE);
+  const viewW = Math.max(1, scrollWrap.clientWidth);
+  const viewH = Math.max(1, scrollWrap.clientHeight);
+  const fit = Math.min(viewW / baseW, viewH / baseH);
+  return Math.max(0.05, Math.min(1, Number.isFinite(fit) ? fit : 1));
+}
+
+function _resolvedCanvasZoom() {
+  editorState.canvasZoom = _normalizeCanvasZoomValue(editorState.canvasZoom);
+  if (editorState.canvasZoom > FIT_ZOOM) return editorState.canvasZoom;
+  return _fitCanvasZoom();
+}
+
+function _applyCanvasZoom({ preserveCenter = false } = {}) {
+  const canvasEl = document.getElementById('wholeSheetCanvas');
+  const scrollWrap = document.getElementById('wholeSheetScroll');
+  if (!canvasEl || !scrollWrap) return;
+
+  const prevZoom = Math.max(0.05, Number(editorState.appliedCanvasZoom || 1));
+  const centerX = preserveCenter ? (scrollWrap.scrollLeft + (scrollWrap.clientWidth / 2)) / prevZoom : 0;
+  const centerY = preserveCenter ? (scrollWrap.scrollTop + (scrollWrap.clientHeight / 2)) / prevZoom : 0;
+
+  const nextZoom = _resolvedCanvasZoom();
+  canvasEl.style.width = `${Math.max(1, Math.round(canvasEl.width * nextZoom))}px`;
+  canvasEl.style.height = `${Math.max(1, Math.round(canvasEl.height * nextZoom))}px`;
+  canvasEl.style.margin = '0 auto';
+  editorState.appliedCanvasZoom = nextZoom;
+
+  const input = document.getElementById('wsCanvasZoomInput');
+  if (input) input.value = String(editorState.canvasZoom);
+  const valueEl = document.getElementById('wsCanvasZoomValue');
+  if (valueEl) {
+    valueEl.textContent = editorState.canvasZoom <= FIT_ZOOM
+      ? `Fit (${_zoomLabel(nextZoom)})`
+      : _zoomLabel(nextZoom);
+  }
+
+  if (preserveCenter) {
+    const nextLeft = Math.max(0, (centerX * nextZoom) - (scrollWrap.clientWidth / 2));
+    const nextTop = Math.max(0, (centerY * nextZoom) - (scrollWrap.clientHeight / 2));
+    scrollWrap.scrollLeft = nextLeft;
+    scrollWrap.scrollTop = nextTop;
+  }
+}
+
+function _disconnectViewportResizeObserver() {
+  if (editorState.viewportResizeObserver) {
+    editorState.viewportResizeObserver.disconnect();
+    editorState.viewportResizeObserver = null;
+  }
+}
+
+function _observeCanvasViewport() {
+  _disconnectViewportResizeObserver();
+  if (typeof ResizeObserver !== 'function') return;
+  const shell = document.getElementById('wholeSheetViewportShell');
+  if (!shell) return;
+  editorState.viewportResizeObserver = new ResizeObserver(() => {
+    if (editorState.canvasZoom <= FIT_ZOOM) _applyCanvasZoom();
+  });
+  editorState.viewportResizeObserver.observe(shell);
+}
 
 // ── mount ──
 
@@ -270,10 +358,45 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
   const canvasArea = document.createElement('div');
   canvasArea.className = 'ws-canvas-area';
 
+  const viewportShell = document.createElement('div');
+  viewportShell.id = 'wholeSheetViewportShell';
+  viewportShell.className = 'subpanel-shell ws-viewport-shell';
+  viewportShell.dataset.panelNumber = '10A';
+  viewportShell.dataset.panelTag = 'whole-sheet-view';
+
+  const zoomRow = document.createElement('div');
+  zoomRow.className = 'ws-zoom-row';
+
+  const zoomLabel = document.createElement('label');
+  zoomLabel.setAttribute('for', 'wsCanvasZoomInput');
+  zoomLabel.textContent = '10A Whole-Sheet Zoom';
+  zoomRow.appendChild(zoomLabel);
+
+  const zoomInput = document.createElement('input');
+  zoomInput.type = 'range';
+  zoomInput.id = 'wsCanvasZoomInput';
+  zoomInput.min = String(FIT_ZOOM);
+  zoomInput.max = String(CANVAS_ZOOM_MAX);
+  zoomInput.step = '0.25';
+  zoomInput.value = String(editorState.canvasZoom);
+  zoomInput.addEventListener('input', () => {
+    editorState.canvasZoom = _normalizeCanvasZoomValue(zoomInput.value);
+    _applyCanvasZoom({ preserveCenter: true });
+  });
+  zoomRow.appendChild(zoomInput);
+
+  const zoomValue = document.createElement('span');
+  zoomValue.id = 'wsCanvasZoomValue';
+  zoomValue.className = 'small';
+  zoomValue.textContent = 'Fit';
+  zoomRow.appendChild(zoomValue);
+
+  viewportShell.appendChild(zoomRow);
+
   const scrollWrap = document.createElement('div');
   scrollWrap.id = 'wholeSheetScroll';
   scrollWrap.className = 'ws-scroll-wrap';
-  canvasArea.appendChild(scrollWrap);
+  viewportShell.appendChild(scrollWrap);
 
   const canvasEl = document.createElement('canvas');
   canvasEl.id = 'wholeSheetCanvas';
@@ -281,6 +404,7 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
   canvasEl.style.cursor = 'crosshair';
   scrollWrap.appendChild(canvasEl);
 
+  canvasArea.appendChild(viewportShell);
   layout.appendChild(canvasArea);
   container.appendChild(layout);
 
@@ -419,6 +543,8 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
 
   editorState.mounted = true;
   canvas.render();
+  _applyCanvasZoom();
+  _observeCanvasViewport();
   _updateToolUI();
   _renderGlyphPicker();
   _renderPaletteGrid();
@@ -2404,6 +2530,7 @@ function _onCanvasMouseMove(e) {
 
 function unmount() {
   document.removeEventListener('keydown', _onKeyDown);
+  _disconnectViewportResizeObserver();
 
   _cancelPasteMode();
   if (editorState.canvas) {
@@ -2468,6 +2595,9 @@ function unmount() {
     browseSelectedId: '',
     browseLoading: false,
     browseError: '',
+    canvasZoom: editorState.canvasZoom,
+    appliedCanvasZoom: 1,
+    viewportResizeObserver: null,
     lastSampledCell: null,
     _pasteInterceptor: null,
   };
@@ -2479,11 +2609,12 @@ function panToFrame(row, col, frameWChars, frameHChars) {
   if (!editorState.mounted) return;
   const scrollWrap = document.getElementById('wholeSheetScroll');
   if (!scrollWrap) return;
+  const zoom = Math.max(0.05, Number(editorState.appliedCanvasZoom || _resolvedCanvasZoom() || 1));
 
-  const targetX = col * frameWChars * CELL_SIZE;
-  const targetY = row * frameHChars * CELL_SIZE;
-  const framePixelW = frameWChars * CELL_SIZE;
-  const framePixelH = frameHChars * CELL_SIZE;
+  const targetX = col * frameWChars * CELL_SIZE * zoom;
+  const targetY = row * frameHChars * CELL_SIZE * zoom;
+  const framePixelW = frameWChars * CELL_SIZE * zoom;
+  const framePixelH = frameHChars * CELL_SIZE * zoom;
 
   const viewW = scrollWrap.clientWidth;
   const viewH = scrollWrap.clientHeight;
@@ -2540,6 +2671,8 @@ function getState() {
     drawGlyph: editorState.drawGlyph,
     drawFg: editorState.drawFg,
     drawBg: editorState.drawBg,
+    canvasZoom: editorState.canvasZoom,
+    appliedCanvasZoom: editorState.appliedCanvasZoom,
   };
 }
 

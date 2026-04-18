@@ -125,7 +125,11 @@
         <div id="wbAutoPlan" class="small muted">Derived automatically from the uploaded PNG at convert time.</div>
       </div>
     </div>
-    <pre id="wbRunOut"></pre>
+    <div id="wbRunOutShell" class="subpanel-shell output-shell" data-panel-number="7A" data-panel-tag="convert-json">
+      <div id="wbRunOutViewport" class="output-viewport">
+        <pre id="wbRunOut"></pre>
+      </div>
+    </div>
   </div>
 
   <div class="two-col">
@@ -144,13 +148,15 @@
         <label>Min Size</label><input id="minSize" type="number" value="8" min="1">
       </div>
       <div class="row">
-        <label for="sourceZoomInput">Source Zoom</label>
-        <input id="sourceZoomInput" type="range" min="1" max="6" step="0.5" value="1">
+        <label for="sourceZoomInput">8A Source Zoom</label>
+        <input id="sourceZoomInput" type="range" min="0" max="6" step="0.25" value="1">
         <span id="sourceZoomValue" class="small">1x</span>
       </div>
       <div id="sourceModeHint" class="small">Mode: Select. Click a sprite box to select, drag to move, drag handles to resize.</div>
-      <div class="canvas-wrap">
-        <canvas id="sourceCanvas" width="576" height="320"></canvas>
+      <div id="sourceCanvasShell" class="subpanel-shell canvas-shell" data-panel-number="8A" data-panel-tag="source-view">
+        <div id="sourceCanvasViewport" class="canvas-wrap">
+          <canvas id="sourceCanvas" width="576" height="320"></canvas>
+        </div>
       </div>
       <div id="sourceInfo" class="small"></div>
       <div id="sourceContextMenu" class="context-menu hidden">
@@ -180,9 +186,9 @@
         <span id="layerHint" class="small">Select a frame tile, then click `Focus Whole-Sheet` (or double-click a frame tile).</span>
       </div>
       <div class="row">
-        <label for="gridZoomInput">Grid Zoom</label>
-        <input id="gridZoomInput" type="range" min="0.75" max="2.5" step="0.25" value="1">
-        <span id="gridZoomValue" class="small">1x</span>
+        <label for="gridZoomInput">9A Frame Nav Zoom</label>
+        <input id="gridZoomInput" type="range" min="0" max="2.5" step="0.25" value="0">
+        <span id="gridZoomValue" class="small">Fit</span>
       </div>
       <div id="layerVisibility" class="row small"></div>
       <div id="wsFrameNav" class="ws-frame-nav" data-panel-number="9A" data-panel-tag="frame-nav">

@@ -630,10 +630,13 @@ export class Canvas {
     let vpH = this.canvasElement.height;
     const par = this.canvasElement.parentElement;
     if (par && (par.scrollWidth > par.clientWidth || par.scrollHeight > par.clientHeight)) {
-      vpX = par.scrollLeft;
-      vpY = par.scrollTop;
-      vpW = par.clientWidth;
-      vpH = par.clientHeight;
+      const rect = this.canvasElement.getBoundingClientRect();
+      const scaleX = rect.width > 0 ? (rect.width / this.canvasElement.width) : 1;
+      const scaleY = rect.height > 0 ? (rect.height / this.canvasElement.height) : 1;
+      vpX = par.scrollLeft / Math.max(scaleX, 0.0001);
+      vpY = par.scrollTop / Math.max(scaleY, 0.0001);
+      vpW = par.clientWidth / Math.max(scaleX, 0.0001);
+      vpH = par.clientHeight / Math.max(scaleY, 0.0001);
     }
 
     // Visible cell range with 1-cell safety margin
