@@ -1210,6 +1210,10 @@ Current mismatch:
 4. There is still no wearable/item template surface in pipeline-v2, so the
    current workbench can only author full character strips, not standalone
    wearable or item sprites.
+5. Current priority remains base skin authoring. Wearable authoring workflow /
+   template design is future work and must not interrupt closure of the current
+   on-foot skin-authoring surface plus its canonical from-scratch acceptance
+   proof.
 
 Current evidence:
 
@@ -2084,6 +2088,17 @@ From the current state, the corrected sequence is:
      - mounted-family authoring after schema normalization
      - green proof-only
      - `bigbee` deferred
+   - Future-only wearable design scope:
+     - design a standalone wearable/item authoring workflow and template
+       surface only after the current skin-authoring flow is closed and
+       acceptance-proven
+     - define whether wearable authoring is:
+       - overlay-first (slot/style/body overlay contract)
+       - item-art-first (world/inventory presentation contract)
+       - or a split surface with separate authoring entrypoints
+     - define the future verifier burden for wearable authoring separately from
+       current skin-strip authoring; do not mix the two into the current Step
+       11 closure criteria
 
 11. **IMPLEMENT — Backend Schema Normalization + Authority Cleanup** — **OPEN; THIS IS NOW THE FIRST SECTION-2 IMPLEMENTATION PRIORITY**.
    - Required work:
@@ -2125,6 +2140,14 @@ From the current state, the corrected sequence is:
      - `output/m2d_action_proof_delete_frame_v2/g6_delete_frame_contract.json`
      - `output/m2d_action_proof_multirow_v1/report.json`
      - `output/m2d_action_proof_multirow_v1/g6_delete_frame_contract.json`
+   - Still open after Step 12:
+     - the repo has partial UI-driven manual-assembly proof, but it still lacks
+       one canonical headed "from scratch" signoff lane for current skin
+       authoring that runs:
+       `template apply -> blank session -> source upload/manual assembly ->
+       whole-sheet edit -> save/export -> Skin Dock/runtime proof`
+     - future wearable authoring is explicitly out of scope for this signoff
+       lane; this lane is only for the current skin-authoring surface
 
 13. **IMPLEMENT — Backend Structural-Contract Runners + Y9-2 HTTP Follow-Through** — **PARTIAL / REPRIORITIZED**.
    - Already implemented:
@@ -2161,20 +2184,41 @@ the immediate sequence is:
      - fatal-parse sentinel fix
      - `preview_xp` fallback warning
      - user-visible template-registry fetch failure path
-2. **Do the Section 3 backend structural-contract runners next.**
+2. **Then add the canonical current-scope "from scratch" Playwright signoff lane.**
+   - extend or replace the current partial manual-assembly runner so one
+     headed UI-driven lane proves:
+     - template apply / blank session creation
+     - source upload and manual assembly from scratch
+     - whole-sheet edit on the authored result
+     - save/export
+     - Skin Dock/runtime proof at the end
+   - this lane is for current skin authoring only
+   - do not block it on future wearable authoring design
+3. **Do the Section 3 backend structural-contract runners next.**
    - add tests/helpers proving normalized schema parity against Y9-2 family,
      fallback, mounted-prefix, and wearable slot/style truth
    - update existing fidelity helpers to consume the same contract
-3. **Keep Step 8 open in parallel only where it does not re-open schema drift.**
+4. **Keep Step 8 open in parallel only where it does not re-open schema drift.**
    - finish demoting session-local source authority into manifest-backed or
      clearly-derived state
-4. **Then re-prove Step 7 as product grouping, not just code tags.**
+5. **Then re-prove Step 7 as product grouping, not just code tags.**
    - the ID overlay and numbered panels exist now
    - the next proof burden is that the visible grouping/order matches the
      intended product workflow and does not repeat the 2026-04-16 local/public
      drift
-5. **Finish the remaining Step 13 Y9-2 wiring after the schema/runners are stable.**
+6. **Finish the remaining Step 13 Y9-2 wiring after the schema/runners are stable.**
    - backend endpoints exist; launcher / wizard integration still does not
-6. **Then return to Step 14 small-screen/persistence completion.**
+7. **Then return to Step 14 small-screen/persistence completion.**
+
+Future after current skin-authoring closure:
+
+1. **Design the wearable authoring workflow/template surface.**
+   - this is explicitly post-current-skin-authoring work
+   - finish current skin-authoring schema closure plus the canonical
+     from-scratch signoff lane before opening wearable workflow implementation
+2. **Define a separate wearable verifier/signoff path.**
+   - wearable authoring must not silently piggyback on the skin-strip signoff
+     lane; it needs its own acceptance and parity burden once the workflow
+     exists
 
 **Ship gate:** Steps 1–2 (housekeeping and Section 1 design) are unblocked and do not require pipeline-v2 server changes. Implementation steps 3–14 are post-release relative to the Y9-2 launcher ship gate. Do not surface the `[3] ASSET PIPELINE` launcher node until Step 3 is at minimum proven complete. FL-813 (asset pipeline lacks a shippable supported surface) blocks launcher promotion and is resolved only when Step 3 is proven, the Section 2.10 HTTP API contract is implemented (Step 13), and the Y9-2 Step 7.12 VERIFY gate passes.
