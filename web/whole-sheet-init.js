@@ -541,7 +541,9 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
     e.stopImmediatePropagation();
     e.preventDefault();
     const rect = canvasEl.getBoundingClientRect();
-    const pixelsPerCell = canvas.cellSize || CELL_SIZE;
+    const pixelsPerCell = rect.width > 0 && canvasEl.width > 0
+      ? (rect.width / canvasEl.width) * CELL_SIZE
+      : (canvas.cellSize || CELL_SIZE);
     const cx = Math.floor((e.clientX - rect.left) / pixelsPerCell);
     const cy = Math.floor((e.clientY - rect.top) / pixelsPerCell);
     _pasteAt(cx, cy);
