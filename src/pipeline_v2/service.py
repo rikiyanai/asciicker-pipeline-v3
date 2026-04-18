@@ -952,6 +952,75 @@ _l0_reference_status: dict[str, str] = {}
 _l1_reference_cache: dict[str, list[Cell]] = {}
 
 
+def _normalize_template_action_spec(
+    template_set_key: str,
+    action_key: str,
+    raw_spec: dict[str, Any],
+) -> dict[str, Any]:
+    spec = dict(raw_spec or {})
+    filename_prefix = str(spec.get("filename_prefix") or spec.get("family") or "").strip()
+    skin_family = str(spec.get("skin_family") or "").strip()
+    preview_xp = str(spec.get("preview_xp") or spec.get("l0_ref") or "").strip()
+    preview_xp_sha256 = str(spec.get("preview_xp_sha256") or spec.get("l0_ref_sha256") or "").strip()
+    l0_ref = str(spec.get("l0_ref") or "").strip()
+    l0_ref_sha256 = str(spec.get("l0_ref_sha256") or "").strip()
+
+    missing: list[str] = []
+    if not filename_prefix:
+        missing.append("filename_prefix")
+    if not skin_family:
+        missing.append("skin_family")
+    if not preview_xp:
+        missing.append("preview_xp")
+    if not preview_xp_sha256:
+        missing.append("preview_xp_sha256")
+    if not l0_ref:
+        missing.append("l0_ref")
+    if not l0_ref_sha256:
+        missing.append("l0_ref_sha256")
+    if missing:
+        raise ValueError(
+            "template_registry.json action "
+            f"{template_set_key}:{action_key} missing required normalized fields: {', '.join(missing)}"
+        )
+
+    spec["filename_prefix"] = filename_prefix
+    spec["skin_family"] = skin_family
+    spec["preview_xp"] = preview_xp
+    spec["preview_xp_sha256"] = preview_xp_sha256
+    spec["l0_ref"] = l0_ref
+    spec["l0_ref_sha256"] = l0_ref_sha256
+    # Compatibility alias for the pre-normalization backend path. Step 11 will
+    # delete the remaining `family` readers after the stale authority path is removed.
+    spec["family"] = filename_prefix
+    return spec
+
+
+def _normalize_template_registry(raw_registry: dict[str, Any]) -> dict[str, Any]:
+    registry = dict(raw_registry or {})
+    template_sets = registry.get("template_sets", {})
+    if not isinstance(template_sets, dict):
+        raise ValueError("template_registry.json template_sets must be an object")
+
+    normalized_sets: dict[str, Any] = {}
+    for template_set_key, template_set in template_sets.items():
+        ts = dict(template_set or {})
+        actions = ts.get("actions", {})
+        if not isinstance(actions, dict):
+            raise ValueError(f"template_registry.json template set '{template_set_key}' actions must be an object")
+        normalized_actions = {
+            action_key: _normalize_template_action_spec(template_set_key, action_key, action_spec)
+            for action_key, action_spec in actions.items()
+        }
+        ts["actions"] = normalized_actions
+        normalized_sets[str(template_set_key)] = ts
+    registry["template_sets"] = normalized_sets
+
+    if "schema_version" not in registry:
+        registry["schema_version"] = 2
+    return registry
+
+
 def load_template_registry() -> dict[str, Any]:
     global _template_registry
     if _template_registry is not None:
@@ -961,7 +1030,7 @@ def load_template_registry() -> dict[str, Any]:
         _template_registry = {"template_sets": {}}
         return _template_registry
     import json
-    _template_registry = json.loads(reg_path.read_text(encoding="utf-8"))
+    _template_registry = _normalize_template_registry(json.loads(reg_path.read_text(encoding="utf-8")))
     # Validate L0 reference checksums at load time
     for ts_key, ts in _template_registry.get("template_sets", {}).items():
         for act_key, act in ts.get("actions", {}).items():

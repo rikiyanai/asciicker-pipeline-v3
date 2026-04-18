@@ -50,6 +50,10 @@ export function getTemplateSetContract(templateSetKey) {
       xp_dims: Array.isArray(spec.xp_dims) ? spec.xp_dims.map((n) => Number(n || 0)) : [0, 0],
       skin_family: spec.skin_family || '',
       filename_prefix: spec.filename_prefix || '',
+      preview_xp: spec.preview_xp || '',
+      preview_xp_sha256: spec.preview_xp_sha256 || '',
+      l0_ref: spec.l0_ref || '',
+      l0_ref_sha256: spec.l0_ref_sha256 || '',
       required: spec.required !== false,
     };
   }
@@ -57,6 +61,7 @@ export function getTemplateSetContract(templateSetKey) {
   return {
     template_set_key: templateSetKey,
     label: templateSet.label || templateSetKey,
+    skin_family_scope: Array.isArray(templateSet.skin_family_scope) ? [...templateSet.skin_family_scope] : [],
     actionKeys: Object.keys(actions),
     actions,
   };

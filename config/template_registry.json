@@ -1,21 +1,179 @@
 {
+  "schema_version": 2,
+  "skin_family_scope": {
+    "human": {
+      "skin_family": "human",
+      "fallback_family": null,
+      "authorable": true,
+      "proof_only": false,
+      "on_foot_prefixes": [
+        "player",
+        "attack",
+        "plydie"
+      ],
+      "mounted_prefixes": [
+        "wolfie",
+        "wolack"
+      ],
+      "deferred_prefixes": [
+        "bigbee"
+      ],
+      "authorable_template_sets": [
+        "player_native_idle_only",
+        "player_native_full"
+      ]
+    },
+    "green": {
+      "skin_family": "green",
+      "fallback_family": "human",
+      "authorable": false,
+      "proof_only": true,
+      "on_foot_prefixes": [
+        "player-green",
+        "attack-green",
+        "plydie-green"
+      ],
+      "mounted_prefixes": [],
+      "deferred_prefixes": []
+    }
+  },
+  "prefix_catalog": {
+    "player": {
+      "filename_prefix": "player",
+      "skin_family": "human",
+      "runtime_role": "on_foot_idle_walk",
+      "mounted": false,
+      "authorable": true,
+      "template_actions": [
+        {
+          "template_set_key": "player_native_idle_only",
+          "action_key": "idle"
+        },
+        {
+          "template_set_key": "player_native_full",
+          "action_key": "idle"
+        }
+      ],
+      "preview_xp": "sprites/player-0001.xp",
+      "preview_xp_sha256": "911fcad889478799ed7e6e1c7a59b6c056795ce3877f4567eda84969c51a1d96",
+      "l0_ref": "sprites/player-0100.xp",
+      "l0_ref_sha256": "073bd74099536d9b2f0b1bab074a485060e2f135a1f309ec759d9a94f15c7e9c"
+    },
+    "attack": {
+      "filename_prefix": "attack",
+      "skin_family": "human",
+      "runtime_role": "on_foot_attack",
+      "mounted": false,
+      "authorable": true,
+      "template_actions": [
+        {
+          "template_set_key": "player_native_full",
+          "action_key": "attack"
+        }
+      ],
+      "preview_xp": "sprites/attack-0001.xp",
+      "preview_xp_sha256": "a2ebf074ff8bfd1ef94703c011f2b9b793429b889223afd55951a13400cd7538",
+      "l0_ref": "sprites/attack-0001.xp",
+      "l0_ref_sha256": "a2ebf074ff8bfd1ef94703c011f2b9b793429b889223afd55951a13400cd7538"
+    },
+    "plydie": {
+      "filename_prefix": "plydie",
+      "skin_family": "human",
+      "runtime_role": "on_foot_fall_death",
+      "mounted": false,
+      "authorable": true,
+      "template_actions": [
+        {
+          "template_set_key": "player_native_full",
+          "action_key": "death"
+        }
+      ],
+      "preview_xp": "sprites/plydie-0001.xp",
+      "preview_xp_sha256": "6ed765f6ffd56ef8cfd7f6de5f13ff91a1438ae9cd7a9ac22775485ae350890c",
+      "l0_ref": "sprites/plydie-0000.xp",
+      "l0_ref_sha256": "29627bf1873555e2935ad8eaf31834fc7a6f9b0fe5694de398a1b2e351e45442"
+    },
+    "wolfie": {
+      "filename_prefix": "wolfie",
+      "skin_family": "human",
+      "runtime_role": "mounted_idle_walk",
+      "mounted": true,
+      "authorable": false,
+      "status": "specified_not_authorable",
+      "authoring_blockers": [
+        "mounted_family_scope_not_enabled",
+        "missing_native_builder"
+      ],
+      "template_actions": [],
+      "preview_xp": "sprites/wolfie-0001.xp",
+      "preview_xp_sha256": "a9917ee5172cdc1ea335d07754f3b389653905bf7a4ad56701c94f00bd18496c",
+      "l0_ref": "sprites/wolfie-0100.xp",
+      "l0_ref_sha256": "930b9e3dc2482258c5b492e89bd083ee70fe2705ade2dd6b527f68190e54fe28"
+    },
+    "wolack": {
+      "filename_prefix": "wolack",
+      "skin_family": "human",
+      "runtime_role": "mounted_attack",
+      "mounted": true,
+      "authorable": false,
+      "status": "specified_not_authorable",
+      "authoring_blockers": [
+        "mounted_family_scope_not_enabled",
+        "missing_native_builder"
+      ],
+      "template_actions": [],
+      "preview_xp": "sprites/wolack-0001.xp",
+      "preview_xp_sha256": "20247d143b306be27a14a6a8034b4a70f1c5441912f5d13b5bcf8616fef084dc",
+      "l0_ref": "sprites/wolack-0001.xp",
+      "l0_ref_sha256": "20247d143b306be27a14a6a8034b4a70f1c5441912f5d13b5bcf8616fef084dc"
+    },
+    "bigbee": {
+      "filename_prefix": "bigbee",
+      "skin_family": "human",
+      "runtime_role": "bee_mount_npc",
+      "mounted": true,
+      "authorable": false,
+      "status": "deferred",
+      "authoring_blockers": [
+        "explicitly_deferred_in_canon",
+        "missing_native_builder"
+      ],
+      "template_actions": [],
+      "preview_xp": "sprites/bigbee-0001.xp",
+      "preview_xp_sha256": "23c5657269a0c7b414c1530dfd2cc700eb5d13cfbb89518ea04499b5c1ef15db",
+      "l0_ref": "sprites/bigbee-0000.xp",
+      "l0_ref_sha256": "981e2374d6789141e2865152e9ea9a65dd45449f9824eaa8467d7e21306b0df6"
+    }
+  },
   "template_sets": {
     "player_native_idle_only": {
       "label": "Player Skin (Idle Only)",
+      "skin_family_scope": [
+        "human"
+      ],
       "actions": {
         "idle": {
-          "family": "player",
+          "filename_prefix": "player",
+          "skin_family": "human",
           "label": "Idle / Walk",
           "required": true,
-          "xp_dims": [126, 80],
+          "xp_dims": [
+            126,
+            80
+          ],
           "angles": 8,
-          "frames": [1, 8],
+          "frames": [
+            1,
+            8
+          ],
           "source_projs": 1,
           "projs": 2,
           "cell_w": 7,
           "cell_h": 10,
           "layers": 4,
           "ahsw_range": "all_16",
+          "preview_xp": "sprites/player-0001.xp",
+          "preview_xp_sha256": "911fcad889478799ed7e6e1c7a59b6c056795ce3877f4567eda84969c51a1d96",
           "l0_ref": "sprites/player-0100.xp",
           "l0_ref_sha256": "073bd74099536d9b2f0b1bab074a485060e2f135a1f309ec759d9a94f15c7e9c"
         }
@@ -23,30 +181,48 @@
     },
     "player_native_full": {
       "label": "Player Skin (Full Bundle)",
+      "skin_family_scope": [
+        "human"
+      ],
       "actions": {
         "idle": {
-          "family": "player",
+          "filename_prefix": "player",
+          "skin_family": "human",
           "label": "Idle / Walk",
           "required": true,
-          "xp_dims": [126, 80],
+          "xp_dims": [
+            126,
+            80
+          ],
           "angles": 8,
-          "frames": [1, 8],
+          "frames": [
+            1,
+            8
+          ],
           "source_projs": 1,
           "projs": 2,
           "cell_w": 7,
           "cell_h": 10,
           "layers": 4,
           "ahsw_range": "all_16",
+          "preview_xp": "sprites/player-0001.xp",
+          "preview_xp_sha256": "911fcad889478799ed7e6e1c7a59b6c056795ce3877f4567eda84969c51a1d96",
           "l0_ref": "sprites/player-0100.xp",
           "l0_ref_sha256": "073bd74099536d9b2f0b1bab074a485060e2f135a1f309ec759d9a94f15c7e9c"
         },
         "attack": {
-          "family": "attack",
+          "filename_prefix": "attack",
+          "skin_family": "human",
           "label": "Attack",
           "required": false,
-          "xp_dims": [144, 80],
+          "xp_dims": [
+            144,
+            80
+          ],
           "angles": 8,
-          "frames": [8],
+          "frames": [
+            8
+          ],
           "source_projs": 1,
           "projs": 2,
           "cell_w": 9,
@@ -54,22 +230,32 @@
           "layers": 4,
           "ahsw_range": "weapon_gte_1",
           "weapon_filter": "W>=1",
+          "preview_xp": "sprites/attack-0001.xp",
+          "preview_xp_sha256": "a2ebf074ff8bfd1ef94703c011f2b9b793429b889223afd55951a13400cd7538",
           "l0_ref": "sprites/attack-0001.xp",
           "l0_ref_sha256": "a2ebf074ff8bfd1ef94703c011f2b9b793429b889223afd55951a13400cd7538"
         },
         "death": {
-          "family": "plydie",
+          "filename_prefix": "plydie",
+          "skin_family": "human",
           "label": "Death",
           "required": false,
-          "xp_dims": [110, 88],
+          "xp_dims": [
+            110,
+            88
+          ],
           "angles": 8,
-          "frames": [5],
+          "frames": [
+            5
+          ],
           "source_projs": 1,
           "projs": 2,
           "cell_w": 11,
           "cell_h": 11,
           "layers": 3,
           "ahsw_range": "all_16",
+          "preview_xp": "sprites/plydie-0001.xp",
+          "preview_xp_sha256": "6ed765f6ffd56ef8cfd7f6de5f13ff91a1438ae9cd7a9ac22775485ae350890c",
           "l0_ref": "sprites/plydie-0000.xp",
           "l0_ref_sha256": "29627bf1873555e2935ad8eaf31834fc7a6f9b0fe5694de398a1b2e351e45442"
         }
