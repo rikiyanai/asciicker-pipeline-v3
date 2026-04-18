@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import math
 import os
 import shlex
@@ -952,6 +953,27 @@ _l0_reference_status: dict[str, str] = {}
 _l1_reference_cache: dict[str, list[Cell]] = {}
 
 
+def _reset_template_registry_cache() -> None:
+    """Reset all template registry and reference caches. For use in tests only."""
+    global _template_registry, _l0_reference_cache, _l0_reference_status, _l1_reference_cache
+    _template_registry = None
+    _l0_reference_cache = {}
+    _l0_reference_status = {}
+    _l1_reference_cache = {}
+
+
+def _resolve_preview_xp_fields(spec: dict[str, Any]) -> tuple[str, str]:
+    """Resolve preview XP and hash as a coupled pair.
+
+    When preview_xp is absent, both values fall back together to the l0_ref pair.
+    """
+    preview_xp = str(spec.get("preview_xp") or "").strip()
+    preview_xp_sha256 = str(spec.get("preview_xp_sha256") or "").strip()
+    if preview_xp:
+        return preview_xp, preview_xp_sha256
+    return str(spec.get("l0_ref") or "").strip(), str(spec.get("l0_ref_sha256") or "").strip()
+
+
 def _normalize_template_action_spec(
     template_set_key: str,
     action_key: str,
@@ -960,8 +982,7 @@ def _normalize_template_action_spec(
     spec = dict(raw_spec or {})
     filename_prefix = str(spec.get("filename_prefix") or spec.get("family") or "").strip()
     skin_family = str(spec.get("skin_family") or "").strip()
-    preview_xp = str(spec.get("preview_xp") or spec.get("l0_ref") or "").strip()
-    preview_xp_sha256 = str(spec.get("preview_xp_sha256") or spec.get("l0_ref_sha256") or "").strip()
+    preview_xp, preview_xp_sha256 = _resolve_preview_xp_fields(spec)
     l0_ref = str(spec.get("l0_ref") or "").strip()
     l0_ref_sha256 = str(spec.get("l0_ref_sha256") or "").strip()
 
@@ -990,14 +1011,20 @@ def _normalize_template_action_spec(
     spec["preview_xp_sha256"] = preview_xp_sha256
     spec["l0_ref"] = l0_ref
     spec["l0_ref_sha256"] = l0_ref_sha256
-    # Compatibility alias for the pre-normalization backend path. Step 11 will
-    # delete the remaining `family` readers after the stale authority path is removed.
+    # DEFERRED: compat alias for pre-normalization callers. Step 11 (PLANNED) will
+    # delete remaining `family` readers once the stale authority path is removed.
     spec["family"] = filename_prefix
     return spec
 
 
 def _normalize_template_registry(raw_registry: dict[str, Any]) -> dict[str, Any]:
     registry = dict(raw_registry or {})
+    skin_family_scope = registry.get("skin_family_scope", {})
+    if not isinstance(skin_family_scope, dict):
+        raise ValueError("template_registry.json skin_family_scope must be an object")
+    prefix_catalog = registry.get("prefix_catalog", {})
+    if not isinstance(prefix_catalog, dict):
+        raise ValueError("template_registry.json prefix_catalog must be an object")
     template_sets = registry.get("template_sets", {})
     if not isinstance(template_sets, dict):
         raise ValueError("template_registry.json template_sets must be an object")
@@ -1015,6 +1042,39 @@ def _normalize_template_registry(raw_registry: dict[str, Any]) -> dict[str, Any]
         ts["actions"] = normalized_actions
         normalized_sets[str(template_set_key)] = ts
     registry["template_sets"] = normalized_sets
+    for prefix_key, prefix_spec in prefix_catalog.items():
+        ps = dict(prefix_spec or {})
+        template_actions = ps.get("template_actions", [])
+        if not isinstance(template_actions, list):
+            raise ValueError(f"template_registry.json prefix_catalog '{prefix_key}' template_actions must be an array")
+        for template_action in template_actions:
+            if not isinstance(template_action, dict):
+                raise ValueError(f"template_registry.json prefix_catalog '{prefix_key}' template_actions entries must be objects")
+            template_set_key = str(template_action.get("template_set_key") or "").strip()
+            action_key = str(template_action.get("action_key") or "").strip()
+            if not template_set_key or not action_key:
+                raise ValueError(
+                    f"template_registry.json prefix_catalog '{prefix_key}' template_actions entries must include template_set_key and action_key"
+                )
+            template_set = normalized_sets.get(template_set_key)
+            if not isinstance(template_set, dict):
+                raise ValueError(
+                    f"template_registry.json prefix_catalog '{prefix_key}' references unknown template set '{template_set_key}'"
+                )
+            actions = template_set.get("actions", {})
+            action_spec = actions.get(action_key) if isinstance(actions, dict) else None
+            if not isinstance(action_spec, dict):
+                raise ValueError(
+                    f"template_registry.json prefix_catalog '{prefix_key}' references unknown action '{template_set_key}:{action_key}'"
+                )
+            for field in ("filename_prefix", "skin_family", "preview_xp", "preview_xp_sha256", "l0_ref", "l0_ref_sha256"):
+                prefix_value = str(ps.get(field) or "").strip()
+                action_value = str(action_spec.get(field) or "").strip()
+                if prefix_value != action_value:
+                    raise ValueError(
+                        "template_registry.json prefix_catalog "
+                        f"'{prefix_key}' field '{field}' drifted from {template_set_key}:{action_key}"
+                    )
 
     if "schema_version" not in registry:
         registry["schema_version"] = 2
@@ -1027,9 +1087,8 @@ def load_template_registry() -> dict[str, Any]:
         return _template_registry
     reg_path = CONFIG_DIR / "template_registry.json"
     if not reg_path.exists():
-        _template_registry = {"template_sets": {}}
+        _template_registry = {"template_sets": {}, "schema_version": 2}
         return _template_registry
-    import json
     _template_registry = _normalize_template_registry(json.loads(reg_path.read_text(encoding="utf-8")))
     # Validate L0 reference checksums at load time
     for ts_key, ts in _template_registry.get("template_sets", {}).items():

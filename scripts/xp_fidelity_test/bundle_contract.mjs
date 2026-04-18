@@ -5,14 +5,33 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const TEMPLATE_REGISTRY_PATH = path.join(REPO_ROOT, 'config', 'template_registry.json');
+const EXPECTED_SCHEMA_VERSION = 2;
 
 let cachedRegistry = null;
 
 function readTemplateRegistry() {
   if (!cachedRegistry) {
-    cachedRegistry = JSON.parse(fs.readFileSync(TEMPLATE_REGISTRY_PATH, 'utf-8'));
+    const registry = JSON.parse(fs.readFileSync(TEMPLATE_REGISTRY_PATH, 'utf-8'));
+    if (registry.schema_version !== EXPECTED_SCHEMA_VERSION) {
+      throw new Error(`Unsupported template registry schema_version: ${registry.schema_version}`);
+    }
+    cachedRegistry = registry;
   }
   return cachedRegistry;
+}
+
+function requireObject(value, context) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${context} must be an object`);
+  }
+  return value;
+}
+
+function requireString(value, context, fieldName) {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`${context} missing required field: ${fieldName}`);
+  }
+  return value.trim();
 }
 
 export function semanticFrameCountFromAnims(anims = []) {
@@ -36,25 +55,29 @@ export function getTemplateSetContract(templateSetKey) {
   if (!templateSet) {
     throw new Error(`Unknown template_set_key: ${templateSetKey}`);
   }
+  requireObject(templateSet, `template_set '${templateSetKey}'`);
+  const actionSpecs = requireObject(templateSet.actions, `template_set '${templateSetKey}' actions`);
 
   const actions = {};
-  for (const [actionKey, spec] of Object.entries(templateSet.actions || {})) {
+  for (const [actionKey, spec] of Object.entries(actionSpecs)) {
+    const context = `template_set '${templateSetKey}' action '${actionKey}'`;
+    const actionSpec = requireObject(spec, context);
     actions[actionKey] = {
       action_key: actionKey,
-      angles: Number(spec.angles || 1),
-      anims: Array.isArray(spec.frames) ? spec.frames.map((n) => Number(n || 0)) : [1],
-      source_projs: Math.max(1, Number(spec.source_projs ?? spec.projs ?? 1)),
-      projs: Math.max(1, Number(spec.projs || 1)),
-      cell_w: Number(spec.cell_w || 1),
-      cell_h: Number(spec.cell_h || 1),
-      xp_dims: Array.isArray(spec.xp_dims) ? spec.xp_dims.map((n) => Number(n || 0)) : [0, 0],
-      skin_family: spec.skin_family || '',
-      filename_prefix: spec.filename_prefix || '',
-      preview_xp: spec.preview_xp || '',
-      preview_xp_sha256: spec.preview_xp_sha256 || '',
-      l0_ref: spec.l0_ref || '',
-      l0_ref_sha256: spec.l0_ref_sha256 || '',
-      required: spec.required !== false,
+      angles: Number(actionSpec.angles || 1),
+      anims: Array.isArray(actionSpec.frames) ? actionSpec.frames.map((n) => Number(n || 0)) : [1],
+      source_projs: Math.max(1, Number(actionSpec.source_projs ?? actionSpec.projs ?? 1)),
+      projs: Math.max(1, Number(actionSpec.projs || 1)),
+      cell_w: Number(actionSpec.cell_w || 1),
+      cell_h: Number(actionSpec.cell_h || 1),
+      xp_dims: Array.isArray(actionSpec.xp_dims) ? actionSpec.xp_dims.map((n) => Number(n || 0)) : [0, 0],
+      skin_family: requireString(actionSpec.skin_family, context, 'skin_family'),
+      filename_prefix: requireString(actionSpec.filename_prefix, context, 'filename_prefix'),
+      preview_xp: requireString(actionSpec.preview_xp, context, 'preview_xp'),
+      preview_xp_sha256: requireString(actionSpec.preview_xp_sha256, context, 'preview_xp_sha256'),
+      l0_ref: requireString(actionSpec.l0_ref, context, 'l0_ref'),
+      l0_ref_sha256: requireString(actionSpec.l0_ref_sha256, context, 'l0_ref_sha256'),
+      required: actionSpec.required !== false,
     };
   }
 

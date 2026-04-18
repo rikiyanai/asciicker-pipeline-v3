@@ -11,6 +11,34 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Fix Attempt — Template Registry Coupling And Bundle Contract Validation (2026-04-18)
+
+### What changed
+
+1. `src/pipeline_v2/service.py` now resolves `preview_xp` and `preview_xp_sha256` as a coupled pair.
+   - When `preview_xp` is absent, both values fall back together to the `l0_ref` pair.
+   - This prevents a registry spec from mixing `preview_xp` from `l0_ref` with an unrelated `preview_xp_sha256`.
+
+2. `src/pipeline_v2/service.py` now validates `prefix_catalog` entries against their matching `template_sets` actions during normalization.
+   - Drift in `filename_prefix`, `skin_family`, `preview_xp`, `preview_xp_sha256`, `l0_ref`, or `l0_ref_sha256` now raises immediately.
+
+3. `scripts/xp_fidelity_test/bundle_contract.mjs` now enforces `schema_version: 2` and required action fields.
+   - Missing or blank action fields now throw instead of returning silent empty strings.
+
+4. Added focused unit coverage.
+   - `tests/test_template_registry_schema.py`
+   - `tests/xp_fidelity_test/bundle_contract.test.mjs`
+
+### Verification
+
+- `python3 -m pytest tests/test_template_registry_schema.py -q` -> PASS
+- `node --test tests/xp_fidelity_test/bundle_contract.test.mjs` -> PASS
+
+### Notes
+
+- This is product/verifier maintenance and log coverage, not acceptance evidence.
+- No headed browser run was required for this slice because the change is contract-validation and normalization logic only.
+
 ---
 
 ## Process Failure — Unauthorized Headless Verification And Premature Patching (2026-04-17)
