@@ -2,7 +2,7 @@
 
 **Authority:** this file and `PLAYWRIGHT_FAILURE_LOG.md` are the only active canon docs for the browser workbench.
 
-**Last updated:** 2026-04-17
+**Last updated:** 2026-04-18
 **Branch baseline:** `v3-refactor-start @ b435ed5`
 **Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the grouped-drag / Delete Frame interaction slice, and the surviving local/browser/runtime assets in this repo
 
@@ -2095,6 +2095,16 @@ From the current state, the corrected sequence is:
      - update backend/template serialization so browser and tests consume only
        the normalized schema
    - This step must complete before broader mounted-family or wearable claims.
+   - **2026-04-18 review-driven execution plan:**
+     1. Add direct JS unit coverage for `web/workbench.js::isTemplateActionAuthorable()` and `getEnabledActions()` before changing behavior again.
+     2. Replace every live backend `ENABLED_FAMILIES` gate with one shared helper derived from normalized registry truth.
+     3. Restore `/api/workbench/templates` `enabled_families` as compatibility output derived from normalized registry state, while keeping browser logic on the normalized contract.
+     4. After step 2 closes, sweep remaining live `family` readers and downgrade the alias to compatibility-only instead of live authority.
+   - **Current Step 11 review blockers from Task 2 (2026-04-18):**
+     - frontend bundle-action authorability gate has no direct branch tests
+     - backend bundle/session/export paths still split authority between normalized registry and `ENABLED_FAMILIES`
+     - compat `family` alias is still a live bridge because backend gating still reads the old authority path
+     - `/api/workbench/templates` changed shape without a compatibility period for `enabled_families`
 
 12. **IMPLEMENT — Interaction completion after UI identity map** — **IMPLEMENTED (2026-04-17, commits `3dd7042`, `2ec2238`, `d689a14`)**.
    - The official source-to-grid runner now proves manual single-box, auto single-box, grouped row-select, and grouped column-select drags through shipped headed UI actions only.
@@ -2134,7 +2144,8 @@ the immediate sequence is:
 1. **Do Step 11 first: normalize the backend schema.**
    - replace legacy `family` registry assumptions with explicit
      `filename_prefix` / `skin_family` action contracts
-   - delete `enabled_families`
+   - restore `enabled_families` only as derived compatibility output while the caller migration window remains open; do not use it as live authority
+   - then delete `enabled_families` in a separate compatibility-cleanup slice once callers are migrated
    - decide and implement the mounted-family representation shape
 2. **Do the Section 3 backend structural-contract runners next.**
    - add tests/helpers proving normalized schema parity against Y9-2 family,

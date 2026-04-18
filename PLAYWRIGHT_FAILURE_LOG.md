@@ -11,6 +11,106 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Code Review Auto-fixes (Round 2) — Task 2 Gated Fixes (2026-04-18)
+
+### What changed
+
+- `web/workbench.js` — `isTemplateActionAuthorable`: empty `skin_family_scope: []` now fail-closed (was fail-open). Linkage check now fail-closed when `templateSetKey` is empty string (was skipped).
+- `src/pipeline_v2/service.py` — L0/L1 reference lookup now uses `filename_prefix` not `family` alias (3 sites). `schema_version` now raises `ValueError` when present and not `2` (was silently defaulted).
+- `tests/test_template_registry_schema.py` — `autouse` fixture resets global `_template_registry` cache before/after each test.
+
+### Verification
+
+- 33 passed: `tests/test_template_registry_schema.py tests/test_contracts.py tests/test_base_path.py::TestRoutesRootHosted::test_api_templates_reachable tests/test_base_path.py::TestRoutesPrefixed::test_prefixed_templates_reachable tests/test_workbench_flow.py::test_root_blank_session_defaults`
+
+### Still open after both fix rounds
+
+**P0** — `web/workbench.js:6998`: `isTemplateActionAuthorable` zero unit tests.
+**P1** — ENABLED_FAMILIES backend gate split from registry (service.py:1302, 5 sites); `family` compat alias / split authority (service.py:1016); `enabled_families` removed from API with no version bump (app.py:387); `proof_only: true` gate untested (workbench.js:7009); `_normalize_template_registry` 7 guard branches untested (service.py:1023); stale empty-registry cached on missing file (service.py:1089).
+**P2** — `ValueError` no cache sentinel crash loop (service.py:1092); drift check only one of 6 fields tested; `preview_xp` silently inherits `l0_ref`; fetch failure silently empties actions (workbench.js:7008).
+
+---
+
+## Code Review Auto-fixes — Task 2 Registry Schema (2026-04-18)
+
+### What changed
+
+- `tests/test_template_registry_schema.py:142` — tightened fallback assertion from `!=` (inequality) to `== spec["l0_ref_sha256"]` (exact expected value); a wrong-but-different fallback would no longer pass silently.
+- `src/pipeline_v2/service.py` — widened `raw_spec` and `raw_registry` type hints from `dict[str, Any]` to `dict[str, Any] | None` to match the `or {}` defensive guard in each function body.
+
+### Verification
+
+- `PYTHONPATH=src python3 -m pytest tests/test_template_registry_schema.py tests/test_contracts.py` → 30 passed.
+
+### Open review findings (not yet resolved)
+
+The following items from the Task 2 ce-review (run `20260418-090721-83a7d325`) remain open:
+
+**P0**
+- `web/workbench.js:6998` — `isTemplateActionAuthorable` has zero unit tests (sole frontend gate, 6 guard branches uncovered).
+
+**P1**
+- `src/pipeline_v2/service.py:1302` — ENABLED_FAMILIES backend gate is split from registry contract (5 sites still enforce hardcoded set).
+- `src/pipeline_v2/service.py:1016` — `family` compat alias defers migration; ENABLED_FAMILIES is still the live backend gate.
+- `src/pipeline_v2/app.py:387` — `enabled_families` removed from API response with no version bump.
+- `web/workbench.js:7006` — empty `skin_family_scope: []` is fail-open (bypasses family gate entirely).
+- `web/workbench.js:7009` — `proof_only: true` gate path untested.
+- `src/pipeline_v2/service.py:1023` — `_normalize_template_registry` 7 ValueError guard branches untested.
+- `src/pipeline_v2/service.py:1089` — stale empty-registry cached when config file absent at first call.
+
+**P2 (gated, concrete fixes exist)**
+- `web/workbench.js:7019` — linkage check bypassed when `templateSetKey` is empty string.
+- `src/pipeline_v2/service.py:1096` — post-normalization loop still reads `act.get("family")` not `act.get("filename_prefix")`.
+- `src/pipeline_v2/service.py:1079` — `schema_version` silently defaults to 2 for malformed or absent field.
+- `scripts/xp_fidelity_test/bundle_contract.mjs:14` — reads raw JSON, bypassing Python normalization (soft fallbacks where Python raises hard errors).
+- `tests/test_template_registry_schema.py:18` — global `_template_registry` cache not reset between tests.
+
+Full artifact: `.context/compound-engineering/ce-review/20260418-090721-83a7d325/`
+
+### Planned fix attempts for the still-open review findings
+
+1. **P0: `web/workbench.js:6998` frontend authorability gate has no branch coverage.**
+   - Add a focused JS unit test file for `isTemplateActionAuthorable()` / `getEnabledActions()` instead of relying on browser/manual proof.
+   - Cover each current guard branch explicitly:
+     - missing `filename_prefix` / `skin_family`
+     - template-set `skin_family_scope` exclusion
+     - missing or non-authorable `skin_family_scope` entry
+     - missing / mismatched `prefix_catalog` entry
+     - `prefix_catalog.authorable === false`
+     - missing template-action linkage for the active template set
+   - Gate: the new JS test file must pass locally and must be the first change in the fix sequence so later contract edits cannot drift unobserved.
+
+2. **P1: `src/pipeline_v2/service.py:1302` backend still gates on `ENABLED_FAMILIES`.**
+   - Introduce one backend helper that answers "is this template action authorable now?" from the normalized registry contract, not from the hardcoded family set.
+   - Replace all five remaining `ENABLED_FAMILIES` checks in bundle create / blank-session / action-run / export / web-skin payload with that helper so frontend and backend read the same authority.
+   - Add backend contract tests that prove:
+     - authorable action creates/runs successfully from registry truth
+     - non-authorable mounted/deferred prefixes stay rejected
+     - adding a registry-authorable action no longer creates a UI-visible / backend-422 split
+
+3. **P1: `src/pipeline_v2/service.py:1016` compat `family` alias is still a live authority bridge, not just migration shim.**
+   - Do not delete the alias first. First complete the backend helper migration in item 2 so no live gating depends on `family`.
+   - After that, sweep remaining backend readers to prefer explicit normalized fields (`filename_prefix`, `skin_family`) or the shared helper, and reduce `family` to compatibility-only serialization where still required.
+   - Gate: before removing any remaining live `family` reads, prove all bundle/run/export/template paths work from normalized fields alone.
+
+4. **P1: `src/pipeline_v2/app.py:387` removed `enabled_families` from `/api/workbench/templates` without compatibility period.**
+   - Restore `enabled_families` as an explicit compatibility field derived from the normalized registry, not as a separate authority source.
+   - Keep browser/product code on the normalized contract path while preserving the field for MCP/external callers during the migration window.
+   - Add an API contract test that asserts both:
+     - normalized fields are present and authoritative
+     - `enabled_families` is still emitted for compatibility only
+   - Follow-up after callers are migrated: delete the compatibility field in a separately logged/versioned contract cleanup slice, not silently inside the normalization change.
+
+### Fix sequence
+
+1. Land the frontend JS branch tests first.
+2. Unify backend authorability under one registry helper and replace `ENABLED_FAMILIES` call sites.
+3. Restore `enabled_families` compatibility emission from normalized registry state.
+4. Only then sweep the remaining live `family` readers and downgrade the alias to compatibility-only.
+5. Re-log the result here with exact verification commands before closing any of the above findings.
+
+---
+
 ## Fix Attempt — Template Registry Coupling And Bundle Contract Validation (2026-04-18)
 
 ### What changed
