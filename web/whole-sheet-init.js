@@ -18,6 +18,12 @@ import { LineTool } from './rexpaint-editor/tools/line-tool.js';
 import { RectTool } from './rexpaint-editor/tools/rect-tool.js';
 import { FillTool } from './rexpaint-editor/tools/fill-tool.js';
 import { SelectTool } from './rexpaint-editor/tools/select-tool.js';
+import {
+  captureVisibleSelectionClipboard,
+  countClipboardCells,
+  getVisibleUnlockedLayerIndices,
+  resolveWritableClipboardLayers,
+} from './whole-sheet-clipboard.mjs';
 
 const _BP = String(window.__WB_BASE_PATH || '');
 const FONT_URL = _BP + '/termpp-web-flat/fonts/cp437_12x12.png';
@@ -218,7 +224,7 @@ let editorState = {
   onBrowseDelete: null,
   _strokeDirty: false,
   // Clipboard state (W19-W22 parity)
-  clipboard: null,       // {cells: [{x, y, glyph, fg, bg}, ...], bounds: {x, y, w, h}}
+  clipboard: null,       // {bounds: {x, y, w, h}, layers: [{layerIndex, cells: [...]}, ...]}
   pasteMode: false,
   browseItems: [],
   browseSelectedId: '',
@@ -514,7 +520,8 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
     originalSetCell(x, y, glyph, fg, bg);
     editorState._strokeDirty = true;
     if (editorState.onCellEdited) {
-      editorState.onCellEdited(x, y, glyph & 0xFF, [...fg], [...bg]);
+      const layerIndex = editorState.layerStack ? editorState.layerStack.activeIndex : 0;
+      editorState.onCellEdited(x, y, glyph & 0xFF, [...fg], [...bg], layerIndex);
     }
   };
 
@@ -571,26 +578,44 @@ function _onStrokeEnd() {
  * Stores cell data with positions relative to selection origin.
  * @returns {boolean} true if copied
  */
+function _applyLayerCellEdit(layerIndex, x, y, cell) {
+  const layerStack = editorState.layerStack;
+  const canvas = editorState.canvas;
+  const layer = layerStack && layerStack.layers ? layerStack.layers[layerIndex] : null;
+  if (!layer || !canvas) return false;
+
+  if (!editorState._strokeDirty && editorState.onStrokeStart) {
+    editorState.onStrokeStart();
+  }
+
+  layer.setCell(x, y, cell.glyph, cell.fg, cell.bg);
+  if (canvas._dirtyCells) canvas._dirtyCells.add(y * canvas.width + x);
+  editorState._strokeDirty = true;
+
+  if (editorState.onCellEdited) {
+    editorState.onCellEdited(x, y, cell.glyph, [...cell.fg], [...cell.bg], layerIndex);
+  }
+  return true;
+}
+
+function _commitLayerMutation() {
+  if (!editorState._strokeDirty) return false;
+  editorState._strokeDirty = false;
+  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
+  if (editorState.canvas) editorState.canvas.render();
+  return true;
+}
+
 function _copySelection() {
   const tool = editorState.selectTool;
   if (!tool) return false;
   const bounds = tool.getSelectionBounds();
   if (!bounds) return false;
-  const canvas = editorState.canvas;
-  if (!canvas) return false;
 
-  const cells = [];
-  for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
-    for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
-      const cell = canvas.getCell(x, y);
-      if (cell) {
-        cells.push({ x: x - bounds.x, y: y - bounds.y, glyph: cell.glyph, fg: [...cell.fg], bg: [...cell.bg] });
-      }
-    }
-  }
-  if (cells.length === 0) return false;
+  const clipboard = captureVisibleSelectionClipboard(editorState.layerStack, bounds);
+  if (!clipboard || countClipboardCells(clipboard) === 0) return false;
 
-  editorState.clipboard = { cells, bounds: { x: bounds.x, y: bounds.y, w: bounds.width, h: bounds.height } };
+  editorState.clipboard = clipboard;
   return true;
 }
 
@@ -606,18 +631,21 @@ function _deleteSelection() {
   if (!bounds) return false;
   const canvas = editorState.canvas;
   if (!canvas) return false;
+  const layerIndices = getVisibleUnlockedLayerIndices(editorState.layerStack);
+  if (!layerIndices || layerIndices.length === 0) return false;
 
-  // setCell proxy fires onStrokeStart on first cell edit and sets _strokeDirty
-  for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
-    for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
-      canvas.setCell(x, y, 0, [255, 255, 255], [0, 0, 0]);
+  for (const layerIndex of layerIndices) {
+    for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
+      for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
+        _applyLayerCellEdit(layerIndex, x, y, {
+          glyph: 0,
+          fg: [255, 255, 255],
+          bg: [0, 0, 0],
+        });
+      }
     }
   }
-  // Force stroke-complete for workbench undo snapshot
-  editorState._strokeDirty = false;
-  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
-  canvas.render();
-  return true;
+  return _commitLayerMutation();
 }
 
 /**
@@ -625,6 +653,8 @@ function _deleteSelection() {
  * @returns {boolean} true if cut succeeded
  */
 function _cutSelection() {
+  const layerIndices = getVisibleUnlockedLayerIndices(editorState.layerStack);
+  if (!layerIndices || layerIndices.length === 0) return false;
   if (!_copySelection()) return false;
   return _deleteSelection();
 }
@@ -635,7 +665,7 @@ function _cutSelection() {
  * @returns {boolean} true if paste mode entered
  */
 function _enterPasteMode() {
-  if (!editorState.clipboard || editorState.clipboard.cells.length === 0) return false;
+  if (!editorState.clipboard || countClipboardCells(editorState.clipboard) === 0) return false;
   editorState.pasteMode = true;
   const canvasEl = editorState.canvas && editorState.canvas.canvasElement;
   if (canvasEl) canvasEl.style.cursor = 'copy';
@@ -655,21 +685,27 @@ function _cancelPasteMode() {
  */
 function _pasteAt(cx, cy) {
   const clip = editorState.clipboard;
-  if (!clip || !clip.cells.length) return;
+  if (!clip || countClipboardCells(clip) === 0) return;
   const canvas = editorState.canvas;
   if (!canvas) return;
 
-  // setCell proxy fires onStrokeStart on first cell edit
-  for (const c of clip.cells) {
-    const nx = cx + c.x;
-    const ny = cy + c.y;
-    if (nx >= 0 && nx < canvas.width && ny >= 0 && ny < canvas.height) {
-      canvas.setCell(nx, ny, c.glyph, c.fg, c.bg);
+  const layerEntries = resolveWritableClipboardLayers(editorState.layerStack, clip);
+  if (!layerEntries || layerEntries.length === 0) return;
+  const clipW = Math.max(0, Number(clip.bounds?.w) || 0);
+  const clipH = Math.max(0, Number(clip.bounds?.h) || 0);
+  if (!clipW || !clipH) return;
+
+  for (const entry of layerEntries) {
+    for (let i = 0; i < entry.cells.length; i++) {
+      const nx = cx + (i % clipW);
+      const ny = cy + ((i / clipW) | 0);
+      if (nx >= 0 && nx < canvas.width && ny >= 0 && ny < canvas.height) {
+        _applyLayerCellEdit(entry.layerIndex, nx, ny, entry.cells[i]);
+      }
     }
   }
-  editorState._strokeDirty = false;
-  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
-  canvas.render();
+
+  _commitLayerMutation();
   _cancelPasteMode();
 }
 
@@ -1639,6 +1675,44 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   toolSelectBtn.title = 'Selection tool (S)';
   toolSelectBtn.addEventListener('click', () => _switchTool('select'));
   drawCol.appendChild(toolSelectBtn);
+
+  const clipboardGroup = document.createElement('div');
+  clipboardGroup.className = 'ws-tool-group';
+  clipboardGroup.style.cssText = 'margin-top:4px; gap:2px;';
+
+  const copyBtn = document.createElement('button');
+  copyBtn.id = 'wsCopySelection';
+  copyBtn.textContent = 'Copy';
+  copyBtn.className = 'ws-tool-btn';
+  copyBtn.title = 'Copy selection (Ctrl+C)';
+  copyBtn.addEventListener('click', () => _copySelection());
+  clipboardGroup.appendChild(copyBtn);
+
+  const cutBtn = document.createElement('button');
+  cutBtn.id = 'wsCutSelection';
+  cutBtn.textContent = 'Cut';
+  cutBtn.className = 'ws-tool-btn';
+  cutBtn.title = 'Cut selection (Ctrl+X)';
+  cutBtn.addEventListener('click', () => _cutSelection());
+  clipboardGroup.appendChild(cutBtn);
+
+  const pasteBtn = document.createElement('button');
+  pasteBtn.id = 'wsPasteSelection';
+  pasteBtn.textContent = 'Paste';
+  pasteBtn.className = 'ws-tool-btn';
+  pasteBtn.title = 'Paste selection (Ctrl+V)';
+  pasteBtn.addEventListener('click', () => _enterPasteMode());
+  clipboardGroup.appendChild(pasteBtn);
+
+  const clearBtn = document.createElement('button');
+  clearBtn.id = 'wsClearSelection';
+  clearBtn.textContent = 'Clear';
+  clearBtn.className = 'ws-tool-btn';
+  clearBtn.title = 'Clear selection (Delete)';
+  clearBtn.addEventListener('click', () => _deleteSelection());
+  clipboardGroup.appendChild(clearBtn);
+
+  drawCol.appendChild(clipboardGroup);
 
   // W24-W27: Selection transform buttons (shipped UI triggers)
   const transformGroup = document.createElement('div');
@@ -2663,8 +2737,8 @@ function getState() {
     hasFontLoaded: !!(editorState.cp437Font && editorState.cp437Font.spriteSheet),
     activeTool: editorState.activeTool,
     selectionBounds: editorState.selectTool ? editorState.selectTool.getSelectionBounds() : null,
-    hasClipboard: !!(editorState.clipboard && editorState.clipboard.cells.length > 0),
-    clipboardCellCount: editorState.clipboard ? editorState.clipboard.cells.length : 0,
+    hasClipboard: countClipboardCells(editorState.clipboard) > 0,
+    clipboardCellCount: countClipboardCells(editorState.clipboard),
     pasteMode: editorState.pasteMode,
     browseItemCount: editorState.browseItems.length,
     browseSelectedId: editorState.browseSelectedId,

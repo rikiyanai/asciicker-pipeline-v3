@@ -2102,7 +2102,7 @@
     return { idx, glyph: 0, fg: [0, 0, 0], bg: [...MAGENTA] };
   }
 
-  function setCell(x, y, c) {
+  function setCell(x, y, c, layerIndex) {
     const idx = y * state.gridCols + x;
     const cell = {
       idx,
@@ -2110,7 +2110,8 @@
       fg: [Number(c.fg?.[0] || 0), Number(c.fg?.[1] || 0), Number(c.fg?.[2] || 0)],
       bg: [Number(c.bg?.[0] || 0), Number(c.bg?.[1] || 0), Number(c.bg?.[2] || 0)],
     };
-    const targetLayer = state.layers[state.activeLayer];
+    const resolvedLayerIndex = Number.isInteger(layerIndex) ? layerIndex : state.activeLayer;
+    const targetLayer = state.layers[resolvedLayerIndex];
     if (targetLayer) targetLayer[idx] = { ...cell };
   }
 
@@ -6310,9 +6311,9 @@
       activeLayer: state.activeLayer,
       visibleLayers: state.visibleLayers,
       currentSessionId: state.sessionId,
-      onCellEdited: function(x, y, glyph, fg, bg) {
+      onCellEdited: function(x, y, glyph, fg, bg, layerIndex) {
         if (x < 0 || x >= state.gridCols || y < 0 || y >= state.gridRows) return;
-        setCell(x, y, { glyph: glyph, fg: fg, bg: bg });
+        setCell(x, y, { glyph: glyph, fg: fg, bg: bg }, layerIndex);
       },
       onStrokeStart: function() {
         pushHistory();
