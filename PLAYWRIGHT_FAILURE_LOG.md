@@ -11,6 +11,39 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Fix Attempt — Whole-Sheet Clipboard Section 1 Re-entry (2026-04-18)
+
+### What changed
+
+- No product code changed in this slice. This is a canon/failure-log correction entry before implementation.
+- Reviewed the current whole-sheet owner in `web/whole-sheet-init.js` and the mounted canvas/layer behavior in `web/rexpaint-editor/canvas.js`.
+- Logged a Section 1 contract gap in the shipped whole-sheet clipboard path:
+  - `web/whole-sheet-init.js:_copySelection()` currently copies through `canvas.getCell()` into a flat `{cells, bounds}` payload.
+  - `web/rexpaint-editor/canvas.js:getCell()` composites visible layers into a single returned cell.
+  - Section 1 requires clipboard operations to preserve cells for every visible layer in the selected bounds, not only the composited result.
+- Logged a shipped-UI gap:
+  - current whole-sheet clipboard behavior is wired to keyboard shortcuts
+  - the whole-sheet sidebar does not yet expose explicit `Copy`, `Cut`, `Paste`, and `Clear` controls
+
+### What this does and does not prove
+
+- It does prove the existing W19-W22 verification lane is narrower than the Section 1 clipboard contract.
+- It does not invalidate the narrower proof that current shortcut-driven copy/cut/paste/delete behavior exists and can move visible cell content around.
+- It does mean the older "FULLY UNBLOCKED" wording for clipboard parity is too broad as canon wording until layer-preserving clipboard behavior is implemented and re-proven.
+
+### Planned correction
+
+1. Move whole-sheet clipboard capture from composited canvas reads to a layer-aware payload derived from visible `LayerStack` layers.
+2. Preserve transactional behavior: paste/cut/delete remain one undo transaction.
+3. Add explicit whole-sheet UI controls for `Copy`, `Cut`, `Paste`, and `Clear` so the workflow is shipped-UI reachable without relying only on shortcuts.
+4. Add structural tests for layer-aware clipboard capture/paste semantics.
+5. Re-run a headed whole-sheet acceptance proof for the shipped UI path and then re-log the result here.
+
+### Notes
+
+- This entry is a fix-attempt / discrepancy log only. It is not acceptance evidence and not a product-fix claim.
+- The older W19-W22 proof remains valid only for the currently implemented, narrower behavior.
+
 ## Code Review Auto-fixes (Round 2) — Task 2 Gated Fixes (2026-04-18)
 
 ### What changed
@@ -5473,6 +5506,8 @@ These four operations are a **parity-decision item**: the product must decide wh
 ### Inspector demotion status
 
 **FULLY UNBLOCKED** — clipboard, transform, and bulk-edit parity all achieved.
+
+Supersession note (2026-04-18): the clipboard portion of this claim is too broad for Section 1 canon. The cited W19-W22 proof covers the currently implemented shortcut-driven/composited clipboard flow, but not the required layer-preserving clipboard contract.
 
 W19-W22 (copy/paste/cut/delete) are now **PROVEN** (`431b437`) via UI-driven proof runner `run_whole_sheet_clipboard_test.mjs`. W23 (select all) is WIRED but has a known bounds-update bug when the select tool is already active (non-blocking). W24-W27 (selection transforms: rotate CW/CCW, flip H/V) are now **PROVEN** (`1828979`) via UI-driven proof runner `run_whole_sheet_transform_test.mjs` — 9/9 PASS using shipped sidebar buttons and keyboard shortcuts, single undo per transform, bounds update after rotate.
 
