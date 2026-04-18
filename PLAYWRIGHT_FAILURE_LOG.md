@@ -11,6 +11,40 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Fix Attempt — Whole-Sheet Clipboard Layered UI Proof Pass (2026-04-18)
+
+### What changed
+
+- Product:
+  - `web/whole-sheet-clipboard.mjs` now captures clipboard rectangles per visible layer instead of flattening through composited canvas reads.
+  - `web/whole-sheet-init.js` now:
+    - copies every visible layer inside the current selection
+    - pastes/cuts/clears as one transaction across the targeted layer set
+    - exposes shipped `Copy`, `Cut`, `Paste`, and `Clear` buttons in the whole-sheet sidebar
+    - computes paste hit-testing from the rendered zoomed canvas size, not raw `12px` cells
+  - `web/workbench.js` now accepts layer-index-aware whole-sheet edit callbacks so multi-layer clipboard writes update authoritative document state correctly.
+- Verifier:
+  - added `tests/web/whole-sheet-clipboard.test.mjs`
+  - upgraded `scripts/xp_fidelity_test/run_whole_sheet_clipboard_test.mjs` to:
+    - drive the shipped whole-sheet buttons instead of shortcut-only clipboard actions
+    - paint and verify distinct content on all visible layers
+    - use zoom-aware canvas coordinate math
+
+### Verification
+
+- `node --test tests/web/whole-sheet-clipboard.test.mjs` -> PASS
+- `node scripts/xp_fidelity_test/run_whole_sheet_clipboard_test.mjs --headed --xp sprites/attack-0001.xp --out-dir output/ws_clipboard_layered` -> PASS
+  - 8/8 steps passed
+  - report artifact: `output/ws_clipboard_layered/report.json`
+
+### What this now proves
+
+- Whole-sheet clipboard actions are shipped-UI reachable through explicit sidebar buttons, not only keyboard shortcuts.
+- Clipboard capture preserves the full rectangular payload for every visible layer in the selection.
+- Paste restores those layers independently at the target location as one transaction.
+- Cut and clear zero the visible selected layer set as one transaction.
+- Paste-mode click placement now remains correct under fit/zoom scaling.
+
 ## Fix Attempt — Whole-Sheet Clipboard Section 1 Re-entry (2026-04-18)
 
 ### What changed
