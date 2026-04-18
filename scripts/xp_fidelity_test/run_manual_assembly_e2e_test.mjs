@@ -84,16 +84,30 @@ async function waitForSourceImage(page, timeout = 15000) {
 }
 
 async function clickWsCell(page, cx, cy) {
-  await page.evaluate(({ tx, ty }) => {
+  await page.evaluate(({ tx, ty, cellSize }) => {
+    const canvas = document.getElementById('wholeSheetCanvas');
     const scroll = document.getElementById('wholeSheetScroll');
-    if (!scroll) return;
-    scroll.scrollLeft = Math.max(0, tx - scroll.clientWidth / 2);
-    scroll.scrollTop = Math.max(0, ty - scroll.clientHeight / 2);
-  }, { tx: cx * CELL_SIZE, ty: cy * CELL_SIZE });
+    if (!canvas || !scroll) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = rect.width > 0 ? (rect.width / Math.max(1, canvas.width)) : 1;
+    const scaleY = rect.height > 0 ? (rect.height / Math.max(1, canvas.height)) : 1;
+    const centerX = ((tx + 0.5) * cellSize) * scaleX;
+    const centerY = ((ty + 0.5) * cellSize) * scaleY;
+    scroll.scrollLeft = Math.max(0, centerX - scroll.clientWidth / 2);
+    scroll.scrollTop = Math.max(0, centerY - scroll.clientHeight / 2);
+  }, { tx: cx, ty: cy, cellSize: CELL_SIZE });
   await page.waitForTimeout(100);
-  await page.click('#wholeSheetCanvas', {
-    position: { x: cx * CELL_SIZE + CELL_SIZE / 2, y: cy * CELL_SIZE + CELL_SIZE / 2 },
-  });
+  const position = await page.evaluate(({ tx, ty, cellSize }) => {
+    const canvas = document.getElementById('wholeSheetCanvas');
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((tx + 0.5) * cellSize) * (rect.width > 0 ? (rect.width / Math.max(1, canvas.width)) : 1),
+      y: ((ty + 0.5) * cellSize) * (rect.height > 0 ? (rect.height / Math.max(1, canvas.height)) : 1),
+    };
+  }, { tx: cx, ty: cy, cellSize: CELL_SIZE });
+  if (!position) throw new Error('wholeSheetCanvas not found');
+  await page.click('#wholeSheetCanvas', { position });
 }
 
 // ---------------------------------------------------------------------------

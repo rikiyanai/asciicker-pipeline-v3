@@ -8651,3 +8651,69 @@ selection collapsed as soon as the user moved to another row.
 - It does NOT change multi-box source-drop grouping semantics.
 - It does NOT by itself prove broader Step 7 public/local workflow grouping
   parity.
+
+---
+
+## Fix Attempt — Manual Assembly Whole-Sheet Click Math After Fit Zoom (2026-04-18)
+
+### What failed
+
+- The official headed manual-assembly lane
+  `scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs`
+  failed at `paint_cell` immediately after the viewport fit-zoom slice.
+- Observed failure:
+  - `Cell glyph should be 65 after paint, got 219`
+- Reality check:
+  - the broader interactive skin-authoring path was still healthy through
+    template apply, upload PNG, manual source boxing, add-to-row, whole-sheet
+    focus, save, and export
+  - the failure was in the verifier helper, not the product path
+
+### Root cause
+
+- `clickWsCell()` in the manual-assembly runner still clicked whole-sheet cells
+  using raw unscaled `CELL_SIZE` coordinates.
+- After the fit-zoom change, `#wholeSheetCanvas` is rendered with CSS scaling,
+  so raw 12px cell coordinates no longer land on the intended logical cell in
+  headed runs.
+
+### Fix
+
+- `scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs`
+  `clickWsCell()` now:
+  - computes the current canvas CSS scale from `getBoundingClientRect()`
+  - scrolls `#wholeSheetScroll` toward the scaled target cell center
+  - clicks `#wholeSheetCanvas` using scaled element-relative coordinates
+
+### Verification evidence
+
+1. **The existing headed source-to-grid workflow still passes.**
+   - Command:
+     - `node scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs --headed --out-dir output/playwright/source_to_grid_audit`
+   - Result:
+     - `21/21` steps passed
+
+2. **The official headed manual-assembly lane now passes again.**
+   - Command:
+     - `node scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs --headed --out-dir output/playwright/manual_assembly_audit_rerun2`
+   - Result:
+     - `13/13` steps passed
+     - `paint_cell` now passes
+
+### What this does prove
+
+- The current interactive skin-authoring path remains live through:
+  - template apply
+  - upload PNG
+  - manual assembly
+  - whole-sheet edit
+  - save
+  - export
+- The manual-assembly verifier is again compatible with the fit-zoom whole-sheet
+  viewport behavior.
+
+### What this does NOT prove
+
+- It does NOT yet add the full canonical current-scope "from scratch" signoff
+  lane with Skin Dock/runtime proof at the end.
+- It does NOT say anything about future wearable authoring.
