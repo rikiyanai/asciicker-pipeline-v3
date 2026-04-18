@@ -1506,6 +1506,7 @@ The live wrapper architecture is still misaligned in these exact ways after the
 | Agent session inspection is MCP-reachable | `scripts/workbench_mcp_server.py` | MCP now exposes `get_cell(session_id, x, y, layer=2)` for cell-level verification and `validate_session(session_id)` as a session-centric alias to `validate_xp(session_id)`. |
 | Classic conversion no longer reintroduces geometry-first wrapper ownership | `web/workbench.html`, `web/workbench.js`, `src/pipeline_v2/app.py`, `src/pipeline_v2/service.py`, `tests/test_workbench_flow.py` | The upload panel remains source-only, while classic root geometry now enters through `Session Ops` / `New XP` and the active session. `Use Auto-Plan` is advisory only. `wbRun()` now requires an active session and posts explicit target geometry (`target_cols` / `target_rows`) into `/api/run`, and the backend honors that exact non-native target grid. RESOLVED for the browser-owned geometry path; richer frame-nav row/cell editing is still a separate product gap. |
 | Browser template scope still leaks the deprecated `enabled_families` authority path | `src/pipeline_v2/app.py:383-384`, `web/workbench.js:7000-7018` | The backend still emits `enabled_families`, and the browser still fail-closes on it. That preserves a stale second authority path exactly where Section 2 says client scope must derive from action contracts only. |
+| Step 11 registry stabilization backlog is still open in code and tests | `web/workbench.js:6998-7029`, `src/pipeline_v2/app.py:385-387`, `src/pipeline_v2/service.py:977-1096` | The current branch still lacks direct branch tests for `isTemplateActionAuthorable()`, still lacks a dedicated proof for `proof_only: true` exclusion, still lacks the 7 malformed-registry guard tests, still caches the empty-registry fallback when the config file is missing, still has no in-process failure sentinel for fatal registry parse errors, still falls back from `preview_xp` to `l0_ref` without a warning, and still degrades template fetch failure to empty frontend state rather than surfacing an operator-visible error. These are all Step 11 hardening items, not optional cleanup. |
 | Y9-2 HTTP API contract now exists | `src/pipeline_v2/app.py:317-325`, `src/pipeline_v2/app.py:562-587`, `src/pipeline_v2/service.py:3913-4027` | The server now exposes `GET /health`, `GET /pipeline/templates`, `POST /pipeline/run`, and `POST /pipeline/validate_xp`. The remaining Y9-2 gap is launcher/wizard wiring, not missing backend endpoints. |
 | Y9-2 wizard not wired as launcher sub-action | `Y9-2 scripts/launcher.py`, `Y9-2 scripts/pipeline/wizard/engine.py` | `WizardEngine` exists but has no `_execute_action` branch in `launcher.py`; `[3] ASSET PIPELINE` node is fully absent rather than showing as `[DEFERRED]`. Tracked as Y9-2 DESIGN OPEN B-13. |
 | **GAP: No wearable or item templates, and no backend parity runner for wearable slot/style contracts** | `config/template_registry.json`, `scripts/xp_fidelity_test/`, `tests/` | Pipeline-v2 has no wearable/item authoring surface, and there is no structural-contract runner that proves the local schema matches Y9-2 slot/style truth. That means gold/dark/default wearable semantics are still only partially covered by ad hoc runtime or engine-side knowledge. Tracked as S2-FAM-04. |
@@ -2105,6 +2106,12 @@ From the current state, the corrected sequence is:
      - backend bundle/session/export paths still split authority between normalized registry and `ENABLED_FAMILIES`
      - compat `family` alias is still a live bridge because backend gating still reads the old authority path
      - `/api/workbench/templates` changed shape without a compatibility period for `enabled_families`
+     - `proof_only: true` exclusion still has no direct frontend test
+     - `_normalize_template_registry()` malformed-input guards still lack the 7 focused `ValueError` tests
+     - `load_template_registry()` still caches the empty-registry fallback when the config file is missing
+     - `load_template_registry()` still lacks an in-process failure sentinel for fatal registry parse errors
+     - `preview_xp` fallback to `l0_ref` is still silent rather than warning-bearing
+     - template-registry fetch failure still degrades to empty frontend action state without operator-visible error
 
 12. **IMPLEMENT — Interaction completion after UI identity map** — **IMPLEMENTED (2026-04-17, commits `3dd7042`, `2ec2238`, `d689a14`)**.
    - The official source-to-grid runner now proves manual single-box, auto single-box, grouped row-select, and grouped column-select drags through shipped headed UI actions only.
@@ -2147,6 +2154,13 @@ the immediate sequence is:
    - restore `enabled_families` only as derived compatibility output while the caller migration window remains open; do not use it as live authority
    - then delete `enabled_families` in a separate compatibility-cleanup slice once callers are migrated
    - decide and implement the mounted-family representation shape
+   - complete the hardening/test backlog before calling Step 11 closed:
+     - JS unit tests for `isTemplateActionAuthorable()` including `proof_only: true`
+     - malformed-registry `ValueError` tests
+     - missing-file cache fix
+     - fatal-parse sentinel fix
+     - `preview_xp` fallback warning
+     - user-visible template-registry fetch failure path
 2. **Do the Section 3 backend structural-contract runners next.**
    - add tests/helpers proving normalized schema parity against Y9-2 family,
      fallback, mounted-prefix, and wearable slot/style truth

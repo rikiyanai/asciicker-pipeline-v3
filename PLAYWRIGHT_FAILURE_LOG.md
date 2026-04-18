@@ -109,6 +109,38 @@ Full artifact: `.context/compound-engineering/ce-review/20260418-090721-83a7d325
 4. Only then sweep the remaining live `family` readers and downgrade the alias to compatibility-only.
 5. Re-log the result here with exact verification commands before closing any of the above findings.
 
+### Canonical still-open design / test-authoring items
+
+The following items remain open after the two safe-fix rounds and must stay
+tracked in canon until they land or are explicitly retired:
+
+1. **P0 — `web/workbench.js:6998`: unit tests for `isTemplateActionAuthorable()` (6 branches).**
+   - Required work: author direct JS unit tests for the sole frontend bundle-action gate.
+
+2. **P1 — `src/pipeline_v2/service.py:1302`: `ENABLED_FAMILIES` -> registry alignment.**
+   - Required work: finish Step 11 backend authority cleanup so runtime/backend gating derives from the normalized registry, not the hardcoded family set.
+
+3. **P1 — `src/pipeline_v2/app.py:387`: version bump or deprecation path for `enabled_families` removal.**
+   - Required work: restore compatibility output or version the contract explicitly before removal.
+
+4. **P1 — `web/workbench.js:7009`: `proof_only: true` exclusion test.**
+   - Required work: add a direct frontend test proving proof-only family scope cannot surface authorable bundle actions.
+
+5. **P1 — `src/pipeline_v2/service.py:1023`: tests for the 7 `ValueError` guard branches in `_normalize_template_registry()`.**
+   - Required work: add focused unit tests for malformed `skin_family_scope`, `prefix_catalog`, `template_sets`, `template_actions`, and unknown template/action references.
+
+6. **P1 — `src/pipeline_v2/service.py:1089`: do not cache empty registry on missing file.**
+   - Required work: stop pinning the in-memory cache to the empty-registry fallback when the config file is absent at first load.
+
+7. **P2 — `src/pipeline_v2/service.py:1092`: cache sentinel on `ValueError` to stop repeated crash-loop behavior.**
+   - Required work: cache a failure sentinel or equivalent so repeated registry reads do not re-run the same fatal parse path indefinitely inside one process.
+
+8. **P2 — `src/pipeline_v2/service.py:985`: warning when `preview_xp` inherits `l0_ref`.**
+   - Required work: keep the coupled fallback, but log the fallback so registry drift is visible instead of silent.
+
+9. **P2 — `web/workbench.js:7008`: surface template-registry fetch failure instead of silently emptying actions.**
+   - Required work: expose the fetch failure to the user/operator rather than degrading to an empty action list with no signal.
+
 ---
 
 ## Fix Attempt — Template Registry Coupling And Bundle Contract Validation (2026-04-18)
