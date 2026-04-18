@@ -61,13 +61,6 @@ const expect = (value) => ({
       throw new Error(`Expected ${b}, got ${a}`);
     }
   },
-  toStrictEqual(expected) {
-    const a = JSON.stringify(value);
-    const b = JSON.stringify(expected);
-    if (a !== b) {
-      throw new Error(`Expected ${b}, got ${a}`);
-    }
-  },
   toBeTrue() {
     if (value !== true) throw new Error(`Expected true, got ${JSON.stringify(value)}`);
   },

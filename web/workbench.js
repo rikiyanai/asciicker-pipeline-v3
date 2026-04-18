@@ -6993,6 +6993,9 @@
 
   // Canonical action order for bundle tabs and initial selection.
   // Pure logic lives in workbench-template-gating.js (loaded before this script).
+  if (!window.__workbenchTemplateGating) {
+    throw new Error('[workbench] workbench-template-gating.js must be loaded before workbench.js');
+  }
   const { BUNDLE_ACTION_ORDER, isTemplateActionAuthorable: _isTemplateActionAuthorable, getEnabledActions: _getEnabledActions } =
     window.__workbenchTemplateGating;
 
