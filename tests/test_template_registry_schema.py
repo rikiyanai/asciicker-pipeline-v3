@@ -71,6 +71,8 @@ def test_templates_api_exposes_normalized_contract(client):
     assert response.status_code == 200
 
     payload = response.get_json()
+    assert "enabled_families" not in payload
+
     idle = payload["template_sets"]["player_native_idle_only"]["actions"]["idle"]
 
     assert idle["filename_prefix"] == "player"

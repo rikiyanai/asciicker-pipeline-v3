@@ -9,7 +9,7 @@ from pathlib import Path
 from flask import Blueprint, Flask, Response, jsonify, redirect, request, send_from_directory, send_file
 
 from .config import (
-    ensure_dirs, ROOT, EXPORT_DIR, ENABLED_FAMILIES, BASE_PATH, BUG_REPORTS_DIR,
+    ensure_dirs, ROOT, EXPORT_DIR, BASE_PATH, BUG_REPORTS_DIR,
     BUG_REPORT_DELIVERY, BUG_REPORT_GITHUB_REPO, BUG_REPORT_GITHUB_TOKEN,
 )
 from .models import ApiError, RunConfig, parse_frames_csv
@@ -384,9 +384,7 @@ def create_app() -> Flask:
 
     @bp.get("/api/workbench/templates")
     def api_wb_templates():
-        reg = load_template_registry()
-        reg["enabled_families"] = sorted(ENABLED_FAMILIES)
-        return jsonify(reg), 200
+        return jsonify(load_template_registry()), 200
 
     @bp.post("/api/workbench/bundle/create")
     def api_wb_bundle_create():

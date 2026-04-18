@@ -6995,17 +6995,42 @@
   // Flask sorts JSON keys alphabetically; this restores the intended order.
   const BUNDLE_ACTION_ORDER = ["idle", "attack", "death"];
 
+  function isTemplateActionAuthorable(ts, actionKey, spec) {
+    const prefix = String(spec?.filename_prefix || spec?.family || "").trim();
+    const skinFamily = String(spec?.skin_family || "").trim();
+    if (!prefix || !skinFamily) return false;
+
+    const templateScope = Array.isArray(ts?.skin_family_scope)
+      ? new Set(ts.skin_family_scope.map((value) => String(value || "").trim()).filter(Boolean))
+      : null;
+    if (templateScope && templateScope.size && !templateScope.has(skinFamily)) return false;
+
+    const familyScope = state.templateRegistry?.skin_family_scope?.[skinFamily];
+    if (!familyScope || familyScope.authorable === false || familyScope.proof_only === true) return false;
+
+    const prefixSpec = state.templateRegistry?.prefix_catalog?.[prefix];
+    if (!prefixSpec) return false;
+    if (String(prefixSpec.filename_prefix || "").trim() !== prefix) return false;
+    if (String(prefixSpec.skin_family || "").trim() !== skinFamily) return false;
+    if (prefixSpec.authorable === false) return false;
+
+    const templateSetKey = String(state.templateSetKey || "").trim();
+    const templateActions = Array.isArray(prefixSpec.template_actions) ? prefixSpec.template_actions : [];
+    if (templateActions.length && templateSetKey) {
+      const linked = templateActions.some((entry) => (
+        String(entry?.template_set_key || "").trim() === templateSetKey &&
+        String(entry?.action_key || "").trim() === actionKey
+      ));
+      if (!linked) return false;
+    }
+    return true;
+  }
+
   function getEnabledActions(ts) {
     if (!ts || !ts.actions) return {};
-    const ef = state.templateRegistry?.enabled_families;
-    if (!ef || !Array.isArray(ef)) {
-      console.warn("enabled_families missing from template registry — fail-closed, showing no actions");
-      return {};
-    }
-    const efSet = new Set(ef);
     const unordered = {};
     for (const [key, spec] of Object.entries(ts.actions)) {
-      if (efSet.has(spec.family)) unordered[key] = spec;
+      if (isTemplateActionAuthorable(ts, key, spec)) unordered[key] = spec;
     }
     // Re-order to canonical order; any unlisted keys appear at the end.
     const out = {};

@@ -274,12 +274,12 @@ def get_skin_payload(session_id: str) -> dict:
 
 @mcp.tool()
 def get_templates() -> dict:
-    """List available template sets and enabled families.
+    """List the normalized template registry.
 
     Returns:
-        Template registry with template_sets and enabled_families list.
-        Each template set defines actions (idle/attack/death) with per-family
-        dims, angles, frames, and L0 reference XPs.
+        Template registry with template_sets, skin_family_scope, and
+        prefix_catalog. Each template action defines filename_prefix,
+        skin_family, dims, angles, frames, and reference XP metadata.
     """
     return _get("/api/workbench/templates")
 

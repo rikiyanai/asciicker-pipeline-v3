@@ -156,6 +156,14 @@ def test_legacy_verify_command_template_in_js():
     assert "verify_e2e.py" in text
 
 
+def test_workbench_js_does_not_use_enabled_families_gating():
+    """Bundle action scope must derive from normalized template action contracts."""
+    js = Path(__file__).resolve().parents[1] / "web" / "workbench.js"
+    text = js.read_text()
+    assert "state.templateRegistry?.enabled_families" not in text
+    assert "enabled_families missing from template registry" not in text
+
+
 def test_skin_dock_test_button_in_html():
     """The Test This Skin button must remain in the shipped HTML."""
     html = Path(__file__).resolve().parents[1] / "web" / "workbench.html"
