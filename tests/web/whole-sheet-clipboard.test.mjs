@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   captureVisibleSelectionClipboard,
   countClipboardCells,
+  getActiveWritableLayerIndex,
   getVisibleUnlockedLayerIndices,
   resolveWritableClipboardLayers,
 } from '../../web/whole-sheet-clipboard.mjs';
@@ -66,6 +67,35 @@ test('getVisibleUnlockedLayerIndices fails closed when a visible layer is locked
   };
 
   assert.equal(getVisibleUnlockedLayerIndices(layerStack), null);
+});
+
+test('getActiveWritableLayerIndex returns only the active visible unlocked layer', () => {
+  const visibleUnlocked = {
+    activeIndex: 2,
+    layers: [
+      createLayer({}, { visible: true, locked: false }),
+      createLayer({}, { visible: true, locked: false }),
+      createLayer({}, { visible: true, locked: false }),
+    ],
+  };
+  assert.equal(getActiveWritableLayerIndex(visibleUnlocked), 2);
+
+  const locked = {
+    activeIndex: 1,
+    layers: [
+      createLayer({}, { visible: true, locked: false }),
+      createLayer({}, { visible: true, locked: true }),
+    ],
+  };
+  assert.equal(getActiveWritableLayerIndex(locked), null);
+
+  const hidden = {
+    activeIndex: 0,
+    layers: [
+      createLayer({}, { visible: false, locked: false }),
+    ],
+  };
+  assert.equal(getActiveWritableLayerIndex(hidden), null);
 });
 
 test('resolveWritableClipboardLayers rejects locked or missing destinations', () => {

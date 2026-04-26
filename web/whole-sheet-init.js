@@ -23,6 +23,7 @@ import { TextTool } from './rexpaint-editor/tools/text-tool.js';
 import {
   captureVisibleSelectionClipboard,
   countClipboardCells,
+  getActiveWritableLayerIndex,
   getVisibleUnlockedLayerIndices,
   resolveWritableClipboardLayers,
 } from './whole-sheet-clipboard.mjs';
@@ -31,6 +32,7 @@ import {
   cloneEditorCell,
   shouldCopyCellOnLayerMerge,
 } from './whole-sheet-cell-ops.mjs';
+import { shouldCycleActiveLayerOnWheel } from './whole-sheet-input-policy.mjs';
 
 const _BP = String(window.__WB_BASE_PATH || '');
 const FONT_URL = _BP + '/termpp-web-flat/fonts/cp437_12x12.png';
@@ -794,6 +796,24 @@ function _deleteSelection() {
   if (!bounds) return false;
   const canvas = editorState.canvas;
   if (!canvas) return false;
+  const layerIndex = getActiveWritableLayerIndex(editorState.layerStack);
+  if (layerIndex === null) return false;
+  const layer = editorState.layerStack?.layers?.[layerIndex];
+  if (!layer) return false;
+
+  for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
+    for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
+      _applyLayerCellEdit(layerIndex, x, y, buildClearedEditorCell(layer.getCell(x, y)));
+    }
+  }
+  return _commitLayerMutation();
+}
+
+function _deleteSelectionAcrossVisibleUnlockedLayers() {
+  const tool = editorState.selectTool;
+  if (!tool) return false;
+  const bounds = tool.getSelectionBounds();
+  if (!bounds) return false;
   const layerIndices = getVisibleUnlockedLayerIndices(editorState.layerStack);
   if (!layerIndices || layerIndices.length === 0) return false;
 
@@ -817,7 +837,7 @@ function _cutSelection() {
   const layerIndices = getVisibleUnlockedLayerIndices(editorState.layerStack);
   if (!layerIndices || layerIndices.length === 0) return false;
   if (!_copySelection()) return false;
-  return _deleteSelection();
+  return _deleteSelectionAcrossVisibleUnlockedLayers();
 }
 
 /**
@@ -1363,10 +1383,6 @@ function _switchTool(name) {
   _cancelPasteMode();
   if (editorState.activeTool === 'text' && name !== 'text') {
     _commitTextEdit();
-  }
-  // Deactivate select tool when switching away (clears stale selection)
-  if (editorState.activeTool === 'select' && name !== 'select' && editorState.selectTool) {
-    editorState.selectTool.deactivate();
   }
   editorState.activeTool = name;
   const canvasEl = editorState.canvas.canvasElement;
@@ -3277,7 +3293,7 @@ function _onCanvasPointerMove(e) {
 
 function _onCanvasWheel(e) {
   if (!editorState.mounted) return;
-  if (e.ctrlKey || e.metaKey) return;
+  if (!shouldCycleActiveLayerOnWheel(e)) return;
   if (!editorState.layerStack || !editorState.layerStack.layers.length) return;
   e.preventDefault();
   const delta = e.deltaY > 0 ? 1 : -1;

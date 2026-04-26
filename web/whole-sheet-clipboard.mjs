@@ -45,6 +45,15 @@ export function getVisibleUnlockedLayerIndices(layerStack) {
   return visible;
 }
 
+export function getActiveWritableLayerIndex(layerStack) {
+  const index = Number(layerStack?.activeIndex);
+  if (!Number.isInteger(index) || index < 0) return null;
+  const layer = layerStack?.layers?.[index];
+  if (!layer || layer.locked) return null;
+  if (layer.visible === false) return null;
+  return index;
+}
+
 export function captureVisibleSelectionClipboard(layerStack, bounds) {
   if (!layerStack || !bounds) return null;
   const width = Math.max(0, Number(bounds.width) || 0);
