@@ -11,6 +11,55 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Audit — UQ-002 Whole-Sheet History Ownership Cut (2026-04-26)
+
+This is a product/code checkpoint entry for the first required UQ-002 hot-path
+refactor step. It is **not** UQ-002 closure and it is **not** headed UQ-003
+proof.
+
+### What changed
+
+1. `web/whole-sheet-init.js` now owns live whole-sheet undo/redo history.
+   - `web/whole-sheet-init.js:759` starts root document transactions from the
+     editor state.
+   - `web/whole-sheet-init.js:3681` / `web/whole-sheet-init.js:3693` apply
+     root-owned snapshots for undo/redo.
+   - whole-sheet undo/redo buttons and shortcuts call those root methods
+     directly.
+2. `web/workbench.js` no longer supplies whole-sheet `onStrokeStart`,
+   `onUndo`, or `onRedo` callbacks.
+   - `web/workbench.js:6391-6443` keeps wrapper responsibilities to mirroring,
+     dirty state, save hooks, and button-state presentation only.
+   - wrapper `pushHistory()` remains alive for source-panel / legacy wrapper
+     actions, but is no longer on the whole-sheet edit path.
+3. External wrapper sync into the whole-sheet editor clears root history so a
+   later root undo cannot apply stale snapshots across an externally owned
+   mutation.
+
+### Verification evidence
+
+- `node --check web/workbench.js`
+  - PASS
+- `node --check <temporary .mjs copy of web/whole-sheet-init.js>`
+  - PASS
+- `node --test tests/web/whole-sheet-history-ownership.test.mjs`
+  - PASS
+- `node --test tests/web/whole-sheet-clipboard.test.mjs tests/web/whole-sheet-cell-ops.test.mjs tests/web/whole-sheet-input-policy.test.mjs`
+  - PASS
+- `node tests/web/workbench-template-gating.test.js`
+  - PASS (`38 passed`)
+
+### Audit consequence
+
+The first required UQ-002 refactor step is complete for code-state purposes:
+whole-sheet live history is no longer wrapper-owned.
+
+Remaining UQ-002 order is unchanged:
+
+1. stop full `renderFrameGrid()` rebuilds on ordinary root edits
+2. decouple save/autosave from edit completion
+3. only then offload remaining heavy secondary work
+
 ## Audit — UQ-002 Section-1 Root-Editor Progress Slice (2026-04-26)
 
 This is a product/code checkpoint entry. It is **not** a Section 1 closure

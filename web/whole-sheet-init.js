@@ -38,6 +38,7 @@ const _BP = String(window.__WB_BASE_PATH || '');
 const FONT_URL = _BP + '/termpp-web-flat/fonts/cp437_12x12.png';
 const CELL_SIZE = 12;
 const PALETTE_CELL = 11;
+const HISTORY_LIMIT = 50;
 const DEFAULT_PALETTE = [
   // Grayscale
   [0,0,0],[17,17,17],[34,34,34],[51,51,51],[68,68,68],[85,85,85],[102,102,102],[119,119,119],
@@ -262,7 +263,6 @@ let editorState = {
   applyFg: true,
   applyBg: true,
   onCellEdited: null,
-  onStrokeStart: null,
   onStrokeComplete: null,
   onActiveLayerChanged: null,
   onLayerVisibilityChanged: null,
@@ -271,8 +271,6 @@ let editorState = {
   onMoveLayer: null,
   onSave: null,
   onExport: null,
-  onUndo: null,
-  onRedo: null,
   onResize: null,
   onBrowseList: null,
   onBrowseOpen: null,
@@ -280,7 +278,11 @@ let editorState = {
   onBrowseDuplicate: null,
   onBrowseDelete: null,
   onDocumentStateChange: null,
+  onHistoryStateChange: null,
   _strokeDirty: false,
+  _pendingHistorySnapshot: null,
+  history: [],
+  future: [],
   // Clipboard state (W19-W22 parity)
   clipboard: null,       // {bounds: {x, y, w, h}, layers: [{layerIndex, cells: [...]}, ...]}
   pasteMode: false,
@@ -437,7 +439,6 @@ async function mount({
   gridVisible,
   gridStep,
   onCellEdited,
-  onStrokeStart,
   onStrokeComplete,
   onActiveLayerChanged,
   onLayerVisibilityChanged,
@@ -446,8 +447,6 @@ async function mount({
   onMoveLayer,
   onSave,
   onExport,
-  onUndo,
-  onRedo,
   onResize,
   onBrowseList,
   onBrowseOpen,
@@ -455,6 +454,7 @@ async function mount({
   onBrowseDuplicate,
   onBrowseDelete,
   onDocumentStateChange,
+  onHistoryStateChange,
 }) {
   if (editorState.mounted) unmount();
 
@@ -469,7 +469,6 @@ async function mount({
   editorState.gridVisible = !!gridVisible;
   editorState.gridStep = String(gridStep || 'frame') || 'frame';
   editorState.onCellEdited = onCellEdited || null;
-  editorState.onStrokeStart = onStrokeStart || null;
   editorState.onStrokeComplete = onStrokeComplete || null;
   editorState.onActiveLayerChanged = onActiveLayerChanged || null;
   editorState.onLayerVisibilityChanged = onLayerVisibilityChanged || null;
@@ -478,8 +477,6 @@ async function mount({
   editorState.onMoveLayer = onMoveLayer || null;
   editorState.onSave = onSave || null;
   editorState.onExport = onExport || null;
-  editorState.onUndo = onUndo || null;
-  editorState.onRedo = onRedo || null;
   editorState.onResize = onResize || null;
   editorState.onBrowseList = onBrowseList || null;
   editorState.onBrowseOpen = onBrowseOpen || null;
@@ -487,6 +484,10 @@ async function mount({
   editorState.onBrowseDuplicate = onBrowseDuplicate || null;
   editorState.onBrowseDelete = onBrowseDelete || null;
   editorState.onDocumentStateChange = onDocumentStateChange || null;
+  editorState.onHistoryStateChange = onHistoryStateChange || null;
+  editorState.history = [];
+  editorState.future = [];
+  editorState._pendingHistorySnapshot = null;
 
   // Build DOM — REXPaint-style sidebar + canvas layout
   container.innerHTML = '';
@@ -659,9 +660,7 @@ async function mount({
       const al = editorState.layerStack.getActiveLayer();
       if (al && al.locked) return;
     }
-    if (!editorState._strokeDirty && editorState.onStrokeStart) {
-      editorState.onStrokeStart();
-    }
+    if (!editorState._strokeDirty) _beginDocumentTransaction();
     originalSetCell(x, y, glyph, fg, bg);
     editorState._strokeDirty = true;
     if (editorState.onCellEdited) {
@@ -700,13 +699,7 @@ async function mount({
 
   editorState.mounted = true;
   canvas.setGridVisible(editorState.gridVisible);
-  if (typeof canvas.setGridStep === 'function') {
-    if (editorState.gridStep === 'frame') canvas.setGridStep(editorState.frameW, editorState.frameH);
-    else {
-      const step = Math.max(1, Number(editorState.gridStep) || 1);
-      canvas.setGridStep(step, step);
-    }
-  }
+  _applyGridStepToCanvas();
   canvas.render();
   _applyCanvasZoom();
   _observeCanvasViewport();
@@ -716,6 +709,7 @@ async function mount({
   _updateInfoDrawState();
   _updateInfoApplyModes();
   _applyModeUI();
+  _updateHistoryButtons();
   void _refreshBrowseItems({ preserveSelection: false });
 
 }
@@ -724,8 +718,7 @@ async function mount({
 
 function _onStrokeEnd() {
   if (editorState._strokeDirty) {
-    editorState._strokeDirty = false;
-    if (editorState.onStrokeComplete) editorState.onStrokeComplete();
+    _commitLayerMutation();
   }
 }
 
@@ -742,9 +735,7 @@ function _applyLayerCellEdit(layerIndex, x, y, cell) {
   const layer = layerStack && layerStack.layers ? layerStack.layers[layerIndex] : null;
   if (!layer || !canvas) return false;
 
-  if (!editorState._strokeDirty && editorState.onStrokeStart) {
-    editorState.onStrokeStart();
-  }
+  if (!editorState._strokeDirty) _beginDocumentTransaction();
 
   layer.setCell(x, y, cell.glyph, cell.fg, cell.bg);
   if (canvas._dirtyCells) canvas._dirtyCells.add(y * canvas.width + x);
@@ -759,16 +750,24 @@ function _applyLayerCellEdit(layerIndex, x, y, cell) {
 function _commitLayerMutation() {
   if (!editorState._strokeDirty) return false;
   editorState._strokeDirty = false;
+  _pushPendingHistorySnapshot();
   if (editorState.onStrokeComplete) editorState.onStrokeComplete();
   if (editorState.canvas) editorState.canvas.render();
   return true;
 }
 
 function _beginDocumentTransaction() {
-  if (!editorState._strokeDirty && editorState.onStrokeStart) {
-    editorState.onStrokeStart();
+  if (!editorState.mounted || !editorState.layerStack) return;
+  if (!editorState._strokeDirty) {
+    editorState._pendingHistorySnapshot = _buildDocumentSnapshot();
   }
   editorState._strokeDirty = true;
+}
+
+function _cancelDocumentTransaction() {
+  editorState._strokeDirty = false;
+  editorState._pendingHistorySnapshot = null;
+  _updateHistoryButtons();
 }
 
 function _copySelection() {
@@ -786,7 +785,7 @@ function _copySelection() {
 
 /**
  * W22: Delete/clear cells inside current selection (glyph→0, transparent).
- * Triggers stroke callbacks for workbench-level undo.
+ * Commits through the root-owned history path.
  * @returns {boolean} true if cleared
  */
 function _deleteSelection() {
@@ -862,7 +861,7 @@ function _cancelPasteMode() {
 
 /**
  * Place clipboard contents at cell (cx, cy).
- * Triggers stroke callbacks for undo.
+ * Commits through the root-owned history path.
  */
 function _pasteAt(cx, cy) {
   const clip = editorState.clipboard;
@@ -941,8 +940,7 @@ function _selectionMatrixRotate(matrix, clockwise) {
 
 /**
  * Apply a transform to the current whole-sheet selection.
- * One undoable operation: triggers onStrokeStart once at the beginning,
- * writes all cells, then triggers onStrokeComplete once at the end.
+ * One undoable operation in the root-owned history stack.
  * For rotate, updates selection bounds to reflect width/height swap.
  * @param {'rot_cw'|'rot_ccw'|'flip_h'|'flip_v'} kind
  * @returns {boolean} true if transform applied
@@ -981,7 +979,7 @@ function _transformSelection(kind) {
   // Check that rotated result fits on canvas
   if (bounds.x + dstW > canvas.width || bounds.y + dstH > canvas.height) return false;
 
-  // setCell proxy fires onStrokeStart on first cell edit — one undo snapshot.
+  // setCell proxy starts one root-owned history transaction on first cell edit.
   // Clear source region first
   for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
     for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
@@ -997,9 +995,7 @@ function _transformSelection(kind) {
     }
   }
 
-  // Force stroke-complete for workbench undo snapshot
-  editorState._strokeDirty = false;
-  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
+  _commitLayerMutation();
 
   // Update selection bounds to match transformed dimensions
   tool.startSelection(bounds.x, bounds.y);
@@ -1034,8 +1030,7 @@ function _fillSelection() {
     }
   }
   if (!changed) return false;
-  editorState._strokeDirty = false;
-  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
+  _commitLayerMutation();
   canvas.render();
   return true;
 }
@@ -1075,8 +1070,7 @@ function _replaceSelectionColor(channel) {
     }
   }
   if (!changed) return false;
-  editorState._strokeDirty = false;
-  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
+  _commitLayerMutation();
   canvas.render();
   return true;
 }
@@ -1139,8 +1133,7 @@ function _findReplace() {
     }
   }
   if (!changed) return false;
-  editorState._strokeDirty = false;
-  if (editorState.onStrokeComplete) editorState.onStrokeComplete();
+  _commitLayerMutation();
   canvas.render();
   return true;
 }
@@ -1192,10 +1185,125 @@ function _buildDocumentSnapshot() {
   };
 }
 
+function _buildLayerStackFromSnapshot(snapshot, cols, rows) {
+  const flatLayers = Array.isArray(snapshot?.layers) && snapshot.layers.length
+    ? snapshot.layers
+    : [[]];
+  const names = Array.isArray(snapshot?.layerNames) ? snapshot.layerNames : [];
+  const visible = new Set((snapshot?.visibleLayers || []).map((value) => Number(value)).filter((value) => Number.isFinite(value)));
+  const locked = new Set((snapshot?.lockedLayers || []).map((value) => Number(value)).filter((value) => Number.isFinite(value)));
+  const stack = new LayerStack(cols, rows);
+  stack.layers.splice(0, 1);
+
+  for (let li = 0; li < flatLayers.length; li++) {
+    stack.addLayer(names[li] || `Layer ${li}`);
+    const layer = stack.layers[li];
+    const flatCells = Array.isArray(flatLayers[li]) ? flatLayers[li] : [];
+    for (let i = 0; i < flatCells.length; i++) {
+      const cell = flatCells[i];
+      if (!cell) continue;
+      const x = i % cols;
+      const y = Math.floor(i / cols);
+      if (x >= cols || y >= rows) continue;
+      const glyph = Number(cell.glyph || 0);
+      const fg = Array.isArray(cell.fg) ? cell.fg.map(Number) : [255, 255, 255];
+      const bg = Array.isArray(cell.bg) ? cell.bg.map(Number) : [0, 0, 0];
+      layer.setCell(x, y, glyph & 0xFF, fg, bg);
+    }
+    layer.setVisible(visible.size ? visible.has(li) : true);
+    layer.setLocked(locked.has(li));
+  }
+
+  const activeLayer = Math.max(0, Math.min(stack.layers.length - 1, Number(snapshot?.activeLayer || 0)));
+  stack.selectLayer(activeLayer);
+  return stack;
+}
+
+function _applyGridStepToCanvas() {
+  if (!editorState.canvas || typeof editorState.canvas.setGridStep !== 'function') return;
+  if (editorState.gridStep === 'frame') {
+    editorState.canvas.setGridStep(editorState.frameW, editorState.frameH);
+  } else {
+    const step = Math.max(1, Number(editorState.gridStep) || 1);
+    editorState.canvas.setGridStep(step, step);
+  }
+}
+
+function _applyDocumentSnapshot(snapshot) {
+  if (!snapshot || !editorState.canvas) return false;
+  const cols = Math.max(1, Number(snapshot.gridCols || editorState.gridCols || 1));
+  const rows = Math.max(1, Number(snapshot.gridRows || editorState.gridRows || 1));
+  editorState.gridCols = cols;
+  editorState.gridRows = rows;
+  editorState.frameW = Math.max(1, Number(snapshot.frameW || editorState.frameW || cols));
+  editorState.frameH = Math.max(1, Number(snapshot.frameH || editorState.frameH || rows));
+  editorState.layerNames = Array.isArray(snapshot.layerNames) ? [...snapshot.layerNames] : [];
+  editorState.canvasZoom = _normalizeCanvasZoomValue(snapshot.canvasZoom);
+  editorState.gridVisible = !!snapshot.gridVisible;
+  editorState.gridStep = String(snapshot.gridStep || 'frame') || 'frame';
+
+  const stack = _buildLayerStackFromSnapshot(snapshot, cols, rows);
+  editorState.layerStack = stack;
+  editorState.canvas.resizeGrid(cols, rows);
+  editorState.canvas.setLayerStack(stack);
+  editorState.canvas.setGridVisible(editorState.gridVisible);
+  _applyGridStepToCanvas();
+  _updateLayersPanelUI();
+  const dimsEl = document.getElementById('wsDims');
+  if (dimsEl) dimsEl.textContent = `${cols}\u00d7${rows} · ${stack.layers.length}L`;
+  _applyCanvasZoom({ preserveCenter: true });
+  if (editorState.canvas) {
+    editorState.canvas._fullRenderNeeded = true;
+    editorState.canvas.render();
+  }
+  return true;
+}
+
 function _emitDocumentStateChange(reason) {
   if (typeof editorState.onDocumentStateChange === 'function') {
     editorState.onDocumentStateChange(_buildDocumentSnapshot(), String(reason || 'document-change'));
   }
+}
+
+function _historyState() {
+  return {
+    canUndo: editorState.history.length > 0,
+    canRedo: editorState.future.length > 0,
+    historyDepth: editorState.history.length,
+    futureDepth: editorState.future.length,
+  };
+}
+
+function _updateHistoryButtons() {
+  const hist = _historyState();
+  const undoBtn = document.getElementById('wsUndoBtn');
+  if (undoBtn) undoBtn.disabled = !hist.canUndo;
+  const redoBtn = document.getElementById('wsRedoBtn');
+  if (redoBtn) redoBtn.disabled = !hist.canRedo;
+  if (typeof editorState.onHistoryStateChange === 'function') {
+    editorState.onHistoryStateChange({ ...hist });
+  }
+}
+
+function _clearHistory() {
+  editorState.history = [];
+  editorState.future = [];
+  editorState._pendingHistorySnapshot = null;
+  _updateHistoryButtons();
+}
+
+function _pushPendingHistorySnapshot() {
+  const snap = editorState._pendingHistorySnapshot;
+  editorState._pendingHistorySnapshot = null;
+  if (!snap) {
+    _updateHistoryButtons();
+    return false;
+  }
+  editorState.history.push(snap);
+  if (editorState.history.length > HISTORY_LIMIT) editorState.history.shift();
+  editorState.future = [];
+  _updateHistoryButtons();
+  return true;
 }
 
 function _updateApplyToggleButtons() {
@@ -1287,7 +1395,7 @@ function _commitTextEdit() {
 function _cancelTextEdit() {
   editorState.textEdit = null;
   if (!editorState._strokeDirty) return false;
-  editorState._strokeDirty = false;
+  _cancelDocumentTransaction();
   return true;
 }
 
@@ -1517,12 +1625,12 @@ function _onKeyDown(e) {
     }
     switch (e.key.toLowerCase()) {
       case 'z':
-        if (editorState.onUndo) editorState.onUndo();
+        undo();
         e.preventDefault();
         e.stopPropagation();
         return;
       case 'y':
-        if (editorState.onRedo) editorState.onRedo();
+        redo();
         e.preventDefault();
         e.stopPropagation();
         return;
@@ -2031,7 +2139,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   undoBtn.className = 'ws-tool-btn';
   undoBtn.textContent = 'Undo';
   undoBtn.title = 'Undo (Ctrl+Z)';
-  undoBtn.addEventListener('click', () => { if (editorState.onUndo) editorState.onUndo(); });
+  undoBtn.addEventListener('click', () => { undo(); });
   toolsCol.appendChild(undoBtn);
 
   const redoBtn = document.createElement('button');
@@ -2039,7 +2147,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   redoBtn.className = 'ws-tool-btn';
   redoBtn.textContent = 'Redo';
   redoBtn.title = 'Redo (Ctrl+Y)';
-  redoBtn.addEventListener('click', () => { if (editorState.onRedo) editorState.onRedo(); });
+  redoBtn.addEventListener('click', () => { redo(); });
   toolsCol.appendChild(redoBtn);
 
   toolsCol.appendChild(_buildToggle('Grid', 'wsGridToggle', editorState.gridVisible, (on) => {
@@ -3018,7 +3126,7 @@ function _mergeActiveLayerDown() {
   const target = editorState.layerStack.layers[targetIndex];
   if (!source || !target || source.locked || target.locked) return false;
 
-  if (!editorState._strokeDirty && editorState.onStrokeStart) editorState.onStrokeStart();
+  if (!editorState._strokeDirty) _beginDocumentTransaction();
   for (let y = 0; y < editorState.gridRows; y++) {
     for (let x = 0; x < editorState.gridCols; x++) {
       const srcCell = source.getCell(x, y);
@@ -3100,9 +3208,12 @@ async function _promptResizeDocument() {
   }
   const nextFrameW = Math.max(1, Math.floor(nextCols / frameCols));
   const nextFrameH = Math.max(1, Math.floor(nextRows / frameRows));
-  if (!editorState._strokeDirty && editorState.onStrokeStart) editorState.onStrokeStart();
+  if (!editorState._strokeDirty) _beginDocumentTransaction();
   const changed = _resizeLayerStack(nextCols, nextRows);
-  if (!changed) return false;
+  if (!changed) {
+    _cancelDocumentTransaction();
+    return false;
+  }
   editorState.frameW = nextFrameW;
   editorState.frameH = nextFrameH;
   editorState._strokeDirty = true;
@@ -3353,7 +3464,6 @@ function unmount() {
     applyFg: editorState.applyFg,
     applyBg: editorState.applyBg,
     onCellEdited: null,
-    onStrokeStart: null,
     onStrokeComplete: null,
     onActiveLayerChanged: null,
     onLayerVisibilityChanged: null,
@@ -3362,8 +3472,6 @@ function unmount() {
     onMoveLayer: null,
     onSave: null,
     onExport: null,
-    onUndo: null,
-    onRedo: null,
     onResize: null,
     onBrowseList: null,
     onBrowseOpen: null,
@@ -3371,7 +3479,11 @@ function unmount() {
     onBrowseDuplicate: null,
     onBrowseDelete: null,
     onDocumentStateChange: null,
+    onHistoryStateChange: null,
     _strokeDirty: false,
+    _pendingHistorySnapshot: null,
+    history: [],
+    future: [],
     clipboard: null,
     pasteMode: false,
     browseItems: [],
@@ -3446,9 +3558,11 @@ function syncFromState(layers) {
 
   editorState.canvas._fullRenderNeeded = true;
   editorState.canvas.render();
+  _clearHistory();
 }
 
 function getState() {
+  const hist = _historyState();
   return {
     mounted: editorState.mounted,
     gridCols: editorState.gridCols,
@@ -3471,6 +3585,10 @@ function getState() {
     appliedCanvasZoom: editorState.appliedCanvasZoom,
     gridVisible: editorState.gridVisible,
     gridStep: editorState.gridStep,
+    canUndo: hist.canUndo,
+    canRedo: hist.canRedo,
+    historyDepth: hist.historyDepth,
+    futureDepth: hist.futureDepth,
   };
 }
 
@@ -3560,6 +3678,31 @@ function getDocumentSnapshot() {
   return _buildDocumentSnapshot();
 }
 
+function undo() {
+  if (!editorState.mounted || editorState.history.length === 0) return false;
+  if (editorState._strokeDirty) _commitLayerMutation();
+  const current = _buildDocumentSnapshot();
+  const previous = editorState.history.pop();
+  editorState.future.push(current);
+  const applied = _applyDocumentSnapshot(previous);
+  _updateHistoryButtons();
+  if (applied) _emitDocumentStateChange('undo');
+  return applied;
+}
+
+function redo() {
+  if (!editorState.mounted || editorState.future.length === 0) return false;
+  if (editorState._strokeDirty) _commitLayerMutation();
+  const current = _buildDocumentSnapshot();
+  const next = editorState.future.pop();
+  editorState.history.push(current);
+  if (editorState.history.length > HISTORY_LIMIT) editorState.history.shift();
+  const applied = _applyDocumentSnapshot(next);
+  _updateHistoryButtons();
+  if (applied) _emitDocumentStateChange('redo');
+  return applied;
+}
+
 // ── Window export ──
 
 window.__wholeSheetEditor = {
@@ -3569,6 +3712,8 @@ window.__wholeSheetEditor = {
   syncFromState,
   getState,
   getDocumentSnapshot,
+  undo,
+  redo,
   setDrawState,
   setActiveLayer,
   setLayerVisibility,

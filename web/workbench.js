@@ -2071,14 +2071,60 @@
     }
   }
 
+  function getWholeSheetHistoryState() {
+    const wsEditor = window.__wholeSheetEditor;
+    if (!wsEditor || typeof wsEditor.getState !== "function") {
+      return { canUndo: false, canRedo: false, historyDepth: 0, futureDepth: 0 };
+    }
+    try {
+      const st = wsEditor.getState();
+      if (!st || !st.mounted) {
+        return { canUndo: false, canRedo: false, historyDepth: 0, futureDepth: 0 };
+      }
+      return {
+        canUndo: !!st.canUndo,
+        canRedo: !!st.canRedo,
+        historyDepth: Math.max(0, Number(st.historyDepth || 0)),
+        futureDepth: Math.max(0, Number(st.futureDepth || 0)),
+      };
+    } catch (_err) {
+      return { canUndo: false, canRedo: false, historyDepth: 0, futureDepth: 0 };
+    }
+  }
+
+  function wholeSheetCanUndo() {
+    const wsEditor = window.__wholeSheetEditor;
+    return !!(wsEditor && typeof wsEditor.undo === "function" && getWholeSheetHistoryState().canUndo);
+  }
+
+  function wholeSheetCanRedo() {
+    const wsEditor = window.__wholeSheetEditor;
+    return !!(wsEditor && typeof wsEditor.redo === "function" && getWholeSheetHistoryState().canRedo);
+  }
+
+  function combinedHistoryState() {
+    const wsHistory = getWholeSheetHistoryState();
+    return {
+      historyDepth: state.history.length + wsHistory.historyDepth,
+      futureDepth: state.future.length + wsHistory.futureDepth,
+      wrapperHistoryDepth: state.history.length,
+      wrapperFutureDepth: state.future.length,
+      wholeSheetHistoryDepth: wsHistory.historyDepth,
+      wholeSheetFutureDepth: wsHistory.futureDepth,
+    };
+  }
+
   function updateUndoRedoButtons() {
-    $("undoBtn").disabled = state.history.length === 0;
-    $("redoBtn").disabled = state.future.length === 0;
-    var wsUndo = $("wsUndoBtn"); if (wsUndo) wsUndo.disabled = state.history.length === 0;
-    var wsRedo = $("wsRedoBtn"); if (wsRedo) wsRedo.disabled = state.future.length === 0;
+    const wsHistory = getWholeSheetHistoryState();
+    $("undoBtn").disabled = state.history.length === 0 && !wsHistory.canUndo;
+    $("redoBtn").disabled = state.future.length === 0 && !wsHistory.canRedo;
   }
 
   function undo() {
+    if (!state.history.length && wholeSheetCanUndo()) {
+      window.__wholeSheetEditor.undo();
+      return;
+    }
     if (!state.history.length) return;
     state.future.push(snapshot());
     const prev = state.history.pop();
@@ -2088,6 +2134,10 @@
   }
 
   function redo() {
+    if (!state.future.length && wholeSheetCanRedo()) {
+      window.__wholeSheetEditor.redo();
+      return;
+    }
     if (!state.future.length) return;
     state.history.push(snapshot());
     const next = state.future.pop();
@@ -6357,10 +6407,8 @@
         if (x < 0 || x >= state.gridCols || y < 0 || y >= state.gridRows) return;
         setCell(x, y, { glyph: glyph, fg: fg, bg: bg }, layerIndex);
       },
-      onStrokeStart: function() {
-        pushHistory();
-      },
       onStrokeComplete: function() {
+        markSessionDirty("whole-sheet-edit");
         // Targeted refresh: skip legacy grid rebuild, source canvas, inspector,
         // metadata, and syncWholeSheetFromState (editor canvas already correct).
         // When _suppressRender is set (verifier recipe replay), skip the
@@ -6387,12 +6435,12 @@
       },
       onSave: function() { saveCurrentActionProgress({ reason: "whole-sheet-save", auto_advance: false }); },
       onExport: function() { exportXp(); },
-      onUndo: function() { undo(); },
-      onRedo: function() { redo(); },
       onDocumentStateChange: function(snapshot, reason) {
         if (!applyWholeSheetDocumentSnapshot(snapshot)) return;
+        markSessionDirty(`whole-sheet-${String(reason || "document")}`);
         saveSessionState(`whole-sheet-${String(reason || "document")}`);
       },
+      onHistoryStateChange: function() { updateUndoRedoButtons(); },
       onBrowseList: browseListSessions,
       onBrowseOpen: browseOpenSession,
       onBrowseRename: browseRenameSession,
@@ -7294,7 +7342,9 @@
   async function applyTemplate() {
     // PB-03 guard: session-boundary dirty check before destructive template apply.
     // loadSession() → hydrateLoadedSession() clears history (by design); warn user.
-    if (state.sessionId && (state.sessionDirty || state.history.length > 0)) {
+    const wsHistory = getWholeSheetHistoryState();
+    const hasUndoHistory = state.history.length > 0 || wsHistory.historyDepth > 0 || wsHistory.futureDepth > 0;
+    if (state.sessionId && (state.sessionDirty || hasUndoHistory)) {
       const proceed = confirm(
         "Applying a template replaces your current session.\n" +
         "Unsaved edits and undo history will be lost.\n\nContinue?"
@@ -8197,8 +8247,12 @@
       extractedBoxes: state.extractedBoxes.length,
       sourceBoxes: state.extractedBoxes.map((b) => ({ id: Number(b.id), x: Number(b.x), y: Number(b.y), w: Number(b.w), h: Number(b.h) })),
       anchorBox: state.anchorBox ? { ...state.anchorBox } : null,
-      historyDepth: state.history.length,
-      futureDepth: state.future.length,
+      historyDepth: combinedHistoryState().historyDepth,
+      futureDepth: combinedHistoryState().futureDepth,
+      wrapperHistoryDepth: combinedHistoryState().wrapperHistoryDepth,
+      wrapperFutureDepth: combinedHistoryState().wrapperFutureDepth,
+      wholeSheetHistoryDepth: combinedHistoryState().wholeSheetHistoryDepth,
+      wholeSheetFutureDepth: combinedHistoryState().wholeSheetFutureDepth,
       // P1 fields (M2 verifier prerequisite — VB-01)
       bundleId: state.bundleId ? String(state.bundleId) : "",
       activeActionKey: String(state.activeActionKey || ""),

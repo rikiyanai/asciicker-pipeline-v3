@@ -884,28 +884,31 @@ What remains open and still blocks honest `UQ-002` closure:
 The remaining "super slow" feel is treated as part of `UQ-002`, not as a later
 polish lane.
 
-What current code still does:
+Current checkpoint state after the 2026-04-26 history ownership cut:
 
-1. `web/workbench.js:2057-2097` still owns live undo/redo through wrapper
-   snapshots.
-2. `web/workbench.js:2807-2826` still rebuilds the entire frame-grid DOM/canvas
+1. whole-sheet live undo/redo is now owned in `web/whole-sheet-init.js`.
+   `web/workbench.js` may delegate UI commands and expose combined diagnostic
+   history depths, but it must not reintroduce whole-sheet `onStrokeStart`,
+   `onUndo`, or `onRedo` ownership.
+2. `web/workbench.js:2857-2876` still rebuilds the entire frame-grid DOM/canvas
    projection with `innerHTML = ""` and per-tile canvas recreation.
-3. `web/workbench.js:3900-3965` still serializes full session payloads on the
+3. `web/workbench.js:3950-4015` still serializes full session payloads on the
    save path.
-4. `web/workbench.js:6363-6394` and `web/workbench.js:6433-6461` still connect
+4. `web/workbench.js:6410-6441` and `web/workbench.js:6481-6509` still connect
    ordinary whole-sheet edit completion to wrapper projection churn and save
    work.
 
 Required execution order inside `UQ-002`:
 
-1. delete wrapper-owned undo/redo from the whole-sheet edit path and move live
-   history ownership into `whole-sheet-init.js`
-2. stop full `renderFrameGrid()` rebuilds on ordinary root edits; update only
+1. completed for code-state: delete wrapper-owned undo/redo from the
+   whole-sheet edit path and move live history ownership into
+   `whole-sheet-init.js`
+2. next: stop full `renderFrameGrid()` rebuilds on ordinary root edits; update only
    the dirty/visible shipped projection surfaces that actually need refresh
-3. decouple session save/autosave from edit completion so normal drawing does
+3. then decouple session save/autosave from edit completion so normal drawing does
    not immediately serialize the full live session payload
-4. only after the owner/hot-path cut is stable, move any remaining secondary
-   projection or serialization work off the main thread
+4. only after the hot-path cut is stable, move any remaining secondary projection
+   or serialization work off the main thread
 
 Stop rules:
 
