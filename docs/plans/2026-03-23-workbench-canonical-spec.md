@@ -842,6 +842,14 @@ What current code now does:
 5. `web/rexpaint-editor/canvas.js` now prefers Pointer Events when available,
    and whole-sheet session metadata now persists layer locks plus zoom/grid
    state through the Flask save/load contract.
+6. The whole-sheet root now preserves cell state correctly for three Section 1
+   parity cases that were regressed in the first slice:
+   - selection delete preserves existing background colors while clearing glyphs
+   - text-edit backspace restores the prior active-layer cell inside the current
+     text session
+   - layer-merge-down copies non-default source cells even when `glyph == 0`,
+     so color-only/background-only cells survive the merge without letting
+     untouched default blanks erase the target layer
 
 Execution evidence:
 
@@ -849,6 +857,8 @@ Execution evidence:
   passed on `2026-04-26` (`61 passed`)
 - `tests/web/rexpaint-editor-canvas.test.js` passed through the VM-module
   runner on `2026-04-26` (`14 passed, 0 failed`)
+- `node --test tests/web/whole-sheet-cell-ops.test.mjs` passed on
+  `2026-04-26` (`3 tests`)
 
 What remains open and still blocks honest `UQ-002` closure:
 

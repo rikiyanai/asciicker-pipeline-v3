@@ -54,6 +54,30 @@ claim and it is **not** `UQ-003` proof.
 - `node --experimental-vm-modules -e "<vm module runner for tests/web/rexpaint-editor-canvas.test.js>"`
   - PASS (`14 passed, 0 failed`)
 
+### Follow-up product correction (2026-04-26, commit `72480b7`)
+
+This is still a Section-1 product slice, not a closure claim.
+
+What it fixed:
+
+1. whole-sheet selection delete now preserves each cleared cell's existing
+   background color instead of hard-resetting selected cells to black
+2. whole-sheet text-edit backspace now restores the exact prior active-layer
+   cell state for the current text session instead of forcing an empty
+   white-on-black cell
+3. layer-merge-down now copies non-default source cells even when `glyph == 0`,
+   so background-only / color-only source cells are not silently dropped while
+   untouched default blanks still do not erase the target layer
+
+Verification evidence:
+
+- `node --test tests/web/whole-sheet-cell-ops.test.mjs`
+  - PASS (`3 tests`)
+- `python3 -m pytest tests/test_workbench_flow.py -k save_session_persists_explicit_geometry -q`
+  - PASS
+- `node --experimental-vm-modules -e "<vm module runner for tests/web/rexpaint-editor-canvas.test.js>"`
+  - PASS (`14 passed, 0 failed`)
+
 ### Execution re-check consequence
 
 1. The broader Flask/workbench/base-path suite does **not** currently expose a
