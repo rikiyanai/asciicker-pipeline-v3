@@ -53,6 +53,26 @@ The deployment lineage is now explicit:
 4. Until that cutover is executed and logged, this repo remains the refactor
    candidate rather than the live public owner.
 
+Deployment-path clarification verified from the live deploy files in this repo:
+
+1. Public `/xpedit` traffic is routed by Cloudflare Worker to Cloud Run, not
+   served directly from repo visibility.
+   - `deploy/cloudflare-worker/wrangler.toml` routes both
+     `rikiworld.com/xpedit` and `rikiworld.com/xpedit/*`.
+   - `deploy/cloudflare-worker/xpedit-router.js` forwards those paths to the
+     configured Cloud Run URL.
+   - `.github/workflows/deploy-cloudrun.yml` deploys the app with
+     `PIPELINE_BASE_PATH=/xpedit`.
+2. Therefore, making the current live `xpedit` repo private should not by
+   itself take down `https://rikiworld.com/xpedit`, as long as:
+   - the current Cloud Run service remains up
+   - the Cloudflare Worker routes remain in place
+   - deploy secrets / workload identity / GitHub Actions access required for
+     future deploys remain valid after the repo visibility change
+3. This statement applies to the `/xpedit` app route only. It does not make any
+   claim about unrelated non-`/xpedit` GitHub Pages/origin content on
+   `rikiworld.com`.
+
 ### Application Boundaries And Guardrails
 
 There are only two master application spec sections in this canon:
@@ -2189,27 +2209,81 @@ From the current state, the corrected sequence is:
 
 ### Immediate Next Tasks After The 2026-04-17 Step 4 Closeout
 
-The three-day failed refactor attempt changed the sequence, and the Step 4
-blockers have now been cleared on this branch. From the current branch state,
-the immediate sequence is:
+The 2026-04-26 canon/deploy audit is now complete. From the current branch
+state, the immediate replacement sequence is:
 
-1. **Audit canon/failure-log state and lock the retirement/replacement plan first.**
-   - record explicitly that pipeline-v3 is the refactor successor to the
-     behavior-frozen pipeline-v2 baseline currently serving
-     `rikiworld.com/xpedit` from its own repo/deploy line
-   - operational cutover target:
-     - keep the public pipeline-v2 site frozen until replacement proof is ready
-     - privately archive the current public pipeline-v2 repo/site so the old
-       implementation is no longer publicly visible
-     - retire/delete the current `asciicker-pipeline-v3` repo identity
-     - create the replacement repo named `xpedit` from this v3 code line
-     - redeploy the v3 workbench to `rikiworld.com/xpedit`
-     - run public smoke/parity verification on the replacement before calling
-       the cutover complete
-   - do not describe any part of this retirement/replacement sequence as done
-     until the repo/archive/deploy operations are actually executed and logged
-     in `PLAYWRIGHT_FAILURE_LOG.md`
-2. **Do Step 11 next: normalize the backend schema.**
+1. **Run the canonical headed from-scratch E2E proof on local root-hosted v3 first.**
+   - start the local app on the repo-default root-hosted path:
+     `PYTHONPATH=src python3 -m pipeline_v2.app`
+   - prove one headed UI-driven lane at
+     `http://127.0.0.1:5071/workbench` that covers:
+     - template apply or classic blank-session creation
+     - source upload and/or manual assembly from scratch
+     - whole-sheet edit on the authored result
+     - save/export
+     - `Test This Skin` runtime proof with sustained usable runtime state
+   - no archive/rename/deploy action starts before this gate passes
+2. **Run the same headed from-scratch E2E proof on local prefixed hosting.**
+   - serve the app with `PIPELINE_BASE_PATH=/xpedit`
+   - prove the same workflow at `http://127.0.0.1:5072/xpedit/workbench`
+   - this is mandatory because the public cutover target is `/xpedit`, not
+     root-hosted `/workbench`
+3. **Run a direct public-parity audit against the current live `rikiworld.com/xpedit`.**
+   - compare the replacement candidate against the currently served public page
+   - required checks include:
+     - direct source-tool parity
+     - visible panel grouping / ordering parity
+     - Recorder / Skin Test dock / Verification / Session separation
+     - no debug-harness leakage into the product UI
+   - if parity fails, stop cutover work and fix product gaps first
+4. **Freeze the exact replacement candidate SHA and evidence.**
+   - use one committed SHA for the replacement target, not a moving branch tip
+   - log the headed-proof artifacts and parity evidence for that SHA before any
+     deployment flip
+5. **Validate the GitHub deployment target for the replacement candidate.**
+   - current verified deploy path is:
+     - GitHub Actions workflow `.github/workflows/deploy-cloudrun.yml`
+     - Cloud Run service `asciicker-xpedit`
+     - env var `PIPELINE_BASE_PATH=/xpedit`
+     - Cloudflare Worker routes `/xpedit` and `/xpedit/*`
+   - before cutover, confirm the replacement SHA deploys through that same path
+     and still passes `scripts/deploy/smoke_test.sh` with `PREFIX=/xpedit`
+6. **Make the current live `xpedit` repo private archive without taking `/xpedit` down.**
+   - because `/xpedit` is served through Cloudflare Worker -> Cloud Run, repo
+     privacy alone should not drop the live public app
+   - do not change Worker routes or Cloud Run service during this archive step
+   - preserve deploy secrets / workload identity / workflow permissions needed
+     to continue deploying after the visibility change
+7. **Replace repo identity after the old live repo is private.**
+   - preferred path:
+     - make the current public `xpedit` repo private archived
+     - rename `asciicker-pipeline-v3` repo to `xpedit`
+   - alternative hard-reset path:
+     - keep the old live repo as private archive
+     - create a new repo named `xpedit` from the frozen replacement SHA
+   - do not delete historical evidence before the replacement is proven live
+8. **Update deployment/package metadata that still hardcodes pipeline-v2 naming.**
+   - examples currently present in this repo:
+     - `deploy/README.md`
+     - `deploy/systemd/asciicker-xpedit.service`
+     - `deploy/.env.example`
+   - the deploy target must keep the public base path `/xpedit` even after repo
+     naming is replaced
+9. **Deploy the frozen v3 replacement candidate through GitHub Actions to Cloud Run.**
+   - deploy the exact replacement SHA, not an unpinned branch head
+   - keep `PIPELINE_BASE_PATH=/xpedit`
+   - keep the Cloud Run service / Worker route shape compatible with the
+     existing public URL
+10. **Run post-deploy smoke tests on the replacement target before public signoff.**
+    - use the existing stateless + stateful smoke path with `PREFIX=/xpedit`
+    - if staging/replacement smoke fails, stop before claiming cutover complete
+11. **Re-verify the public URL after the replacement deploy is live.**
+    - run the same from-scratch headed acceptance flow on
+      `https://rikiworld.com/xpedit`
+    - only after this passes can the cutover be called complete
+12. **Then continue the remaining product hardening in branch priority order.**
+    - the first remaining branch-level architecture/hardening item is still
+      Step 11 backend schema normalization:
    - replace legacy `family` registry assumptions with explicit
      `filename_prefix` / `skin_family` action contracts
    - restore `enabled_families` only as derived compatibility output while the caller migration window remains open; do not use it as live authority
@@ -2222,7 +2296,7 @@ the immediate sequence is:
      - fatal-parse sentinel fix
      - `preview_xp` fallback warning
      - user-visible template-registry fetch failure path
-3. **Then add the canonical current-scope "from scratch" Playwright signoff lane.**
+13. **Then add or refresh the canonical current-scope "from scratch" Playwright signoff lane.**
    - extend or replace the current partial manual-assembly runner so one
      headed UI-driven lane proves:
      - template apply / blank session creation
@@ -2232,7 +2306,7 @@ the immediate sequence is:
      - Skin Dock/runtime proof at the end
    - this lane is for current skin authoring only
    - do not block it on future wearable authoring design
-4. **Do the Section 3 backend structural-contract runners next.**
+14. **Do the Section 3 backend structural-contract runners next.**
    - add tests/helpers proving normalized schema parity against Y9-2 family,
      fallback, mounted-prefix, and wearable slot/style truth
    - update existing fidelity helpers to consume the same contract
