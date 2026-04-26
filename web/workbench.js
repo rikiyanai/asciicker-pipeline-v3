@@ -118,6 +118,10 @@
     layerNames: [...DEFAULT_LAYER_NAMES],
     activeLayer: 2,
     visibleLayers: new Set([2]),
+    lockedLayers: new Set(),
+    wholeSheetCanvasZoom: 0,
+    wholeSheetGridVisible: false,
+    wholeSheetGridStep: "frame",
     inspectorOpen: false,
     inspectorRow: 0,
     inspectorCol: 0,
@@ -1957,6 +1961,7 @@
       layerNames: [...state.layerNames],
       activeLayer: state.activeLayer,
       visibleLayers: new Set(state.visibleLayers),
+      lockedLayers: new Set(state.lockedLayers),
       gridCols: state.gridCols,
       gridRows: state.gridRows,
       angles: state.angles,
@@ -1965,6 +1970,9 @@
       sourceProjs: state.sourceProjs,
       cellWChars: state.cellWChars,
       cellHChars: state.cellHChars,
+      wholeSheetCanvasZoom: state.wholeSheetCanvasZoom,
+      wholeSheetGridVisible: !!state.wholeSheetGridVisible,
+      wholeSheetGridStep: String(state.wholeSheetGridStep || "frame"),
       selectedFrames: [...state.selectedFrames],
       selectionAnchor: state.selectionAnchor ? { ...state.selectionAnchor } : null,
       selectionFocus: state.selectionFocus ? { ...state.selectionFocus } : null,
@@ -1992,6 +2000,7 @@
       state.layerNames = Array.isArray(snap.layerNames) ? [...snap.layerNames] : [...DEFAULT_LAYER_NAMES];
       state.activeLayer = typeof snap.activeLayer === "number" ? snap.activeLayer : 2;
       state.visibleLayers = snap.visibleLayers instanceof Set ? new Set(snap.visibleLayers) : new Set([2]);
+      state.lockedLayers = snap.lockedLayers instanceof Set ? new Set(snap.lockedLayers) : new Set();
       state.gridCols = typeof snap.gridCols === "number" ? snap.gridCols : state.gridCols;
       state.gridRows = typeof snap.gridRows === "number" ? snap.gridRows : state.gridRows;
       // Derive state.cells from layers[2] — layers are the source of truth.
@@ -2007,6 +2016,9 @@
     state.projs = Number(snap.projs || 1);
     state.cellWChars = Number(snap.cellWChars || state.cellWChars || 1);
     state.cellHChars = Number(snap.cellHChars || state.cellHChars || 1);
+    state.wholeSheetCanvasZoom = Number.isFinite(Number(snap.wholeSheetCanvasZoom)) ? Number(snap.wholeSheetCanvasZoom) : state.wholeSheetCanvasZoom;
+    state.wholeSheetGridVisible = !!snap.wholeSheetGridVisible;
+    state.wholeSheetGridStep = String(snap.wholeSheetGridStep || state.wholeSheetGridStep || "frame");
     const legacySelectedFrames = Number.isFinite(Number(snap.selectedRow))
       ? (snap.selectedCols || []).map((x) => ({ row: Number(snap.selectedRow), col: Number(x) }))
       : [];
@@ -3905,18 +3917,37 @@
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), timeoutMs);
     try {
-      // Derive cells from layers[2] for save — layers are the source of truth.
-      const saveCells = (state.layers && state.layers[2]) ? state.layers[2] : state.cells;
+      const wsSnapshot = getWholeSheetDocumentSnapshot();
+      const saveLayers = wsSnapshot?.layers || ((state.layers && state.layers.length > 0) ? state.layers : undefined);
+      const saveCells = (saveLayers && saveLayers[2]) ? saveLayers[2] : state.cells;
+      const saveLayerNames = Array.isArray(wsSnapshot?.layerNames) ? wsSnapshot.layerNames : state.layerNames;
+      const saveActiveLayer = typeof wsSnapshot?.activeLayer === "number" ? wsSnapshot.activeLayer : state.activeLayer;
+      const saveVisibleLayers = wsSnapshot?.visibleLayers || Array.from(state.visibleLayers || []);
+      const saveLockedLayers = wsSnapshot?.lockedLayers || Array.from(state.lockedLayers || []);
+      const saveGridCols = Number(wsSnapshot?.gridCols || state.gridCols || 0);
+      const saveGridRows = Number(wsSnapshot?.gridRows || state.gridRows || 0);
+      const saveCellW = Number(wsSnapshot?.frameW || state.cellWChars || 1);
+      const saveCellH = Number(wsSnapshot?.frameH || state.cellHChars || 1);
+      const saveCanvasZoom = Number.isFinite(Number(wsSnapshot?.canvasZoom)) ? Number(wsSnapshot.canvasZoom) : state.wholeSheetCanvasZoom;
+      const saveGridVisible = typeof wsSnapshot?.gridVisible === "boolean" ? !!wsSnapshot.gridVisible : !!state.wholeSheetGridVisible;
+      const saveGridStep = String(wsSnapshot?.gridStep || state.wholeSheetGridStep || "frame");
       const payload = {
         session_id: state.sessionId,
         cells: saveCells,
-        layers: (state.layers && state.layers.length > 0) ? state.layers : undefined,
-        grid_cols: state.gridCols,
-        grid_rows: state.gridRows,
-        cell_w: state.cellWChars,
-        cell_h: state.cellHChars,
+        layers: saveLayers,
+        layer_names: saveLayerNames,
+        active_layer: saveActiveLayer,
+        visible_layers: saveVisibleLayers,
+        locked_layers: saveLockedLayers,
+        grid_cols: saveGridCols,
+        grid_rows: saveGridRows,
+        cell_w: saveCellW,
+        cell_h: saveCellH,
         angles: state.angles,
         anims: state.anims,
+        whole_sheet_canvas_zoom: saveCanvasZoom,
+        whole_sheet_grid_visible: saveGridVisible,
+        whole_sheet_grid_step: saveGridStep,
         source_projs: state.sourceProjs,
         projs: state.projs,
         row_categories: state.rowCategories,
@@ -3984,6 +4015,9 @@
       state.cellWChars = Number(j.cell_w || 1);
       state.cellHChars = Number(j.cell_h || 1);
       state.layerNames = Array.isArray(j.layer_names) && j.layer_names.length ? [...j.layer_names] : [...DEFAULT_LAYER_NAMES];
+      state.wholeSheetCanvasZoom = Number.isFinite(Number(j.whole_sheet_canvas_zoom)) ? Number(j.whole_sheet_canvas_zoom) : 0;
+      state.wholeSheetGridVisible = !!j.whole_sheet_grid_visible;
+      state.wholeSheetGridStep = String(j.whole_sheet_grid_step || "frame");
       state.anchorBox = j.source_anchor_box ? { ...j.source_anchor_box } : null;
       state.drawCurrent = j.source_draft_box ? { ...j.source_draft_box } : null;
       state.extractedBoxes = cloneBoxes(j.source_boxes || []);
@@ -3999,8 +4033,9 @@
         ...state.sourceCutsV.map((c) => Number(c.id || 0) + 1),
         ...state.sourceCutsH.map((c) => Number(c.id || 0) + 1),
       );
-      state.activeLayer = 2;
-      state.visibleLayers = new Set([2]);
+      state.activeLayer = Number.isFinite(Number(j.active_layer)) ? Number(j.active_layer) : 2;
+      state.visibleLayers = new Set(Array.isArray(j.visible_layers) ? j.visible_layers.map((value) => Number(value)) : [2]);
+      state.lockedLayers = new Set(Array.isArray(j.locked_layers) ? j.locked_layers.map((value) => Number(value)) : []);
       clearGridSelection();
       state.history = [];
       state.future = [];
@@ -4025,7 +4060,9 @@
       if (Array.isArray(j.layers) && j.layers.length > 0) {
         state.layers = j.layers.map((l) => deepCloneCells(l));
         state.hasUploadedLayers = true;
-        state.layerNames = j.layers.map((_, i) => DEFAULT_LAYER_NAMES[i] || `Layer ${i}`);
+        if (!Array.isArray(j.layer_names) || !j.layer_names.length) {
+          state.layerNames = j.layers.map((_, i) => DEFAULT_LAYER_NAMES[i] || `Layer ${i}`);
+        }
         // Derive state.cells mirror from layers[2].  j.cells is ignored when
         // j.layers exists — layers are the sole source of truth.
         state.cells = state.layers.length > 2
@@ -4033,6 +4070,7 @@
           : buildBlankLayerCells();
         if (state.activeLayer < 0 || state.activeLayer >= state.layers.length) state.activeLayer = 2;
         if (!state.visibleLayers || state.visibleLayers.size <= 0) state.visibleLayers = new Set([2]);
+        state.lockedLayers = new Set([...state.lockedLayers].filter((value) => value >= 0 && value < state.layers.length));
       } else {
         // Seed state.cells from j.cells only for sessions without persisted
         // layers — syncLayersFromSessionCells reads state.cells to build the
@@ -6310,7 +6348,11 @@
       layerNames: state.layerNames,
       activeLayer: state.activeLayer,
       visibleLayers: state.visibleLayers,
+      lockedLayers: state.lockedLayers,
       currentSessionId: state.sessionId,
+      canvasZoom: state.wholeSheetCanvasZoom,
+      gridVisible: state.wholeSheetGridVisible,
+      gridStep: state.wholeSheetGridStep,
       onCellEdited: function(x, y, glyph, fg, bg, layerIndex) {
         if (x < 0 || x >= state.gridCols || y < 0 || y >= state.gridRows) return;
         setCell(x, y, { glyph: glyph, fg: fg, bg: bg }, layerIndex);
@@ -6343,69 +6385,14 @@
           }, 1500);
         }
       },
-      onActiveLayerChanged: function(index) {
-        state.activeLayer = index;
-        var sel = $("layerSelect");
-        if (sel) sel.value = String(index);
-        renderAll();
-        saveSessionState("whole-sheet-active-layer");
-      },
-      onLayerVisibilityChanged: function(index, visible) {
-        if (!state.visibleLayers) {
-          state.visibleLayers = new Set();
-          for (var i = 0; i < state.layers.length; i++) state.visibleLayers.add(i);
-        }
-        if (visible) state.visibleLayers.add(index);
-        else state.visibleLayers.delete(index);
-        renderAll();
-        saveSessionState("whole-sheet-layer-visibility");
-      },
-      onAddLayer: function(newIndex) {
-        var blank = buildBlankLayerCells();
-        state.layers.push(blank);
-        state.layerNames.push("Layer " + newIndex);
-        state.activeLayer = newIndex;
-        state.visibleLayers.add(newIndex);
-        renderLayerControls();
-        saveSessionState("whole-sheet-add-layer");
-      },
-      onDeleteLayer: function(deletedIndex, newActiveIndex) {
-        if (state.layers.length <= 1) return;
-        state.layers.splice(deletedIndex, 1);
-        state.layerNames.splice(deletedIndex, 1);
-        state.visibleLayers.delete(deletedIndex);
-        // Re-map visible layer indices above the deleted one
-        var newVisible = new Set();
-        state.visibleLayers.forEach(function(i) {
-          newVisible.add(i > deletedIndex ? i - 1 : i);
-        });
-        state.visibleLayers = newVisible;
-        state.activeLayer = newActiveIndex;
-        renderLayerControls();
-        saveSessionState("whole-sheet-delete-layer");
-      },
-      onMoveLayer: function(fromIndex, toIndex) {
-        var layer = state.layers.splice(fromIndex, 1)[0];
-        state.layers.splice(toIndex, 0, layer);
-        var name = state.layerNames.splice(fromIndex, 1)[0];
-        state.layerNames.splice(toIndex, 0, name);
-        // Re-map visible layer indices for the swap
-        var newVisible = new Set();
-        state.visibleLayers.forEach(function(i) {
-          if (i === fromIndex) { newVisible.add(toIndex); }
-          else if (toIndex < fromIndex && i >= toIndex && i < fromIndex) { newVisible.add(i + 1); }
-          else if (toIndex > fromIndex && i > fromIndex && i <= toIndex) { newVisible.add(i - 1); }
-          else { newVisible.add(i); }
-        });
-        state.visibleLayers = newVisible;
-        state.activeLayer = toIndex;
-        renderLayerControls();
-        saveSessionState("whole-sheet-move-layer");
-      },
       onSave: function() { saveCurrentActionProgress({ reason: "whole-sheet-save", auto_advance: false }); },
       onExport: function() { exportXp(); },
       onUndo: function() { undo(); },
       onRedo: function() { redo(); },
+      onDocumentStateChange: function(snapshot, reason) {
+        if (!applyWholeSheetDocumentSnapshot(snapshot)) return;
+        saveSessionState(`whole-sheet-${String(reason || "document")}`);
+      },
       onBrowseList: browseListSessions,
       onBrowseOpen: browseOpenSession,
       onBrowseRename: browseRenameSession,
@@ -6430,6 +6417,48 @@
     if (!wsEditor || typeof wsEditor.panToFrame !== "function") return;
     if (!wsEditor.getState || !wsEditor.getState().mounted) return;
     wsEditor.panToFrame(row, col, state.frameWChars, state.frameHChars);
+  }
+
+  function getWholeSheetDocumentSnapshot() {
+    const wsEditor = window.__wholeSheetEditor;
+    if (!wsEditor || typeof wsEditor.getDocumentSnapshot !== "function") return null;
+    if (!wsEditor.getState || !wsEditor.getState().mounted) return null;
+    try {
+      return wsEditor.getDocumentSnapshot();
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function applyWholeSheetDocumentSnapshot(snapshot) {
+    if (!snapshot || !Array.isArray(snapshot.layers) || !snapshot.layers.length) return false;
+    state.layers = snapshot.layers.map((layer) => deepCloneCells(layer));
+    state.layerNames = Array.isArray(snapshot.layerNames) && snapshot.layerNames.length
+      ? [...snapshot.layerNames]
+      : state.layers.map((_, i) => DEFAULT_LAYER_NAMES[i] || `Layer ${i}`);
+    state.activeLayer = Math.max(0, Math.min(state.layers.length - 1, Number(snapshot.activeLayer || 0)));
+    state.visibleLayers = new Set((snapshot.visibleLayers || []).map((value) => Number(value)).filter((value) => Number.isFinite(value)));
+    state.lockedLayers = new Set((snapshot.lockedLayers || []).map((value) => Number(value)).filter((value) => Number.isFinite(value)));
+    state.gridCols = Math.max(1, Number(snapshot.gridCols || state.gridCols || 1));
+    state.gridRows = Math.max(1, Number(snapshot.gridRows || state.gridRows || 1));
+    if (Number(snapshot.frameW) > 0) state.cellWChars = Number(snapshot.frameW);
+    if (Number(snapshot.frameH) > 0) state.cellHChars = Number(snapshot.frameH);
+    state.wholeSheetCanvasZoom = Number.isFinite(Number(snapshot.canvasZoom)) ? Number(snapshot.canvasZoom) : state.wholeSheetCanvasZoom;
+    state.wholeSheetGridVisible = !!snapshot.gridVisible;
+    state.wholeSheetGridStep = String(snapshot.gridStep || state.wholeSheetGridStep || "frame");
+    state.cells = state.layers[2] ? deepCloneCells(state.layers[2]) : buildBlankLayerCells();
+    recomputeFrameGeometry();
+    renderLayerControls();
+    renderFrameGrid();
+    renderLegacyGrid();
+    renderMeta();
+    renderJitterInfo();
+    renderSession();
+    const row = state.selectedRow === null ? 0 : state.selectedRow;
+    renderPreviewFrame(Math.max(0, Math.min(state.angles - 1, row)), 0);
+    updateClassicGeometryControls();
+    updateSessionDirtyBadge();
+    return true;
   }
 
   function syncWholeSheetFromState() {

@@ -11,6 +11,73 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Audit — UQ-002 Section-1 Root-Editor Progress Slice (2026-04-26)
+
+This is a product/code checkpoint entry. It is **not** a Section 1 closure
+claim and it is **not** `UQ-003` proof.
+
+### What changed
+
+1. `web/whole-sheet-init.js` now carries additional Section 1 editor behavior
+   inside the root editor surface:
+   - oval and text tools are wired into the shipped whole-sheet tool column
+   - `g` / `f` / `b` apply toggles and `Shift-g` / `Shift-f` / `Shift-b` solo
+     behavior now exist in the root keymap with the no-all-off guard
+   - layer keyboard control now includes `1-9`, `Ctrl-1-9`, `Shift-1-9`,
+     `Ctrl-l`, `Ctrl-Shift-m`, and wheel-based active-layer cycling
+   - `Ctrl-g`, `<`, `>`, and `Ctrl-PgUp` / `Ctrl-PgDn` now drive root grid/zoom
+     state
+   - pointer-based canvas tracking/paste interception is now wired on the
+     whole-sheet surface and the renderer canvas now binds Pointer Events as its
+     primary input path when the browser exposes them
+   - the root surface now has a shipped `Resize` action (`Ctrl-r`) that applies
+     one document transaction across all layers while preserving top-left
+     content
+2. The whole-sheet editor now exposes a root document snapshot and the wrapper
+   save path consumes that snapshot for:
+   - layer names
+   - active layer
+   - visible layers
+   - locked layers
+   - whole-sheet zoom/grid session state
+3. Session persistence now round-trips the new whole-sheet metadata through
+   `src/pipeline_v2/service.py`.
+
+### Verification evidence
+
+- `python3 -m pytest tests/test_workbench_flow.py -k save_session_persists_explicit_geometry -q`
+  - PASS
+- `node --experimental-vm-modules -e "<vm SourceTextModule parse for web/whole-sheet-init.js and web/rexpaint-editor/canvas.js>"`
+  - PASS
+- `node --experimental-vm-modules -e "<vm module runner for tests/web/rexpaint-editor-canvas.test.js>"`
+  - PASS (`14 passed, 0 failed`)
+
+### Residuals still blocking honest `UQ-002` closure
+
+1. **Root-owner law is improved but not closed.**
+   - `web/workbench.js` still owns the live undo/redo journal and still keeps a
+     compatibility mirror of layer/grid state for wrapper rendering.
+   - The new snapshot flow reduces split-authority persistence drift, but it
+     does not yet satisfy the stricter Section 1.8 requirement that history and
+     document ownership live entirely in `whole-sheet-init.js`.
+2. **Resize is still topology-constrained.**
+   - The new root resize path currently requires the requested dimensions to
+     preserve the existing frame-topology divisibility (`frameCols` x
+     `frameRows`) so that current wrapper/session geometry can still save.
+   - This is useful progress but it is not the full canon contract where
+     Section 1 resize may proceed independently and Section 2 only warns.
+3. **UI-only Section 1 proof has not been rerun yet.**
+   - No headed root-hosted or prefixed `/xpedit` acceptance proof is recorded
+     from this slice.
+
+### Consequence
+
+`UQ-002` remains open after this checkpoint. The next truthful work is:
+
+1. finish the remaining root-owner/history cut
+2. remove the remaining resize/session-authority restriction
+3. then run honest `UQ-003` headed UI proof
+
 ## Audit — Section-1 Boundary Correction And Semantic Runtime Contract Coverage (2026-04-26)
 
 This is an audit plus verifier-contract slice. It is not a generalized-bundle

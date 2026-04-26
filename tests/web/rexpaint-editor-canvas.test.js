@@ -257,6 +257,43 @@ runner.describe('Canvas Module', () => {
     expect(listeners.get('mouseleave').length).toBe(0);
   });
 
+  runner.it('should prefer pointer event handlers when PointerEvent is available', () => {
+    const originalPointerEvent = global.PointerEvent;
+    global.PointerEvent = class {};
+
+    const listeners = new Map([
+      ['pointerdown', []],
+      ['pointermove', []],
+      ['pointerup', []],
+      ['pointerleave', []],
+      ['pointercancel', []],
+    ]);
+    const canvasElement = document.createElement('canvas');
+    canvasElement.style = {};
+    canvasElement.addEventListener = function(event, handler) {
+      if (!listeners.has(event)) listeners.set(event, []);
+      listeners.get(event).push(handler);
+    };
+    canvasElement.removeEventListener = function(event, handler) {
+      if (!listeners.has(event)) return;
+      const arr = listeners.get(event);
+      const idx = arr.indexOf(handler);
+      if (idx > -1) arr.splice(idx, 1);
+    };
+
+    const canvas = new Canvas(canvasElement, 8, 8);
+    expect(listeners.get('pointerdown').length).toBe(1);
+    expect(listeners.get('pointermove').length).toBe(1);
+    expect(listeners.get('pointerup').length).toBe(1);
+    expect(listeners.get('pointerleave').length).toBe(1);
+    expect(listeners.get('pointercancel').length).toBe(1);
+    expect(canvasElement.style.touchAction).toBe('none');
+    canvas.dispose();
+
+    if (typeof originalPointerEvent === 'undefined') delete global.PointerEvent;
+    else global.PointerEvent = originalPointerEvent;
+  });
+
   runner.it('should change font size and update canvas dimensions', () => {
     const canvas = new Canvas(document.createElement('canvas'), 80, 25);
     expect(canvas.cellSizePixels).toBe(12); // Default

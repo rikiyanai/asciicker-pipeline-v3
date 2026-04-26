@@ -353,6 +353,13 @@ def test_save_session_persists_explicit_geometry(client):
             "cell_h": 8,
             "angles": 4,
             "anims": [3],
+            "layer_names": ["Metadata", "Ink", "Visual", "FX"],
+            "active_layer": 1,
+            "visible_layers": [0, 1, 3],
+            "locked_layers": [0, 3],
+            "whole_sheet_canvas_zoom": 1.5,
+            "whole_sheet_grid_visible": True,
+            "whole_sheet_grid_step": "4",
             "source_projs": 2,
             "projs": 2,
             "cells": _blank_cells(count),
@@ -368,6 +375,13 @@ def test_save_session_persists_explicit_geometry(client):
     assert saved["anims"] == [3]
     assert saved["source_projs"] == 2
     assert saved["projs"] == 2
+    assert saved["layer_names"] == ["Metadata", "Ink", "Visual", "FX"]
+    assert saved["active_layer"] == 1
+    assert saved["visible_layers"] == [0, 1, 3]
+    assert saved["locked_layers"] == [0, 3]
+    assert saved["whole_sheet_canvas_zoom"] == 1.5
+    assert saved["whole_sheet_grid_visible"] is True
+    assert saved["whole_sheet_grid_step"] == "4"
 
     load_resp = client.post(
         "/api/workbench/load-session",
@@ -382,6 +396,13 @@ def test_save_session_persists_explicit_geometry(client):
     assert loaded["cell_h"] == 8
     assert loaded["angles"] == 4
     assert loaded["anims"] == [3]
+    assert loaded["layer_names"] == ["Metadata", "Ink", "Visual", "FX"]
+    assert loaded["active_layer"] == 1
+    assert loaded["visible_layers"] == [0, 1, 3]
+    assert loaded["locked_layers"] == [0, 3]
+    assert loaded["whole_sheet_canvas_zoom"] == 1.5
+    assert loaded["whole_sheet_grid_visible"] is True
+    assert loaded["whole_sheet_grid_step"] == "4"
 
 
 def test_run_pipeline_honors_explicit_target_geometry(client):

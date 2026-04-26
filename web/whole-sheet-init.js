@@ -15,9 +15,11 @@ import { LayerStack } from './rexpaint-editor/layer-stack.js';
 import { CP437Font } from './rexpaint-editor/cp437-font.js';
 import { CellTool } from './rexpaint-editor/tools/cell-tool.js';
 import { LineTool } from './rexpaint-editor/tools/line-tool.js';
+import { OvalTool } from './rexpaint-editor/tools/oval-tool.js';
 import { RectTool } from './rexpaint-editor/tools/rect-tool.js';
 import { FillTool } from './rexpaint-editor/tools/fill-tool.js';
 import { SelectTool } from './rexpaint-editor/tools/select-tool.js';
+import { TextTool } from './rexpaint-editor/tools/text-tool.js';
 import {
   captureVisibleSelectionClipboard,
   countClipboardCells,
@@ -155,6 +157,31 @@ class FillToolAdapter {
   endDrag() {}
 }
 
+class OvalToolAdapter {
+  constructor() { this._tool = new OvalTool(); this._tool.setMode('outline'); }
+  setCanvas(c) { this._tool.setCanvas(c); }
+  setGlyph(code) { this._tool.setGlyph(code); }
+  setColors(fg, bg) { this._tool.setColors(fg, bg); }
+  setApplyModes(modes) { this._tool.setApplyModes(modes); }
+  setMode(mode) { this._tool.setMode(mode); }
+  startDrag(x, y) { this._tool.startDrag(x, y); }
+  drag(x, y) { this._tool.drag(x, y); }
+  endDrag() { this._tool.endDrag(); }
+  cancelDrag() { this._tool.isDrawing = false; }
+}
+
+class TextToolAdapter {
+  constructor() { this._tool = new TextTool(); }
+  setCanvas(c) { this._tool.setCanvas(c); }
+  setColors(fg, bg) { this._tool.setColors(fg, bg); }
+  setApplyModes(modes) { this._tool.setApplyModes(modes); }
+  setText(text) { this._tool.setText(text); }
+  paint(x, y) { this._tool.paint(x, y); }
+  startDrag(x, y) { _startTextEdit(x, y); }
+  drag() {}
+  endDrag() {}
+}
+
 class SelectToolAdapter {
   constructor() { this._tool = new SelectTool(); }
   setCanvas(c) { this._tool.setCanvas(c); }
@@ -170,14 +197,34 @@ class SelectToolAdapter {
 }
 
 function _forEachTool(fn) {
-  for (const t of [editorState.cellTool, editorState.lineTool, editorState.rectTool, editorState.fillTool]) {
+  for (const t of [
+    editorState.cellTool,
+    editorState.lineTool,
+    editorState.rectTool,
+    editorState.ovalTool,
+    editorState.fillTool,
+    editorState.textTool,
+  ]) {
     if (t) fn(t);
   }
 }
 
+function _setToolGlyph(tool, glyph) {
+  if (tool && typeof tool.setGlyph === 'function') tool.setGlyph(glyph);
+}
+
+function _setToolColors(tool, fg, bg) {
+  if (tool && typeof tool.setColors === 'function') tool.setColors(fg, bg);
+}
+
+function _setToolApplyModes(tool, modes) {
+  if (tool && typeof tool.setApplyModes === 'function') tool.setApplyModes(modes);
+}
+
 const FIT_ZOOM = 0;
-const CANVAS_ZOOM_MIN = 0.25;
+const CANVAS_ZOOM_MIN = 0.5;
 const CANVAS_ZOOM_MAX = 6;
+const CANVAS_ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3, 4];
 
 // ── Editor state ──
 
@@ -190,8 +237,10 @@ let editorState = {
   eyedropperTool: null,
   eraseTool: null,
   lineTool: null,
+  ovalTool: null,
   rectTool: null,
   fillTool: null,
+  textTool: null,
   selectTool: null,
   mode: 'paint',
   activeTool: 'cell',
@@ -217,11 +266,13 @@ let editorState = {
   onExport: null,
   onUndo: null,
   onRedo: null,
+  onResize: null,
   onBrowseList: null,
   onBrowseOpen: null,
   onBrowseRename: null,
   onBrowseDuplicate: null,
   onBrowseDelete: null,
+  onDocumentStateChange: null,
   _strokeDirty: false,
   // Clipboard state (W19-W22 parity)
   clipboard: null,       // {bounds: {x, y, w, h}, layers: [{layerIndex, cells: [...]}, ...]}
@@ -232,12 +283,25 @@ let editorState = {
   browseError: '',
   canvasZoom: FIT_ZOOM,
   appliedCanvasZoom: 1,
+  gridVisible: false,
+  gridStep: 'frame',
   viewportResizeObserver: null,
+  layerNames: [],
   // Match-source cell for Replace FG/BG (W29/W30 parity).
   // Set only from explicit sample actions (eyedropper).
   // Contract: lastSampledCell.fg is the match target for Replace FG,
   //           lastSampledCell.bg is the match target for Replace BG.
   lastSampledCell: null,  // {glyph, fg: [r,g,b], bg: [r,g,b]}
+  textEdit: null,         // {anchorX, anchorY, cursorX, cursorY, active, dirty}
+  spacePan: {
+    armed: false,
+    dragging: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    scrollLeft: 0,
+    scrollTop: 0,
+  },
 };
 
 function _normalizeCanvasZoomValue(v) {
@@ -269,6 +333,10 @@ function _resolvedCanvasZoom() {
   editorState.canvasZoom = _normalizeCanvasZoomValue(editorState.canvasZoom);
   if (editorState.canvasZoom > FIT_ZOOM) return editorState.canvasZoom;
   return _fitCanvasZoom();
+}
+
+function _canvasZoomStateValue() {
+  return editorState.canvasZoom > FIT_ZOOM ? editorState.canvasZoom : _resolvedCanvasZoom();
 }
 
 function _applyCanvasZoom({ preserveCenter = false } = {}) {
@@ -303,6 +371,29 @@ function _applyCanvasZoom({ preserveCenter = false } = {}) {
   }
 }
 
+function _stepCanvasZoom(delta) {
+  const current = _canvasZoomStateValue();
+  let next = CANVAS_ZOOM_STEPS[0];
+  if (delta > 0) {
+    next = CANVAS_ZOOM_STEPS.find((value) => value > (current + 0.001)) || CANVAS_ZOOM_STEPS[CANVAS_ZOOM_STEPS.length - 1];
+  } else {
+    const reversed = [...CANVAS_ZOOM_STEPS].reverse();
+    next = reversed.find((value) => value < (current - 0.001)) || CANVAS_ZOOM_STEPS[0];
+  }
+  editorState.canvasZoom = next;
+  _applyCanvasZoom({ preserveCenter: true });
+  _emitDocumentStateChange('zoom');
+}
+
+function _toggleGridVisibility() {
+  const next = !editorState.gridVisible;
+  editorState.gridVisible = next;
+  const gridBtn = document.getElementById('wsGridToggle');
+  if (gridBtn) gridBtn.classList.toggle('ws-toggle-on', next);
+  if (editorState.canvas) editorState.canvas.setGridVisible(next);
+  _emitDocumentStateChange('grid-toggle');
+}
+
 function _disconnectViewportResizeObserver() {
   if (editorState.viewportResizeObserver) {
     editorState.viewportResizeObserver.disconnect();
@@ -323,7 +414,41 @@ function _observeCanvasViewport() {
 
 // ── mount ──
 
-async function mount({ container, gridCols, gridRows, frameW, frameH, layers, layerNames, activeLayer, visibleLayers, currentSessionId, onCellEdited, onStrokeStart, onStrokeComplete, onActiveLayerChanged, onLayerVisibilityChanged, onAddLayer, onDeleteLayer, onMoveLayer, onSave, onExport, onUndo, onRedo, onBrowseList, onBrowseOpen, onBrowseRename, onBrowseDuplicate, onBrowseDelete }) {
+async function mount({
+  container,
+  gridCols,
+  gridRows,
+  frameW,
+  frameH,
+  layers,
+  layerNames,
+  activeLayer,
+  visibleLayers,
+  lockedLayers,
+  currentSessionId,
+  canvasZoom,
+  gridVisible,
+  gridStep,
+  onCellEdited,
+  onStrokeStart,
+  onStrokeComplete,
+  onActiveLayerChanged,
+  onLayerVisibilityChanged,
+  onAddLayer,
+  onDeleteLayer,
+  onMoveLayer,
+  onSave,
+  onExport,
+  onUndo,
+  onRedo,
+  onResize,
+  onBrowseList,
+  onBrowseOpen,
+  onBrowseRename,
+  onBrowseDuplicate,
+  onBrowseDelete,
+  onDocumentStateChange,
+}) {
   if (editorState.mounted) unmount();
 
   editorState.gridCols = gridCols;
@@ -332,6 +457,10 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
   editorState.frameH = frameH || gridRows;
   editorState.containerEl = container;
   editorState.currentSessionId = String(currentSessionId || '').trim();
+  editorState.layerNames = Array.isArray(layerNames) ? [...layerNames] : [];
+  editorState.canvasZoom = _normalizeCanvasZoomValue(canvasZoom);
+  editorState.gridVisible = !!gridVisible;
+  editorState.gridStep = String(gridStep || 'frame') || 'frame';
   editorState.onCellEdited = onCellEdited || null;
   editorState.onStrokeStart = onStrokeStart || null;
   editorState.onStrokeComplete = onStrokeComplete || null;
@@ -344,11 +473,13 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
   editorState.onExport = onExport || null;
   editorState.onUndo = onUndo || null;
   editorState.onRedo = onRedo || null;
+  editorState.onResize = onResize || null;
   editorState.onBrowseList = onBrowseList || null;
   editorState.onBrowseOpen = onBrowseOpen || null;
   editorState.onBrowseRename = onBrowseRename || null;
   editorState.onBrowseDuplicate = onBrowseDuplicate || null;
   editorState.onBrowseDelete = onBrowseDelete || null;
+  editorState.onDocumentStateChange = onDocumentStateChange || null;
 
   // Build DOM — REXPaint-style sidebar + canvas layout
   container.innerHTML = '';
@@ -461,6 +592,11 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
       layerStack.layers[i].setVisible(visibleLayers.has(i));
     }
   }
+  if (lockedLayers && lockedLayers.size > 0) {
+    for (let i = 0; i < layerStack.layers.length; i++) {
+      layerStack.layers[i].setLocked(lockedLayers.has(i));
+    }
+  }
 
   editorState.layerStack = layerStack;
   canvas.setLayerStack(layerStack);
@@ -493,13 +629,15 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
   // Create Line/Rect/Fill tool adapters
   editorState.lineTool = new LineToolAdapter();
   editorState.rectTool = new RectToolAdapter();
+  editorState.ovalTool = new OvalToolAdapter();
   editorState.fillTool = new FillToolAdapter();
+  editorState.textTool = new TextToolAdapter();
   editorState.selectTool = new SelectToolAdapter();
   canvas.setSelectionTool(editorState.selectTool);
-  for (const t of [editorState.lineTool, editorState.rectTool, editorState.fillTool]) {
-    t.setGlyph(editorState.drawGlyph);
-    t.setColors(editorState.drawFg, editorState.drawBg);
-    t.setApplyModes({ glyph: editorState.applyGlyph, foreground: editorState.applyFg, background: editorState.applyBg });
+  for (const t of [editorState.lineTool, editorState.rectTool, editorState.ovalTool, editorState.fillTool, editorState.textTool]) {
+    _setToolGlyph(t, editorState.drawGlyph);
+    _setToolColors(t, editorState.drawFg, editorState.drawBg);
+    _setToolApplyModes(t, { glyph: editorState.applyGlyph, foreground: editorState.applyFg, background: editorState.applyBg });
   }
 
   // Activate default tool
@@ -526,16 +664,19 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
   };
 
   // Stroke-complete detection
-  canvasEl.addEventListener('mouseup', _onStrokeEnd);
+  canvasEl.addEventListener('pointerup', _onStrokeEnd);
+  canvasEl.addEventListener('pointercancel', _onStrokeEnd);
 
   // Mouse tracking (mouseleave handles both stroke-end and hover clear)
-  canvasEl.addEventListener('mousemove', _onCanvasMouseMove);
-  canvasEl.addEventListener('mouseleave', _onCanvasMouseLeave);
+  canvasEl.addEventListener('pointermove', _onCanvasPointerMove);
+  canvasEl.addEventListener('pointerleave', _onCanvasPointerLeave);
+  canvasEl.addEventListener('wheel', _onCanvasWheel, { passive: false });
 
   // Keyboard shortcuts
   document.addEventListener('keydown', _onKeyDown);
+  document.addEventListener('keyup', _onKeyUp);
 
-  // Paste-mode interceptor (capturing phase fires before Canvas's own mousedown)
+  // Paste-mode interceptor (capturing phase fires before Canvas's own pointerdown)
   editorState._pasteInterceptor = (e) => {
     if (!editorState.pasteMode) return;
     e.stopImmediatePropagation();
@@ -548,9 +689,17 @@ async function mount({ container, gridCols, gridRows, frameW, frameH, layers, la
     const cy = Math.floor((e.clientY - rect.top) / pixelsPerCell);
     _pasteAt(cx, cy);
   };
-  canvasEl.addEventListener('mousedown', editorState._pasteInterceptor, true);
+  canvasEl.addEventListener('pointerdown', editorState._pasteInterceptor, true);
 
   editorState.mounted = true;
+  canvas.setGridVisible(editorState.gridVisible);
+  if (typeof canvas.setGridStep === 'function') {
+    if (editorState.gridStep === 'frame') canvas.setGridStep(editorState.frameW, editorState.frameH);
+    else {
+      const step = Math.max(1, Number(editorState.gridStep) || 1);
+      canvas.setGridStep(step, step);
+    }
+  }
   canvas.render();
   _applyCanvasZoom();
   _observeCanvasViewport();
@@ -606,6 +755,13 @@ function _commitLayerMutation() {
   if (editorState.onStrokeComplete) editorState.onStrokeComplete();
   if (editorState.canvas) editorState.canvas.render();
   return true;
+}
+
+function _beginDocumentTransaction() {
+  if (!editorState._strokeDirty && editorState.onStrokeStart) {
+    editorState.onStrokeStart();
+  }
+  editorState._strokeDirty = true;
 }
 
 function _copySelection() {
@@ -968,6 +1124,206 @@ function _findReplace() {
 
 // ── Eyedropper sample ──
 
+function _flattenLayerCells(layer, cols, rows) {
+  const out = [];
+  const safeCols = Math.max(1, Number(cols) || 1);
+  const safeRows = Math.max(1, Number(rows) || 1);
+  for (let y = 0; y < safeRows; y++) {
+    for (let x = 0; x < safeCols; x++) {
+      const idx = y * safeCols + x;
+      const cell = layer?.getCell ? layer.getCell(x, y) : null;
+      out.push({
+        idx,
+        glyph: Number(cell?.glyph || 0),
+        fg: Array.isArray(cell?.fg) ? cell.fg.map(Number) : [255, 255, 255],
+        bg: Array.isArray(cell?.bg) ? cell.bg.map(Number) : [0, 0, 0],
+      });
+    }
+  }
+  return out;
+}
+
+function _buildDocumentSnapshot() {
+  const layerStack = editorState.layerStack;
+  const layers = layerStack?.layers || [];
+  return {
+    gridCols: editorState.gridCols,
+    gridRows: editorState.gridRows,
+    frameW: editorState.frameW,
+    frameH: editorState.frameH,
+    layers: layers.map((layer) => _flattenLayerCells(layer, editorState.gridCols, editorState.gridRows)),
+    layerNames: layers.map((layer, index) => layer?.name || editorState.layerNames[index] || `Layer ${index}`),
+    activeLayer: layerStack ? layerStack.activeIndex : 0,
+    visibleLayers: layers.reduce((acc, layer, index) => {
+      if (layer?.visible !== false) acc.push(index);
+      return acc;
+    }, []),
+    lockedLayers: layers.reduce((acc, layer, index) => {
+      if (layer?.locked) acc.push(index);
+      return acc;
+    }, []),
+    canvasZoom: editorState.canvasZoom,
+    appliedCanvasZoom: editorState.appliedCanvasZoom,
+    gridVisible: !!editorState.gridVisible,
+    gridStep: String(editorState.gridStep || 'frame'),
+  };
+}
+
+function _emitDocumentStateChange(reason) {
+  if (typeof editorState.onDocumentStateChange === 'function') {
+    editorState.onDocumentStateChange(_buildDocumentSnapshot(), String(reason || 'document-change'));
+  }
+}
+
+function _updateApplyToggleButtons() {
+  const glyphBtn = document.getElementById('wsApplyGlyph');
+  if (glyphBtn) glyphBtn.classList.toggle('ws-toggle-on', editorState.applyGlyph);
+  const fgBtn = document.getElementById('wsApplyFg');
+  if (fgBtn) fgBtn.classList.toggle('ws-toggle-on', editorState.applyFg);
+  const bgBtn = document.getElementById('wsApplyBg');
+  if (bgBtn) bgBtn.classList.toggle('ws-toggle-on', editorState.applyBg);
+}
+
+function _setApplyChannel(channel, on) {
+  const key = channel === 'glyph'
+    ? 'applyGlyph'
+    : (channel === 'foreground' ? 'applyFg' : 'applyBg');
+  const current = !!editorState[key];
+  const next = !!on;
+  if (current === next) return true;
+
+  const activeCount = [editorState.applyGlyph, editorState.applyFg, editorState.applyBg].filter(Boolean).length;
+  if (!next && current && activeCount <= 1) return false;
+
+  editorState[key] = next;
+  if (channel === 'glyph') _forEachTool((t) => _setToolApplyModes(t, { glyph: next }));
+  else if (channel === 'foreground') _forEachTool((t) => _setToolApplyModes(t, { foreground: next }));
+  else _forEachTool((t) => _setToolApplyModes(t, { background: next }));
+  _updateApplyToggleButtons();
+  _updateInfoApplyModes();
+  return true;
+}
+
+function _toggleApplyChannel(channel) {
+  const key = channel === 'glyph'
+    ? 'applyGlyph'
+    : (channel === 'foreground' ? 'applyFg' : 'applyBg');
+  return _setApplyChannel(channel, !editorState[key]);
+}
+
+function _soloApplyChannel(channel) {
+  const desired = {
+    glyph: channel === 'glyph',
+    foreground: channel === 'foreground',
+    background: channel === 'background',
+  };
+  const alreadySolo = editorState.applyGlyph === desired.glyph
+    && editorState.applyFg === desired.foreground
+    && editorState.applyBg === desired.background;
+  const next = alreadySolo
+    ? { glyph: true, foreground: true, background: true }
+    : desired;
+  _setApplyChannel('glyph', next.glyph);
+  _setApplyChannel('foreground', next.foreground);
+  _setApplyChannel('background', next.background);
+}
+
+function _cancelShapeDrag() {
+  const tool = editorState.activeTool === 'line'
+    ? editorState.lineTool
+    : (editorState.activeTool === 'rect'
+      ? editorState.rectTool
+      : (editorState.activeTool === 'oval' ? editorState.ovalTool : null));
+  if (tool && typeof tool.cancelDrag === 'function') {
+    tool.cancelDrag();
+  }
+}
+
+function _startTextEdit(x, y) {
+  if (!editorState.canvas || !editorState.layerStack) return;
+  const activeLayer = editorState.layerStack.getActiveLayer();
+  if (!activeLayer || activeLayer.locked) return;
+  editorState.textEdit = {
+    active: true,
+    dirty: false,
+    anchorX: x,
+    anchorY: y,
+    cursorX: x,
+    cursorY: y,
+    positions: [],
+  };
+}
+
+function _commitTextEdit() {
+  const session = editorState.textEdit;
+  editorState.textEdit = null;
+  if (!session?.dirty) return false;
+  return _commitLayerMutation();
+}
+
+function _cancelTextEdit() {
+  editorState.textEdit = null;
+  if (!editorState._strokeDirty) return false;
+  editorState._strokeDirty = false;
+  return true;
+}
+
+function _applyTextCharacter(ch) {
+  const session = editorState.textEdit;
+  const tool = editorState.textTool;
+  if (!session?.active || !tool || !editorState.canvas) return false;
+  const { cursorX, cursorY } = session;
+  if (cursorX < 0 || cursorY < 0 || cursorX >= editorState.canvas.width || cursorY >= editorState.canvas.height) return false;
+  tool.setText(String(ch).slice(0, 1));
+  tool.paint(cursorX, cursorY);
+  session.dirty = true;
+  session.positions.push({ x: cursorX, y: cursorY });
+  session.cursorX += 1;
+  return true;
+}
+
+function _applyTextEnter() {
+  const session = editorState.textEdit;
+  if (!session?.active || !editorState.canvas) return false;
+  session.cursorX = session.anchorX;
+  session.cursorY = Math.min(editorState.canvas.height - 1, session.cursorY + 1);
+  return true;
+}
+
+function _applyTextBackspace() {
+  const session = editorState.textEdit;
+  if (!session?.active || !editorState.canvas) return false;
+  const last = session.positions.pop();
+  if (!last) return true;
+  session.cursorX = last.x;
+  session.cursorY = last.y;
+  editorState.canvas.setCell(last.x, last.y, 0, [255, 255, 255], [0, 0, 0]);
+  session.dirty = true;
+  return true;
+}
+
+function _handleTextKey(e) {
+  if (editorState.activeTool !== 'text' || !editorState.textEdit?.active) return false;
+  if (e.key === 'Escape') {
+    _commitTextEdit();
+    _switchTool('text');
+    return true;
+  }
+  if (e.key === 'Backspace') {
+    _applyTextBackspace();
+    return true;
+  }
+  if (e.key === 'Enter') {
+    _applyTextEnter();
+    return true;
+  }
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+    _applyTextCharacter(e.key);
+    return true;
+  }
+  return false;
+}
+
 function _applyEyedropperSample(glyph, fg, bg) {
   editorState.drawGlyph = glyph & 0xFF;
   editorState.drawFg = [...fg];
@@ -975,7 +1331,10 @@ function _applyEyedropperSample(glyph, fg, bg) {
   // W29/W30 match-source contract: eyedropper is the explicit sample action.
   editorState.lastSampledCell = { glyph: glyph & 0xFF, fg: [...fg], bg: [...bg] };
 
-  _forEachTool(t => { t.setGlyph(editorState.drawGlyph); t.setColors(editorState.drawFg, editorState.drawBg); });
+  _forEachTool((t) => {
+    _setToolGlyph(t, editorState.drawGlyph);
+    _setToolColors(t, editorState.drawFg, editorState.drawBg);
+  });
 
   const glyphEl = document.getElementById('wsGlyphCode');
   if (glyphEl) glyphEl.value = String(editorState.drawGlyph);
@@ -996,6 +1355,9 @@ function _applyEyedropperSample(glyph, fg, bg) {
 function _switchTool(name) {
   if (!editorState.mounted || !editorState.canvas) return;
   _cancelPasteMode();
+  if (editorState.activeTool === 'text' && name !== 'text') {
+    _commitTextEdit();
+  }
   // Deactivate select tool when switching away (clears stale selection)
   if (editorState.activeTool === 'select' && name !== 'select' && editorState.selectTool) {
     editorState.selectTool.deactivate();
@@ -1023,9 +1385,17 @@ function _switchTool(name) {
       editorState.canvas.toolActivated(editorState.rectTool);
       if (canvasEl) canvasEl.style.cursor = 'crosshair';
       break;
+    case 'oval':
+      editorState.canvas.toolActivated(editorState.ovalTool);
+      if (canvasEl) canvasEl.style.cursor = 'crosshair';
+      break;
     case 'fill':
       editorState.canvas.toolActivated(editorState.fillTool);
       if (canvasEl) canvasEl.style.cursor = 'crosshair';
+      break;
+    case 'text':
+      editorState.canvas.toolActivated(editorState.textTool);
+      if (canvasEl) canvasEl.style.cursor = 'text';
       break;
     case 'select':
       editorState.canvas.toolActivated(editorState.selectTool);
@@ -1038,11 +1408,21 @@ function _switchTool(name) {
 }
 
 function _updateToolUI() {
-  const names = { cell: 'Cell', eyedropper: 'Eyedropper', erase: 'Erase', line: 'Line', rect: 'Rect', fill: 'Fill', select: 'Select' };
+  const names = {
+    cell: 'Cell',
+    eyedropper: 'Eyedropper',
+    erase: 'Erase',
+    line: 'Line',
+    rect: 'Rect',
+    oval: 'Oval',
+    fill: 'Fill',
+    text: 'Text',
+    select: 'Select',
+  };
   const toolEl = document.getElementById('wsActiveTool');
   if (toolEl) toolEl.textContent = names[editorState.activeTool] || editorState.activeTool;
 
-  for (const id of ['wsToolCell', 'wsToolEyedropper', 'wsToolErase', 'wsToolLine', 'wsToolRect', 'wsToolFill', 'wsToolSelect']) {
+  for (const id of ['wsToolCell', 'wsToolEyedropper', 'wsToolErase', 'wsToolLine', 'wsToolRect', 'wsToolOval', 'wsToolFill', 'wsToolText', 'wsToolSelect']) {
     const btn = document.getElementById(id);
     if (!btn) continue;
     const toolName = id.replace('wsTool', '').toLowerCase();
@@ -1059,6 +1439,9 @@ function _onKeyDown(e) {
     e.preventDefault();
     e.stopPropagation();
     return;
+  }
+  if (e.key === ' ') {
+    editorState.spacePan.armed = true;
   }
   const tag = e.target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -1084,8 +1467,32 @@ function _onKeyDown(e) {
     return;
   }
 
+  if (_handleTextKey(e)) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
   // Ctrl/Cmd+key shortcuts before tool shortcuts
   if (e.ctrlKey || e.metaKey) {
+    if (e.shiftKey && e.key.toLowerCase() === 's') {
+      if (editorState.onExport) editorState.onExport();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (e.shiftKey && e.key.toLowerCase() === 'm') {
+      _mergeActiveLayerDown();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (/^[1-9]$/.test(e.key)) {
+      _toggleLayerVisibility(Number(e.key) - 1);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     switch (e.key.toLowerCase()) {
       case 'z':
         if (editorState.onUndo) editorState.onUndo();
@@ -1124,8 +1531,47 @@ function _onKeyDown(e) {
         e.preventDefault();
         e.stopPropagation();
         return;
+      case 's':
+        if (editorState.onSave) editorState.onSave();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      case 'r':
+        void _promptResizeDocument();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      case 'g':
+        _toggleGridVisibility();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      case 'l':
+        _addLayer();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+    }
+    if (e.key === 'PageUp') {
+      _stepCanvasZoom(1);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (e.key === 'PageDown') {
+      _stepCanvasZoom(-1);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
     }
     // Let other Ctrl/Cmd combos pass through
+    return;
+  }
+
+  if (e.shiftKey && /^[1-9]$/.test(e.key)) {
+    _toggleLayerLock(Number(e.key) - 1);
+    e.preventDefault();
+    e.stopPropagation();
     return;
   }
 
@@ -1133,6 +1579,12 @@ function _onKeyDown(e) {
   if (e.key === 'Escape') {
     if (editorState.pasteMode) {
       _cancelPasteMode();
+      e.preventDefault();
+      return;
+    }
+    _cancelShapeDrag();
+    if (_cancelTextEdit()) {
+      editorState.canvas?.render();
       e.preventDefault();
       return;
     }
@@ -1157,8 +1609,46 @@ function _onKeyDown(e) {
     return;
   }
 
+  if (e.shiftKey && (e.key === 'G' || e.key === 'F' || e.key === 'B')) {
+    if (e.key === 'G') _soloApplyChannel('glyph');
+    else if (e.key === 'F') _soloApplyChannel('foreground');
+    else _soloApplyChannel('background');
+    e.preventDefault();
+    return;
+  }
+
+  if (e.key === '<') {
+    _stepCanvasZoom(-1);
+    e.preventDefault();
+    return;
+  }
+  if (e.key === '>') {
+    _stepCanvasZoom(1);
+    e.preventDefault();
+    return;
+  }
+
+  if (/^[1-9]$/.test(e.key)) {
+    _switchActiveLayer(Number(e.key) - 1);
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
   // Plain key tool shortcuts — only fire without modifiers
   switch (e.key.toLowerCase()) {
+    case 'g':
+      _toggleApplyChannel('glyph');
+      e.preventDefault();
+      break;
+    case 'f':
+      _toggleApplyChannel('foreground');
+      e.preventDefault();
+      break;
+    case 'b':
+      _toggleApplyChannel('background');
+      e.preventDefault();
+      break;
     case 'c':
       _switchTool('cell');
       e.preventDefault();
@@ -1179,8 +1669,16 @@ function _onKeyDown(e) {
       _switchTool('rect');
       e.preventDefault();
       break;
+    case 'o':
+      _switchTool('oval');
+      e.preventDefault();
+      break;
     case 'i':
       _switchTool('fill');
+      e.preventDefault();
+      break;
+    case 't':
+      _switchTool('text');
       e.preventDefault();
       break;
     case 's':
@@ -1190,12 +1688,20 @@ function _onKeyDown(e) {
   }
 }
 
+function _onKeyUp(e) {
+  if (e.key === ' ') {
+    editorState.spacePan.armed = false;
+    editorState.spacePan.dragging = false;
+    editorState.spacePan.pointerId = null;
+  }
+}
+
 // ── Glyph picker ──
 
 function _setDrawGlyph(code) {
   code = Math.max(0, Math.min(255, code));
   editorState.drawGlyph = code;
-  _forEachTool(t => t.setGlyph(code));
+  _forEachTool((t) => _setToolGlyph(t, code));
 
   const glyphEl = document.getElementById('wsGlyphCode');
   if (glyphEl) glyphEl.value = String(code);
@@ -1455,7 +1961,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   fgInput.title = 'Foreground color';
   fgInput.addEventListener('input', () => {
     editorState.drawFg = _hexToRgb(fgInput.value);
-    _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
+    _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
     _renderGlyphPicker();
     _renderPaletteGrid();
     _updateInfoDrawState();
@@ -1471,7 +1977,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   bgInput.title = 'Background color';
   bgInput.addEventListener('input', () => {
     editorState.drawBg = _hexToRgb(bgInput.value);
-    _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
+    _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
     _renderGlyphPicker();
     _renderPaletteGrid();
     _updateInfoDrawState();
@@ -1514,7 +2020,8 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   redoBtn.addEventListener('click', () => { if (editorState.onRedo) editorState.onRedo(); });
   toolsCol.appendChild(redoBtn);
 
-  toolsCol.appendChild(_buildToggle('Grid', 'wsGridToggle', false, (on) => {
+  toolsCol.appendChild(_buildToggle('Grid', 'wsGridToggle', editorState.gridVisible, (on) => {
+    editorState.gridVisible = !!on;
     if (editorState.canvas) {
       // Apply current step selection before showing
       if (on) {
@@ -1525,6 +2032,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
       }
       editorState.canvas.setGridVisible(on);
     }
+    _emitDocumentStateChange('grid-toggle');
   }));
 
   const gridStepSel = document.createElement('select');
@@ -1541,8 +2049,9 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
     opt.textContent = `${v}\u00d7${v}`;
     gridStepSel.appendChild(opt);
   }
-  gridStepSel.value = 'frame';
+  gridStepSel.value = editorState.gridStep;
   gridStepSel.addEventListener('change', () => {
+    editorState.gridStep = gridStepSel.value;
     if (editorState.canvas && typeof editorState.canvas.setGridStep === 'function') {
       if (gridStepSel.value === 'frame') {
         editorState.canvas.setGridStep(editorState.frameW, editorState.frameH);
@@ -1551,6 +2060,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
         editorState.canvas.setGridStep(v, v);
       }
     }
+    _emitDocumentStateChange('grid-step');
   });
   toolsCol.appendChild(gridStepSel);
 
@@ -1563,19 +2073,13 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   applyCol.appendChild(applyLabel);
 
   applyCol.appendChild(_buildToggle('G', 'wsApplyGlyph', editorState.applyGlyph, (on) => {
-    editorState.applyGlyph = on;
-    _forEachTool(t => t.setApplyModes({ glyph: on }));
-    _updateInfoApplyModes();
+    _setApplyChannel('glyph', on);
   }));
   applyCol.appendChild(_buildToggle('F', 'wsApplyFg', editorState.applyFg, (on) => {
-    editorState.applyFg = on;
-    _forEachTool(t => t.setApplyModes({ foreground: on }));
-    _updateInfoApplyModes();
+    _setApplyChannel('foreground', on);
   }));
   applyCol.appendChild(_buildToggle('B', 'wsApplyBg', editorState.applyBg, (on) => {
-    editorState.applyBg = on;
-    _forEachTool(t => t.setApplyModes({ background: on }));
-    _updateInfoApplyModes();
+    _setApplyChannel('background', on);
   }));
 
   taCols.appendChild(toolsCol);
@@ -1596,7 +2100,13 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   imageLabel.className = 'ws-ta-label';
   imageLabel.textContent = 'Image';
   imageCol.appendChild(imageLabel);
-  imageCol.appendChild(_placeholder('New'));
+  const resizeBtn = document.createElement('button');
+  resizeBtn.id = 'wsResizeBtn';
+  resizeBtn.className = 'ws-tool-btn';
+  resizeBtn.textContent = 'Resize';
+  resizeBtn.title = 'Resize image (Ctrl+R)';
+  resizeBtn.addEventListener('click', () => { void _promptResizeDocument(); });
+  imageCol.appendChild(resizeBtn);
 
   const saveBtn = document.createElement('button');
   saveBtn.id = 'wsSaveBtn';
@@ -1662,6 +2172,14 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   toolRectBtn.addEventListener('click', () => _switchTool('rect'));
   drawCol.appendChild(toolRectBtn);
 
+  const toolOvalBtn = document.createElement('button');
+  toolOvalBtn.id = 'wsToolOval';
+  toolOvalBtn.textContent = 'Oval';
+  toolOvalBtn.className = 'ws-tool-btn';
+  toolOvalBtn.title = 'Oval tool (O)';
+  toolOvalBtn.addEventListener('click', () => _switchTool('oval'));
+  drawCol.appendChild(toolOvalBtn);
+
   const toolFillBtn = document.createElement('button');
   toolFillBtn.id = 'wsToolFill';
   toolFillBtn.textContent = 'Fill';
@@ -1677,6 +2195,14 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   toolSelectBtn.title = 'Selection tool (S)';
   toolSelectBtn.addEventListener('click', () => _switchTool('select'));
   drawCol.appendChild(toolSelectBtn);
+
+  const toolTextBtn = document.createElement('button');
+  toolTextBtn.id = 'wsToolText';
+  toolTextBtn.textContent = 'Text';
+  toolTextBtn.className = 'ws-tool-btn';
+  toolTextBtn.title = 'Text tool (T)';
+  toolTextBtn.addEventListener('click', () => _switchTool('text'));
+  drawCol.appendChild(toolTextBtn);
 
   const clipboardGroup = document.createElement('div');
   clipboardGroup.className = 'ws-tool-group';
@@ -2232,7 +2758,7 @@ function _applyModeUI() {
     scrollWrap.classList.toggle('ws-browse-preview', mode === 'browse');
   }
   if (mode === 'browse') {
-    _onCanvasMouseLeave();
+    _onCanvasPointerLeave();
   } else {
     _switchTool(editorState.activeTool);
   }
@@ -2262,8 +2788,9 @@ function _buildToggle(label, id, initial, onChange) {
   btn.title = `Toggle ${label}`;
   btn.addEventListener('click', () => {
     const on = !btn.classList.contains('ws-toggle-on');
+    const accepted = onChange(on);
+    if (accepted === false) return;
     btn.classList.toggle('ws-toggle-on', on);
-    onChange(on);
   });
   return btn;
 }
@@ -2371,10 +2898,12 @@ function _switchActiveLayer(index) {
 
   editorState.layerStack.selectLayer(index);
   _updateLayersPanelUI();
-
-  if (editorState.onActiveLayerChanged) {
-    editorState.onActiveLayerChanged(index);
+  if (editorState.canvas) {
+    editorState.canvas._fullRenderNeeded = true;
+    editorState.canvas.render();
   }
+  if (editorState.onActiveLayerChanged) editorState.onActiveLayerChanged(index);
+  _emitDocumentStateChange('active-layer');
 }
 
 function _toggleLayerVisibility(index) {
@@ -2383,61 +2912,184 @@ function _toggleLayerVisibility(index) {
   if (!layer) return;
 
   const newVisible = !layer.visible;
+  _beginDocumentTransaction();
   layer.setVisible(newVisible);
   _updateLayersPanelUI();
 
   if (editorState.canvas) { editorState.canvas._fullRenderNeeded = true; editorState.canvas.render(); }
+  _commitLayerMutation();
 
   if (editorState.onLayerVisibilityChanged) {
     editorState.onLayerVisibilityChanged(index, newVisible);
   }
+  _emitDocumentStateChange('layer-visibility');
 }
 
 function _toggleLayerLock(index) {
   if (!editorState.layerStack) return;
   const layer = editorState.layerStack.layers[index];
   if (!layer) return;
+  _beginDocumentTransaction();
   layer.setLocked(!layer.locked);
   _updateLayersPanelUI();
+  _commitLayerMutation();
+  _emitDocumentStateChange('layer-lock');
 }
 
 function _addLayer() {
   if (!editorState.layerStack) return;
   const newIndex = editorState.layerStack.layers.length;
+  _beginDocumentTransaction();
   editorState.layerStack.addLayer(`Layer ${newIndex}`);
   editorState.layerStack.selectLayer(newIndex);
   _updateLayersPanelUI();
   if (editorState.canvas) { editorState.canvas._fullRenderNeeded = true; editorState.canvas.render(); }
+  _commitLayerMutation();
   if (editorState.onAddLayer) editorState.onAddLayer(newIndex);
+  _emitDocumentStateChange('layer-add');
 }
 
 function _deleteActiveLayer() {
   if (!editorState.layerStack) return;
   if (editorState.layerStack.layers.length <= 1) return;
   const deletedIndex = editorState.layerStack.activeIndex;
+  _beginDocumentTransaction();
   editorState.layerStack.removeLayer(deletedIndex);
   const newActive = editorState.layerStack.activeIndex;
   _updateLayersPanelUI();
   if (editorState.canvas) { editorState.canvas._fullRenderNeeded = true; editorState.canvas.render(); }
+  _commitLayerMutation();
   if (editorState.onDeleteLayer) editorState.onDeleteLayer(deletedIndex, newActive);
+  _emitDocumentStateChange('layer-delete');
 }
 
 function _moveLayerUp(index) {
   if (!editorState.layerStack) return;
   if (index <= 0) return;
+  _beginDocumentTransaction();
   editorState.layerStack.moveLayer(index, index - 1);
   _updateLayersPanelUI();
   if (editorState.canvas) { editorState.canvas._fullRenderNeeded = true; editorState.canvas.render(); }
+  _commitLayerMutation();
   if (editorState.onMoveLayer) editorState.onMoveLayer(index, index - 1);
+  _emitDocumentStateChange('layer-move');
 }
 
 function _moveLayerDown(index) {
   if (!editorState.layerStack) return;
   if (index >= editorState.layerStack.layers.length - 1) return;
+  _beginDocumentTransaction();
   editorState.layerStack.moveLayer(index, index + 1);
   _updateLayersPanelUI();
   if (editorState.canvas) { editorState.canvas._fullRenderNeeded = true; editorState.canvas.render(); }
+  _commitLayerMutation();
   if (editorState.onMoveLayer) editorState.onMoveLayer(index, index + 1);
+  _emitDocumentStateChange('layer-move');
+}
+
+function _mergeActiveLayerDown() {
+  if (!editorState.layerStack || editorState.layerStack.layers.length <= 1) return false;
+  const sourceIndex = editorState.layerStack.activeIndex;
+  const targetIndex = sourceIndex + 1;
+  if (targetIndex >= editorState.layerStack.layers.length) return false;
+  const source = editorState.layerStack.layers[sourceIndex];
+  const target = editorState.layerStack.layers[targetIndex];
+  if (!source || !target || source.locked || target.locked) return false;
+
+  if (!editorState._strokeDirty && editorState.onStrokeStart) editorState.onStrokeStart();
+  for (let y = 0; y < editorState.gridRows; y++) {
+    for (let x = 0; x < editorState.gridCols; x++) {
+      const srcCell = source.getCell(x, y);
+      if (!srcCell || Number(srcCell.glyph || 0) === 0) continue;
+      target.setCell(x, y, srcCell.glyph, srcCell.fg, srcCell.bg);
+    }
+  }
+  editorState._strokeDirty = true;
+  editorState.layerStack.removeLayer(sourceIndex);
+  editorState.layerStack.selectLayer(Math.max(0, Math.min(editorState.layerStack.layers.length - 1, sourceIndex)));
+  _updateLayersPanelUI();
+  if (editorState.canvas) {
+    editorState.canvas._fullRenderNeeded = true;
+    editorState.canvas.render();
+  }
+  _commitLayerMutation();
+  _emitDocumentStateChange('layer-merge');
+  return true;
+}
+
+function _resizeLayerStack(nextCols, nextRows) {
+  const layerStack = editorState.layerStack;
+  if (!layerStack) return false;
+  const oldCols = editorState.gridCols;
+  const oldRows = editorState.gridRows;
+  if (nextCols === oldCols && nextRows === oldRows) return false;
+  for (const layer of layerStack.layers) {
+    const nextData = Array.from({ length: nextRows }, (_, y) =>
+      Array.from({ length: nextCols }, (_, x) => {
+        if (x < oldCols && y < oldRows) return layer.getCell(x, y);
+        return { glyph: 0, fg: [255, 255, 255], bg: [0, 0, 0] };
+      })
+    );
+    layer.width = nextCols;
+    layer.height = nextRows;
+    layer.data = nextData;
+  }
+  editorState.gridCols = nextCols;
+  editorState.gridRows = nextRows;
+  if (editorState.canvas && typeof editorState.canvas.resizeGrid === 'function') {
+    editorState.canvas.resizeGrid(nextCols, nextRows);
+    editorState.canvas.setLayerStack(layerStack);
+  }
+  const dimsEl = document.getElementById('wsDims');
+  if (dimsEl) dimsEl.textContent = `${nextCols}\u00d7${nextRows} · ${layerStack.layers.length}L`;
+  const tool = editorState.selectTool;
+  if (tool) {
+    const bounds = tool.getSelectionBounds();
+    if (bounds) {
+      const maxX = nextCols - 1;
+      const maxY = nextRows - 1;
+      if (bounds.x > maxX || bounds.y > maxY) {
+        tool.clearSelection();
+      } else {
+        const endX = Math.min(maxX, bounds.x + bounds.width - 1);
+        const endY = Math.min(maxY, bounds.y + bounds.height - 1);
+        tool.startSelection(bounds.x, bounds.y);
+        tool.updateSelection(endX, endY);
+        tool.endSelection();
+      }
+    }
+  }
+  return true;
+}
+
+async function _promptResizeDocument() {
+  const frameCols = Math.max(1, Math.round(editorState.gridCols / Math.max(1, editorState.frameW)));
+  const frameRows = Math.max(1, Math.round(editorState.gridRows / Math.max(1, editorState.frameH)));
+  const raw = window.prompt('Resize image (cols x rows)', `${editorState.gridCols}x${editorState.gridRows}`);
+  if (raw === null) return false;
+  const match = String(raw).trim().match(/^(\d+)\s*[x, ]\s*(\d+)$/i);
+  if (!match) return false;
+  const nextCols = Math.max(1, Number(match[1]));
+  const nextRows = Math.max(1, Number(match[2]));
+  if ((nextCols % frameCols) !== 0 || (nextRows % frameRows) !== 0) {
+    window.alert(`Resize must preserve the current frame topology (${frameCols} column groups x ${frameRows} row groups).`);
+    return false;
+  }
+  const nextFrameW = Math.max(1, Math.floor(nextCols / frameCols));
+  const nextFrameH = Math.max(1, Math.floor(nextRows / frameRows));
+  if (!editorState._strokeDirty && editorState.onStrokeStart) editorState.onStrokeStart();
+  const changed = _resizeLayerStack(nextCols, nextRows);
+  if (!changed) return false;
+  editorState.frameW = nextFrameW;
+  editorState.frameH = nextFrameH;
+  editorState._strokeDirty = true;
+  _commitLayerMutation();
+  _applyCanvasZoom({ preserveCenter: true });
+  _emitDocumentStateChange('resize');
+  if (typeof editorState.onResize === 'function') {
+    await editorState.onResize(_buildDocumentSnapshot());
+  }
+  return true;
 }
 
 // ── Helpers ──
@@ -2466,7 +3118,7 @@ function _setDrawColor(channel, rgb) {
     const el = document.getElementById('wsBgColor');
     if (el) el.value = _rgbToHex(rgb);
   }
-  _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
+  _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
   _renderGlyphPicker();
   _renderPaletteGrid();
   _updateInfoDrawState();
@@ -2494,8 +3146,8 @@ function _updateInfoApplyModes() {
   if (bEl) bEl.classList.toggle('ws-info-apply-on', editorState.applyBg);
 }
 
-function _onCanvasMouseLeave() {
-  _onStrokeEnd();
+function _onCanvasPointerLeave() {
+  if (editorState.activeTool !== 'text') _onStrokeEnd();
   const posEl = document.getElementById('wsPos');
   if (posEl) posEl.textContent = '-,-';
   const glyphEl = document.getElementById('wsHoverGlyph');
@@ -2565,7 +3217,21 @@ function _onPaletteClick(e, channel) {
   }
 }
 
-function _onCanvasMouseMove(e) {
+function _onCanvasPointerMove(e) {
+  const scrollWrap = document.getElementById('wholeSheetScroll');
+  if (editorState.spacePan.armed && (e.buttons & 1) && scrollWrap) {
+    if (!editorState.spacePan.dragging || editorState.spacePan.pointerId !== e.pointerId) {
+      editorState.spacePan.dragging = true;
+      editorState.spacePan.pointerId = e.pointerId;
+      editorState.spacePan.startX = e.clientX;
+      editorState.spacePan.startY = e.clientY;
+      editorState.spacePan.scrollLeft = scrollWrap.scrollLeft;
+      editorState.spacePan.scrollTop = scrollWrap.scrollTop;
+    }
+    scrollWrap.scrollLeft = editorState.spacePan.scrollLeft - (e.clientX - editorState.spacePan.startX);
+    scrollWrap.scrollTop = editorState.spacePan.scrollTop - (e.clientY - editorState.spacePan.startY);
+    return;
+  }
   const canvasEl = e.currentTarget;
   const rect = canvasEl.getBoundingClientRect();
   const scaleX = canvasEl.width / rect.width;
@@ -2602,21 +3268,35 @@ function _onCanvasMouseMove(e) {
   }
 }
 
+function _onCanvasWheel(e) {
+  if (!editorState.mounted) return;
+  if (e.ctrlKey || e.metaKey) return;
+  if (!editorState.layerStack || !editorState.layerStack.layers.length) return;
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 1 : -1;
+  const nextIndex = Math.max(0, Math.min(editorState.layerStack.layers.length - 1, editorState.layerStack.activeIndex + delta));
+  _switchActiveLayer(nextIndex);
+}
+
 // ── unmount ──
 
 function unmount() {
   document.removeEventListener('keydown', _onKeyDown);
+  document.removeEventListener('keyup', _onKeyUp);
   _disconnectViewportResizeObserver();
 
+  _commitTextEdit();
   _cancelPasteMode();
   if (editorState.canvas) {
     const canvasEl = editorState.canvas.canvasElement;
     if (canvasEl) {
-      canvasEl.removeEventListener('mousemove', _onCanvasMouseMove);
-      canvasEl.removeEventListener('mouseleave', _onCanvasMouseLeave);
-      canvasEl.removeEventListener('mouseup', _onStrokeEnd);
+      canvasEl.removeEventListener('pointermove', _onCanvasPointerMove);
+      canvasEl.removeEventListener('pointerleave', _onCanvasPointerLeave);
+      canvasEl.removeEventListener('pointerup', _onStrokeEnd);
+      canvasEl.removeEventListener('pointercancel', _onStrokeEnd);
+      canvasEl.removeEventListener('wheel', _onCanvasWheel);
       if (editorState._pasteInterceptor) {
-        canvasEl.removeEventListener('mousedown', editorState._pasteInterceptor, true);
+        canvasEl.removeEventListener('pointerdown', editorState._pasteInterceptor, true);
       }
     }
     if (typeof editorState.canvas.dispose === 'function') editorState.canvas.dispose();
@@ -2632,8 +3312,10 @@ function unmount() {
     eyedropperTool: null,
     eraseTool: null,
     lineTool: null,
+    ovalTool: null,
     rectTool: null,
     fillTool: null,
+    textTool: null,
     selectTool: null,
     mode: 'paint',
     activeTool: 'cell',
@@ -2659,11 +3341,13 @@ function unmount() {
     onExport: null,
     onUndo: null,
     onRedo: null,
+    onResize: null,
     onBrowseList: null,
     onBrowseOpen: null,
     onBrowseRename: null,
     onBrowseDuplicate: null,
     onBrowseDelete: null,
+    onDocumentStateChange: null,
     _strokeDirty: false,
     clipboard: null,
     pasteMode: false,
@@ -2673,8 +3357,21 @@ function unmount() {
     browseError: '',
     canvasZoom: editorState.canvasZoom,
     appliedCanvasZoom: 1,
+    gridVisible: false,
+    gridStep: 'frame',
     viewportResizeObserver: null,
+    layerNames: [],
     lastSampledCell: null,
+    textEdit: null,
+    spacePan: {
+      armed: false,
+      dragging: false,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      scrollLeft: 0,
+      scrollTop: 0,
+    },
     _pasteInterceptor: null,
   };
 }
@@ -2749,13 +3446,15 @@ function getState() {
     drawBg: editorState.drawBg,
     canvasZoom: editorState.canvasZoom,
     appliedCanvasZoom: editorState.appliedCanvasZoom,
+    gridVisible: editorState.gridVisible,
+    gridStep: editorState.gridStep,
   };
 }
 
 function setDrawState({ glyph, fg, bg, applyGlyph, applyFg, applyBg }) {
   if (typeof glyph === 'number') {
     editorState.drawGlyph = glyph & 0xFF;
-    _forEachTool(t => t.setGlyph(editorState.drawGlyph));
+    _forEachTool((t) => _setToolGlyph(t, editorState.drawGlyph));
     const el = document.getElementById('wsGlyphCode');
     if (el) el.value = String(editorState.drawGlyph);
     const ch = document.getElementById('wsGlyphChar');
@@ -2763,31 +3462,31 @@ function setDrawState({ glyph, fg, bg, applyGlyph, applyFg, applyBg }) {
   }
   if (Array.isArray(fg) && fg.length === 3) {
     editorState.drawFg = fg.map(Number);
-    _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
+    _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
     const el = document.getElementById('wsFgColor');
     if (el) el.value = _rgbToHex(editorState.drawFg);
   }
   if (Array.isArray(bg) && bg.length === 3) {
     editorState.drawBg = bg.map(Number);
-    _forEachTool(t => t.setColors(editorState.drawFg, editorState.drawBg));
+    _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
     const el = document.getElementById('wsBgColor');
     if (el) el.value = _rgbToHex(editorState.drawBg);
   }
   if (typeof applyGlyph === 'boolean') {
     editorState.applyGlyph = applyGlyph;
-    _forEachTool(t => t.setApplyModes({ glyph: applyGlyph }));
+    _forEachTool((t) => _setToolApplyModes(t, { glyph: applyGlyph }));
     const el = document.getElementById('wsApplyGlyph');
     if (el) el.classList.toggle('ws-toggle-on', applyGlyph);
   }
   if (typeof applyFg === 'boolean') {
     editorState.applyFg = applyFg;
-    _forEachTool(t => t.setApplyModes({ foreground: applyFg }));
+    _forEachTool((t) => _setToolApplyModes(t, { foreground: applyFg }));
     const el = document.getElementById('wsApplyFg');
     if (el) el.classList.toggle('ws-toggle-on', applyFg);
   }
   if (typeof applyBg === 'boolean') {
     editorState.applyBg = applyBg;
-    _forEachTool(t => t.setApplyModes({ background: applyBg }));
+    _forEachTool((t) => _setToolApplyModes(t, { background: applyBg }));
     const el = document.getElementById('wsApplyBg');
     if (el) el.classList.toggle('ws-toggle-on', applyBg);
   }
@@ -2834,6 +3533,10 @@ function moveLayer(fromIndex, toIndex) {
   if (toIndex === fromIndex + 1) { _moveLayerDown(fromIndex); return; }
 }
 
+function getDocumentSnapshot() {
+  return _buildDocumentSnapshot();
+}
+
 // ── Window export ──
 
 window.__wholeSheetEditor = {
@@ -2842,6 +3545,7 @@ window.__wholeSheetEditor = {
   panToFrame,
   syncFromState,
   getState,
+  getDocumentSnapshot,
   setDrawState,
   setActiveLayer,
   setLayerVisibility,

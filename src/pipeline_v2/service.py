@@ -977,7 +977,7 @@ def _resolve_preview_xp_fields(spec: dict[str, Any]) -> tuple[str, str]:
 def _normalize_template_action_spec(
     template_set_key: str,
     action_key: str,
-    raw_spec: dict[str, Any],
+    raw_spec: dict[str, Any] | None,
 ) -> dict[str, Any]:
     spec = dict(raw_spec or {})
     filename_prefix = str(spec.get("filename_prefix") or spec.get("family") or "").strip()
@@ -1017,7 +1017,7 @@ def _normalize_template_action_spec(
     return spec
 
 
-def _normalize_template_registry(raw_registry: dict[str, Any]) -> dict[str, Any]:
+def _normalize_template_registry(raw_registry: dict[str, Any] | None) -> dict[str, Any]:
     registry = dict(raw_registry or {})
     skin_family_scope = registry.get("skin_family_scope", {})
     if not isinstance(skin_family_scope, dict):
@@ -1076,8 +1076,13 @@ def _normalize_template_registry(raw_registry: dict[str, Any]) -> dict[str, Any]
                         f"'{prefix_key}' field '{field}' drifted from {template_set_key}:{action_key}"
                     )
 
-    if "schema_version" not in registry:
+    schema_version = registry.get("schema_version")
+    if schema_version is None:
         registry["schema_version"] = 2
+    elif schema_version != 2:
+        raise ValueError(
+            f"template_registry.json schema_version {schema_version!r} is not supported; expected 2"
+        )
     return registry
 
 
@@ -1093,7 +1098,7 @@ def load_template_registry() -> dict[str, Any]:
     # Validate L0 reference checksums at load time
     for ts_key, ts in _template_registry.get("template_sets", {}).items():
         for act_key, act in ts.get("actions", {}).items():
-            family = act.get("family", "")
+            family = act.get("filename_prefix", "")
             if family not in _l0_reference_status:
                 _load_reference_l0(family)
     return _template_registry
@@ -1110,7 +1115,7 @@ def _load_reference_l0(family: str) -> list[Cell] | None:
     if reg:
         for ts in reg.get("template_sets", {}).values():
             for act in ts.get("actions", {}).values():
-                if act.get("family") == family:
+                if act.get("filename_prefix") == family:
                     l0_ref_path = act.get("l0_ref")
                     l0_ref_sha256 = act.get("l0_ref_sha256")
                     break
@@ -1179,7 +1184,7 @@ def _load_reference_l1(family: str) -> list[Cell] | None:
     if reg:
         for ts in reg.get("template_sets", {}).values():
             for act in ts.get("actions", {}).values():
-                if act.get("family") == family:
+                if act.get("filename_prefix") == family:
                     l0_ref_path = act.get("l0_ref")
                     break
             if l0_ref_path:
@@ -2370,7 +2375,13 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
             if int(c.get("glyph", 0)) not in (0, 32)
         ),
         "layer_count": layer_count,
-        "layer_names": ["Metadata", "Layer 1", "Visual", "Layer 3"][:layer_count],
+        "layer_names": list(sess_dict.get("layer_names") or ["Metadata", "Layer 1", "Visual", "Layer 3"][:layer_count]),
+        "active_layer": int(sess_dict.get("active_layer", 2 if layer_count > 2 else 0)),
+        "visible_layers": list(sess_dict.get("visible_layers") or ([2] if layer_count > 2 else [0])),
+        "locked_layers": list(sess_dict.get("locked_layers") or []),
+        "whole_sheet_canvas_zoom": sess_dict.get("whole_sheet_canvas_zoom", 0),
+        "whole_sheet_grid_visible": bool(sess_dict.get("whole_sheet_grid_visible", False)),
+        "whole_sheet_grid_step": str(sess_dict.get("whole_sheet_grid_step", "frame")),
         "grid_cols": width,
         "grid_rows": height,
         "cell_w": int(sess_dict["cell_w"]),
@@ -3795,6 +3806,29 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
         if not isinstance(row_categories, dict):
             raise ApiError("row_categories must be object", "invalid_row_categories", "workbench", req_id, 422)
         sess["row_categories"] = row_categories
+    if "layer_names" in payload:
+        layer_names = payload.get("layer_names")
+        if not isinstance(layer_names, list):
+            raise ApiError("layer_names must be list", "invalid_layer_names", "workbench", req_id, 422)
+        sess["layer_names"] = [str(name) for name in layer_names]
+    if "active_layer" in payload:
+        sess["active_layer"] = int(payload.get("active_layer"))
+    if "visible_layers" in payload:
+        visible_layers = payload.get("visible_layers")
+        if not isinstance(visible_layers, list):
+            raise ApiError("visible_layers must be list", "invalid_visible_layers", "workbench", req_id, 422)
+        sess["visible_layers"] = [int(value) for value in visible_layers]
+    if "locked_layers" in payload:
+        locked_layers = payload.get("locked_layers")
+        if not isinstance(locked_layers, list):
+            raise ApiError("locked_layers must be list", "invalid_locked_layers", "workbench", req_id, 422)
+        sess["locked_layers"] = [int(value) for value in locked_layers]
+    if "whole_sheet_canvas_zoom" in payload:
+        sess["whole_sheet_canvas_zoom"] = float(payload.get("whole_sheet_canvas_zoom") or 0)
+    if "whole_sheet_grid_visible" in payload:
+        sess["whole_sheet_grid_visible"] = bool(payload.get("whole_sheet_grid_visible"))
+    if "whole_sheet_grid_step" in payload:
+        sess["whole_sheet_grid_step"] = str(payload.get("whole_sheet_grid_step") or "frame")
     if "frame_groups" in payload:
         frame_groups = payload.get("frame_groups")
         if not isinstance(frame_groups, list):
@@ -3827,14 +3861,7 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
         sess["source_cuts_h"] = source_cuts_h
 
     save_json(p, sess)
-    return {
-        "session_id": session_id,
-        "grid_cols": int(sess["grid_cols"]),
-        "grid_rows": int(sess["grid_rows"]),
-        "angles": int(sess["angles"]),
-        "anims": [int(x) for x in sess["anims"]],
-        "source_projs": int(sess.get("source_projs", sess["projs"])),
-        "projs": int(sess["projs"]),
-        "cell_count": len(sess["cells"]),
-        "source_boxes": len(sess.get("source_boxes", [])) if isinstance(sess.get("source_boxes"), list) else 0,
-    }
+    response = _session_payload(sess)
+    response["cell_count"] = len(sess["cells"])
+    response["source_boxes"] = len(sess.get("source_boxes", [])) if isinstance(sess.get("source_boxes"), list) else 0
+    return response

@@ -102,18 +102,28 @@ export class Canvas {
       return;
     }
 
-    // Store bound handlers for cleanup
-    this._boundHandlers = {
-      mousedown: (event) => this._onMouseDown(event),
-      mousemove: (event) => this._onMouseMove(event),
-      mouseup: (event) => this._onMouseUp(event),
-      mouseleave: (event) => this._onMouseLeave(event),
-    };
+    const usePointerEvents = typeof PointerEvent !== 'undefined';
 
-    this.canvasElement.addEventListener('mousedown', this._boundHandlers.mousedown);
-    this.canvasElement.addEventListener('mousemove', this._boundHandlers.mousemove);
-    this.canvasElement.addEventListener('mouseup', this._boundHandlers.mouseup);
-    this.canvasElement.addEventListener('mouseleave', this._boundHandlers.mouseleave);
+    // Store bound handlers for cleanup
+    this._boundHandlers = usePointerEvents
+      ? {
+          pointerdown: (event) => this._onPointerDown(event),
+          pointermove: (event) => this._onPointerMove(event),
+          pointerup: (event) => this._onPointerUp(event),
+          pointerleave: (event) => this._onPointerLeave(event),
+          pointercancel: (event) => this._onPointerLeave(event),
+        }
+      : {
+          mousedown: (event) => this._onMouseDown(event),
+          mousemove: (event) => this._onMouseMove(event),
+          mouseup: (event) => this._onMouseUp(event),
+          mouseleave: (event) => this._onMouseLeave(event),
+        };
+
+    for (const [eventName, handler] of Object.entries(this._boundHandlers)) {
+      this.canvasElement.addEventListener(eventName, handler);
+    }
+    if (this.canvasElement.style) this.canvasElement.style.touchAction = 'none';
   }
 
   /**
@@ -168,6 +178,10 @@ export class Canvas {
     }
   }
 
+  _onPointerDown(event) {
+    return this._onMouseDown(event);
+  }
+
   /**
    * Handle mousemove event
    * Includes error handling to prevent unhandled exceptions from disrupting user interaction
@@ -211,6 +225,10 @@ export class Canvas {
     }
   }
 
+  _onPointerMove(event) {
+    return this._onMouseMove(event);
+  }
+
   /**
    * Handle mouseup event
    * @private
@@ -230,6 +248,10 @@ export class Canvas {
     this.render();
   }
 
+  _onPointerUp(event) {
+    return this._onMouseUp(event);
+  }
+
   /**
    * Handle mouseleave event
    * @private
@@ -242,6 +264,10 @@ export class Canvas {
     // Cancel drag if mouse leaves canvas
     this.activeTool.endDrag();
     this.render();
+  }
+
+  _onPointerLeave(event) {
+    return this._onMouseLeave(event);
   }
 
   /**
@@ -786,6 +812,36 @@ export class Canvas {
     this.render();
   }
 
+  resizeGrid(gridWidth, gridHeight) {
+    const nextWidth = Math.max(1, Number(gridWidth) || 1);
+    const nextHeight = Math.max(1, Number(gridHeight) || 1);
+    if (nextWidth === this.width && nextHeight === this.height) return;
+
+    const oldCells = this.cells;
+    this.width = nextWidth;
+    this.height = nextHeight;
+    this.canvasElement.width = this.width * this.cellSizePixels;
+    this.canvasElement.height = this.height * this.cellSizePixels;
+    this.cells = new Map();
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        const key = `${x},${y}`;
+        const prior = oldCells.get(key);
+        this.cells.set(key, prior ? {
+          glyph: prior.glyph,
+          fg: [...prior.fg],
+          bg: [...prior.bg],
+        } : {
+          glyph: 0,
+          fg: [255, 255, 255],
+          bg: [0, 0, 0],
+        });
+      }
+    }
+    this._dirtyCells.clear();
+    this._fullRenderNeeded = true;
+  }
+
   /**
    * Get current font size in pixels per cell
    * @returns {number} Current font size (8, 10, 12, or 16)
@@ -809,11 +865,9 @@ export class Canvas {
       return;
     }
 
-    // Remove all mouse event listeners
-    this.canvasElement.removeEventListener('mousedown', this._boundHandlers.mousedown);
-    this.canvasElement.removeEventListener('mousemove', this._boundHandlers.mousemove);
-    this.canvasElement.removeEventListener('mouseup', this._boundHandlers.mouseup);
-    this.canvasElement.removeEventListener('mouseleave', this._boundHandlers.mouseleave);
+    for (const [eventName, handler] of Object.entries(this._boundHandlers)) {
+      this.canvasElement.removeEventListener(eventName, handler);
+    }
 
     // Clear references
     this._boundHandlers = null;
