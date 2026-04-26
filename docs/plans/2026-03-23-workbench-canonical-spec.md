@@ -2135,7 +2135,18 @@ The current repo maps onto this harness model as follows:
 
 ## Unified Sequence Of Actions
 
-The original Step 2-8 deletion sequence has already landed in these commits:
+This section is the literal bottom-up workflow for this repo. The ordering law
+is:
+
+1. **Section 1 first** — finish the REXPaint-parity root editor and owner graph.
+2. **Section 2 second** — add wrapper/runtime/bundle behavior only on top of
+   the proven Section 1 owner.
+3. **Section 3 third** — build acceptance and structural-contract proof that is
+   carefully decoupled and only describes behavior that actually exists.
+4. **Y9-2 gateway and public replacement last** — launcher/wizard follow-through
+   and `/xpedit` cutover happen only after the first three layers are current.
+
+Already-landed foundation slices on this branch:
 
 1. `b8df3af` — blank root image path (`New XP`)
 2. `790b63f` — whole-sheet root session ownership
@@ -2145,313 +2156,55 @@ The original Step 2-8 deletion sequence has already landed in these commits:
 6. `5014671` — research-backed editor/runtime decisions captured in Section 1.9 and Section 2.9
 7. `5d5af15` — explicit Section 2 runtime-proof scope and full root save shape
 
-**AUDITOR FOUND GAP (2026-04-15):** The prior task sequence conflated design and implementation within each step, and treated design decisions as if they were part of the implementation step that required them. This caused implementation work to proceed before the behavioral contract was specified. The corrected sequence below promotes design to its own explicit phase before any implementation step that depends on it. Steps marked **DESIGN** produce a written spec/decision. Steps marked **IMPLEMENT** must not begin until the preceding DESIGN step is documented.
+Legacy-step crosswalk for older references:
 
-From the current state, the corrected sequence is:
+- legacy Steps 1-4 = `UQ-001` through `UQ-003`
+- legacy Steps 5 / 8 / 9 / 10 / 11 = `UQ-004` through `UQ-008`
+- legacy Steps 6 / 12 = `UQ-009`
+- legacy Step 13 = `UQ-010`
+- legacy replacement lane = `UQ-011`
+- legacy Step 14 = `UQ-013`
 
-1. **HOUSEKEEPING** — Keep production behavior frozen on `rikiworld.com/xpedit`. Do not ship partial ownership changes. Keep the canon layer strict: only `PLAYWRIGHT_FAILURE_LOG.md` and `docs/plans/2026-03-23-workbench-canonical-spec.md` are active authority docs.
+**Queue protocol:**
 
-2. **DESIGN — Section 1 feature contract** — Before any Section 1 implementation, write the behavioral contract for every gap item in the 1.6 auditor table. This step produces a written spec for:
-   - Resize: dialog UX, geometry change semantics, downstream state cascade
-   - Browse mode: peer-mode interaction contract, image CRUD operations, Tab toggle lifecycle
-   - Apply mode toggles: g/f/b keyboard authority, solo-mode behavior, UI representation
-   - Draw tool completeness: Oval, Text, Copy/Cut/Paste — interaction contract for each
-   - Keyboard authority map: complete keybinding table for the whole-sheet editor
-   - Pointer model: adopt the Section 1.9.1 touch contract as the implementation target; specify how existing mouse handlers migrate to Pointer Events
-   - Layer locking: lock state semantics, locked-layer draw rejection contract
-   - Zoom/font-scale: zoom levels, persistence, grid alignment
-   Do not begin Step 3 until this design output exists.
+1. Start at the first row whose state is `CURRENT` or `READY`.
+2. Before changing files, check `PLAYWRIGHT_FAILURE_LOG.md`, isolate unrelated
+   dirt, and do not stage or revert user/unrelated changes.
+3. Do exactly the row’s task. Do not pull future-layer work forward because it
+   feels related.
+4. A Section 2 row may adapt to Section 1 behavior, but it may not reopen
+   Section 1 ownership or invent a second editor/root.
+5. A Section 3 row may only prove current shipped behavior. It must not invent
+   product behavior, bypass the UI acceptance boundary, or over-claim closure
+   from structural/diagnostic paths.
+6. When a row lands or its state changes materially, update this canon and
+   `PLAYWRIGHT_FAILURE_LOG.md` in the same commit.
+7. `PARKED` rows are backlog, not “maybe next.” They do not execute until the
+   earlier `CURRENT` / `READY` rows pass or the user explicitly reprioritizes
+   them.
 
-3. **IMPLEMENT — Section 1 structural cleanup** — **IMPLEMENTED, UNVERIFIED (2026-04-15, commit `c836cde`)** — `syncRootStateFromWholeSheet()` and all callsites deleted. Old history/future owner deleted. Legacy inspector deleted. Grep confirms no matches for `syncRootStateFromWholeSheet`, `state.history`, `state.future`, `pushHistory`, `renderInspector`, `closeInspector`, `inspectorOpen`. No behavioral proof run yet.
-
-4. **IMPLEMENT — Section 1 feature completeness** — **IMPLEMENTED (2026-04-17; commits `d60c46b`, `bd69ce2`, `b435ed5`)**.
-   - The earlier Step 4 reopen from the 2026-04-17 re-audit is now resolved in live code:
-     - `BROWSE` is a live whole-sheet owner mode again, with click + `Tab` toggle and saved-session browse actions backed by the new `/api/workbench/browse/*` routes
-     - the upload panel no longer exposes `wbAnalyze`, `wbAngles`, `wbFrames`, `wbSourceProjs`, or `wbRenderRes`
-     - classic direct conversion is now session-first:
-       - `Session Ops` is the front-door geometry creator for classic root sessions
-       - `Use Auto-Plan` copies `/api/analyze` suggestions into those fields as advice only
-       - `wbRun()` now requires an active session and sends the active session geometry (`angles`, `anims`, `source_projs`, `target_cols`, `target_rows`) into `/api/run`
-       - `/api/run` now honors explicit non-native target geometry so direct classic conversion populates the active session grid instead of re-deriving a fresh one from analyzer-owned render heuristics
-   - Boundary-vs-product rule after this closeout:
-     - Step 4 is no longer blocked by the deferred/reintroduced browser surfaces
-     - Step 7 remains the separate public/workflow-grouping proof burden; do not reuse this Step 4 closeout as Step 7 acceptance proof
-   - The local heavy-contract fix pass closes the highest-risk save/interaction regressions that were still contaminating Step 4:
-      - pending whole-sheet debounced saves now flush/checkpoint before `loadSession()` or `loadFromJob()` replace the active session
-      - dirty sessions are checkpointed before replacement instead of only clearing the timer
-      - active text sessions now arm debounced saves while typing and are quiesced before remount/session switch
-      - two-finger pinch back to one-finger touch now resumes tool ownership instead of leaving the surviving touch inert
-      - rejected root resize saves now roll the whole-sheet editor back to the prior snapshot instead of leaving client geometry diverged
-      - session load/save payload translation now runs through whole-sheet (`loadSessionPayload()` / `buildSessionPayload()`), and `workbench.js` derives mirror state from the root document after load
-      - the viewport wire contract (`viewport_x`/`viewport_y` on the API, `scrollLeft`/`scrollTop` in the client) is now explicitly documented at the save/load boundary, and Python zoom normalization now matches client rounding semantics
-   - Verification evidence from the earlier Step 4 local pass:
-      - `python3 -m pytest tests/test_workbench_flow.py -k save_session_round_trips_root_owner_metadata` — PASS
-      - `node --check web/workbench.js` — PASS
-      - `node --experimental-vm-modules -e "const fs=require('fs'); const vm=require('vm'); new vm.SourceTextModule(fs.readFileSync('web/whole-sheet-init.js','utf8'));"` — PASS
-      - `python3 -m py_compile src/pipeline_v2/service.py` — PASS
-      - `PW_SKIP_WEBSERVER=1 npx playwright test tests/playwright/step4-root-proof.spec.js --reporter=list` — PASS
-        - proves root-owner load/save payload translation, session-switch text persistence, touch gesture handoff, pointer-cancel vs lost-capture behavior, resize rollback, and concurrent remount undo single-fire
-   - Fixes landed in the CE review pass (`20260415-112338-b515fe54`):
-     - the 2026-04-16 slice removed the then-live browser `enabled_families` fail-close, and that browser-side fix is still present; the remaining Step 11 problem is the backend `family` / `ENABLED_FAMILIES` authority path
-   - Local browser-owner cleanup on `2026-04-16`:
-      - the deprecated `/wizard` browser UI is hard-disabled to redirect to `/workbench`; only the external Y9-2 TUI/MCP wizard remains in scope
-      - `wbRun` is the visible conversion action, and source-image preview loading is fail-open instead of blocking upload/session activation
-      - concurrent load race closed — `withSessionLoadLock` + `state.sessionLoadInFlight` guard wraps both `loadFromJob` and `loadSession` (browser-proven: overlapping loads return `[true, false]`)
-      - partial-state-before-await fixed — `applyLoadedSessionSideState` deferred after root load; `previousRootPayload` rollback wired on mirror-sync failure
-      - `_wsDrawSaveTimer` added to state initializer
-      - `syncRootOwnerMirrorsFromDocument()` deleted on `2026-04-16` — render/debug read paths now consume whole-sheet snapshots, and the mid-load double-sync path is gone with it
-   - Reopen correction from `2026-04-17` is now fixed on this branch:
-      - the stronger claim that upload-panel geometry ownership and `wbAnalyze` were already deleted was false at re-audit time
-      - `b435ed5` removes that surface, and the follow-through pass finishes the ownership move by making classic geometry explicit in `Session Ops` rather than hidden behind `wbRun()`
-   - Completion pass landed on `2026-04-16`:
-      - **FL-STEP4-02 fixed:** `_normalize_storage_id()` now preserves integer `0` instead of coercing it to an empty string.
-      - **FL-STEP4-03 fixed:** `/api/workbench/create-blank-session` again accepts bare `{}` and explicit `blank_session` payloads for generic root sessions while retaining template-backed creation.
-      - **FL-STEP4-04 fixed:** dead `force_fallback` / `crop_box` fields were deleted from `RunConfig`, and `/api/run` plus `/pipeline/run` now reject those legacy fields with `unsupported_run_fields` instead of silently ignoring them.
-      - **FL-STEP4-05 resolved by contract:** `/api/workbench/validate-xp` is now explicitly documented and tested as a non-exporting checksum/quality endpoint that returns a predicted `xp_path` plus `exported=false` for compatibility, without writing an export artifact.
-      - agent-native text parity now exists on the MCP/HTTP path through `save_session(..., text_input={x,y,text})`.
-      - inspector edits now execute inside whole-sheet external-edit transactions, so one inspector action creates one whole-sheet undo snapshot and is reversible through the root undo contract.
-   - Verification evidence for the completion pass:
-      - `python3 -m pytest tests/test_workbench_flow.py -k "root_blank_session_legacy_route_defaults or root_blank_session_rejects_invalid_geometry or save_session_text_input_writes_root_authoritative_text or validate_xp_contract_returns_predictable_path_without_exporting or save_session_rejects_inconsistent_sheet_geometry or normalize_storage_id_preserves_integer_zero or save_session_round_trips_root_owner_metadata" -q` — PASS
-      - `python3 -m pytest tests/test_base_path.py -k "create_root_blank_session_under_prefix or save_and_export_root_blank_session_under_prefix" -q` — PASS
-      - `python3 -m pytest tests/test_workbench_mcp_server.py -q` — PASS
-      - `python3 -m pytest tests/test_workbench_validation.py -k "validate_xp_does_not_create_export_artifact or api_run_rejects_removed_legacy_fields or pipeline_run_rejects_removed_legacy_fields" -q` — PASS
-      - `node --check web/workbench.js` — PASS
-      - `node --experimental-vm-modules -e "const fs=require('fs'); const vm=require('vm'); new vm.SourceTextModule(fs.readFileSync('web/whole-sheet-init.js','utf8'));"` — PASS
-      - `python3 -m py_compile src/pipeline_v2/app.py src/pipeline_v2/service.py src/pipeline_v2/models.py scripts/workbench_mcp_server.py tests/test_workbench_flow.py` — PASS
-      - live browser proof against a local `pipeline_v2.app` server on `127.0.0.1:5082`:
-        - inspector action wrote glyph `65`
-        - whole-sheet `canUndo` transitioned `false -> true`
-        - undo restored the glyph to `0` and `canUndo` returned to `false`
-   - Verification evidence for the reopened Step 4 blockers:
-      - `python3 -m pytest tests/test_workbench_flow.py -k "browse_crud_endpoints or browse_delete_rejects_bundle_owned_session" -q` — PASS
-      - `python3 -m pytest tests/test_workbench_flow.py -k "root_blank_session_defaults or root_blank_session_accepts_explicit_geometry or save_session_persists_explicit_geometry or run_pipeline_honors_explicit_target_geometry or run_to_workbench_to_export" -q` — PASS
-      - `python3 -m pytest tests/test_base_path.py -k "create_blank_session_under_prefix or create_root_blank_session_under_prefix" -q` — PASS
-      - `node --check web/workbench.js` — PASS
-      - `node --experimental-vm-modules -e "const fs=require('fs'); const vm=require('vm'); new vm.SourceTextModule(fs.readFileSync('web/whole-sheet-init.js','utf8'));"` — PASS
-      - `rg -n "Browse mode \\(deferred\\)|browseBtn\\.disabled|wbAnalyze|wbAngles|wbFrames|wbSourceProjs|wbRenderRes" web/workbench.html web/workbench.js web/whole-sheet-init.js` — no matches
-      - contract note: classic row-count/cell-size editing is still front-doored through `Session Ops`; frame-nav remains the geometry owner conceptually, but the branch has not yet replaced those classic root-geometry controls with pure frame-nav row/cell authoring
-
-5. **DESIGN — Section 2 input contract** — **IMPLEMENTED (2026-04-15)** — Section 2.3.1-2.3.4 now define:
-   - source-layout modes (`uniform_grid` vs `explicit_regions`)
-   - sidecar manifest authority (`<source>.asciicker-source.json`)
-   - human and agent slicing workflow on top of the root editor
-   - PASS/WARN/FAIL quality contract for non-visual agent loops
-   Step 7 and Step 8 may proceed, but only by implementing this contract rather than inventing a second source-wrapper model.
-
-6. **DESIGN — Section 3 action harness contract** — **IMPLEMENTED (2026-04-15)** — Section 3 now defines:
-   - the User-Reachable Action Graph as the authoritative action inventory
-   - the Goal Artifact Contract as the authoritative success target
-   - the Recipe Synthesizer as a state-transition planner rather than a truth-table repaint generator
-   - deterministic checkpoints plus bounded random-exploration windows between checkpoints
-   - the acceptance boundary: real browser gestures only, with `__wb_debug` and direct API mutation limited to diagnostics
-   - the active/legacy file split for `scripts/xp_fidelity_test/` and related watchdog tooling
-   Legacy truth-table recipe entrypoints are now explicitly demoted out of the primary acceptance path. Future verifier work must implement this contract rather than extending the old repaint lane.
-
-7. **IMPLEMENT — UI identity map and panel-topology correction** — **IMPLEMENTED, UNPROVEN (2026-04-17, commit `b58e776`)**.
-   - Live code now tags visible panels with stable on-screen badges (`1 banner` through `18 inspector`) and child labels like `9A frame-nav` / `9B grid-panel`.
-   - `web/workbench.js` now provides the full ID overlay toggle (`hide IDs` / `Alt+I`) so every visible clickable/typable element with an `id` can be surfaced in-browser.
-   - The grid/frame-navigation region is now visibly sequenced as `8 source` -> `9 grid` -> `9A frame-nav` / `9B grid-panel` -> `10 whole-sheet`.
-   - Remaining gap:
-     - this is implemented in code but not yet re-proved as public-parity workflow grouping, so do not treat it as acceptance-complete
-
-8. **IMPLEMENT — Demote session-local source state** — Once the Step 5 contract exists:
-   - Demote session-local `extractedBoxes`, `sourceCutsV`, `sourceCutsH` from ad hoc authority into manifest-backed or clearly-derived overlays
-
-9. **IMPLEMENT — Quality enforcement at export boundary** — **IMPLEMENTED (2026-04-16)**.
-   - G7/G8/G9 replacement gates now run inside `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`
-   - `POST /api/workbench/validate-xp` now provides the lightweight single-XP validation endpoint for agent loops
-   - Keep this step closed unless live code or tests contradict the current Section 2.5 ledger
-
-10. **DESIGN — Family + Wearable Schema Policy** — **REOPENED / UPDATED (2026-04-18)**.
-   - Section 2.3.5-2.3.7 now define the corrected design target:
-     - engine truth includes family/prefix/fallback plus generalized wearable
-       slot/style behavior
-     - pipeline-v2 needs a normalized action schema, not the old flat `family`
-       registry
-     - backend and runners must share one contract-helper direction instead of
-       each re-encoding family/wearable assumptions
-   - Initial normalized scope remains:
-     - on-foot human actions first
-     - mounted-family authoring after schema normalization
-     - green proof-only
-     - `bigbee` deferred
-   - Future-only wearable design scope:
-     - design a standalone wearable/item authoring workflow and template
-       surface only after the current skin-authoring flow is closed and
-       acceptance-proven
-     - define whether wearable authoring is:
-       - overlay-first (slot/style/body overlay contract)
-       - item-art-first (world/inventory presentation contract)
-       - or a split surface with separate authoring entrypoints
-     - define the future verifier burden for wearable authoring separately from
-       current skin-strip authoring; do not mix the two into the current Step
-       11 closure criteria
-
-11. **IMPLEMENT — Backend Schema Normalization + Authority Cleanup** — **OPEN; THIS IS NOW THE FIRST SECTION-2 IMPLEMENTATION PRIORITY**.
-   - Required work:
-     - replace live backend `family` / `ENABLED_FAMILIES` gates with one shared
-       helper derived from normalized registry truth
-     - stop using the compat `family` alias as live authority in bundle
-       creation, blank-session creation, action run, export, and web-skin
-       payload paths
-     - keep mounted prefixes in the same normalized registry and wire future
-       mounted enablement against that contract rather than adding a side
-       authority
-     - add operator-visible template-registry load/fetch failure behavior
-       instead of silently degrading to empty action state
-   - This step must complete before broader mounted-family or wearable claims.
-   - **2026-04-26 audit-driven execution plan:**
-     1. Add backend-focused tests around the live registry authority paths:
-        `create_bundle()`, `workbench_create_blank_session()`,
-        `bundle_action_run()`, `workbench_export_bundle()`, and
-        `workbench_web_skin_bundle_payload()`.
-     2. Replace every live backend `ENABLED_FAMILIES` branch with normalized
-        `filename_prefix` / `skin_family_scope` / `prefix_catalog` helpers.
-     3. Sweep remaining live `family` readers and demote the alias to
-        compatibility-only data instead of behavior-driving authority.
-     4. Harden registry load/fetch failure handling:
-        - missing-file cache behavior
-        - fatal parse sentinel / error mode
-        - operator-visible fetch failure in the browser
-        - explicit warning or removal of silent `preview_xp -> l0_ref` fallback
-   - **Current Step 11 review blockers after the 2026-04-26 audit:**
-     - backend bundle/session/export/runtime paths still split live authority
-       between normalized registry data and `ENABLED_FAMILIES`
-     - compat `family` alias is still behavior-driving in backend paths
-     - `_normalize_template_registry()` malformed-input coverage is still
-       partial
-     - `load_template_registry()` still caches the empty-registry fallback when
-       the config file is missing
-     - `load_template_registry()` still lacks an in-process failure sentinel for
-       fatal registry parse errors
-     - `preview_xp` fallback to `l0_ref` is still silent rather than
-       warning-bearing
-     - template-registry fetch failure still degrades to empty frontend action
-       state without operator-visible error
-
-12. **IMPLEMENT — Interaction completion after UI identity map** — **IMPLEMENTED (2026-04-17, commits `3dd7042`, `2ec2238`, `d689a14`)**.
-   - The official source-to-grid runner now proves manual single-box, auto single-box, grouped row-select, and grouped column-select drags through shipped headed UI actions only.
-   - The product now has a distinct `Delete Frame` action with semantic-slot removal and left-shift/repack behavior, separate from `Clear Selected`.
-   - Cross-row `shift+click` frame-nav selection is now live in product code; it no longer collapses back to the focused row when the user moves to the next row.
-   - The official M2-D runner now proves `clear_selected_contents` and `delete_frame_slot` as separate actions, including the cross-row selection contract, geometry shrink, and signature repack.
-   - Current headed evidence:
-     - `output/source_panel_after_delete_frame_v1/report.json`
-     - `output/source_to_grid_after_delete_frame_v1/report.json`
-     - `output/m2d_action_proof_delete_frame_v2/report.json`
-     - `output/m2d_action_proof_delete_frame_v2/g6_delete_frame_contract.json`
-     - `output/m2d_action_proof_multirow_v1/report.json`
-     - `output/m2d_action_proof_multirow_v1/g6_delete_frame_contract.json`
-   - Still open after Step 12:
-     - the repo has partial UI-driven manual-assembly proof, but it still lacks
-       one canonical headed "from scratch" signoff lane for current skin
-       authoring that runs:
-       `template apply -> blank session -> source upload/manual assembly ->
-       whole-sheet edit -> save/export -> Skin Dock/runtime proof`
-     - future wearable authoring is explicitly out of scope for this signoff
-       lane; this lane is only for the current skin-authoring surface
-
-13. **IMPLEMENT — Backend Structural-Contract Runners + Y9-2 HTTP Follow-Through** — **PARTIAL / REPRIORITIZED**.
-   - Already implemented:
-     - MCP tools for region marking, manifest persistence, session validation, and quality validation
-     - Section 2.10 backend API endpoints: `GET /health`, `GET /pipeline/templates`, `POST /pipeline/run`, `POST /pipeline/validate_xp`
-   - Still open:
-     - backend parity runners/tests for normalized family schema
-     - backend parity runners/tests for mounted-family scope
-     - backend parity runners/tests for wearable slot/style contracts and overlay coverage
-     - launcher / wizard wiring for the `[3] ASSET PIPELINE` path
-     - coherent front-door execution so the Y9-2 gateway uses the current backend endpoints instead of leaving the asset-pipeline node absent
-
-14. **IMPLEMENT — Small-screen layout and browser persistence** — Use the Section 1 research decisions:
-   - Finish the Pointer Events / touch-action migration
-   - Implement the three-tier persistence model (draft / explicit / PWA)
-   - Finish the narrow-screen layout contract from Section 1.9.3
-
-### Immediate Next Tasks For Bundle Parity After The 2026-04-26 Root + Prefixed Runtime Proof
-
-The first two local runtime-proof gates are now complete on branch
-`v3-refactor-start @ 8163950`:
-
-1. headed root-hosted manual-assembly runtime proof: PASS
-2. headed prefixed `/xpedit` manual-assembly runtime proof: PASS, but only
-   after fixing a real base-path asset bug
-
-Those passes do **not** close Section 1, Section 2, or Section 3, and they do
-not by themselves justify public cutover. From the current branch state, the
-immediate unified execution sequence is now:
-
-1. **Close the remaining Section 1 editor-parity gaps.**
-   - The open editor-parity items remain:
-     - resize
-     - full browse parity
-     - undo/redo ownership
-     - missing oval/text/tool-map completeness
-     - touch/pointer migration
-     - zoom/grid completeness
-     - full layer-keyboard/persistence parity
-   - Do not treat Section 2 bundle work as a substitute for this owner-graph
-     closeout.
-2. **Finish Step 11 as backend authority cleanup, not browser cleanup.**
-   - Replace live backend `family` / `ENABLED_FAMILIES` gates in:
-     - `create_bundle()`
-     - `workbench_create_blank_session()`
-     - `bundle_action_run()`
-     - `workbench_export_bundle()`
-     - `workbench_web_skin_bundle_payload()`
-   - Keep the browser on the normalized registry contract and remove the
-     remaining backend split-authority behavior.
-3. **Finish the still-open Section 2 source-authoring/product gaps.**
-   - Upgrade source authoring from JSON-first manifest editing to direct
-     interactive slicer ergonomics on the same canonical sidecar contract.
-   - Keep Step 8 scoped to manifest-backed state only; do not reintroduce
-     session-local source ownership.
-4. **Enable mounted-family parity on the normalized contract that already exists.**
-   - `wolfie` and `wolack` are now represented in the registry and semantic
-     contract.
-   - The remaining work is:
-     - mounted template/action authoring surface
-     - native builder support
-     - export/runtime proof
-   - `bigbee` remains explicitly deferred.
-5. **Add the missing Section 2 semantic runtime parity rows and proof.**
-   - Implement and verify:
-     - `item.world_item`
-     - `item.inventory_grid`
-   - Then add runtime-facing proof for the minimum seven semantic rows.
-   - Only after that extend the same proof model to mounted rows.
-6. **Keep Section 3 current while Sections 1 and 2 change.**
-   - Refresh the canonical current-scope headed signoff lane so one UI-driven
-     pass proves:
-     - template apply / blank session creation
-     - source upload and manual assembly from scratch
-     - whole-sheet edit
-     - save/export
-     - Skin Dock/runtime proof
-   - Keep acceptance evidence UI-only on root-hosted, prefixed `/xpedit`, and
-     eventual public parity surfaces.
-   - Keep structural-contract runners separate for schema/runtime parity.
-7. **Finish Y9-2 gateway follow-through only after the Section 2 backend truth is stable.**
-   - The HTTP endpoints already exist.
-   - The remaining gateway work is launcher / wizard front-door wiring against
-     the stable backend contract, not inventing a second pipeline model.
-8. **Only after Sections 1, 2, and 3 are actually closed and current should public replacement begin.**
-   - Then run:
-     - direct public-parity audit against `rikiworld.com/xpedit`
-     - freeze exact replacement SHA and proof artifacts
-     - validate the current `/xpedit` deploy path
-     - deploy the frozen candidate
-     - re-run public headed proof on the live URL
-9. **Then return to Step 14 small-screen/persistence completion.**
+| Seq | State | Robot Task | Preconditions | Do Exactly This | Pass Condition | Stop / Fail Condition | FL / Owner |
+|---|---|---|---|---|---|---|---|
+| UQ-001 | ALWAYS | Establish repo truth before work | none | Run the repo entry checks, check the failure log first, inspect branch/head/dirty files, and identify unrelated dirt that must be left alone | Current authority docs, branch/head, dirty files, and relevant blockers are known before edits begin | Any unknown dirty change intersects the target files and cannot be safely isolated | Repo rule / `PLAYWRIGHT_FAILURE_LOG.md` |
+| UQ-002 | CURRENT | Close Section 1 REXPaint parity and root-owner law | UQ-001 complete | Use Section 1.6 and Section 1.8 as the exact scope. Land only root-editor work: resize, browse parity, undo/redo ownership, apply toggles, oval/text tools, pointer events, zoom/grid completeness, and layer keyboard/persistence parity. Keep `whole-sheet-init.js` the sole document owner. | Section 1 no longer has unresolved root-editor parity blockers, or any residuals are explicitly logged as open with proof state and no mixed ownership survives | Any patch reintroduces a second editor/root owner or leaves the old owner alive while adding a new authoritative path | Section 1 / `FL-STEP4` family / §1.6 |
+| UQ-003 | BLOCKED | Prove the Section 1 foundation on shipped surfaces | UQ-002 pass condition met | Run UI-only headed proof for the root-hosted and prefixed `/xpedit` Section 1 surface using shipped controls only; record evidence and update the ledger honestly | Root-hosted and prefixed Section 1 flows are proven on the shipped UI with no acceptance-boundary violation | Any proof relies on `fetch()`, `page.evaluate()` mutation, hidden hooks, or diagnostic-only paths and is labeled acceptance | Section 3 acceptance law / Section 1 proof |
+| UQ-004 | BLOCKED | Finish Step 11 backend authority cleanup on the normalized registry | UQ-002 passed; UQ-003 not contradicted | Add backend-focused tests around `create_bundle()`, `workbench_create_blank_session()`, `bundle_action_run()`, `workbench_export_bundle()`, and `workbench_web_skin_bundle_payload()`. Replace live backend `family` / `ENABLED_FAMILIES` gates with one helper derived from normalized registry truth. Demote the compat `family` alias to compatibility-only data. Surface operator-visible registry load/fetch failures. | No live backend bundle/session/export/runtime path still takes authority from `family` or `ENABLED_FAMILIES`; browser and backend both consume the same normalized contract | Any fix restores browser-side fail-close logic, creates a second registry authority, or claims Step 11 closure while backend split-authority code remains | Section 2.5 / Step 11 |
+| UQ-005 | BLOCKED | Close the Section 2 export-quality contract at the wrapper boundary | UQ-004 pass condition met | Wire the full Step 5 quality contract into `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`. Keep `/api/workbench/validate-xp` aligned with the same contract and do not treat single-XP validation as a substitute for export-path enforcement. | Bundle export and web-skin payload generation reject artifacts that fail the full quality contract, not just G10-G12 | Any closure claim remains contradicted by live service code, or export/web-skin paths still skip G7/G8/G9 | Section 2.4 / quality gates |
+| UQ-006 | BLOCKED | Finish the Section 2 source-wrapper implementation on the canonical manifest contract | UQ-004 pass condition met | Upgrade source authoring from JSON-first manifest editing to direct interactive slicer ergonomics on the same `<source>.asciicker-source.json` contract. Keep `extractedBoxes`, `sourceCutsV`, and `sourceCutsH` derived-only; do not revive session-local source ownership. | Source authoring is no longer JSON-first, and one canonical manifest contract still owns source layout for UI, MCP, and backend paths | Any fix creates a second source-layout model or makes session-local source state authoritative again | Section 2.3 / Step 8 |
+| UQ-007 | BLOCKED | Close the minimum Section 2 semantic runtime parity row set | UQ-004 through UQ-006 pass conditions met | Implement and prove the minimum semantic row set on runtime-facing lanes: preserve the already-mapped on-foot rows and add the missing `item.world_item` and `item.inventory_grid` rows. Keep the proof runtime-facing; do not confuse contract modeling with runtime closure. | The minimum seven-row semantic parity slice is implemented and proven on honest runtime-facing lanes | Any row is still only modeled, not proven, or the proof surface remains action-tab-only while claiming semantic closure | Section 2.3.9 / semantic parity |
+| UQ-008 | BLOCKED | Extend Section 2 to mounted-family authoring and runtime parity | UQ-007 pass condition met | On top of the normalized registry and minimum semantic rows, add mounted-family authoring/runtime parity for `wolfie` and `wolack`: mounted template/action surface, native builder support, export/runtime proof, and mounted semantic-row closure. Keep `bigbee` explicitly deferred unless canon changes. | `wolfie` and `wolack` are authorable/provable on the live Section 2 contract, and mounted rows are no longer “specified_not_authorable” | Any fix pulls `bigbee` into scope without canon change, or adds mounted support via a proof-only shim instead of the live authoring/runtime path | Section 2.5 / mounted parity |
+| UQ-009 | CURRENT / SUPPORT | Keep Section 3 harness and structural-contract runners aligned to what exists | UQ-001 complete; target Section 1/2 source state exists | Update the Section 3 action graph, headed signoff lanes, and backend schema/contract runners only for the surfaces that actually exist after each landed Section 1/2 slice. Keep acceptance UI-only. Keep backend schema/runtime parity runners separate from UI acceptance. Keep legacy repaint/truth-table entrypoints demoted. | Section 3 proof describes current code honestly: no false-green acceptance lane, no stale action graph, no structural-contract runner claiming UI acceptance | Any verifier lane outruns product reality, uses debug/API mutation as acceptance, or implies mounted/item closure from player-only lanes | Section 3 / harness law |
+| UQ-010 | PARKED | Finish Y9-2 gateway follow-through on the stable backend contract | UQ-004 through UQ-009 passed, or user explicitly reprioritizes it after backend truth is stable | Wire launcher / wizard / MCP front doors to the current HTTP backend (`GET /health`, `GET /pipeline/templates`, `POST /pipeline/run`, `POST /pipeline/validate_xp`) and remove any surviving second pipeline owner or local CLI substitution from the execution path | Y9-2 front doors use the same stable backend contract that Section 2 and Section 3 already prove | Any fix creates a second pipeline owner, keeps local subprocess behavior alive as parallel truth, or starts before backend truth is stable | Section 2.10 / B-13 / Step 13 |
+| UQ-011 | PARKED | Public replacement / cutover lane | UQ-003 through UQ-010 passed; user explicitly starts cutover | Run the direct public-parity audit against `rikiworld.com/xpedit`, freeze the exact replacement SHA and proof artifacts, validate the `/xpedit` deploy path, deploy the frozen candidate, and re-run headed proof on the live URL | Public replacement is backed by the same root-hosted, prefixed, and public evidence chain with no unresolved earlier-layer blocker | Any earlier row is still open, any public parity check fails, or cutover is claimed from code state alone | Replacement lane / public parity |
+| UQ-012 | ALWAYS | Canon hygiene and anti-overclaiming | Every non-trivial source/doc/proof change | Keep `PLAYWRIGHT_FAILURE_LOG.md`, this canon spec, and any directly-adjacent proof-summary text aligned. Separate code state, proof state, and doc state explicitly. Reopen rows when live code falsifies an earlier closeout. | Authority docs and live source agree, and no stale completion claim survives a contradiction | A lower-priority note, stale sequence summary, or old “COMPLETE” wording contradicts the current failure log or source | Canon authority / process |
+| UQ-013 | PARKED | Small-screen layout and browser persistence follow-through | Core Section 1-3 queue rows passed, or user explicitly reprioritizes | Finish the Section 1.9.1 pointer/touch migration, three-tier persistence model, and narrow-screen layout contract without reopening the Section 1 owner graph | Small-screen/persistence work lands on the proven root editor rather than competing with it | Any fix reopens owner boundaries or is used to dodge unfinished Section 1 parity work | Section 1.9.1 / legacy Step 14 |
 
 Future after current skin-authoring closure:
 
-1. **Design the wearable authoring workflow/template surface.**
-   - this is explicitly post-current-skin-authoring work
-   - finish current skin-authoring schema closure plus the canonical
-     from-scratch signoff lane before opening wearable workflow implementation
-2. **Define a separate wearable verifier/signoff path.**
-   - wearable authoring must not silently piggyback on the skin-strip signoff
-     lane; it needs its own acceptance and parity burden once the workflow
-     exists
+1. Design the wearable authoring workflow/template surface only after UQ-002
+   through UQ-011 are current.
+2. Define a separate wearable verifier/signoff path instead of piggybacking on
+   the skin-strip signoff lane.
 
 ---
 
@@ -2664,25 +2417,26 @@ not a task plan — it is a gate list. Migration is ready when all blocking gate
 
 | Gate | Section | Status |
 |------|---------|--------|
-| Step 3 structural cleanup verified (no `syncRootStateFromWholeSheet` etc.) | §Unified Step 3 | IMPLEMENTED, UNVERIFIED (`c836cde`) |
-| Step 11 backend schema normalization done | §Unified Step 11 | OPEN — backend authority cleanup is still first S2 priority |
-| Live backend `family` / `ENABLED_FAMILIES` authority path deleted | §2.5 misalignment ledger | OPEN |
-| G7/G8/G9 enforced at export | §2.4 | OPEN — export/web-skin paths still run only G10-G12 on the current branch |
-| Canonical from-scratch Playwright signoff lane passing | §Unified Step 12 | PARTIAL |
-| §2.11 coverage script exists and emits PASS | §2.11 | OPEN |
-| §2.12 rollback binary snapshot implemented | §2.12 | OPEN |
-| §2.13 B-13 wizard node wired in Y9-2 launcher | §2.13 / §2.10 | OPEN |
+| UQ-002 Section 1 REXPaint-parity foundation passes | §Unified Queue `UQ-002` | CURRENT — root-editor parity ledger still open |
+| UQ-003 root-hosted + prefixed Section 1 proof passes | §Unified Queue `UQ-003` | BLOCKED on UQ-002 |
+| UQ-004 backend authority cleanup passes | §Unified Queue `UQ-004` | OPEN — backend `family` / `ENABLED_FAMILIES` split still live |
+| UQ-005 export/web-skin quality contract fully enforced | §Unified Queue `UQ-005` | OPEN — export/web-skin paths still run only G10-G12 on the current branch |
+| UQ-006 manifest-backed source authoring no longer JSON-first | §Unified Queue `UQ-006` | OPEN |
+| UQ-007 minimum seven-row semantic runtime parity proven | §Unified Queue `UQ-007` | OPEN |
+| UQ-008 mounted-family parity for `wolfie` / `wolack` proven | §Unified Queue `UQ-008` | OPEN |
+| UQ-009 current-scope Section 3 signoff + contract runners current | §Unified Queue `UQ-009` | PARTIAL |
+| UQ-010 Y9-2 wizard / launcher gateway wired to stable HTTP backend | §Unified Queue `UQ-010` | OPEN |
+| UQ-011 cutover support gates ready (`§2.11`, `§2.12`) | §Unified Queue `UQ-011` | OPEN |
 
 ### Non-Blocking Gaps (required for full parity, not migration gate)
 
 | Gap | Section | Status |
 |-----|---------|--------|
-| Mounted-family authoring (wolfie, wolack) enabled | §2.9.1 / §2.11 | DEFERRED post Step 11 |
 | Wearable/item authoring surface | §2.3.6 / §2.3.7 | EXPLICITLY DEFERRED post skin-authoring signoff |
 | Proof-only color-variant family authoring surface | §2.5 misalignment ledger | PROOF-ONLY by policy (`service.py`, `workbench.js`) |
 | REXPaint parity gaps (resize, browse, oval/text tools) | §1.6 auditor table | TRACKED in Section 1 |
 | M2 E2E proof run (PNG→WS→export, committed headed run) | §Milestone 2 | PARTIAL |
-| Step 14 small-screen layout and persistence | §Unified Step 14 | OPEN |
+| UQ-013 small-screen layout and persistence | §Unified Queue `UQ-013` | OPEN |
 
 ### Gate Maintenance Rule
 

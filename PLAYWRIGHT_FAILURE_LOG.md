@@ -170,6 +170,45 @@ pass.
 6. Keep Section 3 proof current on root-hosted, prefixed `/xpedit`, and public parity surfaces.
 7. Only after Sections 1, 2, and 3 are current should public replacement/cutover resume.
 
+## Audit — Unified Sequence Queue Rewrite For Bottom-Up Repo Workflow (2026-04-26)
+
+This is a canon/failure-log audit entry. It is not a product fix or proof run.
+
+### Findings
+
+1. **The previous Unified Sequence section was still a mixed narrative, not a literal execution queue. HIGH.**
+   - It mixed historical commit notes, implemented-state prose, immediate-next-task prose, and backlog notes in one section.
+   - It did not give the robot a single row-oriented front door with state, preconditions, exact action, pass condition, and stop condition.
+
+2. **The bottom-up repo law was present in substance but not explicit enough in the queue shape. HIGH.**
+   - The intended order is:
+     - Section 1 foundation = REXPaint-parity root editor
+     - Section 2 = wrapper/runtime/bundle features built on that foundation
+     - Section 3 = proof/harness work that matches current shipped behavior only
+   - The older section still left too much room to read Section 2/3 work as a parallel track rather than a downstream track.
+
+3. **The Y9-2 canon now has the stronger model and this repo needed to match that quality bar. MEDIUM.**
+   - Reference model:
+     - `/Users/r/Downloads/asciicker-Y9-2/docs/plans/2026-03-22-multiplayer-canonical-spec.md`
+     - Section 3 `Robot Execution Queue`
+   - That queue is more explicit about row state, exact task, pass/fail, and stop rules than the older pipeline-v3 sequence section was.
+
+### What changed
+
+1. `docs/plans/2026-03-23-workbench-canonical-spec.md` `Unified Sequence Of Actions` is now a literal queue.
+2. The queue now makes the layer law explicit:
+   - `UQ-002` / `UQ-003` = Section 1 foundation first
+   - `UQ-004` through `UQ-008` = Section 2 build-up only after foundation
+   - `UQ-009` = Section 3 proof/harness follow-through, decoupled to current reality
+   - `UQ-010` / `UQ-011` = Y9-2 gateway and public replacement only after the earlier layers are current
+3. The gate table was realigned to the queue, including moving mounted-family parity out of the “non-blocking” bucket.
+
+### Current execution consequence
+
+1. Start at `UQ-002`, not at a Section 2 or cutover row.
+2. Treat Section 2 backend cleanup and semantic/runtime parity as blocked on Section 1 foundation closure.
+3. Treat Section 3 as support/proof that follows implemented reality instead of a parallel feature track.
+
 ## Audit — Canon/Porting Precondition And Y9-2 Bundle-State Investigation (2026-04-26)
 
 This is an audit/investigation entry. It is not a product fix, proof pass, or
