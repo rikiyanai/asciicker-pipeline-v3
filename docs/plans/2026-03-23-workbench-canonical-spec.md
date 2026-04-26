@@ -3,7 +3,7 @@
 **Authority:** this file and `PLAYWRIGHT_FAILURE_LOG.md` are the only active canon docs for the browser workbench.
 
 **Last updated:** 2026-04-26
-**Branch baseline:** `v3-refactor-start @ 3f89a74`
+**Checkpoint baseline:** `v3-refactor-start @ a536b81`
 **Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the manual-assembly runtime proof, the Y9-2 generalized-bundle porting audit, the semantic-runtime contract coverage slice, and the surviving local/browser/runtime assets in this repo
 
 ## Application Statement
