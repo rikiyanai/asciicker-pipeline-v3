@@ -870,6 +870,16 @@ What remains open and still blocks honest `UQ-002` closure:
    warn.
 3. No headed UI-only Section 1 proof has been rerun yet on the root-hosted and
    prefixed `/xpedit` shipped surfaces.
+4. Loaded headed-use findings now show three additional practical residuals on
+   the shipped root surface:
+   - plain two-finger / wheel scrolling over the canvas silently cycles the
+     active layer, which can move the user off Visual layer 2 into layer 1 or 0
+     during normal navigation attempts
+   - switching from Select to Text destroys the current selection immediately,
+     so selection-scoped cross-tool workflows are not currently possible
+   - `Delete` currently clears the selected rectangle across all visible
+     unlocked layers, which is still user-surprising enough that the intended
+     scope should remain explicit until reconfirmed
 
 ### 1.7 Section-1 Refactor Rule
 

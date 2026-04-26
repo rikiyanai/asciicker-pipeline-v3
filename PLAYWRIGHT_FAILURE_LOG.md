@@ -78,6 +78,53 @@ Verification evidence:
 - `node --experimental-vm-modules -e "<vm module runner for tests/web/rexpaint-editor-canvas.test.js>"`
   - PASS (`14 passed, 0 failed`)
 
+### Headed UI findings from loaded root-hosted workbench check (2026-04-26)
+
+These are user-observed shipped-surface findings from the loaded whole-sheet
+editor. They are product residuals, not proof of closure.
+
+1. **Trackpad/two-finger scroll currently changes the active layer too easily. HIGH.**
+   - Live code evidence:
+     - `web/whole-sheet-init.js:3278-3285` binds plain canvas `wheel` events to
+       active-layer cycling whenever `Ctrl` / `Cmd` is not held
+     - Section 1 canon explicitly lists mouse-wheel-over-canvas active-layer
+       cycling (`docs/plans/2026-03-23-workbench-canonical-spec.md:479`,
+       `:993`)
+   - Headed consequence:
+     - normal two-finger scrolling over the whole-sheet canvas can silently move
+       the active layer from Visual (2) to Layer 1 / Metadata (1 / 0), so the
+       user can continue editing without realizing they are now on the wrong
+       layer
+   - Truthful state:
+     - this is now a shipped UX/safety regression against practical editor use,
+       even if it matches the current written wheel shortcut contract
+
+2. **Selection is destroyed when switching from Select to Text. HIGH.**
+   - Live code evidence:
+     - `web/whole-sheet-init.js:1367-1370` explicitly deactivates the select
+       tool and clears the selection whenever the active tool changes away from
+       `select`
+   - Headed consequence:
+     - a user cannot keep a visible selection box, switch to Text, and then act
+       on that same selection; the box disappears immediately on tool change
+   - Truthful state:
+     - any workflow that assumes persistent selection across tool switches is
+       currently unsupported on the shipped root surface
+
+3. **Delete currently clears the selection across all visible unlocked layers, not just the active layer. MEDIUM.**
+   - Live code evidence:
+     - `web/whole-sheet-init.js:797-806` resolves delete targets through
+       `getVisibleUnlockedLayerIndices(editorState.layerStack)` and applies the
+       clear to each returned layer
+   - Headed consequence:
+     - in normal Select-mode use, `Delete` can appear to "delete everything"
+       because it clears the selected rectangle on every visible unlocked layer
+       rather than only the active editing layer
+   - Truthful state:
+     - the current behavior may be internally consistent with the multi-layer
+       document-selection model, but it is user-surprising and should remain
+       explicitly logged until the intended scope is reconfirmed
+
 ### Execution re-check consequence
 
 1. The broader Flask/workbench/base-path suite does **not** currently expose a
