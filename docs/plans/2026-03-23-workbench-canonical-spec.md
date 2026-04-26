@@ -6,6 +6,174 @@
 **Checkpoint baseline:** `v3-refactor-start @ a536b81`
 **Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the manual-assembly runtime proof, the Y9-2 generalized-bundle porting audit, the semantic-runtime contract coverage slice, and the surviving local/browser/runtime assets in this repo
 
+## Section 0 — Behavior Rule, Scope, And Authority
+
+### Cardinal Behavior Rule
+
+**Purpose:** Prevent frame-blind fixes where the repo keeps making local changes
+inside the wrong owner boundary, proof surface, or product surface and then
+mistakes that activity for progress.
+
+Every task in this repo is nested inside a larger requirement. Before acting,
+identify what the user is actually asking for, which boundary or owner that
+requirement touches, and whether the current file, workflow, artifact, or
+subsystem is the correct place to act. Do not assume the current structure is
+already valid. If the frame is wrong, changing things inside it is accumulated
+misalignment, not progress. Never confuse the nearest actionable patch with the
+correct architectural action. Verify the frame first.
+
+### Scope And Authority
+
+Only two application sections own product behavior in this canon:
+
+1. Section 1 — the root editor contract
+2. Section 2 — the Asciicker wrapper/runtime contract layered on top of it
+
+Section 3 is the harness/proof section that observes and proves Sections 1 and
+2. It is not a third product owner.
+
+Only two active canon docs exist:
+
+1. `PLAYWRIGHT_FAILURE_LOG.md`
+2. `docs/plans/2026-03-23-workbench-canonical-spec.md`
+
+All former handoff, worksheet, claim-verification, and reference docs are
+archive/reference material only unless this section or the failure log
+explicitly revives them.
+
+For canon work in this repo, the startup/read order is:
+
+1. `python3 scripts/conductor_tools.py status --auto-setup`
+2. `PLAYWRIGHT_FAILURE_LOG.md`
+3. `docs/plans/2026-03-23-workbench-canonical-spec.md`
+4. the live code and tests for the behavior under audit
+
+If an older workflow references missing helpers such as
+`scripts/git_guardrails.py`, `scripts/analyze_failure_log.py`, or
+`scripts/analyze_runs.py`, treat that as stale repo alignment, not as a reason
+to invent a new authority path.
+
+### Canon And Repo Alignment
+
+The 2-doc canon is the live authority model, but repo alignment is still
+incomplete:
+
+1. `README.md:75-76` still points at retired canonical paths.
+2. `scripts/doc_lifecycle_stitch.sh:24-39`,
+   `scripts/doc_lifecycle_stitch.sh:63-75`, and
+   `scripts/doc_lifecycle_stitch.sh:250-252` still point at retired
+   failure-log/spec paths and the older protected-doc set.
+3. `scripts/git_guardrails.py` is referenced by older doc-health instructions
+   but is absent in this repo, so any startup flow that assumes it exists is
+   stale.
+4. Top-level `AGENTS.md` and `CLAUDE.md` must stay aligned to the 2-doc canon
+   and the deletion-first architecture rule.
+
+These are repo-health failures. They are separate from, and additive to, the
+Section 1 and Section 2 architecture failures.
+
+### Non-Negotiable Architecture Laws
+
+These are top-level canon. They are not historical notes, convenience
+guidelines, verifier-local rules, or temporary refactor suggestions.
+
+#### Law 1 - Single Ownership Or No Ownership Claim
+
+**Purpose:** Simplicity and modularity are the governing engineering rules in
+this repo. Every mutable truth source must have one owner or later proof cannot
+tell which path actually produced the behavior.
+
+No mixed ownership is allowed at any abstraction level. If editor, wrapper,
+runtime, proof, deployment, or documentation ownership moves, the old owner
+must be deleted or hard-disabled before the replacement is added. Wrapping,
+shadowing, bridge logic, compatibility fallbacks, and temporary parallel owners
+are regressions unless they are explicitly non-runtime historical material.
+
+#### Law 2 - Section 1 Owns The Editor Root
+
+**Purpose:** Prevent template, bundle, runtime, or proof workflows from
+redefining the base editor contract.
+
+Section 1 is the root editor owner. Whole-sheet document state, editing
+behavior, layers, history, browse mode, and root image actions belong to the
+Section 1 owner graph. Section 2 may adapt, seed, validate, export, or preview
+that state, but it may not replace the root editor, create a second
+authoritative document/session owner, or redefine the base editing workflow.
+
+#### Law 3 - Section 2 Owns Runtime And Engine Truth Only Downstream
+
+**Purpose:** Keep the wrapper/runtime layer useful without letting it reclaim
+authoring ownership.
+
+Section 2 owns engine-facing filename/runtime truth, bundle structure, export
+contracts, native-builder constraints, and runtime preview adaptation. It does
+not own the root image/session, authored geometry, or the primary editor
+workflow. If Section 1 and Section 2 disagree, Section 1 wins for editor
+ownership and Section 2 wins only for downstream engine/runtime truth.
+
+#### Law 4 - Proof Observes; It Does Not Own
+
+**Purpose:** Prevent acceptance, structural, or runtime proof from becoming a
+hidden architecture owner.
+
+Acceptance proof, structural gates, and visual/runtime proof are observational
+surfaces only. They may reveal contradictions, but they do not establish
+product ownership, redefine behavior, or justify bypassing the shipped UI.
+Verifier gaps are verifier gaps; they are not permission to move the boundary.
+
+#### Law 5 - Debug And Diagnostic Paths Are Not Product Flows
+
+**Purpose:** Keep `/workbench` honest about what a user can actually do.
+
+Debug harnesses, raw iframe loaders, external XP injection helpers,
+`/termpp-skin-lab`, MCP-only shortcuts, and other diagnostic paths may remain
+for development, but they must stay explicitly diagnostic and off the primary
+product path. Do not surface them as peer user actions inside `/workbench`, and
+do not use them as acceptance substitutes.
+
+#### Law 6 - Geometry Ownership Must Stay Explicit
+
+**Purpose:** Prevent source analysis, template shape, and runtime constraints
+from collapsing into one hidden geometry owner.
+
+Source PNG mapping, authored frame geometry, and runtime/native export are
+separate problems. The analyzer is advisory only. Frame navigation owns authored
+row/frame geometry. The whole-sheet editor owns the stored document. Templates,
+native builders, and runtime/export paths are downstream adapters that may seed,
+normalize, or reject shapes, but they may not silently redefine authored
+geometry.
+
+#### Law 7 - Uniform Frame Geometry Is Session-Level Truth
+
+**Purpose:** Preserve the whole-sheet/frame-nav contract and prevent
+per-sprite special cases from becoming silent geometry owners.
+
+One authored session/action has one frame-slot size. Individual sprite content
+may vary inside those slots, but the slot geometry itself is uniform across the
+session. If one mapped sprite must be larger, enlarge the authored session
+geometry for that action. Do not create one special larger frame while other
+frames remain smaller.
+
+#### Law 8 - Live Pipeline-V2 Behavior Stays Frozen Until Replacement
+
+**Purpose:** Prevent premature public cutover and split ownership on the live
+`/xpedit` URL.
+
+Do not change live pipeline-v2 `rikiworld.com/xpedit` behavior until the v3
+replacement is complete, working, and ready for same-URL cutover. The target is
+replacement, not indefinite dual ownership. Any ownership move on the public URL
+must delete or retire the old owner rather than layering a second one beside it.
+
+#### Law 9 - Canon Requirements Stay Above Status Mirrors
+
+**Purpose:** Prevent doc cleanup from burying active rules under audits,
+sequence notes, or historical narration.
+
+This spec may contain deployment notes, sequence queues, audits, and current
+state mirrors, but those sections may not replace or bury the laws above. If a
+status note conflicts with a law, the law wins unless
+`PLAYWRIGHT_FAILURE_LOG.md` records a reviewed replacement.
+
 ## Application Statement
 
 Asciicker XPEdit is a browser-based XP sprite-sheet authoring workbench for the Asciicker / TERM++ game runtime.
@@ -102,93 +270,6 @@ The following replacement-sequence facts are now directly verified:
    adding the missing base-path rewrite for
    `/workbench-template-gating.js` and pinning it with a focused prefixed-route
    regression test.
-
-### Application Boundaries And Guardrails
-
-There are only two master application spec sections in this canon:
-
-1. Section 1 — the root editor contract
-2. Section 2 — the Asciicker wrapper/runtime contract layered on top of it
-
-Section 3 is the testing harness spec that proves those two application
-sections. It is not a third application owner.
-
-These rules are execution guardrails, not optional advice:
-
-1. Do not change the live pipeline-v2 `rikiworld.com/xpedit` behavior until the v3 replacement is complete, working, and ready for same-URL cutover.
-2. Do not add a new authoritative owner while the old owner still mutates the same behavior.
-3. If an ownership boundary moves, delete or hard-disable the old owner first.
-4. Do not let template, bundle, source-slicing, or runtime proof workflows redefine the root editor contract.
-5. Treat acceptance proof, structural gates, and visual-runtime proof as observation only. They do not establish ownership.
-6. If Section 1 and Section 2 disagree, Section 1 wins for editor ownership and Section 2 wins only for engine filename/runtime truth.
-7. Do not surface debug runtime harnesses as peer product flows inside `/workbench`; if they remain in-repo, keep them explicitly diagnostic and off the primary user path.
-
-### Geometry Ownership Clarification
-
-The current contract is explicit:
-
-1. Source PNG mapping is one problem.
-2. Authoring frame geometry is another problem.
-3. Runtime/native export is a third problem.
-
-Those three concerns must not be collapsed into one hidden analyzer decision.
-
-Ownership is:
-
-1. **Analyzer = advisory only**
-   - It may suggest angles, frame counts, projections, guides, and likely cuts.
-   - It must not silently become the authority for session geometry.
-2. **Frame nav = geometry owner**
-   - row count = authored angle count
-   - frame slots = authored semantic frames
-   - projection structure = authored slot layout
-   - add/delete/reorder rows and frames here
-3. **Whole-sheet = document owner**
-   - frame nav is the semantic index into the sheet
-   - source boxes map into explicit frame slots on that sheet
-   - the whole-sheet document is the stored authoring truth
-4. **Template/native/runtime = downstream adapters**
-   - templates may seed starting geometry
-   - runtime/native export may normalize or reject unsupported shapes
-   - neither may redefine the authored geometry owner
-
-Uniform-frame-size rule:
-
-1. One authored session/action has one frame-slot size.
-2. Individual sprite content may vary inside those slots, but the slots
-   themselves are uniform across the session.
-3. If one mapped sprite is larger than the rest and must fit without clipping,
-   the correct contract is to enlarge the session/frame-nav/whole-sheet geometry
-   for the whole action.
-4. The system must not create one special larger frame while leaving the other
-   frame slots smaller, because that breaks the whole-sheet/L0-style uniform
-   sheet geometry contract.
-
-### Canon And Repo Alignment
-
-Only two active canon docs exist:
-
-1. `PLAYWRIGHT_FAILURE_LOG.md`
-2. `docs/plans/2026-03-23-workbench-canonical-spec.md`
-
-All other former doc-state, handoff, claim-verification, and manual/reference
-docs are archive/reference material only.
-
-The 2-doc collapse is true in the live repo, but repo alignment is still
-incomplete:
-
-1. The active canon files are:
-   - `PLAYWRIGHT_FAILURE_LOG.md`
-   - `docs/plans/2026-03-23-workbench-canonical-spec.md`
-2. `README.md:75-76` still points at retired canonical paths.
-3. `scripts/doc_lifecycle_stitch.sh:24-39`, `scripts/doc_lifecycle_stitch.sh:63-75`, and `scripts/doc_lifecycle_stitch.sh:250-252` still point at retired failure-log/spec paths and the older protected-doc set.
-4. `scripts/git_guardrails.py` is referenced by older doc-health instructions but is absent in this repo, so any startup flow that assumes it exists is stale.
-5. Top-level `AGENTS.md` and `CLAUDE.md` must stay aligned to the 2-doc canon and the deletion-first architecture rule.
-
-These are repo-health failures. They are separate from, and additive to, the
-Section 1 and Section 2 architecture failures.
-
----
 
 ## Section 1 — Fundamental REXPaint-Parity Spec
 
