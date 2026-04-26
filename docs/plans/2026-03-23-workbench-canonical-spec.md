@@ -1272,13 +1272,12 @@ Current mismatch:
 
 1. The engine/browser canon has both a base `skin_family` axis and a generalized
    wearable overlay schema.
-2. The current branch's `config/template_registry.json` is still
-   pre-normalization: it exposes legacy `family` fields, lacks explicit
-   `filename_prefix` / `skin_family` / `preview_xp` metadata, and does not
-   represent mounted families.
-3. The backend and runners have already started to expect the normalized fields
-   in places (`bundle_contract.mjs`), so the schema is currently split across
-   canon, code, and runner assumptions.
+2. The current branch's `config/template_registry.json` is now normalized and
+   mounted-aware: it exposes explicit `filename_prefix` / `skin_family` /
+   `preview_xp` metadata plus mounted/deferred prefix state.
+3. The remaining split is execution, not config shape: runners and the browser
+   consume the normalized contract, but backend bundle/runtime/export paths
+   still keep the legacy `family` alias and `ENABLED_FAMILIES` gate alive.
 4. There is still no wearable/item template surface in pipeline-v2, so the
    current workbench can only author full character strips, not standalone
    wearable or item sprites.
@@ -1290,7 +1289,8 @@ Current mismatch:
 Current evidence:
 
 - `config/template_registry.json`
-- `src/pipeline_v2/app.py` `enabled_families` compatibility emission
+- `src/pipeline_v2/app.py` `GET /api/workbench/templates`
+- `src/pipeline_v2/service.py` backend bundle/runtime/export gates
 - `web/workbench.js::getEnabledActions()`
 - `scripts/xp_fidelity_test/bundle_contract.mjs`
 - `web/termpp_skin_lab.js` runtime override path
@@ -1670,9 +1670,9 @@ These gates are wrapper safeguards. They do not define the editor root contract.
 
 1. **G7/G8/G9 still do not guard bundle export.** G7 (geometry cell count), G8 (non-empty content ≥5%), and G9 (handoff population) run during `run_pipeline()`, but they are NOT called from `workbench_export_bundle()`. Only G10/G11/G12 are active at bundle export time. These gates are the only programmatic substitute for visual quality inspection, so their absence from the export gate is especially significant for agent-driven workflows.
 
-2. **The quality contract now exists in Section 2.3.4, but it is not yet enforced.** The missing work is implementation: `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()` still do not evaluate the full Step 5 quality report, and there is still no lightweight single-XP validation endpoint for agent loops.
+2. **The quality contract now exists in Section 2.3.4, but it is not yet enforced at the export boundary.** `POST /api/workbench/validate-xp` now exists for single-XP agent loops, but `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()` still do not evaluate the full Step 5 quality report.
 
-3. **Registry roles are fixed in design, but the current branch still leaks the old `enabled_families` compatibility path.** `config/template_registry.json` is still the intended authoring authority and the harness action registry seed is still fidelity test instrumentation only. However, `src/pipeline_v2/app.py` still emits `enabled_families` and `web/workbench.js` still reads it, so the implementation side of that authority cleanup is reopened in Step 11.
+3. **Registry roles are fixed in design, but the current branch still leaks legacy authority in backend execution.** `config/template_registry.json` is still the intended authoring authority and the harness action registry seed is still fidelity test instrumentation only. The browser no longer uses `enabled_families`, but backend bundle/runtime/export code still reads the compat `family` alias and static `ENABLED_FAMILIES` set, so the implementation side of that authority cleanup remains open in Step 11.
 
 4. **FL-STEP4-04 resolved on `2026-04-16`: dead `force_fallback` and `crop_box` removed from `RunConfig`.** The live `/api/run` and `/pipeline/run` contracts no longer advertise fields the handlers ignore; legacy callers now get an explicit `unsupported_run_fields` error if they still send those keys.
 
@@ -1685,18 +1685,18 @@ The live wrapper architecture is still misaligned in these exact ways after the
 |---------|------------------|------------------------|
 | Canonical manifest authoring now exists, but it is still JSON-first | `web/workbench.html:133-145`, `web/workbench.js:2196-2377`, `web/workbench.js:3278-3367`, `src/pipeline_v2/app.py:496-525`, `src/pipeline_v2/service.py:3831-3887`, `scripts/workbench_mcp_server.py` | Source guides/regions are now edited through the canonical sidecar and rendered on the source canvas without reviving session-local box/cut ownership, MCP exposes manifest read/write/region-marking tools against the same sidecar contract, and the source panel can now seed a canonical `uniform_grid` draft from the active run/template geometry for the common naked-PNG case. The remaining gap is interactive slicer tooling and richer manifest editing ergonomics. |
 | Source panel now reloads canonical PNG/manifest without grid geometry | `web/workbench.js:2242-2305`, `web/workbench.js:3278-3367`, `web/workbench.js:4310-4332`, `src/pipeline_v2/app.py:496-525` | The source projection can now stand alone from `source_path` / `source_manifest`; it no longer requires pre-populated root grid geometry. RESOLVED. |
-| Template registry is still pre-normalization relative to the family/wearable canon | `config/template_registry.json`, `scripts/xp_fidelity_test/bundle_contract.mjs` | The current branch registry still uses legacy `family` fields, lacks explicit `filename_prefix` / `skin_family` / `preview_xp`, and does not represent mounted families. The runner helper has already started reading the normalized keys, so schema drift is now real in code, not just in prose. |
+| Template registry is normalized and mounted-aware in data, but backend runtime/export paths still carry legacy authority | `config/template_registry.json`, `src/pipeline_v2/service.py:977-1097`, `src/pipeline_v2/service.py:1292-1317`, `src/pipeline_v2/service.py:2798-2890`, `src/pipeline_v2/service.py:3565-3675`, `scripts/xp_fidelity_test/bundle_contract.mjs` | The registry now has explicit `filename_prefix` / `skin_family` / `preview_xp` / `runtime_role` keys and explicit mounted prefixes (`wolfie`, `wolack`, deferred `bigbee`). But bundle creation, blank-session creation, bundle run, export, and web-skin payload generation still read the legacy `family` alias and static `ENABLED_FAMILIES={"player","attack","plydie"}` gate. Schema normalization therefore exists in config, but it is not yet the sole live backend authority. |
 | MCP override-name validation now accepts engine-valid hyphenated prefixes | `scripts/workbench_mcp_server.py` | `_AHSW_RE` now accepts `player-green-0001.xp`-style names. RESOLVED. |
-| Mounted-family authoring is still absent in the current branch even though the engine schema is mounted-aware | `config/template_registry.json`, `web/workbench.js`, `asciicker-Y9-2/engine/game.cpp` | The engine already knows `wolfie` and `wolack`, but pipeline-v2 still exposes only player on-foot template sets in this branch. Mounted-family support therefore remains a backend/template gap, not a solved family-schema problem. |
+| Mounted-family contract now exists, but mounted-family authoring/runtime parity is still absent | `config/template_registry.json`, `src/pipeline_v2/service.py:1793-1812`, `scripts/xp_fidelity_test/bundle_contract.mjs`, `tests/xp_fidelity_test/semantic_runtime_contract.test.mjs`, `asciicker-Y9-2/engine/game.cpp` | `wolfie` and `wolack` are now represented explicitly in `prefix_catalog` with `runtime_role`, `mounted=true`, and blocker metadata. The remaining gap is execution: there are still no mounted template actions, no native builder for those families, and no runtime-facing proof lane that closes the mounted semantic rows. |
 | Green proof coverage now exists, but green authoring remains deliberately proof-only until green reference assets exist | `src/pipeline_v2/service.py`, `config/template_registry.json`, `scripts/workbench_png_to_skin_test_playwright.mjs`, `web/workbench.js` | Runtime/proof helpers now preserve and inject `player-green` / `attack-green` / `plydie-green`, but the template authoring surface stays human-only by explicit boundary. This is a product-scope limitation, not a missing proof-path owner. |
 | Skin Dock proof is now explicit, but it is still wrapper proof rather than editor proof | `src/pipeline_v2/service.py:2898-2921`, `web/workbench.js:1453-1558`, `web/workbench.html:320-404` | Single-session runtime scope and structural-vs-runtime verification are now explicit, but runtime proof still does not establish Section 1 editor correctness. |
 | Wrapper run paths now materialize and consume canonical manifests end-to-end | `src/pipeline_v2/app.py:438-446`, `src/pipeline_v2/app.py:599-621`, `src/pipeline_v2/service.py:1437-1660`, `src/pipeline_v2/service.py:2558-2710`, `tests/test_workbench_validation.py` | Step 5 is now manifest-backed all the way through conversion: `/api/run`, `/pipeline/run`, and bundle action-apply persist canonical manifests before conversion, and `run_pipeline()` now dispatches to explicit `uniform_grid` / `explicit_regions` builders that reject invalid geometry instead of silently resizing. RESOLVED. |
-| G7/G8/G9 now enforced at export boundary | `src/pipeline_v2/service.py` | G7–G12 all run inside `_build_quality_report()` which is called from `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`. RESOLVED by Steps 6–7. |
+| G7/G8/G9 are still not enforced at the bundle export / web-skin payload boundary | `src/pipeline_v2/service.py:3527-3562`, `src/pipeline_v2/service.py:3565-3675` | `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()` still call `_run_structural_gates()`, which only runs G10/G11/G12. The quality-contract lane exists separately, but export/web-skin payload generation still lacks the full G7-G12 enforcement the canon requires for non-visual bundle safety. |
 | Agent quality contract implemented as `/api/workbench/validate-xp` | `src/pipeline_v2/app.py`, `src/pipeline_v2/service.py` | `POST /api/workbench/validate-xp` returns a PASS/WARN/FAIL report with per-slot coverage and gate results. The endpoint remains non-exporting, but now returns a predicted `xp_path`, `checksum`, `xp_size_bytes`, and `exported=false` for compatibility; callers that need a real file on disk must still use `/api/workbench/export-xp`. |
 | Agent session inspection is MCP-reachable | `scripts/workbench_mcp_server.py` | MCP now exposes `get_cell(session_id, x, y, layer=2)` for cell-level verification and `validate_session(session_id)` as a session-centric alias to `validate_xp(session_id)`. |
 | Classic conversion no longer reintroduces geometry-first wrapper ownership | `web/workbench.html`, `web/workbench.js`, `src/pipeline_v2/app.py`, `src/pipeline_v2/service.py`, `tests/test_workbench_flow.py` | The upload panel remains source-only, while classic root geometry now enters through `Session Ops` / `New XP` and the active session. `Use Auto-Plan` is advisory only. `wbRun()` now requires an active session and posts explicit target geometry (`target_cols` / `target_rows`) into `/api/run`, and the backend honors that exact non-native target grid. RESOLVED for the browser-owned geometry path; richer frame-nav row/cell editing is still a separate product gap. |
-| Browser template scope still leaks the deprecated `enabled_families` authority path | `src/pipeline_v2/app.py:383-384`, `web/workbench.js:7000-7018` | The backend still emits `enabled_families`, and the browser still fail-closes on it. That preserves a stale second authority path exactly where Section 2 says client scope must derive from action contracts only. |
-| Step 11 registry stabilization backlog is still open in code and tests | `web/workbench.js:6998-7029`, `src/pipeline_v2/app.py:385-387`, `src/pipeline_v2/service.py:977-1096` | The current branch still lacks direct branch tests for `isTemplateActionAuthorable()`, still lacks a dedicated proof for `proof_only: true` exclusion, still lacks the 7 malformed-registry guard tests, still caches the empty-registry fallback when the config file is missing, still has no in-process failure sentinel for fatal registry parse errors, still falls back from `preview_xp` to `l0_ref` without a warning, and still degrades template fetch failure to empty frontend state rather than surfacing an operator-visible error. These are all Step 11 hardening items, not optional cleanup. |
+| Browser bundle scope now derives from normalized template actions, but backend authority cleanup is still incomplete | `src/pipeline_v2/app.py:386-388`, `web/workbench.js:6995-7008`, `tests/test_template_registry_schema.py`, `tests/web/workbench-template-gating.test.js`, `tests/test_contracts.py` | The browser no longer reads `enabled_families`, `/api/workbench/templates` no longer emits it, and direct JS/tests now cover `isTemplateActionAuthorable()` plus `proof_only` exclusion. But the backend still keeps the legacy `family` alias and `ENABLED_FAMILIES` gate alive in bundle/runtime code, so Step 11 remains open as a backend authority cleanup, not as a browser fail-close bug. |
+| Step 11 registry stabilization backlog is still open in backend code, load-path hardening, and operator visibility | `web/workbench.js:6979-6987`, `src/pipeline_v2/app.py:386-388`, `src/pipeline_v2/service.py:977-1097`, `src/pipeline_v2/service.py:1292-1317`, `src/pipeline_v2/service.py:2798-2890`, `src/pipeline_v2/service.py:3565-3675`, `tests/web/workbench-template-gating.test.js`, `tests/test_template_registry_schema.py` | Frontend action-authorability tests now exist and the browser consumes the normalized contract, but the backend still gates live behavior through `family`/`ENABLED_FAMILIES`, malformed-registry guard coverage is still partial, `load_template_registry()` still caches the empty-registry fallback when the config file is missing, fatal parse failures still lack an in-process sentinel/error mode, `preview_xp` still silently falls back to `l0_ref`, and template-registry fetch failure still degrades to silent empty client state instead of surfacing an operator-visible error. |
 | Y9-2 HTTP API contract now exists | `src/pipeline_v2/app.py:317-325`, `src/pipeline_v2/app.py:562-587`, `src/pipeline_v2/service.py:3913-4027` | The server now exposes `GET /health`, `GET /pipeline/templates`, `POST /pipeline/run`, and `POST /pipeline/validate_xp`. The remaining Y9-2 gap is launcher/wizard wiring, not missing backend endpoints. |
 | Y9-2 wizard not wired as launcher sub-action | `Y9-2 scripts/launcher.py`, `Y9-2 scripts/pipeline/wizard/engine.py` | `WizardEngine` exists but has no `_execute_action` branch in `launcher.py`; `[3] ASSET PIPELINE` node is fully absent rather than showing as `[DEFERRED]`. Tracked as Y9-2 DESIGN OPEN B-13. |
 | **GAP: No wearable or item templates, and no backend parity runner for wearable slot/style contracts** | `config/template_registry.json`, `scripts/xp_fidelity_test/`, `tests/` | Pipeline-v2 has no wearable/item authoring surface, and there is no structural-contract runner that proves the local schema matches Y9-2 slot/style truth. That means gold/dark/default wearable semantics are still only partially covered by ad hoc runtime or engine-side knowledge. Tracked as S2-FAM-04. |
@@ -2192,7 +2192,7 @@ From the current state, the corrected sequence is:
       - `PW_SKIP_WEBSERVER=1 npx playwright test tests/playwright/step4-root-proof.spec.js --reporter=list` — PASS
         - proves root-owner load/save payload translation, session-switch text persistence, touch gesture handoff, pointer-cancel vs lost-capture behavior, resize rollback, and concurrent remount undo single-fire
    - Fixes landed in the CE review pass (`20260415-112338-b515fe54`):
-      - the 2026-04-16 slice removed the then-live `enabled_families` fail-close, but the current branch has since regressed that authority path and reopens it under Step 11
+     - the 2026-04-16 slice removed the then-live browser `enabled_families` fail-close, and that browser-side fix is still present; the remaining Step 11 problem is the backend `family` / `ENABLED_FAMILIES` authority path
    - Local browser-owner cleanup on `2026-04-16`:
       - the deprecated `/wizard` browser UI is hard-disabled to redirect to `/workbench`; only the external Y9-2 TUI/MCP wizard remains in scope
       - `wbRun` is the visible conversion action, and source-image preview loading is fail-open instead of blocking upload/session activation
@@ -2289,31 +2289,45 @@ From the current state, the corrected sequence is:
 
 11. **IMPLEMENT — Backend Schema Normalization + Authority Cleanup** — **OPEN; THIS IS NOW THE FIRST SECTION-2 IMPLEMENTATION PRIORITY**.
    - Required work:
-     - normalize `config/template_registry.json` to explicit
-       `filename_prefix` / `skin_family` / `preview_xp` / `l0_ref`
-     - decide whether mounted families land in the same registry now or in an
-       adjacent explicit scope file, but do not keep the current ambiguous
-       hybrid
-     - delete the live `enabled_families` compatibility authority path
-     - update backend/template serialization so browser and tests consume only
-       the normalized schema
+     - replace live backend `family` / `ENABLED_FAMILIES` gates with one shared
+       helper derived from normalized registry truth
+     - stop using the compat `family` alias as live authority in bundle
+       creation, blank-session creation, action run, export, and web-skin
+       payload paths
+     - keep mounted prefixes in the same normalized registry and wire future
+       mounted enablement against that contract rather than adding a side
+       authority
+     - add operator-visible template-registry load/fetch failure behavior
+       instead of silently degrading to empty action state
    - This step must complete before broader mounted-family or wearable claims.
-   - **2026-04-18 review-driven execution plan:**
-     1. Add direct JS unit coverage for `web/workbench.js::isTemplateActionAuthorable()` and `getEnabledActions()` before changing behavior again.
-     2. Replace every live backend `ENABLED_FAMILIES` gate with one shared helper derived from normalized registry truth.
-     3. Restore `/api/workbench/templates` `enabled_families` as compatibility output derived from normalized registry state, while keeping browser logic on the normalized contract.
-     4. After step 2 closes, sweep remaining live `family` readers and downgrade the alias to compatibility-only instead of live authority.
-   - **Current Step 11 review blockers from Task 2 (2026-04-18):**
-     - frontend bundle-action authorability gate has no direct branch tests
-     - backend bundle/session/export paths still split authority between normalized registry and `ENABLED_FAMILIES`
-     - compat `family` alias is still a live bridge because backend gating still reads the old authority path
-     - `/api/workbench/templates` changed shape without a compatibility period for `enabled_families`
-     - `proof_only: true` exclusion still has no direct frontend test
-     - `_normalize_template_registry()` malformed-input guards still lack the 7 focused `ValueError` tests
-     - `load_template_registry()` still caches the empty-registry fallback when the config file is missing
-     - `load_template_registry()` still lacks an in-process failure sentinel for fatal registry parse errors
-     - `preview_xp` fallback to `l0_ref` is still silent rather than warning-bearing
-     - template-registry fetch failure still degrades to empty frontend action state without operator-visible error
+   - **2026-04-26 audit-driven execution plan:**
+     1. Add backend-focused tests around the live registry authority paths:
+        `create_bundle()`, `workbench_create_blank_session()`,
+        `bundle_action_run()`, `workbench_export_bundle()`, and
+        `workbench_web_skin_bundle_payload()`.
+     2. Replace every live backend `ENABLED_FAMILIES` branch with normalized
+        `filename_prefix` / `skin_family_scope` / `prefix_catalog` helpers.
+     3. Sweep remaining live `family` readers and demote the alias to
+        compatibility-only data instead of behavior-driving authority.
+     4. Harden registry load/fetch failure handling:
+        - missing-file cache behavior
+        - fatal parse sentinel / error mode
+        - operator-visible fetch failure in the browser
+        - explicit warning or removal of silent `preview_xp -> l0_ref` fallback
+   - **Current Step 11 review blockers after the 2026-04-26 audit:**
+     - backend bundle/session/export/runtime paths still split live authority
+       between normalized registry data and `ENABLED_FAMILIES`
+     - compat `family` alias is still behavior-driving in backend paths
+     - `_normalize_template_registry()` malformed-input coverage is still
+       partial
+     - `load_template_registry()` still caches the empty-registry fallback when
+       the config file is missing
+     - `load_template_registry()` still lacks an in-process failure sentinel for
+       fatal registry parse errors
+     - `preview_xp` fallback to `l0_ref` is still silent rather than
+       warning-bearing
+     - template-registry fetch failure still degrades to empty frontend action
+       state without operator-visible error
 
 12. **IMPLEMENT — Interaction completion after UI identity map** — **IMPLEMENTED (2026-04-17, commits `3dd7042`, `2ec2238`, `d689a14`)**.
    - The official source-to-grid runner now proves manual single-box, auto single-box, grouped row-select, and grouped column-select drags through shipped headed UI actions only.
@@ -2352,115 +2366,81 @@ From the current state, the corrected sequence is:
    - Implement the three-tier persistence model (draft / explicit / PWA)
    - Finish the narrow-screen layout contract from Section 1.9.3
 
-### Immediate Next Tasks After The 2026-04-26 Root + Prefixed Runtime Proof
+### Immediate Next Tasks For Bundle Parity After The 2026-04-26 Root + Prefixed Runtime Proof
 
-The first two local cutover gates are now complete on branch
+The first two local runtime-proof gates are now complete on branch
 `v3-refactor-start @ 8163950`:
 
 1. headed root-hosted manual-assembly runtime proof: PASS
 2. headed prefixed `/xpedit` manual-assembly runtime proof: PASS, but only
    after fixing a real base-path asset bug
 
-From that current branch state, the immediate replacement sequence is now:
+Those passes do **not** close Section 1, Section 2, or Section 3, and they do
+not by themselves justify public cutover. From the current branch state, the
+immediate unified execution sequence is now:
 
-1. **Run a direct public-parity audit against the current live `rikiworld.com/xpedit`.**
-   - compare the replacement candidate against the currently served public page
-   - required checks include:
-     - direct source-tool parity
-     - visible panel grouping / ordering parity
-     - Recorder / Skin Test dock / Verification / Session separation
-     - no debug-harness leakage into the product UI
-   - if parity fails, stop cutover work and fix product gaps first
-2. **Freeze the exact replacement candidate SHA and evidence.**
-   - current candidate baseline: `8163950`
-   - keep using one committed SHA for the replacement target, not a moving
-     branch tip
-   - keep the headed-proof artifacts tied to that SHA:
-     - `output/manual_assembly_e2e_root_runtime_2026-04-26/report.json`
-     - `output/manual_assembly_e2e_prefixed_runtime_fixed_2026-04-26/report.json`
-   - if the public-parity audit fails, fix forward and freeze a new SHA instead
-3. **Validate the GitHub deployment target for the replacement candidate.**
-   - current verified deploy path is:
-     - GitHub Actions workflow `.github/workflows/deploy-cloudrun.yml`
-     - Cloud Run service `asciicker-xpedit`
-     - env var `PIPELINE_BASE_PATH=/xpedit`
-     - Cloudflare Worker routes `/xpedit` and `/xpedit/*`
-   - before cutover, confirm the replacement SHA deploys through that same path
-     and still passes `scripts/deploy/smoke_test.sh` with `PREFIX=/xpedit`
-4. **Treat the old live repo visibility step as partially complete, not fully archived.**
-   - current fact: `rikiyanai/asciicker-xpedit` is already `PRIVATE`
-   - still open if desired:
-     - toggle formal GitHub archive state
-     - preserve rollback notes / deploy metadata before freezing it permanently
-   - do not change Worker routes or Cloud Run service during this step
-5. **Replace repo identity after the old live repo is private.**
-   - preferred path:
-     - keep the current live `xpedit` repo private
-     - optionally mark it archived after rollback notes are captured
-     - rename `asciicker-pipeline-v3` repo to `xpedit`
-   - alternative hard-reset path:
-     - keep the old live repo as private historical archive
-     - create a new repo named `xpedit` from the frozen replacement SHA
-   - do not delete historical evidence before the replacement is proven live
-6. **Update deployment/package metadata that still hardcodes pipeline-v2 naming.**
-   - examples currently present in this repo:
-     - `deploy/README.md`
-     - `deploy/systemd/asciicker-xpedit.service`
-     - `deploy/.env.example`
-   - the deploy target must keep the public base path `/xpedit` even after repo
-     naming is replaced
-7. **Deploy the frozen v3 replacement candidate through GitHub Actions to Cloud Run.**
-   - deploy the exact replacement SHA, not an unpinned branch head
-   - keep `PIPELINE_BASE_PATH=/xpedit`
-   - keep the Cloud Run service / Worker route shape compatible with the
-     existing public URL
-8. **Run post-deploy smoke tests on the replacement target before public signoff.**
-    - use the existing stateless + stateful smoke path with `PREFIX=/xpedit`
-    - if staging/replacement smoke fails, stop before claiming cutover complete
-9. **Re-verify the public URL after the replacement deploy is live.**
-    - run the same from-scratch headed acceptance flow on
-      `https://rikiworld.com/xpedit`
-    - only after this passes can the cutover be called complete
-10. **Then continue the remaining product hardening in branch priority order.**
-    - the first remaining branch-level architecture/hardening item is still
-      Step 11 backend schema normalization:
-   - replace legacy `family` registry assumptions with explicit
-     `filename_prefix` / `skin_family` action contracts
-   - restore `enabled_families` only as derived compatibility output while the caller migration window remains open; do not use it as live authority
-   - then delete `enabled_families` in a separate compatibility-cleanup slice once callers are migrated
-   - decide and implement the mounted-family representation shape
-   - complete the hardening/test backlog before calling Step 11 closed:
-     - JS unit tests for `isTemplateActionAuthorable()` including `proof_only: true`
-     - malformed-registry `ValueError` tests
-     - missing-file cache fix
-     - fatal-parse sentinel fix
-     - `preview_xp` fallback warning
-     - user-visible template-registry fetch failure path
-13. **Then add or refresh the canonical current-scope "from scratch" Playwright signoff lane.**
-   - extend or replace the current partial manual-assembly runner so one
-     headed UI-driven lane proves:
+1. **Close the remaining Section 1 editor-parity gaps.**
+   - The open editor-parity items remain:
+     - resize
+     - full browse parity
+     - undo/redo ownership
+     - missing oval/text/tool-map completeness
+     - touch/pointer migration
+     - zoom/grid completeness
+     - full layer-keyboard/persistence parity
+   - Do not treat Section 2 bundle work as a substitute for this owner-graph
+     closeout.
+2. **Finish Step 11 as backend authority cleanup, not browser cleanup.**
+   - Replace live backend `family` / `ENABLED_FAMILIES` gates in:
+     - `create_bundle()`
+     - `workbench_create_blank_session()`
+     - `bundle_action_run()`
+     - `workbench_export_bundle()`
+     - `workbench_web_skin_bundle_payload()`
+   - Keep the browser on the normalized registry contract and remove the
+     remaining backend split-authority behavior.
+3. **Finish the still-open Section 2 source-authoring/product gaps.**
+   - Upgrade source authoring from JSON-first manifest editing to direct
+     interactive slicer ergonomics on the same canonical sidecar contract.
+   - Keep Step 8 scoped to manifest-backed state only; do not reintroduce
+     session-local source ownership.
+4. **Enable mounted-family parity on the normalized contract that already exists.**
+   - `wolfie` and `wolack` are now represented in the registry and semantic
+     contract.
+   - The remaining work is:
+     - mounted template/action authoring surface
+     - native builder support
+     - export/runtime proof
+   - `bigbee` remains explicitly deferred.
+5. **Add the missing Section 2 semantic runtime parity rows and proof.**
+   - Implement and verify:
+     - `item.world_item`
+     - `item.inventory_grid`
+   - Then add runtime-facing proof for the minimum seven semantic rows.
+   - Only after that extend the same proof model to mounted rows.
+6. **Keep Section 3 current while Sections 1 and 2 change.**
+   - Refresh the canonical current-scope headed signoff lane so one UI-driven
+     pass proves:
      - template apply / blank session creation
      - source upload and manual assembly from scratch
-     - whole-sheet edit on the authored result
+     - whole-sheet edit
      - save/export
-     - Skin Dock/runtime proof at the end
-   - this lane is for current skin authoring only
-   - do not block it on future wearable authoring design
-14. **Do the Section 3 backend structural-contract runners next.**
-   - add tests/helpers proving normalized schema parity against Y9-2 family,
-     fallback, mounted-prefix, and wearable slot/style truth
-   - update existing fidelity helpers to consume the same contract
-5. **Keep Step 8 open in parallel only where it does not re-open schema drift.**
-   - finish demoting session-local source authority into manifest-backed or
-     clearly-derived state
-6. **Then re-prove Step 7 as product grouping, not just code tags.**
-   - the ID overlay and numbered panels exist now
-   - the next proof burden is that the visible grouping/order matches the
-     intended product workflow and does not repeat the 2026-04-16 local/public
-     drift
-7. **Finish the remaining Step 13 Y9-2 wiring after the schema/runners are stable.**
-   - backend endpoints exist; launcher / wizard integration still does not
-8. **Then return to Step 14 small-screen/persistence completion.**
+     - Skin Dock/runtime proof
+   - Keep acceptance evidence UI-only on root-hosted, prefixed `/xpedit`, and
+     eventual public parity surfaces.
+   - Keep structural-contract runners separate for schema/runtime parity.
+7. **Finish Y9-2 gateway follow-through only after the Section 2 backend truth is stable.**
+   - The HTTP endpoints already exist.
+   - The remaining gateway work is launcher / wizard front-door wiring against
+     the stable backend contract, not inventing a second pipeline model.
+8. **Only after Sections 1, 2, and 3 are actually closed and current should public replacement begin.**
+   - Then run:
+     - direct public-parity audit against `rikiworld.com/xpedit`
+     - freeze exact replacement SHA and proof artifacts
+     - validate the current `/xpedit` deploy path
+     - deploy the frozen candidate
+     - re-run public headed proof on the live URL
+9. **Then return to Step 14 small-screen/persistence completion.**
 
 Future after current skin-authoring closure:
 
@@ -2685,9 +2665,9 @@ not a task plan — it is a gate list. Migration is ready when all blocking gate
 | Gate | Section | Status |
 |------|---------|--------|
 | Step 3 structural cleanup verified (no `syncRootStateFromWholeSheet` etc.) | §Unified Step 3 | IMPLEMENTED, UNVERIFIED (`c836cde`) |
-| Step 11 backend schema normalization done | §Unified Step 11 | OPEN — first S2 priority |
-| `enabled_families` legacy authority path deleted | §2.5 misalignment ledger | OPEN |
-| G7/G8/G9 enforced at export (Step 9, `2026-04-16`) | §2.4 | IMPLEMENTED (`src/pipeline_v2/service.py`); re-verify on V3 branch |
+| Step 11 backend schema normalization done | §Unified Step 11 | OPEN — backend authority cleanup is still first S2 priority |
+| Live backend `family` / `ENABLED_FAMILIES` authority path deleted | §2.5 misalignment ledger | OPEN |
+| G7/G8/G9 enforced at export | §2.4 | OPEN — export/web-skin paths still run only G10-G12 on the current branch |
 | Canonical from-scratch Playwright signoff lane passing | §Unified Step 12 | PARTIAL |
 | §2.11 coverage script exists and emits PASS | §2.11 | OPEN |
 | §2.12 rollback binary snapshot implemented | §2.12 | OPEN |

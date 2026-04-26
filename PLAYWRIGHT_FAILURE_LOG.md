@@ -104,6 +104,72 @@ What this slice does **not** close:
 2. item/world/inventory semantic-runtime parity
 3. mounted-row readiness
 
+## Audit — Section-2 Live-Code Re-Audit And Sequence Correction (2026-04-26)
+
+This is a canon/failure-log audit entry. It is not a product fix or a proof
+pass.
+
+### Findings
+
+1. **The current Section 2 Step 11 wording was partially stale against live code. HIGH.**
+   - Live code evidence:
+     - `src/pipeline_v2/app.py:386-388` returns `load_template_registry()` directly from `GET /api/workbench/templates`
+     - `tests/test_template_registry_schema.py:83-99` asserts the API no longer emits `enabled_families`
+     - `web/workbench.js:6995-7008` derives bundle scope from normalized template actions
+     - `tests/web/workbench-template-gating.test.js` now has direct coverage for `isTemplateActionAuthorable()`, `getEnabledActions()`, and `proof_only: true`
+   - Consequence:
+     - the browser-side `enabled_families` fail-close is no longer the active Section 2 blocker
+     - Step 11 stays open, but it is now a backend authority/runtime cleanup problem
+
+2. **Backend bundle/runtime paths still keep the legacy `family` / `ENABLED_FAMILIES` authority alive. HIGH.**
+   - Live code evidence:
+     - `src/pipeline_v2/config.py:38` still defines `ENABLED_FAMILIES = {"player", "attack", "plydie"}`
+     - `src/pipeline_v2/service.py:1305-1317` gates `create_bundle()` on `family in ENABLED_FAMILIES`
+     - `src/pipeline_v2/service.py:2810-2815` gates blank-session creation the same way
+     - `src/pipeline_v2/service.py:2870-2875` gates `bundle_action_run()` the same way
+     - `src/pipeline_v2/service.py:3578-3582` and `3630-3634` still drop/export-skip families via the same gate
+   - Consequence:
+     - mounted-family parity is still blocked by backend implementation even though the normalized registry exists
+     - Step 11 must now target backend truth, not browser truth
+
+3. **The registry is no longer “missing mounted families”; it is mounted-aware but not executable end-to-end. MEDIUM.**
+   - Live code evidence:
+     - `config/template_registry.json` now contains explicit `filename_prefix`, `skin_family`, `runtime_role`, `mounted`, and mounted/deferred prefix lists
+     - `wolfie` / `wolack` are present with `status="specified_not_authorable"` and blockers `mounted_family_scope_not_enabled`, `missing_native_builder`
+     - `tests/xp_fidelity_test/semantic_runtime_contract.test.mjs:64-71` keeps mounted rows explicit as blockers rather than silent omissions
+   - Consequence:
+     - the open gap is mounted authorability/native-builder/runtime proof
+     - the open gap is no longer “registry does not represent mounted families”
+
+4. **G7/G8/G9 are still not enforced at the export/web-skin boundary. HIGH.**
+   - Live code evidence:
+     - `src/pipeline_v2/service.py:3527-3562` defines `_run_structural_gates()` as G10/G11/G12 only
+     - `src/pipeline_v2/service.py:3565-3616` and `3619-3675` call only `_run_structural_gates()` during bundle export and web-skin payload generation
+   - Consequence:
+     - the older “G7-G12 enforced at export boundary” closure claim is false on the current branch
+     - Section 2 export safety still needs the full quality-contract follow-through
+
+5. **Generalized bundle parity is still blocked on semantic rows, not just on action tabs. HIGH.**
+   - Live code evidence:
+     - `scripts/xp_fidelity_test/bundle_contract.mjs` still marks `item.world_item` and `item.inventory_grid` as `unmodeled_gap`
+     - mounted rows remain `specified_not_authorable`
+   - Consequence:
+     - bundle parity remains blocked on item/world/inventory implementation plus runtime-facing semantic proof
+     - mounted parity remains blocked after that
+
+### Corrected next sequence
+
+1. Close the remaining Section 1 editor-parity ledger first.
+2. Finish Step 11 as backend authority cleanup:
+   - remove live `family` / `ENABLED_FAMILIES` gating from bundle/session/export/runtime paths
+3. Finish Section 2 source-authoring ergonomics on the canonical manifest contract.
+4. Enable mounted-family authoring/runtime parity on the already-normalized registry.
+5. Implement and prove the missing semantic runtime rows:
+   - `item.world_item`
+   - `item.inventory_grid`
+6. Keep Section 3 proof current on root-hosted, prefixed `/xpedit`, and public parity surfaces.
+7. Only after Sections 1, 2, and 3 are current should public replacement/cutover resume.
+
 ## Audit — Canon/Porting Precondition And Y9-2 Bundle-State Investigation (2026-04-26)
 
 This is an audit/investigation entry. It is not a product fix, proof pass, or
