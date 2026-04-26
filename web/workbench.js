@@ -113,6 +113,7 @@
     selectedCols: new Set(),
     rowCategories: {},
     frameGroups: [],
+    frameGridDirtyCells: new Set(),
     layers: [],
     hasUploadedLayers: false,
     layerNames: [...DEFAULT_LAYER_NAMES],
@@ -2712,6 +2713,58 @@
     return `A${row} ${angleName} F${info.frame}${authoringProjectionCount() > 1 ? ` P${info.proj}` : ""}`;
   }
 
+  function frameGridDirtyKey(row, col) {
+    return `${Number(row)}:${Number(col)}`;
+  }
+
+  function markFrameGridDirtyForCell(x, y) {
+    if (!state.frameGridDirtyCells) state.frameGridDirtyCells = new Set();
+    const frameW = Math.max(1, Number(state.frameWChars || 1));
+    const frameH = Math.max(1, Number(state.frameHChars || 1));
+    const row = Math.floor(Number(y) / frameH);
+    const col = Math.floor(Number(x) / frameW);
+    if (row < 0 || row >= state.angles) return;
+    if (col < 0 || col >= authoringFrameCols()) return;
+    state.frameGridDirtyCells.add(frameGridDirtyKey(row, col));
+  }
+
+  function takeFrameGridDirtyCells() {
+    const dirty = state.frameGridDirtyCells instanceof Set ? state.frameGridDirtyCells : new Set();
+    state.frameGridDirtyCells = new Set();
+    return [...dirty].map((key) => {
+      const [row, col] = String(key).split(":").map((value) => Number(value));
+      return { row, col };
+    }).filter((coord) => Number.isFinite(coord.row) && Number.isFinite(coord.col));
+  }
+
+  function refreshFrameGridCells(coords) {
+    const panel = $("gridPanel");
+    if (!panel || !Array.isArray(coords) || coords.length === 0) return;
+    for (const coord of coords) {
+      const row = Number(coord.row);
+      const col = Number(coord.col);
+      const prior = panel.querySelector(`.frame-cell[data-row="${row}"][data-col="${col}"]`);
+      if (!prior) continue;
+      const selected = selectionContainsFrame(row, col);
+      const rowSelected = rowHasSelectedFrames(row);
+      const groupSelected = state.frameGroups.some((g) => Number(g.row) === row && (g.cols || []).includes(col));
+      prior.replaceWith(makeFrameCanvas(row, col, selected, rowSelected, groupSelected));
+    }
+    enforceGridPanelFit();
+  }
+
+  function refreshDirtyFrameGridCells(opts = {}) {
+    const dirtyFrames = takeFrameGridDirtyCells();
+    refreshFrameGridCells(dirtyFrames);
+    if (opts.updatePreview) {
+      const pRow = state.selectedRow === null ? 0 : state.selectedRow;
+      const previewRow = Math.max(0, Math.min(state.angles - 1, pRow));
+      if (dirtyFrames.some((coord) => Number(coord.row) === previewRow && Number(coord.col) === 0)) {
+        renderPreviewFrame(previewRow, 0);
+      }
+    }
+  }
+
   function makeFrameCanvas(row, col, selected, rowSelected, groupSelected) {
     const frame = document.createElement("div");
     frame.className = "frame-cell";
@@ -2857,6 +2910,7 @@
   function renderFrameGrid() {
     const panel = $("gridPanel");
     panel.innerHTML = "";
+    if (state.frameGridDirtyCells) state.frameGridDirtyCells.clear();
     const frameCols = authoringFrameCols();
     updateGridPanelZoomUI();
     panel.style.gridTemplateColumns = `${gridPanelHeaderPx()}px repeat(${frameCols}, ${gridPanelTilePx()}px)`;
@@ -6406,18 +6460,15 @@
       onCellEdited: function(x, y, glyph, fg, bg, layerIndex) {
         if (x < 0 || x >= state.gridCols || y < 0 || y >= state.gridRows) return;
         setCell(x, y, { glyph: glyph, fg: fg, bg: bg }, layerIndex);
+        markFrameGridDirtyForCell(x, y);
       },
       onStrokeComplete: function() {
         markSessionDirty("whole-sheet-edit");
-        // Targeted refresh: skip legacy grid rebuild, source canvas, inspector,
-        // metadata, and syncWholeSheetFromState (editor canvas already correct).
-        // When _suppressRender is set (verifier recipe replay), skip the
-        // expensive frame grid + preview renders that churn hundreds of DOM
-        // canvas elements per call.  A single render fires after replay ends.
+        // Targeted refresh: skip full legacy grid rebuild, source canvas,
+        // inspector, metadata, and syncWholeSheetFromState (editor canvas
+        // already correct).
         if (!state._suppressRender) {
-          renderFrameGrid();
-          var pRow = state.selectedRow === null ? 0 : state.selectedRow;
-          renderPreviewFrame(Math.max(0, Math.min(state.angles - 1, pRow)), 0);
+          refreshDirtyFrameGridCells({ updatePreview: true });
         }
         updateSessionDirtyBadge();
         updateUndoRedoButtons();
@@ -8333,7 +8384,13 @@
     // rebuild (innerHTML + 144 canvas elements) and preview render fire on
     // every stroke completion — 4694 actions = ~676K DOM element churn.
     // Suppressing these during replay prevents Chromium renderer OOM crashes.
-    suppressRender: (on) => { state._suppressRender = !!on; },
+    suppressRender: (on) => {
+      const wasSuppressed = !!state._suppressRender;
+      state._suppressRender = !!on;
+      if (wasSuppressed && !state._suppressRender) {
+        refreshDirtyFrameGridCells({ updatePreview: true });
+      }
+    },
     // Layer-aware accessors for browser-level proof automation.
     _state: () => state,
     _setCell: (x, y, c) => setCell(x, y, c),

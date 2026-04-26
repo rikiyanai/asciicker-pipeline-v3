@@ -11,6 +11,49 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Audit — UQ-002 Frame-Grid Hot-Path Cut (2026-04-26)
+
+This is a product/code checkpoint entry for the second required UQ-002
+hot-path refactor step. It is **not** UQ-002 closure and it is **not** headed
+UQ-003 proof.
+
+### What changed
+
+1. Ordinary whole-sheet cell edits no longer call full `renderFrameGrid()` on
+   stroke completion.
+   - `web/workbench.js:2720-2759` records dirty frame-grid coordinates from
+     edited whole-sheet cells and refreshes only matching `.frame-cell` tiles.
+   - `web/workbench.js:6460-6471` now marks dirty frames during
+     `onCellEdited` and calls `refreshDirtyFrameGridCells()` from
+     `onStrokeComplete`.
+2. Full `renderFrameGrid()` remains available for structural wrapper flows
+   such as selection, row/column operations, geometry changes, and full
+   document snapshot application.
+3. Render suppression used by verifier replay now preserves dirty frame
+   coordinates while suppressed and flushes targeted tile refreshes when
+   suppression is disabled.
+
+### Verification evidence
+
+- `node --check web/workbench.js`
+  - PASS
+- `node --test tests/web/whole-sheet-history-ownership.test.mjs`
+  - PASS (`3 tests`)
+- `node --test tests/web/whole-sheet-clipboard.test.mjs tests/web/whole-sheet-cell-ops.test.mjs tests/web/whole-sheet-input-policy.test.mjs`
+  - PASS
+- `node tests/web/workbench-template-gating.test.js`
+  - PASS (`38 passed`)
+
+### Audit consequence
+
+The second required UQ-002 refactor step is complete for code-state purposes:
+ordinary root edits no longer rebuild the entire frame-grid projection.
+
+Remaining UQ-002 order is unchanged:
+
+1. decouple save/autosave from edit completion
+2. only then offload remaining heavy secondary work
+
 ## Audit — UQ-002 Whole-Sheet History Ownership Cut (2026-04-26)
 
 This is a product/code checkpoint entry for the first required UQ-002 hot-path

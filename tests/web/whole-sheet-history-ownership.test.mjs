@@ -41,3 +41,18 @@ test('whole-sheet edit completion no longer writes wrapper history', () => {
     'whole-sheet mount callbacks must not call wrapper pushHistory()'
   );
 });
+
+test('ordinary whole-sheet stroke completion avoids full frame-grid rebuilds', () => {
+  const strokeBlock = workbenchJs.match(/onStrokeComplete:\s*function\(\)\s*\{[\s\S]*?\n\s*\},\n\s*onSave:/);
+  assert.ok(strokeBlock, 'expected whole-sheet onStrokeComplete callback');
+  assert.equal(
+    /renderFrameGrid\(\)/.test(strokeBlock[0]),
+    false,
+    'ordinary whole-sheet stroke completion must not rebuild the full frame grid'
+  );
+  assert.match(
+    strokeBlock[0],
+    /refreshDirtyFrameGridCells/,
+    'ordinary whole-sheet stroke completion should refresh only dirty frame-grid cells'
+  );
+});
