@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-04-26
 **Branch baseline:** `v3-refactor-start @ 3f89a74`
-**Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the manual-assembly runtime proof, the Y9-2 generalized-bundle porting audit, and the surviving local/browser/runtime assets in this repo
+**Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the manual-assembly runtime proof, the Y9-2 generalized-bundle porting audit, the semantic-runtime contract coverage slice, and the surviving local/browser/runtime assets in this repo
 
 ## Application Statement
 
@@ -1579,6 +1579,70 @@ Therefore the porting/testing precondition is strict:
    players, manual runs, scripted runs, and proof artifacts, with recipes
    remaining input-only and analyzer gates owning proof. Any future porting
    verifier here must follow that same boundary.
+6. Boundary correction: it is not accurate to say "Section 1 stayed unchanged
+   and only Section 2 changed." Current code shows material Section 1 root
+   editor changes (whole-sheet primary-surface ownership, Session Ops blank-root
+   flow, whole-sheet browse/zoom/clipboard/mode behavior). The correct claim is:
+   Section 1 changed materially, while the specific missing generalized-bundle
+   parity layer lives in Section 2 semantic-runtime coverage.
+
+#### 2.3.9 Semantic Runtime Parity Contract And Current Coverage
+
+The repo now has an explicit contract-model layer for the Y9-2 semantic runtime
+rows it must eventually prove.
+
+Current contract surfaces:
+
+1. `scripts/xp_fidelity_test/bundle_contract.mjs`
+   - `getSemanticRuntimeParityContract()`
+2. `scripts/xp_fidelity_test/run_semantic_runtime_contract_test.mjs`
+   - contract-audit verifier lane
+3. `tests/xp_fidelity_test/semantic_runtime_contract.test.mjs`
+   - row/blocker assertions
+
+Minimum semantic-runtime parity row set now modeled:
+
+1. `actor.on_foot_idle`
+2. `actor.on_foot_move`
+3. `actor.melee_attack`
+4. `actor.fall_dead.fall`
+5. `actor.fall_dead.dead`
+6. `item.world_item`
+7. `item.inventory_grid`
+
+Full generalized-bundle readiness remains broader than that minimum row set.
+The next blocking extension rows are:
+
+1. `actor.mounted_idle_walk`
+2. `actor.mounted_attack`
+
+Current modeled coverage state in this repo:
+
+1. Mapped to the current authoring surface:
+   - `actor.on_foot_idle` -> `player_native_full / idle / player`
+   - `actor.on_foot_move` -> `player_native_full / idle / player`
+   - `actor.melee_attack` -> `player_native_full / attack / attack`
+   - `actor.fall_dead.fall` -> `player_native_full / death / plydie`
+   - `actor.fall_dead.dead` -> `player_native_full / death / plydie`
+2. Explicit current gaps:
+   - `item.world_item`
+   - `item.inventory_grid`
+3. Explicit broader-readiness blockers:
+   - mounted rows are specified but not authorable in the current registry
+   - headed semantic gameplay proof is still missing
+
+What this contract slice means:
+
+1. The repo is no longer allowed to over-claim "generalized bundle parity"
+   while silently remaining action-tab only.
+2. The contract layer is necessary, but it is not the same thing as runtime
+   proof.
+3. `generalized_bundle_port_ready` remains `false` until:
+   - the 7-row minimum is proven in runtime-facing lanes, not just modeled
+   - item/world/inventory rows are implemented and verified
+   - mounted extension rows are no longer blocked
+   - headed semantic gameplay proof exists for the same action surface Y9-2
+     canon requires
 
 ### 2.4 Structural Gate, Export, And Injection Contract
 
@@ -1636,7 +1700,7 @@ The live wrapper architecture is still misaligned in these exact ways after the
 | Y9-2 HTTP API contract now exists | `src/pipeline_v2/app.py:317-325`, `src/pipeline_v2/app.py:562-587`, `src/pipeline_v2/service.py:3913-4027` | The server now exposes `GET /health`, `GET /pipeline/templates`, `POST /pipeline/run`, and `POST /pipeline/validate_xp`. The remaining Y9-2 gap is launcher/wizard wiring, not missing backend endpoints. |
 | Y9-2 wizard not wired as launcher sub-action | `Y9-2 scripts/launcher.py`, `Y9-2 scripts/pipeline/wizard/engine.py` | `WizardEngine` exists but has no `_execute_action` branch in `launcher.py`; `[3] ASSET PIPELINE` node is fully absent rather than showing as `[DEFERRED]`. Tracked as Y9-2 DESIGN OPEN B-13. |
 | **GAP: No wearable or item templates, and no backend parity runner for wearable slot/style contracts** | `config/template_registry.json`, `scripts/xp_fidelity_test/`, `tests/` | Pipeline-v2 has no wearable/item authoring surface, and there is no structural-contract runner that proves the local schema matches Y9-2 slot/style truth. That means gold/dark/default wearable semantics are still only partially covered by ad hoc runtime or engine-side knowledge. Tracked as S2-FAM-04. |
-| **GAP: Current verifier surface is still action-tab centric, not generalized semantic-selector centric** | `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs`, `scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs`, `scripts/xp_fidelity_test/bundle_contract.mjs`, `config/template_registry.json`, `Y9-2 server/network.h`, `Y9-2 engine/inventory.h`, `Y9-2 scripts/pipeline/staging/appearance_bundle/phase2-positive/appearance_bundle.json` | Current pipeline-v3 proof is still organized around authoring actions such as `idle`, `attack`, and `death`. The active Y9-2 bundle runtime is organized around generalized bundle/profile/item/presentation IDs plus semantic selector tables like `on_foot_move`, `melee_attack`, `fall_dead`, `world_item`, and `inventory_grid`. Before generalized bundle-port claims, this repo needs a verifier layer that proves those same semantic runtime rows rather than only the current action-tab authoring surface. |
+| **GAP: Semantic runtime contract is now modeled, but runtime selector proof is still missing** | `scripts/xp_fidelity_test/bundle_contract.mjs`, `scripts/xp_fidelity_test/run_semantic_runtime_contract_test.mjs`, `tests/xp_fidelity_test/semantic_runtime_contract.test.mjs`, `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs`, `scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs`, `config/template_registry.json`, `Y9-2 server/network.h`, `Y9-2 engine/inventory.h`, `Y9-2 scripts/pipeline/staging/appearance_bundle/phase2-positive/appearance_bundle.json` | This repo now explicitly models the minimum 7 semantic runtime rows plus mounted blockers, so the contract gap is no longer silent. But the only headed/browser/runtime proof lanes still center on authoring actions such as `idle`, `attack`, and `death`, and item/world/inventory semantic rows still have no runtime-facing verifier lane. Generalized bundle-port readiness therefore remains blocked on actual semantic selector proof, not just contract modeling. |
 
 ### 2.6 Section-2 Scope Boundary
 

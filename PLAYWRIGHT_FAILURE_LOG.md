@@ -11,6 +11,99 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Audit — Section-1 Boundary Correction And Semantic Runtime Contract Coverage (2026-04-26)
+
+This is an audit plus verifier-contract slice. It is not a generalized-bundle
+port completion claim.
+
+### Boundary correction
+
+It is **not** accurate to say "Section 1 stayed unchanged and only Section 2
+changed."
+
+What is strictly proven from current code:
+
+1. Section 1 root-editor code changed materially in this repo.
+   - `web/workbench.html` now declares the whole-sheet panel as the primary
+     editor surface.
+   - `web/workbench.js` now mounts the whole-sheet editor with root callbacks
+     for edit/history/layer/save/export/browse ownership.
+   - `web/whole-sheet-init.js` now carries whole-sheet browse, zoom, clipboard,
+     and mode-toggle behavior inside the root editor.
+2. Section 2 still contains the active Y9-2 generalized-bundle parity gap.
+   - Current verifier and registry surfaces are still action-tab centric around
+     `idle`, `attack`, and `death`.
+   - Y9-2 runtime truth is semantic-selector centric around actor/item rows.
+
+Therefore the correct boundary is:
+
+- Section 1 has changed materially and remains its own editor-parity problem.
+- The specific new porting/parity debt for Y9-2 generalized bundles lives in
+  Section 2 semantic-runtime coverage.
+
+### Semantic runtime contract slice added
+
+The repo now has a machine-readable semantic-runtime parity contract layer:
+
+1. `scripts/xp_fidelity_test/bundle_contract.mjs`
+   - new `getSemanticRuntimeParityContract()`
+2. `scripts/xp_fidelity_test/run_semantic_runtime_contract_test.mjs`
+   - contract-audit verifier lane
+3. `tests/xp_fidelity_test/semantic_runtime_contract.test.mjs`
+   - row/blocker assertions
+
+What that new layer now models:
+
+1. minimum 7 semantic rows:
+   - `actor.on_foot_idle`
+   - `actor.on_foot_move`
+   - `actor.melee_attack`
+   - `actor.fall_dead.fall`
+   - `actor.fall_dead.dead`
+   - `item.world_item`
+   - `item.inventory_grid`
+2. full-readiness extension rows still blocking broader readiness claims:
+   - `actor.mounted_idle_walk`
+   - `actor.mounted_attack`
+
+Current modeled status:
+
+1. mapped to existing pipeline-v3 authoring surface:
+   - `actor.on_foot_idle`
+   - `actor.on_foot_move`
+   - `actor.melee_attack`
+   - `actor.fall_dead.fall`
+   - `actor.fall_dead.dead`
+2. explicit unmapped gaps:
+   - `item.world_item`
+   - `item.inventory_grid`
+3. explicit broader-readiness blockers:
+   - mounted rows are specified but not authorable
+   - headed semantic gameplay proof is still missing
+
+### Verification evidence
+
+- `node --test tests/xp_fidelity_test/bundle_contract.test.mjs tests/xp_fidelity_test/semantic_runtime_contract.test.mjs`
+  - PASS
+- `node scripts/xp_fidelity_test/run_semantic_runtime_contract_test.mjs --out-dir output/semantic_runtime_contract_2026-04-26`
+  - PASS
+  - report: `output/semantic_runtime_contract_2026-04-26/report.json`
+
+### Audit consequence
+
+Do not call generalized bundle-port readiness complete from this slice.
+
+What this slice closes:
+
+1. the repo now explicitly models the semantic rows it must match
+2. the repo now fails honest if those rows disappear from contract coverage
+
+What this slice does **not** close:
+
+1. actual runtime selector proof for those semantic rows
+2. item/world/inventory semantic-runtime parity
+3. mounted-row readiness
+
 ## Audit — Canon/Porting Precondition And Y9-2 Bundle-State Investigation (2026-04-26)
 
 This is an audit/investigation entry. It is not a product fix, proof pass, or
