@@ -3,8 +3,8 @@
 **Authority:** this file and `PLAYWRIGHT_FAILURE_LOG.md` are the only active canon docs for the browser workbench.
 
 **Last updated:** 2026-04-26
-**Branch baseline:** `v3-refactor-start @ 312590c`
-**Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the grouped-drag / Delete Frame interaction slice, and the surviving local/browser/runtime assets in this repo
+**Branch baseline:** `v3-refactor-start @ 8163950`
+**Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the grouped-drag / Delete Frame interaction slice, the manual-assembly runtime proof, and the surviving local/browser/runtime assets in this repo
 
 ## Application Statement
 
@@ -27,9 +27,12 @@ That is the current shipped application. It is not already a pure whole-sheet-ro
 
 The user-facing runtime lane is singular: the current whole-sheet XP editor state is what gets tested in the embedded Skin Dock/runtime preview (`Test This Skin` or the bundle equivalent). Debug-only harnesses such as `/termpp-skin-lab`, raw iframe loaders, or external-XP injection helpers may exist for developers, but they are not part of the `/workbench` product surface and must not appear as peer user actions.
 
-Public/local parity note: the public behavior-frozen `rikiworld.com/xpedit` page still exposes older direct source-marking controls (`Select`, `Draw Box`, `Drag Row`, `Drag Column`, `Vertical Cut`, `Find Sprites`). The local rebuild currently does not; rebuilding that direct slicer surface remains an open gap rather than current product truth.
-
-Public/local parity note: the public page also keeps `Recorder`, `Skin Test dock`, `Verification`, and `Session` as distinct user-facing surfaces. The local rebuild currently over-collapses some of those into the runtime drawer; that is a live UI failure, not intended canon direction.
+Public/local parity note: the current local served workbench now exposes the
+same named direct source controls (`Select`, `Draw Box`, `Drag Row`,
+`Drag Column`, `Vertical Cut`, `Find Sprites`) and the same major panel
+surfaces (`Recorder`, `Skin Test dock`, `Verification`, `Session`) on both
+root-hosted and `/xpedit` local URLs. Full public parity is still not proven
+until a direct live-vs-local audit is rerun against `rikiworld.com/xpedit`.
 
 ### Deployment Lineage And Replacement Target
 
@@ -72,6 +75,33 @@ Deployment-path clarification verified from the live deploy files in this repo:
 3. This statement applies to the `/xpedit` app route only. It does not make any
    claim about unrelated non-`/xpedit` GitHub Pages/origin content on
    `rikiworld.com`.
+
+### Verified Replacement Progress (2026-04-26)
+
+The following replacement-sequence facts are now directly verified:
+
+1. The current live GitHub repo `rikiyanai/asciicker-xpedit` was switched from
+   `PUBLIC` to `PRIVATE` on 2026-04-26.
+   - `https://rikiworld.com/xpedit` remained live because the app route is
+     still served by Cloudflare Worker -> Cloud Run.
+   - formal GitHub "archive" state was not toggled in this slice; only
+     visibility was changed.
+2. The current local branch has one real headed authored-XP runtime proof lane
+   for the classic/manual-assembly path:
+   - root-hosted PASS artifact:
+     `output/manual_assembly_e2e_root_runtime_2026-04-26/report.json`
+   - prefixed `/xpedit` PASS artifact:
+     `output/manual_assembly_e2e_prefixed_runtime_fixed_2026-04-26/report.json`
+3. The prefixed proof did not pass by assumption. It first failed on a real
+   base-path defect:
+   - `/xpedit/workbench` still referenced `/workbench-template-gating.js`
+     without the `/xpedit` prefix
+   - the prefixed HTML loaded, but the missing asset broke workbench JS
+     readiness and blocked the headed verifier before any workflow action
+4. That `/xpedit` asset-path defect is fixed in the current branch baseline by
+   adding the missing base-path rewrite for
+   `/workbench-template-gating.js` and pinning it with a focused prefixed-route
+   regression test.
 
 ### Application Boundaries And Guardrails
 
@@ -2207,28 +2237,18 @@ From the current state, the corrected sequence is:
    - Implement the three-tier persistence model (draft / explicit / PWA)
    - Finish the narrow-screen layout contract from Section 1.9.3
 
-### Immediate Next Tasks After The 2026-04-17 Step 4 Closeout
+### Immediate Next Tasks After The 2026-04-26 Root + Prefixed Runtime Proof
 
-The 2026-04-26 canon/deploy audit is now complete. From the current branch
-state, the immediate replacement sequence is:
+The first two local cutover gates are now complete on branch
+`v3-refactor-start @ 8163950`:
 
-1. **Run the canonical headed from-scratch E2E proof on local root-hosted v3 first.**
-   - start the local app on the repo-default root-hosted path:
-     `PYTHONPATH=src python3 -m pipeline_v2.app`
-   - prove one headed UI-driven lane at
-     `http://127.0.0.1:5071/workbench` that covers:
-     - template apply or classic blank-session creation
-     - source upload and/or manual assembly from scratch
-     - whole-sheet edit on the authored result
-     - save/export
-     - `Test This Skin` runtime proof with sustained usable runtime state
-   - no archive/rename/deploy action starts before this gate passes
-2. **Run the same headed from-scratch E2E proof on local prefixed hosting.**
-   - serve the app with `PIPELINE_BASE_PATH=/xpedit`
-   - prove the same workflow at `http://127.0.0.1:5072/xpedit/workbench`
-   - this is mandatory because the public cutover target is `/xpedit`, not
-     root-hosted `/workbench`
-3. **Run a direct public-parity audit against the current live `rikiworld.com/xpedit`.**
+1. headed root-hosted manual-assembly runtime proof: PASS
+2. headed prefixed `/xpedit` manual-assembly runtime proof: PASS, but only
+   after fixing a real base-path asset bug
+
+From that current branch state, the immediate replacement sequence is now:
+
+1. **Run a direct public-parity audit against the current live `rikiworld.com/xpedit`.**
    - compare the replacement candidate against the currently served public page
    - required checks include:
      - direct source-tool parity
@@ -2236,11 +2256,15 @@ state, the immediate replacement sequence is:
      - Recorder / Skin Test dock / Verification / Session separation
      - no debug-harness leakage into the product UI
    - if parity fails, stop cutover work and fix product gaps first
-4. **Freeze the exact replacement candidate SHA and evidence.**
-   - use one committed SHA for the replacement target, not a moving branch tip
-   - log the headed-proof artifacts and parity evidence for that SHA before any
-     deployment flip
-5. **Validate the GitHub deployment target for the replacement candidate.**
+2. **Freeze the exact replacement candidate SHA and evidence.**
+   - current candidate baseline: `8163950`
+   - keep using one committed SHA for the replacement target, not a moving
+     branch tip
+   - keep the headed-proof artifacts tied to that SHA:
+     - `output/manual_assembly_e2e_root_runtime_2026-04-26/report.json`
+     - `output/manual_assembly_e2e_prefixed_runtime_fixed_2026-04-26/report.json`
+   - if the public-parity audit fails, fix forward and freeze a new SHA instead
+3. **Validate the GitHub deployment target for the replacement candidate.**
    - current verified deploy path is:
      - GitHub Actions workflow `.github/workflows/deploy-cloudrun.yml`
      - Cloud Run service `asciicker-xpedit`
@@ -2248,40 +2272,41 @@ state, the immediate replacement sequence is:
      - Cloudflare Worker routes `/xpedit` and `/xpedit/*`
    - before cutover, confirm the replacement SHA deploys through that same path
      and still passes `scripts/deploy/smoke_test.sh` with `PREFIX=/xpedit`
-6. **Make the current live `xpedit` repo private archive without taking `/xpedit` down.**
-   - because `/xpedit` is served through Cloudflare Worker -> Cloud Run, repo
-     privacy alone should not drop the live public app
-   - do not change Worker routes or Cloud Run service during this archive step
-   - preserve deploy secrets / workload identity / workflow permissions needed
-     to continue deploying after the visibility change
-7. **Replace repo identity after the old live repo is private.**
+4. **Treat the old live repo visibility step as partially complete, not fully archived.**
+   - current fact: `rikiyanai/asciicker-xpedit` is already `PRIVATE`
+   - still open if desired:
+     - toggle formal GitHub archive state
+     - preserve rollback notes / deploy metadata before freezing it permanently
+   - do not change Worker routes or Cloud Run service during this step
+5. **Replace repo identity after the old live repo is private.**
    - preferred path:
-     - make the current public `xpedit` repo private archived
+     - keep the current live `xpedit` repo private
+     - optionally mark it archived after rollback notes are captured
      - rename `asciicker-pipeline-v3` repo to `xpedit`
    - alternative hard-reset path:
-     - keep the old live repo as private archive
+     - keep the old live repo as private historical archive
      - create a new repo named `xpedit` from the frozen replacement SHA
    - do not delete historical evidence before the replacement is proven live
-8. **Update deployment/package metadata that still hardcodes pipeline-v2 naming.**
+6. **Update deployment/package metadata that still hardcodes pipeline-v2 naming.**
    - examples currently present in this repo:
      - `deploy/README.md`
      - `deploy/systemd/asciicker-xpedit.service`
      - `deploy/.env.example`
    - the deploy target must keep the public base path `/xpedit` even after repo
      naming is replaced
-9. **Deploy the frozen v3 replacement candidate through GitHub Actions to Cloud Run.**
+7. **Deploy the frozen v3 replacement candidate through GitHub Actions to Cloud Run.**
    - deploy the exact replacement SHA, not an unpinned branch head
    - keep `PIPELINE_BASE_PATH=/xpedit`
    - keep the Cloud Run service / Worker route shape compatible with the
      existing public URL
-10. **Run post-deploy smoke tests on the replacement target before public signoff.**
+8. **Run post-deploy smoke tests on the replacement target before public signoff.**
     - use the existing stateless + stateful smoke path with `PREFIX=/xpedit`
     - if staging/replacement smoke fails, stop before claiming cutover complete
-11. **Re-verify the public URL after the replacement deploy is live.**
+9. **Re-verify the public URL after the replacement deploy is live.**
     - run the same from-scratch headed acceptance flow on
       `https://rikiworld.com/xpedit`
     - only after this passes can the cutover be called complete
-12. **Then continue the remaining product hardening in branch priority order.**
+10. **Then continue the remaining product hardening in branch priority order.**
     - the first remaining branch-level architecture/hardening item is still
       Step 11 backend schema normalization:
    - replace legacy `family` registry assumptions with explicit

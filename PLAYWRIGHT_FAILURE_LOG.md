@@ -11,6 +11,96 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Fix Attempt — Live Repo Private + Manual-Assembly Runtime Proof + `/xpedit` Asset Repair (2026-04-26)
+
+This slice includes one operational visibility change, one verifier expansion,
+one real prefixed-hosting bug fix, and two headed proof runs.
+
+### Operational step executed
+
+- Verified the current live repo as `rikiyanai/asciicker-xpedit` and changed its
+  GitHub visibility from `PUBLIC` to `PRIVATE`.
+- Re-verified the repo visibility after the change: `PRIVATE`.
+- `https://rikiworld.com/xpedit` remained live after that visibility change,
+  consistent with the Cloudflare Worker -> Cloud Run deploy shape already
+  logged in canon.
+- Formal GitHub archive state was **not** toggled in this slice.
+
+### Verifier gap closed
+
+- Extended `scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs` so the
+  existing manual-assembly lane no longer stops at export.
+- The runner now continues through:
+  - `Test This Skin` button enablement
+  - skin-dock iframe appearance
+  - playable runtime detection
+  - 10-second movement / render-stability proof
+
+### Root-hosted result
+
+- Command:
+  `node scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs --headed --out-dir output/manual_assembly_e2e_root_runtime_2026-04-26`
+- Result: **PASS**
+- Artifact:
+  `output/manual_assembly_e2e_root_runtime_2026-04-26/report.json`
+- Step summary: `16/16 passed`
+  - includes template apply, upload, manual assembly, whole-sheet paint,
+    save, export, `Test This Skin`, runtime playable, runtime runaround
+
+### Prefixed `/xpedit` initial failure
+
+- Initial command:
+  `node scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs --headed --url http://127.0.0.1:5072/xpedit/workbench --out-dir output/manual_assembly_e2e_prefixed_runtime_2026-04-26`
+- Initial result: **FAIL before workflow start**
+- Failure class: prefixed workbench readiness timeout in `openWorkbench()`
+- Verified cause from prefixed server logs and response body:
+  - `GET /xpedit/workbench` returned `200`
+  - `GET /workbench-template-gating.js` returned `404`
+  - the prefixed HTML rewrite path was still missing `/xpedit` for
+    `workbench-template-gating.js`
+
+### Prefixed `/xpedit` fix
+
+- Product fix:
+  - `src/pipeline_v2/app.py` now prefixes
+    `src="/workbench-template-gating.js"` with `BASE_PATH`
+- Regression coverage:
+  - added focused prefixed-route assertion in `tests/test_base_path.py`
+- Focused verification:
+  - `python3 -m pytest tests/test_base_path.py -k "template_gating_js_prefixed or workbench_js_prefixed or workbench_whole_sheet_init_prefixed"` -> `3 passed`
+
+### Prefixed `/xpedit` final result
+
+- Fixed command:
+  `node scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs --headed --url http://127.0.0.1:5072/xpedit/workbench --out-dir output/manual_assembly_e2e_prefixed_runtime_fixed_2026-04-26`
+- Result: **PASS**
+- Artifact:
+  `output/manual_assembly_e2e_prefixed_runtime_fixed_2026-04-26/report.json`
+- Step summary: `16/16 passed`
+
+### What this now proves
+
+- The branch now has one real headed authored-XP signoff lane for the
+  classic/manual-assembly workflow that covers:
+  - template apply
+  - source upload/manual assembly
+  - whole-sheet edit
+  - save/export
+  - `Test This Skin`
+  - playable runtime
+  - short movement stability
+- That lane passes on both canonical local hosting modes:
+  - root-hosted `/workbench`
+  - prefixed `/xpedit/workbench`
+- The prefixed-hosting pass is meaningful because it required fixing a real
+  base-path defect first, not because the verifier was weakened.
+
+### What remains open
+
+- direct public-parity audit against live `https://rikiworld.com/xpedit`
+- replacement deploy through GitHub Actions / Cloud Run for this code line
+- post-deploy public same-flow verification on the live URL
+
 ## Audit — Canon Drift, Progress Triage, And Retirement/Replacement Plan (2026-04-26)
 
 This is a canon/failure-log audit entry. It is not a product fix, deployment cutover,
