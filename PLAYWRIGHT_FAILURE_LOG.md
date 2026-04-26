@@ -286,6 +286,90 @@ What this slice does **not** close:
 2. item/world/inventory semantic-runtime parity
 3. mounted-row readiness
 
+## Audit — Section-1 Hot-Path Performance Architecture And UQ-002 Refactor Order (2026-04-26)
+
+This is a product-architecture audit entry. It is not a proof pass or a
+closure claim.
+
+### Trigger
+
+- User reports the shipped workbench still feels "super slow" even when the
+  immediately visible correctness bugs are fixed.
+
+### Findings
+
+1. **The dominant slowdown is still architectural split ownership on the edit hot path. HIGH.**
+   - Live code evidence:
+     - `web/workbench.js:6392-6394` still reacts to whole-sheet document
+       changes by applying a wrapper snapshot and triggering a save
+     - `web/workbench.js:6433-6461` then mirrors the snapshot into wrapper
+       state and rerenders wrapper-derived surfaces
+   - Consequence:
+     - one root-editor interaction still fans out into wrapper mirror updates,
+       projection rerenders, and persistence work instead of staying local to
+       the root owner
+
+2. **Frame-grid projection still rebuilds too much DOM/canvas state per interaction. HIGH.**
+   - Live code evidence:
+     - `web/workbench.js:2807-2826` `renderFrameGrid()` clears `#gridPanel`
+       with `innerHTML = ""` and recreates every tile
+     - `web/workbench.js:2665-2728` `makeFrameCanvas()` creates a fresh canvas
+       and repaints every cell in the frame thumbnail
+     - `web/workbench.js:6363-6385` whole-sheet stroke completion still calls
+       `renderFrameGrid()` on the normal path
+   - Consequence:
+     - the wrapper still does large synchronous projection churn for edits that
+       already rendered correctly on the root whole-sheet canvas
+
+3. **Save/persistence work is still too tightly coupled to interaction completion. HIGH.**
+   - Live code evidence:
+     - `web/workbench.js:3900-3965` `saveSessionState()` serializes the full
+       session/layer payload and waits on in-flight saves with a polling loop
+     - `web/workbench.js:6381-6385` whole-sheet draw completion still schedules
+       `saveSessionState("whole-sheet-draw")`
+   - Consequence:
+     - even debounced saves still use a heavyweight full-session unit and stay
+       attached to the same interaction pipeline that is trying to feel snappy
+
+4. **Undo/redo is still wrapper-owned full-snapshot history, which keeps UQ-002 open and inflates cost. HIGH.**
+   - Live code evidence:
+     - `web/workbench.js:2057-2063` `pushHistory()` still snapshots wrapper
+       state
+     - `web/workbench.js:2081-2097` undo/redo still restore through wrapper
+       state and save from there
+   - Consequence:
+     - the remaining root-owner law violation is also a performance problem,
+       because every history unit is still shaped as a wrapper snapshot rather
+       than a root-owned editor transaction
+
+### Strict conclusion
+
+1. The current "super slow" feel is not just one missing optimization. It is
+   the surviving `UQ-002` architecture problem.
+2. The next truthful Section 1 sequence must prioritize hot-path ownership
+   cleanup over more wrapper-side polish.
+3. This is still code-state only until headed `UQ-003` is rerun.
+
+### Required `UQ-002` refactor order
+
+1. delete wrapper-owned undo/redo history from the whole-sheet edit path and
+   move live history ownership into `web/whole-sheet-init.js`
+2. stop full `renderFrameGrid()` rebuilds on ordinary root edits; update only
+   the dirty/visible projection surfaces needed for shipped wrapper views
+3. decouple session save/autosave from edit completion so normal drawing does
+   not immediately serialize the full live session payload
+4. only after the owner/hot-path cut is stable, move secondary projection or
+   serialization work off the main thread where it is still computationally
+   heavy
+
+### Consequence for queue state
+
+1. `UQ-002` remains `CURRENT`.
+2. The performance refactor is not a new later lane; it is part of the
+   remaining Section 1 closure work.
+3. `UQ-004` and later rows must not absorb this work by adding more wrapper or
+   backend-side compensation around the still-hot local path.
+
 ## Audit — Section-2 Live-Code Re-Audit And Sequence Correction (2026-04-26)
 
 This is a canon/failure-log audit entry. It is not a product fix or a proof

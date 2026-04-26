@@ -875,6 +875,44 @@ What remains open and still blocks honest `UQ-002` closure:
    - historical note: these were fixed in product commit `d487e74`; they
      should not be treated as current blockers unless headed `UQ-003` rerun
      disproves the fix
+5. The current hot path is still architecturally too slow because root edits
+   fan back out into wrapper history, frame-grid rebuilds, and full-session
+   save work.
+
+### 1.6.2 Required UQ-002 Hot-Path Refactor Order — 2026-04-26
+
+The remaining "super slow" feel is treated as part of `UQ-002`, not as a later
+polish lane.
+
+What current code still does:
+
+1. `web/workbench.js:2057-2097` still owns live undo/redo through wrapper
+   snapshots.
+2. `web/workbench.js:2807-2826` still rebuilds the entire frame-grid DOM/canvas
+   projection with `innerHTML = ""` and per-tile canvas recreation.
+3. `web/workbench.js:3900-3965` still serializes full session payloads on the
+   save path.
+4. `web/workbench.js:6363-6394` and `web/workbench.js:6433-6461` still connect
+   ordinary whole-sheet edit completion to wrapper projection churn and save
+   work.
+
+Required execution order inside `UQ-002`:
+
+1. delete wrapper-owned undo/redo from the whole-sheet edit path and move live
+   history ownership into `whole-sheet-init.js`
+2. stop full `renderFrameGrid()` rebuilds on ordinary root edits; update only
+   the dirty/visible shipped projection surfaces that actually need refresh
+3. decouple session save/autosave from edit completion so normal drawing does
+   not immediately serialize the full live session payload
+4. only after the owner/hot-path cut is stable, move any remaining secondary
+   projection or serialization work off the main thread
+
+Stop rules:
+
+1. Do not treat wrapper-side suppression flags, throttles, or more mirror logic
+   as closure for this lane.
+2. Do not move this work into `UQ-004` or any later Section 2/3 row.
+3. Do not reopen a second document/root owner while reducing hot-path cost.
 
 ### 1.7 Section-1 Refactor Rule
 
@@ -2328,7 +2366,7 @@ Legacy-step normalization for older references:
 | Seq | State | Robot Task | Preconditions | Do Exactly This | Pass Condition | Stop / Fail Condition | FL / Owner |
 |---|---|---|---|---|---|---|---|
 | UQ-001 | ALWAYS | Establish repo truth before work | none | Run the repo entry checks, check the failure log first, inspect branch/head/dirty files, and identify unrelated dirt that must be left alone | Current authority docs, branch/head, dirty files, and relevant blockers are known before edits begin | Any unknown dirty change intersects the target files and cannot be safely isolated | Repo rule / `PLAYWRIGHT_FAILURE_LOG.md` |
-| UQ-002 | CURRENT | Close Section 1 REXPaint parity and root-owner law | UQ-001 complete | Use Section 1.6 and Section 1.8 as the exact scope. Land only root-editor work: resize, browse parity, undo/redo ownership, apply toggles, oval/text tools, pointer events, zoom/grid completeness, and layer keyboard/persistence parity. Keep `whole-sheet-init.js` the sole document owner. | Section 1 no longer has unresolved root-editor parity blockers, or any residuals are explicitly logged as open with proof state and no mixed ownership survives | Any patch reintroduces a second editor/root owner or leaves the old owner alive while adding a new authoritative path | Section 1 / `FL-STEP4` family / §1.6 |
+| UQ-002 | CURRENT | Close Section 1 REXPaint parity and root-owner law | UQ-001 complete | Use Section 1.6 and Section 1.8 as the exact scope. Land only root-editor work: resize, browse parity, undo/redo ownership, apply toggles, oval/text tools, pointer events, zoom/grid completeness, and layer keyboard/persistence parity. Keep `whole-sheet-init.js` the sole document owner. Within this row, cut the hot path in this order: move live history out of `workbench.js`, stop full frame-grid rebuilds on ordinary root edits, decouple save/autosave from edit completion, then offload any still-heavy secondary projection/serialization work. | Section 1 no longer has unresolved root-editor parity blockers, the shipped edit path no longer depends on wrapper-owned history or broad wrapper projection churn for ordinary edits, or any residuals are explicitly logged as open with proof state and no mixed ownership survives | Any patch reintroduces a second editor/root owner, leaves the old owner alive while adding a new authoritative path, or treats wrapper-side throttles/suppression flags as closure while wrapper-owned hot-path authority still survives | Section 1 / `FL-STEP4` family / §1.6 |
 | UQ-003 | BLOCKED | Prove the Section 1 foundation on shipped surfaces | UQ-002 pass condition met | Run UI-only headed proof for the root-hosted and prefixed `/xpedit` Section 1 surface using shipped controls only; record evidence and update the ledger honestly | Root-hosted and prefixed Section 1 flows are proven on the shipped UI with no acceptance-boundary violation | Any proof relies on `fetch()`, `page.evaluate()` mutation, hidden hooks, or diagnostic-only paths and is labeled acceptance | Section 3 acceptance law / Section 1 proof |
 | UQ-004 | READY AFTER UQ-002 | Finish backend authority cleanup on the normalized registry | UQ-002 pass condition met | Add backend-focused tests around `create_bundle()`, `workbench_create_blank_session()`, `bundle_action_run()`, `workbench_export_bundle()`, and `workbench_web_skin_bundle_payload()`. Replace live backend `family` / `ENABLED_FAMILIES` gates with one helper derived from normalized registry truth. Demote the compat `family` alias to compatibility-only data. Surface operator-visible registry load/fetch failures. | No live backend bundle/session/export/runtime path still takes authority from `family` or `ENABLED_FAMILIES`; browser and backend both consume the same normalized contract | Any fix restores browser-side fail-close logic, creates a second registry authority, or claims `UQ-004` closure while backend split-authority code remains | Section 2.5 / normalized-registry authority cleanup |
 | UQ-005 | BLOCKED | Close the Section 2 export-quality contract at the wrapper boundary | UQ-004 pass condition met | Wire the full Step 5 quality contract into `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`. Keep `/api/workbench/validate-xp` aligned with the same contract and do not treat single-XP validation as a substitute for export-path enforcement. | Bundle export and web-skin payload generation reject artifacts that fail the full quality contract, not just G10-G12 | Any closure claim remains contradicted by live service code, or export/web-skin paths still skip G7/G8/G9 | Section 2.4 / quality gates |
@@ -2559,7 +2597,7 @@ not a task plan — it is a gate list. Migration is ready when all blocking gate
 
 | Gate | Section | Status |
 |------|---------|--------|
-| UQ-002 Section 1 REXPaint-parity foundation passes | §Unified Queue `UQ-002` | CURRENT — root-editor parity ledger still open (`workbench.js` history owner, topology-constrained resize, no headed Section 1 proof) |
+| UQ-002 Section 1 REXPaint-parity foundation passes | §Unified Queue `UQ-002` | CURRENT — root-editor parity ledger still open (`workbench.js` history owner, topology-constrained resize, wrapper hot-path churn/full frame-grid rebuilds/full-session save coupling, no headed Section 1 proof) |
 | UQ-003 root-hosted + prefixed Section 1 proof passes | §Unified Queue `UQ-003` | BLOCKED on UQ-002 |
 | UQ-004 backend authority cleanup passes | §Unified Queue `UQ-004` | OPEN — backend `family` / `ENABLED_FAMILIES` split still live |
 | UQ-005 export/web-skin quality contract fully enforced | §Unified Queue `UQ-005` | OPEN — export/web-skin paths still run only G10-G12 on the current branch |
