@@ -872,14 +872,9 @@ What remains open and still blocks honest `UQ-002` closure:
    prefixed `/xpedit` shipped surfaces.
 4. Loaded headed-use findings now show three additional practical residuals on
    the shipped root surface:
-   - plain two-finger / wheel scrolling over the canvas silently cycles the
-     active layer, which can move the user off Visual layer 2 into layer 1 or 0
-     during normal navigation attempts
-   - switching from Select to Text destroys the current selection immediately,
-     so selection-scoped cross-tool workflows are not currently possible
-   - `Delete` currently clears the selected rectangle across all visible
-     unlocked layers, which is still user-surprising enough that the intended
-     scope should remain explicit until reconfirmed
+   - historical note: these were fixed in product commit `d487e74`; they
+     should not be treated as current blockers unless headed `UQ-003` rerun
+     disproves the fix
 
 ### 1.7 Section-1 Refactor Rule
 
@@ -977,10 +972,17 @@ to invent a second behavior model in code.
 6. Copy/cut/paste operate on a rectangular document selection, not on a frame
    tile abstraction. The clipboard preserves cells for every visible layer in
    the selected bounds, and paste commits as one transaction.
-7. `Delete` / `Backspace` clear the current selection as one transaction.
-8. `Esc` cancels in-progress line/rect/oval/text/paste interactions without
+7. Tool switches do not implicitly destroy the current selection. Selection
+   remains visible and authoritative until explicitly cleared, canceled, or
+   invalidated by a geometry-changing document mutation.
+8. `Delete` / `Backspace` clear the current selection on the active visible
+   unlocked layer as one transaction.
+9. `Cut` still operates on the visible-layer clipboard model: it captures the
+   selection across visible layers, then clears the cut rectangle across the
+   visible unlocked layers as one transaction.
+10. `Esc` cancels in-progress line/rect/oval/text/paste interactions without
    emitting a history entry.
-9. `Text` tool contract:
+11. `Text` tool contract:
    - click sets the insertion anchor on the active unlocked layer
    - printable keys emit glyphs using current apply/color state
    - `Enter` moves to the next line from the anchor column
@@ -1000,7 +1002,7 @@ must be intercepted where necessary.
 | Draw tools | `c` cell, `l` line, `r` rect, `o` oval, `i` fill, `t` text, `d` eyedropper, `e` erase, `s` select |
 | Selection / clipboard | `Ctrl-c`, `Ctrl-x`, `Ctrl-v`, `Delete`, `Backspace`, `Esc`, `[` rotate CCW, `]` rotate CW |
 | History | `Ctrl-z` undo, `Ctrl-y` redo |
-| Layers | `Ctrl-l` add, `1-9` select active, `Ctrl-1-9` toggle visibility, `Shift-1-9` toggle lock, `Ctrl-Shift-m` merge active downward, mouse wheel over canvas cycles active layer |
+| Layers | `Ctrl-l` add, `1-9` select active, `Ctrl-1-9` toggle visibility, `Shift-1-9` toggle lock, `Ctrl-Shift-m` merge active downward, `Alt` + mouse wheel over canvas cycles active layer |
 | Viewport | `Ctrl-g` grid toggle, `<` / `>` and `Ctrl-PgUp` / `Ctrl-PgDn` zoom/font-scale, `Space` + drag pan |
 
 #### 1.8.6 Layer And History Contract

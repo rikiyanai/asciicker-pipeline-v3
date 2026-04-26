@@ -125,6 +125,38 @@ editor. They are product residuals, not proof of closure.
        document-selection model, but it is user-surprising and should remain
        explicitly logged until the intended scope is reconfirmed
 
+### Follow-up product correction for headed whole-sheet UX findings (2026-04-26, commit `d487e74`)
+
+This is a product correction slice, not a Section 1 closure claim.
+
+What it fixed:
+
+1. active-layer cycling on the hosted canvas no longer triggers on plain
+   two-finger / wheel scrolling; it now requires `Alt` + wheel so normal
+   trackpad navigation does not silently move the active layer
+2. switching tools no longer destroys the current selection, so Select -> Text
+   and similar cross-tool workflows keep the same selection bounds visible
+3. `Delete` / selection clear now target only the active visible unlocked
+   layer; multi-layer delete remains attached to `Cut`, which still clears the
+   copied rectangle across visible unlocked layers after clipboard capture
+
+Verification evidence:
+
+- `node --test tests/web/whole-sheet-clipboard.test.mjs tests/web/whole-sheet-input-policy.test.mjs tests/web/whole-sheet-cell-ops.test.mjs`
+  - PASS (`10 tests`)
+- `python3 -m pytest tests/test_workbench_flow.py -k save_session_persists_explicit_geometry -q`
+  - PASS
+- `node --experimental-vm-modules -e "<vm module runner for tests/web/rexpaint-editor-canvas.test.js>"`
+  - PASS (`14 passed, 0 failed`)
+
+Truthful state after this correction:
+
+1. the three headed-surface UX findings above are no longer current product
+   residuals
+2. this is still non-acceptance execution evidence, not `UQ-003`
+3. `UQ-002` remains open for the previously logged owner/history, resize-law,
+   and headed-proof reasons
+
 ### Execution re-check consequence
 
 1. The broader Flask/workbench/base-path suite does **not** currently expose a
