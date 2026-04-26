@@ -2,8 +2,8 @@
 
 **Authority:** this file and `PLAYWRIGHT_FAILURE_LOG.md` are the only active canon docs for the browser workbench.
 
-**Last updated:** 2026-04-18
-**Branch baseline:** `v3-refactor-start @ b435ed5`
+**Last updated:** 2026-04-26
+**Branch baseline:** `v3-refactor-start @ 312590c`
 **Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the grouped-drag / Delete Frame interaction slice, and the surviving local/browser/runtime assets in this repo
 
 ## Application Statement
@@ -31,6 +31,28 @@ Public/local parity note: the public behavior-frozen `rikiworld.com/xpedit` page
 
 Public/local parity note: the public page also keeps `Recorder`, `Skin Test dock`, `Verification`, and `Session` as distinct user-facing surfaces. The local rebuild currently over-collapses some of those into the runtime drawer; that is a live UI failure, not intended canon direction.
 
+### Deployment Lineage And Replacement Target
+
+The deployment lineage is now explicit:
+
+1. The public `https://rikiworld.com/xpedit` site is still the behavior-frozen
+   pipeline-v2 baseline served from its own repo/deploy line.
+2. This repo/branch (`asciicker-pipeline-v3`, `v3-refactor-start`) is the
+   refactor successor to that pipeline-v2 baseline.
+3. The target end state is not long-term dual ownership. The target is
+   retirement-and-replacement on the same public URL:
+   - keep the live pipeline-v2 site frozen until the v3 replacement is ready
+   - privately archive the current public pipeline-v2 repo/site so the old
+     implementation is no longer publicly visible
+   - retire the current `asciicker-pipeline-v3` repo identity
+   - create the replacement repo named `xpedit` from this v3 code line
+   - redeploy the v3 workbench so `rikiworld.com/xpedit` resolves to the
+     replacement repo/deploy line
+   - rerun public smoke/parity verification on the replacement before calling
+     the cutover complete
+4. Until that cutover is executed and logged, this repo remains the refactor
+   candidate rather than the live public owner.
+
 ### Application Boundaries And Guardrails
 
 There are only two master application spec sections in this canon:
@@ -43,7 +65,7 @@ sections. It is not a third application owner.
 
 These rules are execution guardrails, not optional advice:
 
-1. Do not change `rikiworld.com/xpedit` behavior until the refactor is complete and working.
+1. Do not change the live pipeline-v2 `rikiworld.com/xpedit` behavior until the v3 replacement is complete, working, and ready for same-URL cutover.
 2. Do not add a new authoritative owner while the old owner still mutates the same behavior.
 3. If an ownership boundary moves, delete or hard-disable the old owner first.
 4. Do not let template, bundle, source-slicing, or runtime proof workflows redefine the root editor contract.
@@ -2171,7 +2193,23 @@ The three-day failed refactor attempt changed the sequence, and the Step 4
 blockers have now been cleared on this branch. From the current branch state,
 the immediate sequence is:
 
-1. **Do Step 11 first: normalize the backend schema.**
+1. **Audit canon/failure-log state and lock the retirement/replacement plan first.**
+   - record explicitly that pipeline-v3 is the refactor successor to the
+     behavior-frozen pipeline-v2 baseline currently serving
+     `rikiworld.com/xpedit` from its own repo/deploy line
+   - operational cutover target:
+     - keep the public pipeline-v2 site frozen until replacement proof is ready
+     - privately archive the current public pipeline-v2 repo/site so the old
+       implementation is no longer publicly visible
+     - retire/delete the current `asciicker-pipeline-v3` repo identity
+     - create the replacement repo named `xpedit` from this v3 code line
+     - redeploy the v3 workbench to `rikiworld.com/xpedit`
+     - run public smoke/parity verification on the replacement before calling
+       the cutover complete
+   - do not describe any part of this retirement/replacement sequence as done
+     until the repo/archive/deploy operations are actually executed and logged
+     in `PLAYWRIGHT_FAILURE_LOG.md`
+2. **Do Step 11 next: normalize the backend schema.**
    - replace legacy `family` registry assumptions with explicit
      `filename_prefix` / `skin_family` action contracts
    - restore `enabled_families` only as derived compatibility output while the caller migration window remains open; do not use it as live authority
@@ -2184,7 +2222,7 @@ the immediate sequence is:
      - fatal-parse sentinel fix
      - `preview_xp` fallback warning
      - user-visible template-registry fetch failure path
-2. **Then add the canonical current-scope "from scratch" Playwright signoff lane.**
+3. **Then add the canonical current-scope "from scratch" Playwright signoff lane.**
    - extend or replace the current partial manual-assembly runner so one
      headed UI-driven lane proves:
      - template apply / blank session creation
@@ -2194,21 +2232,21 @@ the immediate sequence is:
      - Skin Dock/runtime proof at the end
    - this lane is for current skin authoring only
    - do not block it on future wearable authoring design
-3. **Do the Section 3 backend structural-contract runners next.**
+4. **Do the Section 3 backend structural-contract runners next.**
    - add tests/helpers proving normalized schema parity against Y9-2 family,
      fallback, mounted-prefix, and wearable slot/style truth
    - update existing fidelity helpers to consume the same contract
-4. **Keep Step 8 open in parallel only where it does not re-open schema drift.**
+5. **Keep Step 8 open in parallel only where it does not re-open schema drift.**
    - finish demoting session-local source authority into manifest-backed or
      clearly-derived state
-5. **Then re-prove Step 7 as product grouping, not just code tags.**
+6. **Then re-prove Step 7 as product grouping, not just code tags.**
    - the ID overlay and numbered panels exist now
    - the next proof burden is that the visible grouping/order matches the
      intended product workflow and does not repeat the 2026-04-16 local/public
      drift
-6. **Finish the remaining Step 13 Y9-2 wiring after the schema/runners are stable.**
+7. **Finish the remaining Step 13 Y9-2 wiring after the schema/runners are stable.**
    - backend endpoints exist; launcher / wizard integration still does not
-7. **Then return to Step 14 small-screen/persistence completion.**
+8. **Then return to Step 14 small-screen/persistence completion.**
 
 Future after current skin-authoring closure:
 
@@ -2220,5 +2258,243 @@ Future after current skin-authoring closure:
    - wearable authoring must not silently piggyback on the skin-strip signoff
      lane; it needs its own acceptance and parity burden once the workflow
      exists
+
+---
+
+## 2.11 Bundle Coverage Policy
+
+**Added 2026-04-22. Based on cross-repo audit of `artifacts/bundled_xp_sprite_packs/`
+in Y9-2.**
+
+The active bundle (driven by `appearance_bundle.json` and `ids.lock.json`) currently
+references approximately 74 of 441 XP sprite files in the Y9-2 `assets/sprites/`
+directory — roughly 17% coverage. This is not an error; it reflects deliberate phase-2
+scope. However, the spec does not currently define coverage policy, so there is no
+machine-enforceable contract between the sprite library and the active bundle.
+
+### 2.11.1 Coverage Baseline
+
+Current phase-2 baseline intentionally includes:
+
+- on-foot human idle/attack/death actions (player, attack, plydie families)
+- standard color variant (default skin only)
+- AHSW equipment encoding combinations for the three authorized families
+
+Current phase-2 intentionally excludes:
+
+- color-variant families (`attack-green-*`, `player-green-*`, `plydie-green-*`) —
+  proof-only, not authorable; see §2.3.4 and §2.5 misalignment ledger
+  (`src/pipeline_v2/service.py`, `config/template_registry.json`,
+  `scripts/workbench_png_to_skin_test_playwright.mjs`, `web/workbench.js`)
+- mounted families (`wolfie-*`, `wolack-*`) — deferred pending schema normalization;
+  see §2.9.1
+- `bigbee-*` — deferred explicitly; see Step 10 scope note
+- world-item and inventory-grid item families — no item authoring surface exists yet
+
+### 2.11.2 Coverage Expansion Contract
+
+When the scope above expands (e.g. mounted families land after Step 11), the bundle
+coverage contract must expand simultaneously. The rule is:
+
+1. Every sprite in `assets/sprites/` must be either:
+   - referenced in the active bundle source manifest, OR
+   - listed in `config/SPRITE_COVERAGE_EXCEPTIONS.txt` with an explicit reason
+
+2. Accepted reasons for exclusion:
+   - `deprecated` — asset is historical; not in active use
+   - `proof-only` — runtime/proof helpers use it but the authoring surface does not
+   - `future-scope` — planned for a future phase; include target milestone if known
+   - `test-fixture` — test-only asset not in production bundles
+
+3. If a new sprite file is added to `assets/sprites/` without a corresponding bundle
+   reference or SPRITE_COVERAGE_EXCEPTIONS.txt entry, that is a coverage regression,
+   not a cleanup task.
+
+4. Coverage audits must be machine-driven. A script or CI step must enumerate
+   `assets/sprites/*.xp`, cross-reference the active bundle, and emit a coverage
+   report before any bundle export gate is declared PASS.
+
+### 2.11.3 Current Exceptions (2026-04-22)
+
+The following families are excluded from phase-2 bundle by design:
+
+| Family pattern | Reason | Resolves in |
+|----------------|--------|-------------|
+| `attack-green-*`, `player-green-*`, `plydie-green-*` | proof-only (`§2.5`, `service.py`, `workbench.js`) | after Step 11 authoring-boundary decision |
+| `wolfie-*`, `wolack-*` | future-scope: mounted authoring | after Step 11 schema normalization |
+| `bigbee-*` | future-scope: bigbee deferred | explicitly post-mounted-family work |
+
+This table must be updated whenever scope changes. Do not widen bundle coverage without
+updating this table.
+
+---
+
+## 2.12 Rollback Asset Snapshot Contract
+
+**Added 2026-04-22. Based on audit of `artifacts/bundled_xp_sprite_packs/rollbacks/`
+in Y9-2.**
+
+Current rollback snapshots (e.g. `rollback_20260422_193432/`) capture only JSON
+metadata:
+
+- `appearance_bundle.json`
+- `ids.lock.json`
+- `compile_report.json`
+
+They do NOT capture XP sprite binary files. If a sprite binary changes between the
+rollback snapshot and the rollback restore point, the rollback cannot reconstruct prior
+asset state.
+
+### 2.12.1 Required Rollback Snapshot Contents
+
+A sound rollback snapshot must capture:
+
+1. All JSON metadata (current behavior — retain as-is)
+2. All XP sprite binaries referenced by the bundle at snapshot time
+3. The expected SHA256 hash of each referenced sprite binary, stored in a
+   `bundle_sha256_manifest.json` alongside the snapshot
+
+Implementation:
+
+- At snapshot creation time, copy all referenced XP files into the rollback directory
+  under an `asset_binaries/` subdirectory
+- At restore time: unpack `asset_binaries/` to the original sprite paths, recompile,
+  and verify the resulting `compile_report.json` hashes match `bundle_sha256_manifest.json`
+
+### 2.12.2 Rollback Validation Rule
+
+After a rollback restore, all of the following must pass before the state is declared
+sound:
+
+1. `ids.lock.json` hashes match the snapshot
+2. All sprite files named in `bundle_sha256_manifest.json` are present at their
+   expected paths with matching hashes
+3. A fresh bundle compile produces a `compile_report.json` that matches the snapshot
+
+If any check fails, the rollback is partial and the operator must be notified before
+any further bundle operations proceed.
+
+### 2.12.3 Current State (2026-04-22)
+
+This contract is not yet implemented. The existing rollback mechanism satisfies only
+item 1 of §2.12.1. Items 2 and 3 are OPEN. This gap should be addressed before any
+rollback is relied on in an automated or agent-driven workflow.
+
+---
+
+## 2.13 Y9-2 Wizard Parity Contract
+
+**Added 2026-04-22. Expands on DESIGN OPEN B-13 from §2.10.**
+
+Section 2.10 defines the HTTP API endpoints this server must expose for Y9-2
+integration. DESIGN OPEN B-13 documents that the Y9-2 `[3] ASSET PIPELINE` launcher
+node is absent rather than wired. This section defines the parity contract that must
+hold between the Y9-2 `WizardEngine`, the Y9-2 launcher `option_tree`, and the
+pipeline-v3 backend.
+
+### 2.13.1 Wizard Parity Invariants
+
+1. Every wizard option listed in the Y9-2 launcher `option_tree.py` under the
+   `[3] ASSET PIPELINE` node must have a corresponding handler in
+   `scripts/pipeline/wizard/engine.py` that calls a real pipeline-v3 backend endpoint.
+   A listed option with no handler, or with a handler that does not reach the backend,
+   is a parity violation.
+
+2. Every wizard handler must implement a full lifecycle:
+   - **Precondition check**: verify `PIPELINE_SERVER_URL` is reachable (`GET /health`)
+     before the first user prompt; fail fast with a clear message if not
+   - **Prompt sequence**: at least one user-facing prompt that collects required input
+   - **Execution**: POST to the appropriate backend endpoint with the collected input
+   - **Result display**: render the backend response in the terminal before returning
+     to the menu
+
+3. Tests must exercise the full lifecycle. A test that only checks for handler name
+   existence (string matching on `option_tree.py`) does not satisfy this contract.
+
+4. The `option_tree` must reflect the current backend capability. If an endpoint is
+   not implemented, the corresponding launcher option must be either absent or
+   explicitly labeled `[DEFERRED]` — never silently present with a broken or stub
+   handler.
+
+### 2.13.2 Priority Client Paths
+
+Per §2.7, there are two client paths into the backend:
+
+- **Human TUI path**: Y9-2 launcher `[3] Asset Pipeline` → `WizardEngine` → HTTP
+- **Agent MCP path**: AI agent → `mcp/wizard_mcp_server.py` → `WizardEngine` → HTTP
+
+Both paths must satisfy the same parity contract. An MCP tool that calls a wizard
+action stub without reaching the backend is the same class of violation as a launcher
+option with no handler.
+
+### 2.13.3 Action Authoring Lifecycle (TUI)
+
+When a user enters the bundle authoring wizard from the Y9-2 launcher:
+
+1. **Status check**: wizard displays pipeline server URL and health status
+2. **Template selection**: list available templates from `GET /pipeline/templates`;
+   user selects family + action
+3. **Source input**: prompt for source PNG path or existing XP path
+4. **Run**: POST to `POST /pipeline/run` with wizard nav state; display progress
+5. **Validate**: call `POST /pipeline/validate_xp` on the result; display gate
+   outcomes (G7–G12) and quality score
+6. **Accept or retry**: user reviews; if rejected, return to step 3
+
+Status display rule: the wizard must always show which action is currently active
+(e.g. `Authoring: player idle (action 1 of 3)`). The user must never be in a state
+where it is unclear which bundle action they are editing.
+
+### 2.13.4 Scope Boundary
+
+The Y9-2 wizard is a thin client. It:
+
+- does not own the XP editor root (Section 1 owns this)
+- does not own the wrapper architecture (Section 2 owns this)
+- does not define the family/template schema (the backend registry owns this)
+- does not define the bundle export contract (§2.4 and §2.11 own this)
+
+The wizard is responsible only for orchestrating user input, calling the correct
+backend endpoints in order, and presenting results. Any design decision about what the
+pipeline does must be captured in this spec, not in wizard code.
+
+---
+
+## V3 Migration Readiness Gates
+
+**Added 2026-04-22. Tracks what must be true before a V3 migration is declared ready.**
+
+This section lists the open gaps identified by the 2026-04-22 cross-repo audit. It is
+not a task plan — it is a gate list. Migration is ready when all blocking gates PASS.
+
+### Blocking Gates
+
+| Gate | Section | Status |
+|------|---------|--------|
+| Step 3 structural cleanup verified (no `syncRootStateFromWholeSheet` etc.) | §Unified Step 3 | IMPLEMENTED, UNVERIFIED (`c836cde`) |
+| Step 11 backend schema normalization done | §Unified Step 11 | OPEN — first S2 priority |
+| `enabled_families` legacy authority path deleted | §2.5 misalignment ledger | OPEN |
+| G7/G8/G9 enforced at export (Step 9, `2026-04-16`) | §2.4 | IMPLEMENTED (`src/pipeline_v2/service.py`); re-verify on V3 branch |
+| Canonical from-scratch Playwright signoff lane passing | §Unified Step 12 | PARTIAL |
+| §2.11 coverage script exists and emits PASS | §2.11 | OPEN |
+| §2.12 rollback binary snapshot implemented | §2.12 | OPEN |
+| §2.13 B-13 wizard node wired in Y9-2 launcher | §2.13 / §2.10 | OPEN |
+
+### Non-Blocking Gaps (required for full parity, not migration gate)
+
+| Gap | Section | Status |
+|-----|---------|--------|
+| Mounted-family authoring (wolfie, wolack) enabled | §2.9.1 / §2.11 | DEFERRED post Step 11 |
+| Wearable/item authoring surface | §2.3.6 / §2.3.7 | EXPLICITLY DEFERRED post skin-authoring signoff |
+| Proof-only color-variant family authoring surface | §2.5 misalignment ledger | PROOF-ONLY by policy (`service.py`, `workbench.js`) |
+| REXPaint parity gaps (resize, browse, oval/text tools) | §1.6 auditor table | TRACKED in Section 1 |
+| M2 E2E proof run (PNG→WS→export, committed headed run) | §Milestone 2 | PARTIAL |
+| Step 14 small-screen layout and persistence | §Unified Step 14 | OPEN |
+
+### Gate Maintenance Rule
+
+A gate moves to IMPLEMENTED when the corresponding code is committed and the
+spec section above reflects current state accurately. A gate moves to PASS only
+when a verified test run or headed proof is committed with a dated evidence ref.
+Do not remove rows when gates PASS — update Status in-place with the evidence ref.
 
 **Ship gate:** Steps 1–2 (housekeeping and Section 1 design) are unblocked and do not require pipeline-v2 server changes. Implementation steps 3–14 are post-release relative to the Y9-2 launcher ship gate. Do not surface the `[3] ASSET PIPELINE` launcher node until Step 3 is at minimum proven complete. FL-813 (asset pipeline lacks a shippable supported surface) blocks launcher promotion and is resolved only when Step 3 is proven, the Section 2.10 HTTP API contract is implemented (Step 13), and the Y9-2 Step 7.12 VERIFY gate passes.

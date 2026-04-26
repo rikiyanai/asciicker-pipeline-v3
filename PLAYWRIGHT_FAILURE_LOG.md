@@ -11,6 +11,95 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Audit — Canon Drift, Progress Triage, And Retirement/Replacement Plan (2026-04-26)
+
+This is a canon/failure-log audit entry. It is not a product fix, deployment cutover,
+or acceptance proof.
+
+### What was audited
+
+- `PLAYWRIGHT_FAILURE_LOG.md`
+- `docs/plans/2026-03-23-workbench-canonical-spec.md`
+- current branch head: `v3-refactor-start @ 312590c`
+- current public URL references: `https://rikiworld.com/xpedit`
+
+### Drift and stale-claim corrections
+
+1. **The canonical spec header was stale. HIGH.**
+   - The spec still declared `Last updated: 2026-04-18` and branch baseline
+     `b435ed5` even though the current audited branch head is `312590c` and the
+     file already contains later 2026-04-22 additions.
+   - Canon consequence: readers could treat the spec header as older and less
+     complete than the actual file contents.
+
+2. **The canon did not state the deployment lineage explicitly enough. HIGH.**
+   - The public `rikiworld.com/xpedit` surface is still the behavior-frozen
+     pipeline-v2 baseline served from its own repo/deploy line.
+   - This repo/branch is the pipeline-v3 refactor successor to that baseline,
+     not the current public owner.
+   - Canon consequence: without stating that lineage directly, progress claims
+     can blur the difference between the live v2 site and the local v3 refactor.
+
+3. **The immediate-next-task ordering was stale. HIGH.**
+   - The canon jumped straight into Step 11 backend/schema work.
+   - It did not first log the required repo/site retirement-and-replacement plan
+     for moving the public URL from the old pipeline-v2 line to the v3 refactor
+     line.
+
+4. **No canonical cutover plan existed for replacing the public repo/site. HIGH.**
+   - Before this audit, canon did not explicitly track the operational plan to:
+     - privately archive the current public pipeline-v2 repo/site so the old
+       implementation is no longer publicly visible
+     - retire the current `asciicker-pipeline-v3` repo identity
+     - create the replacement repo named `xpedit` from the v3 code line
+     - redeploy the v3 workbench to `rikiworld.com/xpedit`
+   - Canon consequence: deployment replacement intent existed only as session
+     intent, not as logged execution-state truth.
+
+### Progress triage
+
+What is strictly proven:
+
+- The public `https://rikiworld.com/xpedit` surface is still treated in canon as
+  the frozen production baseline, not as this branch's current deployed owner.
+- The current local branch head is `312590c`, ahead of the older spec-header
+  baseline.
+- The v3 refactor line contains additional committed work after `b435ed5`,
+  including:
+  - `101daf9` — normalize template registry schema
+  - `5b7ef4a` — remove enabled-families template gating
+  - `b357619` — add JS unit tests for authorability gating
+  - `0c45e51`, `d20e8ba`, `312590c` — layered whole-sheet clipboard fixes/proof
+
+What is implemented but not proven by this audit:
+
+- The v3 refactor line has substantial post-baseline work committed, but this
+  audit does not by itself prove public-parity cutover readiness.
+
+What is still assumed or open:
+
+- private archive of the current public pipeline-v2 repo/site
+- deletion/retirement of the current `asciicker-pipeline-v3` repo identity
+- creation of the replacement repo named `xpedit`
+- redeploy of pipeline-v3 to `rikiworld.com/xpedit`
+- post-cutover public smoke/parity verification
+
+What would make the replacement claim false:
+
+- if the old pipeline-v2 public site remains the live owner after the supposed
+  cutover
+- if the v3 code is redeployed without same-URL parity verification
+- if repo retirement/recreation is described as done before the host/archive
+  operations are actually executed
+
+### Immediate consequence
+
+- The canonical spec must record the deployment lineage explicitly and put the
+  repo/site retirement-and-replacement plan at the top of the immediate-next-task
+  sequence.
+- No repo deletion, archive operation, rename, or redeploy was executed in this
+  audit slice. Those remain planned operational steps only.
+
 ## Fix Attempt — Whole-Sheet Clipboard Layered UI Proof Pass (2026-04-18)
 
 ### What changed
