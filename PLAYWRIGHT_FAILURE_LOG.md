@@ -47,10 +47,22 @@ claim and it is **not** `UQ-003` proof.
 
 - `python3 -m pytest tests/test_workbench_flow.py -k save_session_persists_explicit_geometry -q`
   - PASS
+- `python3 -m pytest tests/test_workbench_flow.py tests/test_base_path.py -q`
+  - PASS (`61 passed`)
 - `node --experimental-vm-modules -e "<vm SourceTextModule parse for web/whole-sheet-init.js and web/rexpaint-editor/canvas.js>"`
   - PASS
 - `node --experimental-vm-modules -e "<vm module runner for tests/web/rexpaint-editor-canvas.test.js>"`
   - PASS (`14 passed, 0 failed`)
+
+### Execution re-check consequence
+
+1. The broader Flask/workbench/base-path suite does **not** currently expose a
+   new save/load/prefix regression from this slice.
+2. This is still non-acceptance execution evidence, not `UQ-003`.
+3. The truthful blocker set stays the same:
+   - root history owner still lives in `web/workbench.js`
+   - resize still stays inside the current frame-topology save law
+   - headed shipped-surface proof is still missing
 
 ### Residuals still blocking honest `UQ-002` closure
 

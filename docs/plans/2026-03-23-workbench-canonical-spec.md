@@ -825,6 +825,42 @@ These are architectural failures. They are not just missing buttons.
 
 These gaps must be explicitly designed before implementation begins. Do not implement piecemeal. See Unified Sequence Of Actions for the corrected task sequence.
 
+### 1.6.1 Execution Checkpoint — 2026-04-26
+
+The 2026-04-15 gap table above remains valid as historical audit context, but
+some of those rows are no longer literally current code state.
+
+What current code now does:
+
+1. `web/whole-sheet-init.js` now ships a root-editor `Resize` action plus
+   `Ctrl-r`.
+2. `web/whole-sheet-init.js` now ships live `PAINT` / `BROWSE` mode toggling
+   with `Tab`.
+3. Oval and text tools are now wired into the whole-sheet editor surface.
+4. Grid/zoom shortcuts and layer keyboard/wheel controls now exist in the root
+   keymap.
+5. `web/rexpaint-editor/canvas.js` now prefers Pointer Events when available,
+   and whole-sheet session metadata now persists layer locks plus zoom/grid
+   state through the Flask save/load contract.
+
+Execution evidence:
+
+- `python3 -m pytest tests/test_workbench_flow.py tests/test_base_path.py -q`
+  passed on `2026-04-26` (`61 passed`)
+- `tests/web/rexpaint-editor-canvas.test.js` passed through the VM-module
+  runner on `2026-04-26` (`14 passed, 0 failed`)
+
+What remains open and still blocks honest `UQ-002` closure:
+
+1. The root-owner law is still incomplete because `web/workbench.js` still owns
+   the live undo/redo journal and still keeps compatibility mirrors of document
+   state for wrapper rendering.
+2. Root resize is still constrained by the current frame-topology save law; it
+   is not yet the unrestricted Section 1 image action where Section 2 may only
+   warn.
+3. No headed UI-only Section 1 proof has been rerun yet on the root-hosted and
+   prefixed `/xpedit` shipped surfaces.
+
 ### 1.7 Section-1 Refactor Rule
 
 Do not add a new owner while leaving the old owner alive.
@@ -2501,7 +2537,7 @@ not a task plan — it is a gate list. Migration is ready when all blocking gate
 
 | Gate | Section | Status |
 |------|---------|--------|
-| UQ-002 Section 1 REXPaint-parity foundation passes | §Unified Queue `UQ-002` | CURRENT — root-editor parity ledger still open |
+| UQ-002 Section 1 REXPaint-parity foundation passes | §Unified Queue `UQ-002` | CURRENT — root-editor parity ledger still open (`workbench.js` history owner, topology-constrained resize, no headed Section 1 proof) |
 | UQ-003 root-hosted + prefixed Section 1 proof passes | §Unified Queue `UQ-003` | BLOCKED on UQ-002 |
 | UQ-004 backend authority cleanup passes | §Unified Queue `UQ-004` | OPEN — backend `family` / `ENABLED_FAMILIES` split still live |
 | UQ-005 export/web-skin quality contract fully enforced | §Unified Queue `UQ-005` | OPEN — export/web-skin paths still run only G10-G12 on the current branch |
