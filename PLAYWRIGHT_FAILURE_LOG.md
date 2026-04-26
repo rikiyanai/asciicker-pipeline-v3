@@ -119,7 +119,7 @@ pass.
      - `tests/web/workbench-template-gating.test.js` now has direct coverage for `isTemplateActionAuthorable()`, `getEnabledActions()`, and `proof_only: true`
    - Consequence:
      - the browser-side `enabled_families` fail-close is no longer the active Section 2 blocker
-     - Step 11 stays open, but it is now a backend authority/runtime cleanup problem
+     - `UQ-004` stays open, but it is now a backend authority/runtime cleanup problem
 
 2. **Backend bundle/runtime paths still keep the legacy `family` / `ENABLED_FAMILIES` authority alive. HIGH.**
    - Live code evidence:
@@ -130,7 +130,7 @@ pass.
      - `src/pipeline_v2/service.py:3578-3582` and `3630-3634` still drop/export-skip families via the same gate
    - Consequence:
      - mounted-family parity is still blocked by backend implementation even though the normalized registry exists
-     - Step 11 must now target backend truth, not browser truth
+     - `UQ-004` must now target backend truth, not browser truth
 
 3. **The registry is no longer “missing mounted families”; it is mounted-aware but not executable end-to-end. MEDIUM.**
    - Live code evidence:
@@ -160,14 +160,15 @@ pass.
 ### Corrected next sequence
 
 1. Close the remaining Section 1 editor-parity ledger first.
-2. Finish Step 11 as backend authority cleanup:
+2. `UQ-003` support proof should follow the Section 1 closure honestly, but it is not a prerequisite for backend cleanup.
+3. Finish `UQ-004` as backend authority cleanup:
    - remove live `family` / `ENABLED_FAMILIES` gating from bundle/session/export/runtime paths
-3. Finish Section 2 source-authoring ergonomics on the canonical manifest contract.
-4. Enable mounted-family authoring/runtime parity on the already-normalized registry.
-5. Implement and prove the missing semantic runtime rows:
+4. Finish Section 2 source-authoring ergonomics on the canonical manifest contract.
+5. Enable mounted-family authoring/runtime parity on the already-normalized registry.
+6. Implement and prove the missing semantic runtime rows:
    - `item.world_item`
    - `item.inventory_grid`
-6. Keep Section 3 proof current on root-hosted, prefixed `/xpedit`, and public parity surfaces.
+7. Keep Section 3 proof current on root-hosted, prefixed `/xpedit`, and public parity surfaces.
 7. Only after Sections 1, 2, and 3 are current should public replacement/cutover resume.
 
 ## Audit — Unified Sequence Queue Rewrite For Bottom-Up Repo Workflow (2026-04-26)
