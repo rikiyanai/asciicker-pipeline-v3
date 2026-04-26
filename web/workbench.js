@@ -56,6 +56,8 @@
     return _ahswNamesForFamilies(["player", "wolfie", "wolack"]);
   })();
   const WEBBUILD_READY_TIMEOUT_MS = 180000;
+  const WHOLE_SHEET_AUTOSAVE_DEBOUNCE_MS = 1500;
+  const WHOLE_SHEET_AUTOSAVE_IDLE_TIMEOUT_MS = 3000;
   const DEFAULT_FLATMAP_NAME = "minimal_2x2.a3d";
   const WEBBUILD_BASE_SRC = (() => {
     const u = new URL(bp("/termpp-web-flat/index.html?solo=1&player=player"), window.location.origin);
@@ -153,6 +155,9 @@
     sessionSaveInFlight: false,
     sessionLastSaveOkAt: 0,
     sessionLastSaveReason: "",
+    _wsAutosaveDueAt: 0,
+    _wsAutosaveReason: "",
+    _wsAutosaveIdleHandle: null,
     termppStream: {
       id: null,
       pollTimer: null,
@@ -4001,6 +4006,70 @@
     if ($("jitterDownBtn")) $("jitterDownBtn").disabled = jitterDisabled;
   }
 
+  function cancelWholeSheetAutosaveIdle() {
+    if (state._wsAutosaveIdleHandle !== null && typeof window.cancelIdleCallback === "function") {
+      window.cancelIdleCallback(state._wsAutosaveIdleHandle);
+    }
+    state._wsAutosaveIdleHandle = null;
+  }
+
+  function clearQueuedWholeSheetAutosave() {
+    if (state._wsDrawSaveTimer) {
+      clearTimeout(state._wsDrawSaveTimer);
+      state._wsDrawSaveTimer = null;
+    }
+    cancelWholeSheetAutosaveIdle();
+    state._wsAutosaveDueAt = 0;
+    state._wsAutosaveReason = "";
+  }
+
+  function scheduleWholeSheetAutosavePump(delayMs = 0) {
+    if (state._wsDrawSaveTimer) return;
+    state._wsDrawSaveTimer = setTimeout(function() {
+      state._wsDrawSaveTimer = null;
+      runWholeSheetAutosavePump();
+    }, Math.max(0, Number(delayMs || 0)));
+  }
+
+  function runWholeSheetAutosavePump() {
+    if (state._suppressAutoSave || !state._wsAutosaveDueAt) return;
+    const waitMs = Number(state._wsAutosaveDueAt || 0) - Date.now();
+    if (waitMs > 0) {
+      scheduleWholeSheetAutosavePump(waitMs);
+      return;
+    }
+    const runSave = function() {
+      state._wsAutosaveIdleHandle = null;
+      if (state._suppressAutoSave || !state._wsAutosaveDueAt) return;
+      const nextWaitMs = Number(state._wsAutosaveDueAt || 0) - Date.now();
+      if (nextWaitMs > 0) {
+        scheduleWholeSheetAutosavePump(nextWaitMs);
+        return;
+      }
+      const reason = String(state._wsAutosaveReason || "whole-sheet-draw");
+      state._wsAutosaveDueAt = 0;
+      state._wsAutosaveReason = "";
+      saveSessionState(reason);
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      state._wsAutosaveIdleHandle = window.requestIdleCallback(runSave, { timeout: WHOLE_SHEET_AUTOSAVE_IDLE_TIMEOUT_MS });
+    } else {
+      state._wsDrawSaveTimer = setTimeout(function() {
+        state._wsDrawSaveTimer = null;
+        runSave();
+      }, 0);
+    }
+  }
+
+  function queueWholeSheetAutosave(reason = "whole-sheet-draw") {
+    if (state._suppressAutoSave) return;
+    state._wsAutosaveReason = String(reason || "whole-sheet-draw");
+    state._wsAutosaveDueAt = Date.now() + WHOLE_SHEET_AUTOSAVE_DEBOUNCE_MS;
+    if (!state._wsDrawSaveTimer && state._wsAutosaveIdleHandle === null) {
+      scheduleWholeSheetAutosavePump(WHOLE_SHEET_AUTOSAVE_DEBOUNCE_MS);
+    }
+  }
+
   async function saveSessionState(reason, opts = {}) {
     if (!state.sessionId) return { ok: false, skipped: "no_session" };
     const waitForIdle = !!opts.wait_for_idle;
@@ -6472,17 +6541,7 @@
         }
         updateSessionDirtyBadge();
         updateUndoRedoButtons();
-        // Debounce autosave: batch rapid strokes into a single save after 1.5s
-        // of quiet. The dirty badge updates instantly (above). Export triggers
-        // its own save with wait_for_idle, so no data loss at export time.
-        // When _suppressAutoSave is set (verifier recipe replay), skip the
-        // debounced save entirely — the runner saves at controlled checkpoints.
-        if (!state._suppressAutoSave) {
-          clearTimeout(state._wsDrawSaveTimer);
-          state._wsDrawSaveTimer = setTimeout(function() {
-            saveSessionState("whole-sheet-draw");
-          }, 1500);
-        }
+        queueWholeSheetAutosave("whole-sheet-draw");
       },
       onSave: function() { saveCurrentActionProgress({ reason: "whole-sheet-save", auto_advance: false }); },
       onExport: function() { exportXp(); },
@@ -7208,10 +7267,7 @@
   }
 
   async function flushPendingWholeSheetDrawSaveTimer() {
-    if (state._wsDrawSaveTimer) {
-      clearTimeout(state._wsDrawSaveTimer);
-      state._wsDrawSaveTimer = null;
-    }
+    clearQueuedWholeSheetAutosave();
   }
 
   async function saveCurrentActionProgress(opts = {}) {
@@ -8368,18 +8424,17 @@
       out.overrideMode = OVERRIDE_MODE;
       return out;
     },
-    // Verifier-only autosave suppression.  During recipe replay the runner
-    // calls suppressAutoSave(true) to prevent the debounced whole-sheet-draw
-    // save from firing on every stroke.  The runner saves explicitly at
+    // Verifier-only autosave suppression. During recipe replay the runner
+    // suppresses the idle whole-sheet autosave queue and saves explicitly at
     // controlled checkpoints via flushSave().
     suppressAutoSave: (on) => {
       state._suppressAutoSave = !!on;
-      if (on && state._wsDrawSaveTimer) {
-        clearTimeout(state._wsDrawSaveTimer);
-        state._wsDrawSaveTimer = null;
-      }
+      if (on) clearQueuedWholeSheetAutosave();
     },
-    flushSave: () => saveSessionState("verifier-checkpoint", { wait_for_idle: true, timeout_ms: 30000 }),
+    flushSave: () => {
+      clearQueuedWholeSheetAutosave();
+      return saveSessionState("verifier-checkpoint", { wait_for_idle: true, timeout_ms: 30000 });
+    },
     // Verifier-only render suppression.  During recipe replay the frame grid
     // rebuild (innerHTML + 144 canvas elements) and preview render fire on
     // every stroke completion — 4694 actions = ~676K DOM element churn.

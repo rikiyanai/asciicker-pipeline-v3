@@ -11,6 +11,46 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Audit — UQ-002 Save/Autosave Hot-Path Decoupling (2026-04-26)
+
+This is a product/code checkpoint entry for the third required UQ-002 hot-path
+refactor step. It is **not** UQ-002 closure and it is **not** headed UQ-003
+proof.
+
+### What changed
+
+1. Ordinary whole-sheet stroke completion no longer starts full-session
+   serialization directly.
+   - `web/workbench.js:6534-6544` now marks dirty UI state and calls
+     `queueWholeSheetAutosave("whole-sheet-draw")`.
+2. Whole-sheet autosave now runs through a decoupled idle queue.
+   - `web/workbench.js:4034-4069` tracks a quiet-period due time and runs the
+     actual `saveSessionState()` call through `requestIdleCallback` when
+     available, with a timeout fallback.
+   - verifier suppression cancels queued autosave work, and `flushSave()`
+     clears the queue before running the explicit checkpoint save.
+
+### Verification evidence
+
+- `node --check web/workbench.js`
+  - PASS
+- `node --test tests/web/whole-sheet-history-ownership.test.mjs`
+  - PASS (`4 tests`)
+- `node --test tests/web/whole-sheet-clipboard.test.mjs tests/web/whole-sheet-cell-ops.test.mjs tests/web/whole-sheet-input-policy.test.mjs`
+  - PASS
+- `node tests/web/workbench-template-gating.test.js`
+  - PASS (`38 passed`)
+
+### Audit consequence
+
+The third required UQ-002 refactor step is complete for code-state purposes:
+normal drawing no longer runs or directly arms full-session serialization from
+the edit-completion body.
+
+Remaining UQ-002 order:
+
+1. only now evaluate/offload remaining heavy secondary work
+
 ## Audit — UQ-002 Frame-Grid Hot-Path Cut (2026-04-26)
 
 This is a product/code checkpoint entry for the second required UQ-002

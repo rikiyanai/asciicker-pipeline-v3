@@ -56,3 +56,18 @@ test('ordinary whole-sheet stroke completion avoids full frame-grid rebuilds', (
     'ordinary whole-sheet stroke completion should refresh only dirty frame-grid cells'
   );
 });
+
+test('ordinary whole-sheet stroke completion queues autosave instead of serializing', () => {
+  const strokeBlock = workbenchJs.match(/onStrokeComplete:\s*function\(\)\s*\{[\s\S]*?\n\s*\},\n\s*onSave:/);
+  assert.ok(strokeBlock, 'expected whole-sheet onStrokeComplete callback');
+  assert.equal(
+    /saveSessionState\(/.test(strokeBlock[0]),
+    false,
+    'ordinary whole-sheet stroke completion must not call full session serialization directly'
+  );
+  assert.match(
+    strokeBlock[0],
+    /queueWholeSheetAutosave/,
+    'ordinary whole-sheet stroke completion should hand off persistence to the autosave queue'
+  );
+});

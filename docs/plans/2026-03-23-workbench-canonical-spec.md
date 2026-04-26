@@ -884,8 +884,8 @@ What remains open and still blocks honest `UQ-002` closure:
 The remaining "super slow" feel is treated as part of `UQ-002`, not as a later
 polish lane.
 
-Current checkpoint state after the 2026-04-26 history and frame-grid hot-path
-cuts:
+Current checkpoint state after the 2026-04-26 history, frame-grid, and
+save/autosave hot-path cuts:
 
 1. whole-sheet live undo/redo is now owned in `web/whole-sheet-init.js`.
    `web/workbench.js` may delegate UI commands and expose combined diagnostic
@@ -895,10 +895,12 @@ cuts:
    refresh only matching frame tiles on stroke completion. Full
    `renderFrameGrid()` remains for structural wrapper flows, not ordinary root
    edit completion.
-3. `web/workbench.js:3950-4015` still serializes full session payloads on the
-   save path.
-4. `web/workbench.js:6465-6488` still connects ordinary whole-sheet edit
-   completion to debounced full-session save work.
+3. explicit/checkpoint saves still serialize full session payloads through
+   `saveSessionState()`, but ordinary whole-sheet edit completion now only
+   queues autosave intent for the idle autosave pump.
+4. any remaining UQ-002 hot-path work must be measured as secondary projection
+   or serialization work after the first three ownership cuts, not patched by
+   reintroducing wrapper ownership.
 
 Required execution order inside `UQ-002`:
 
@@ -908,10 +910,11 @@ Required execution order inside `UQ-002`:
 2. completed for code-state: stop full `renderFrameGrid()` rebuilds on ordinary
    root edits; update only the dirty/visible shipped projection surfaces that
    actually need refresh
-3. next: decouple session save/autosave from edit completion so normal drawing does
-   not immediately serialize the full live session payload
-4. only after the hot-path cut is stable, move any remaining secondary projection
-   or serialization work off the main thread
+3. completed for code-state: decouple session save/autosave from edit
+   completion so normal drawing does not immediately serialize the full live
+   session payload
+4. next: only after the hot-path cut is stable, move any remaining secondary
+   projection or serialization work off the main thread
 
 Stop rules:
 
