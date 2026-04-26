@@ -11,6 +11,142 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Audit — Canon/Porting Precondition And Y9-2 Bundle-State Investigation (2026-04-26)
+
+This is an audit/investigation entry. It is not a product fix, proof pass, or
+port completion claim.
+
+### Scope audited
+
+- current authority docs in this repo:
+  - `PLAYWRIGHT_FAILURE_LOG.md`
+  - `docs/plans/2026-03-23-workbench-canonical-spec.md`
+- current pipeline branch head:
+  - `v3-refactor-start @ 3f89a74`
+- current game repo consulted for runtime truth:
+  - `/Users/r/Downloads/asciicker-Y9-2` on `main @ 0ef8d327`
+
+### Current Y9-2 repo state
+
+What is strictly proven:
+
+- The game repo exists locally at `/Users/r/Downloads/asciicker-Y9-2`.
+- Its current checked-out branch is `main`.
+- Its current worktree is dirty, including changes in:
+  - `engine/game.cpp`
+  - `server/server_tick.cpp`
+  - `testing/launcher.py`
+  - `docs/FAILURE_LOG.md`
+  - `docs/plans/2026-03-22-multiplayer-canonical-spec.md`
+
+What that means:
+
+- Any statement about the "current game repo" must be treated as in-flight
+  source truth, not as a clean release snapshot.
+- The repo is still the right place to read the active bundle architecture, but
+  not a clean-tree closure anchor.
+
+### Y9-2 bundle-system findings
+
+The current game repo is no longer using the old narrow visual model as its
+active contract. The following generalized bundle facts are directly visible in
+source:
+
+1. **The runtime/wire contract is generalized.**
+   - `server/network.h` carries `STRUCT_BRC_APPEARANCE_STATE_V2` with:
+     - `appearance_profile_id`
+     - `skin_definition_id`
+     - `mount_definition_id`
+     - per-entry `slot_kind_id`
+     - per-entry `item_definition_id`
+     - per-entry `visual_style_id`
+   - `STRUCT_SNAPSHOT_ENTITY` also carries `presentation_kind_id`, and snapshot
+     layout version `9` is explicitly the bundle-aware layout.
+
+2. **The item/runtime model is generalized.**
+   - `engine/inventory.h` item instances now carry:
+     - `item_definition_id`
+     - `visual_style_id`
+     - `presentation_kind_id`
+   - That is bundle-owned runtime identity, not the older fixed sprite-family
+     switch model.
+
+3. **Join/runtime identity is bundle-hash gated.**
+   - `engine/game_app.cpp` reads
+     `assets/appearance_bundle/current/compile_report.json` at join time and
+     requires the bundle/ids-lock hashes for `STRUCT_REQ_JOIN_V2`.
+   - So the game repo already treats compiled appearance-bundle identity as part
+     of runtime admission truth.
+
+4. **The compiled bundle itself is selector/semantic driven, not just
+   idle-attack-death-tab driven.**
+   - `scripts/pipeline/staging/appearance_bundle/phase2-positive/appearance_bundle.json`
+     contains selector tables such as:
+     - `on_foot_idle`
+     - `on_foot_move`
+     - `melee_attack`
+     - `fall_dead`
+     - `world_item`
+     - `inventory_grid`
+   - Those tables are keyed by semantic input/state contracts:
+     - `combat_states`
+     - `life_states`
+     - `locomotion_states`
+     - `mount_states`
+     - `presentation_kinds`
+   - The bundle also includes `death_playback_metadata` and item/style-linked
+     rows using `item_definition_id` and `visual_style_id`.
+
+### Porting/testing precondition
+
+The answer to the user question is **yes, with a boundary**:
+
+- **Yes:** before porting pipeline work to align with the generalized Y9-2
+  bundle system, testing must be modified so it can prove the **same semantic
+  action/state contracts** the game repo actually consumes.
+- **Boundary:** this does NOT mean deleting the current workbench authoring
+  tests. The existing workbench/editor tests still prove the authoring surface.
+  But they are not enough by themselves to prove generalized bundle parity.
+
+Why that conclusion is required:
+
+1. Y9-2 canon law explicitly requires the **same reachable action surface** for
+   real players, manual tests, scripted tests, and proof artifacts.
+2. Y9-2 canon also says recipes must be **input-only choreography**, while
+   proof belongs to analyzer gates over recorded evidence.
+3. Y9-2's active bundle-refactor contract says the refactor is not done until
+   headed candidate proof passes semantic gameplay rows including:
+   - passive visibility
+   - pickup / equip / swap / drop
+   - melee attack
+   - fall / death
+   - scoped NPC corpse / death
+4. This repo's current pipeline/verifier surface is still largely centered on:
+   - `player_native_full`
+   - action keys `idle`, `attack`, `death`
+   - human on-foot prefixes
+   - workbench authoring/runtime proof
+5. This repo still lacks:
+   - wearable/item template surfaces
+   - mounted-family authoring
+   - a parity runner for Y9-2 slot/style contracts
+   - a verifier that models the generalized selector semantics from the active
+     appearance bundle
+
+### Audit consequence
+
+The canon in this repo must say this plainly:
+
+1. Current workbench proof is necessary but insufficient for generalized-bundle
+   porting.
+2. Before generalized Y9-2 bundle-port claims, this repo needs a test contract
+   layer that can prove the same semantic selector/action rows the game runtime
+   uses.
+3. Porting should be framed as:
+   - keep editor/workbench authoring proof
+   - add semantic-runtime parity proof
+   - then port generalized bundle behavior
+
 ## Fix Attempt — Live Repo Private + Manual-Assembly Runtime Proof + `/xpedit` Asset Repair (2026-04-26)
 
 This slice includes one operational visibility change, one verifier expansion,

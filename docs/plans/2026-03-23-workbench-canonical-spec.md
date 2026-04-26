@@ -3,8 +3,8 @@
 **Authority:** this file and `PLAYWRIGHT_FAILURE_LOG.md` are the only active canon docs for the browser workbench.
 
 **Last updated:** 2026-04-26
-**Branch baseline:** `v3-refactor-start @ 8163950`
-**Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the grouped-drag / Delete Frame interaction slice, the manual-assembly runtime proof, and the surviving local/browser/runtime assets in this repo
+**Branch baseline:** `v3-refactor-start @ 3f89a74`
+**Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the manual-assembly runtime proof, the Y9-2 generalized-bundle porting audit, and the surviving local/browser/runtime assets in this repo
 
 ## Application Statement
 
@@ -1530,6 +1530,56 @@ The normalized family/wearable model is now too broad to leave in one ambiguous
 If those three layers drift, the canon must treat that as a backend/schema
 regression before it is treated as a UI problem.
 
+#### 2.3.8 Porting Precondition — Semantic Runtime Parity, Not Just Action Tabs
+
+The active Y9-2 runtime contract is no longer narrow "three action tabs"
+truth. The current game repo (`/Users/r/Downloads/asciicker-Y9-2` on
+`main @ 0ef8d327`, dirty worktree) now consumes generalized bundle identity and
+semantic selector state:
+
+1. `server/network.h` appearance V2 carries:
+   - `appearance_profile_id`
+   - `skin_definition_id`
+   - `mount_definition_id`
+   - per-entry `slot_kind_id`
+   - per-entry `item_definition_id`
+   - per-entry `visual_style_id`
+2. `STRUCT_SNAPSHOT_ENTITY` carries bundle-era `presentation_kind_id`, and
+   snapshot layout version `9` is the bundle-aware layout.
+3. `engine/inventory.h` item instances now carry `item_definition_id`,
+   `visual_style_id`, and `presentation_kind_id`.
+4. `engine/game_app.cpp` reads
+   `assets/appearance_bundle/current/compile_report.json` during join and
+   requires bundle contract hashes.
+5. The compiled appearance bundle in Y9-2 is selector-driven with semantic
+   tables such as:
+   - `on_foot_idle`
+   - `on_foot_move`
+   - `melee_attack`
+   - `fall_dead`
+   - `world_item`
+   - `inventory_grid`
+   and those selectors are keyed by semantic state inputs like
+   `combat_states`, `life_states`, `locomotion_states`, `mount_states`, and
+   `presentation_kinds`.
+
+Therefore the porting/testing precondition is strict:
+
+1. Current workbench authoring/runtime proof in this repo remains necessary.
+2. It is **not sufficient** for generalized-bundle porting by itself.
+3. Before claiming ported parity with the Y9-2 bundle system, this repo must
+   add a verifier/contract layer that can prove the **same semantic
+   action/state rows** the game repo uses, rather than only the current
+   `idle` / `attack` / `death` authoring tabs.
+4. Do not collapse this into "replace the editor tests." The correct split is:
+   - keep editor/workbench authoring proof
+   - add semantic runtime/bundle parity proof
+   - only then claim generalized bundle-port readiness
+5. Y9-2 canon law also requires the same reachable action surface for real
+   players, manual runs, scripted runs, and proof artifacts, with recipes
+   remaining input-only and analyzer gates owning proof. Any future porting
+   verifier here must follow that same boundary.
+
 ### 2.4 Structural Gate, Export, And Injection Contract
 
 Current wrapper-side structural gates are:
@@ -1586,6 +1636,7 @@ The live wrapper architecture is still misaligned in these exact ways after the
 | Y9-2 HTTP API contract now exists | `src/pipeline_v2/app.py:317-325`, `src/pipeline_v2/app.py:562-587`, `src/pipeline_v2/service.py:3913-4027` | The server now exposes `GET /health`, `GET /pipeline/templates`, `POST /pipeline/run`, and `POST /pipeline/validate_xp`. The remaining Y9-2 gap is launcher/wizard wiring, not missing backend endpoints. |
 | Y9-2 wizard not wired as launcher sub-action | `Y9-2 scripts/launcher.py`, `Y9-2 scripts/pipeline/wizard/engine.py` | `WizardEngine` exists but has no `_execute_action` branch in `launcher.py`; `[3] ASSET PIPELINE` node is fully absent rather than showing as `[DEFERRED]`. Tracked as Y9-2 DESIGN OPEN B-13. |
 | **GAP: No wearable or item templates, and no backend parity runner for wearable slot/style contracts** | `config/template_registry.json`, `scripts/xp_fidelity_test/`, `tests/` | Pipeline-v2 has no wearable/item authoring surface, and there is no structural-contract runner that proves the local schema matches Y9-2 slot/style truth. That means gold/dark/default wearable semantics are still only partially covered by ad hoc runtime or engine-side knowledge. Tracked as S2-FAM-04. |
+| **GAP: Current verifier surface is still action-tab centric, not generalized semantic-selector centric** | `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs`, `scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs`, `scripts/xp_fidelity_test/bundle_contract.mjs`, `config/template_registry.json`, `Y9-2 server/network.h`, `Y9-2 engine/inventory.h`, `Y9-2 scripts/pipeline/staging/appearance_bundle/phase2-positive/appearance_bundle.json` | Current pipeline-v3 proof is still organized around authoring actions such as `idle`, `attack`, and `death`. The active Y9-2 bundle runtime is organized around generalized bundle/profile/item/presentation IDs plus semantic selector tables like `on_foot_move`, `melee_attack`, `fall_dead`, `world_item`, and `inventory_grid`. Before generalized bundle-port claims, this repo needs a verifier layer that proves those same semantic runtime rows rather than only the current action-tab authoring surface. |
 
 ### 2.6 Section-2 Scope Boundary
 
