@@ -26,6 +26,11 @@ import {
   getVisibleUnlockedLayerIndices,
   resolveWritableClipboardLayers,
 } from './whole-sheet-clipboard.mjs';
+import {
+  buildClearedEditorCell,
+  cloneEditorCell,
+  shouldCopyCellOnLayerMerge,
+} from './whole-sheet-cell-ops.mjs';
 
 const _BP = String(window.__WB_BASE_PATH || '');
 const FONT_URL = _BP + '/termpp-web-flat/fonts/cp437_12x12.png';
@@ -793,13 +798,11 @@ function _deleteSelection() {
   if (!layerIndices || layerIndices.length === 0) return false;
 
   for (const layerIndex of layerIndices) {
+    const layer = editorState.layerStack?.layers?.[layerIndex];
+    if (!layer) continue;
     for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
       for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
-        _applyLayerCellEdit(layerIndex, x, y, {
-          glyph: 0,
-          fg: [255, 255, 255],
-          bg: [0, 0, 0],
-        });
+        _applyLayerCellEdit(layerIndex, x, y, buildClearedEditorCell(layer.getCell(x, y)));
       }
     }
   }
@@ -1272,12 +1275,14 @@ function _applyTextCharacter(ch) {
   const session = editorState.textEdit;
   const tool = editorState.textTool;
   if (!session?.active || !tool || !editorState.canvas) return false;
+  const activeLayer = editorState.layerStack?.getActiveLayer?.();
   const { cursorX, cursorY } = session;
   if (cursorX < 0 || cursorY < 0 || cursorX >= editorState.canvas.width || cursorY >= editorState.canvas.height) return false;
+  const priorCell = cloneEditorCell(activeLayer?.getCell(cursorX, cursorY));
   tool.setText(String(ch).slice(0, 1));
   tool.paint(cursorX, cursorY);
   session.dirty = true;
-  session.positions.push({ x: cursorX, y: cursorY });
+  session.positions.push({ x: cursorX, y: cursorY, priorCell });
   session.cursorX += 1;
   return true;
 }
@@ -1297,7 +1302,8 @@ function _applyTextBackspace() {
   if (!last) return true;
   session.cursorX = last.x;
   session.cursorY = last.y;
-  editorState.canvas.setCell(last.x, last.y, 0, [255, 255, 255], [0, 0, 0]);
+  const priorCell = cloneEditorCell(last.priorCell);
+  editorState.canvas.setCell(last.x, last.y, priorCell.glyph, priorCell.fg, priorCell.bg);
   session.dirty = true;
   return true;
 }
@@ -3000,8 +3006,9 @@ function _mergeActiveLayerDown() {
   for (let y = 0; y < editorState.gridRows; y++) {
     for (let x = 0; x < editorState.gridCols; x++) {
       const srcCell = source.getCell(x, y);
-      if (!srcCell || Number(srcCell.glyph || 0) === 0) continue;
-      target.setCell(x, y, srcCell.glyph, srcCell.fg, srcCell.bg);
+      if (!shouldCopyCellOnLayerMerge(srcCell)) continue;
+      const nextCell = cloneEditorCell(srcCell);
+      target.setCell(x, y, nextCell.glyph, nextCell.fg, nextCell.bg);
     }
   }
   editorState._strokeDirty = true;
