@@ -90,6 +90,7 @@ def _serve_web_html(file_name: str):
     # Prefix root-relative asset paths with BASE_PATH
     html = html.replace('href="/styles.css"', f'href="{_v(BASE_PATH + "/styles.css")}"')
     html = html.replace('href="/rexpaint-editor/styles.css"', f'href="{_v(BASE_PATH + "/rexpaint-editor/styles.css")}"')
+    html = html.replace('src="/workbench-template-gating.js"', f'src="{_v(BASE_PATH + "/workbench-template-gating.js")}"')
     html = html.replace('src="/workbench.js"', f'src="{_v(BASE_PATH + "/workbench.js")}"')
     html = html.replace('src="/wizard.js"', f'src="{_v(BASE_PATH + "/wizard.js")}"')
     html = html.replace('src="/whole-sheet-init.js"', f'src="{_v(BASE_PATH + "/whole-sheet-init.js")}"')

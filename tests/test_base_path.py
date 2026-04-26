@@ -198,6 +198,11 @@ class TestHtmlInjectionPrefixed:
         html = r.data.decode()
         assert 'src="/xpedit/workbench.js?' in html
 
+    def test_workbench_template_gating_js_prefixed(self):
+        r = self.client.get("/xpedit/workbench")
+        html = r.data.decode()
+        assert 'src="/xpedit/workbench-template-gating.js?' in html
+
     def test_workbench_whole_sheet_init_prefixed(self):
         r = self.client.get("/xpedit/workbench")
         html = r.data.decode()

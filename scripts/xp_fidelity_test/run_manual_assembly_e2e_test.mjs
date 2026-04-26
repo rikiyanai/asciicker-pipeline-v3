@@ -20,8 +20,10 @@
  *   9. Paint a cell in WS editor
  *  10. Click Save
  *  11. Click Export XP
+ *  12. Click Test This Skin
+ *  13. Prove runtime reaches playable state and survives movement
  *
- * This is the critical M2 acceptance workflow: PNG → manual assembly → editing → export.
+ * This is the critical M2 acceptance workflow: PNG → manual assembly → editing → export → runtime test.
  *
  * Usage:
  *   node run_manual_assembly_e2e_test.mjs --out-dir output/slice5_e2e
@@ -108,6 +110,97 @@ async function clickWsCell(page, cx, cy) {
   }, { tx: cx, ty: cy, cellSize: CELL_SIZE });
   if (!position) throw new Error('wholeSheetCanvas not found');
   await page.click('#wholeSheetCanvas', { position });
+}
+
+async function captureFrameProbe(frameHandle, label) {
+  try {
+    return await frameHandle.evaluate((label0) => {
+      const overlay = document.getElementById('login-overlay');
+      const canvas = document.getElementById('asciicker_canvas');
+      const overlayVisible = (() => {
+        if (!overlay) return false;
+        const cs = getComputedStyle(overlay);
+        return !overlay.hidden && cs.display !== 'none' && cs.visibility !== 'hidden';
+      })();
+      const safeCall = (fn) => {
+        try {
+          return typeof fn === 'function' ? fn() : null;
+        } catch (_e) {
+          return null;
+        }
+      };
+      const out = {
+        label: String(label0 || ''),
+        overlayVisible,
+        canvasPresent: !!canvas,
+        wasmReady: !!window._wasmReady,
+        gameMainMenu: safeCall(window.GameMainMenuActive),
+        worldReady: safeCall(window.GameWorldReady),
+        renderStage: safeCall(window.GetRenderStageCode),
+        pos: null,
+      };
+      try {
+        if (window.ak && typeof window.ak.getPos === 'function') {
+          const p = [0, 0, 0];
+          window.ak.getPos(p, 0);
+          out.pos = p.map((v) => Number(v));
+        }
+      } catch (_e) {}
+      try {
+        if (window.__ak_diag) {
+          out.rafCount = window.__ak_diag.raf || 0;
+          out.renderCrashes = window.__ak_diag.crashes || 0;
+        }
+      } catch (_e) {}
+      return out;
+    }, label);
+  } catch (e) {
+    return { label, error: String(e) };
+  }
+}
+
+function probeShowsWorldStarted(probe) {
+  if (!probe || typeof probe !== 'object') return false;
+  const asBool = (v) => v === true || Number(v) === 1;
+  const asNum = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const mainMenu = asBool(probe.gameMainMenu);
+  const worldReady = asBool(probe.worldReady);
+  const renderStage = asNum(probe.renderStage);
+  const pos = Array.isArray(probe.pos) ? probe.pos : [];
+  const nonZeroPos = pos.some((v) => Number.isFinite(v) && Math.abs(v) > 1e-3);
+  if (worldReady && !mainMenu) return true;
+  if (renderStage !== null && renderStage >= 70 && !mainMenu) return true;
+  if (!mainMenu && nonZeroPos) return true;
+  if (probe.rafCount > 30 && !probe.overlayVisible && probe.renderCrashes === 0) {
+    if (renderStage !== null && renderStage > 0) return true;
+  }
+  return false;
+}
+
+async function pulseMainMenuAdvance(frameHandle) {
+  return await frameHandle.evaluate(() => {
+    const out = { keyb: false, dom: false };
+    try {
+      if (typeof window.Keyb === 'function') {
+        window.Keyb(0, 3);
+        window.Keyb(2, 10);
+        window.Keyb(1, 3);
+        out.keyb = true;
+      }
+    } catch (_e) {}
+    try {
+      for (const target of [window, document, document.body, document.getElementById('asciicker_canvas')]) {
+        if (!target || typeof target.dispatchEvent !== 'function') continue;
+        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+        target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+        out.dom = true;
+      }
+    } catch (_e) {}
+    return out;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -366,6 +459,186 @@ try {
     { exportOutText }
   );
   steps.export_xp = { step: 'export_xp', pass: exportPass, xp_path: exportXpPath };
+  if (!exportPass) allPass = false;
+
+  // ── Step 12: Test This Skin ──
+  console.log('=== Step 12: Test This Skin ===');
+  const quickBtn = page.locator('#webbuildQuickTestBtn');
+  await quickBtn.waitFor({ state: 'visible', timeout: 15000 });
+  const quickEnabled = await quickBtn.isEnabled().catch(() => false);
+  const quickTitle = await quickBtn.getAttribute('title').catch(() => '');
+  const testBtnPass = assert(
+    quickEnabled,
+    fail, 'skin_test_button', `Test This Skin should be enabled, title="${quickTitle || ''}"`,
+  );
+  steps.test_this_skin_button = {
+    step: 'test_this_skin_button_enabled',
+    pass: testBtnPass,
+    title: quickTitle || '',
+  };
+  if (!testBtnPass) {
+    allPass = false;
+  } else {
+    await quickBtn.click();
+    await page.waitForFunction(() => {
+      const frame = document.getElementById('webbuildFrame');
+      return !!frame && !frame.classList.contains('hidden') && !!frame.getAttribute('src');
+    }, { timeout: 60000 });
+    await screenshot(page, outDir, 'step12_test_this_skin');
+  }
+
+  // ── Step 13: Runtime playable + movement stability ──
+  console.log('=== Step 13: Runtime playable ===');
+  const getFrameHandle = () => page.frame({ url: /\/termpp-web-flat\/index\.html/ });
+  let frameHandle = null;
+  for (let i = 0; i < 120; i++) {
+    frameHandle = getFrameHandle();
+    if (frameHandle) break;
+    await page.waitForTimeout(500);
+  }
+
+  let playable = false;
+  let playableProbe = null;
+  const playableProbes = [];
+  if (!frameHandle) {
+    fail('runtime_playable', 'Skin dock iframe handle not found after Test This Skin');
+    steps.runtime_playable = { step: 'runtime_playable', pass: false, reason: 'no_frame_handle' };
+    allPass = false;
+  } else {
+    for (let i = 0; i < 120; i++) {
+      frameHandle = getFrameHandle() || frameHandle;
+      const wasmProbe = await captureFrameProbe(frameHandle, `wasm_wait_${i}`);
+      if (wasmProbe.error && /detach/i.test(wasmProbe.error)) {
+        await page.waitForTimeout(1000);
+        continue;
+      }
+      if (wasmProbe.wasmReady) break;
+      await page.waitForTimeout(1000);
+    }
+
+    let probe = await captureFrameProbe(frameHandle, 'initial');
+    if (probe.overlayVisible) {
+      try {
+        const playBtn = frameHandle.locator('#play-btn');
+        if (await playBtn.count()) {
+          await playBtn.waitFor({ state: 'visible', timeout: 15000 });
+          if (await playBtn.isEnabled().catch(() => false)) {
+            await playBtn.click({ timeout: 5000 });
+          }
+        }
+      } catch (_e) {}
+      await page.waitForTimeout(1500);
+    }
+
+    for (let i = 0; i < 30; i++) {
+      frameHandle = getFrameHandle() || frameHandle;
+      probe = await captureFrameProbe(frameHandle, `menu_${i + 1}`);
+      if (probe.error && /detach/i.test(probe.error)) {
+        await page.waitForTimeout(1000);
+        continue;
+      }
+      if (!probe.gameMainMenu && probeShowsWorldStarted(probe)) break;
+      if (probeShowsWorldStarted(probe)) break;
+      if (probe.gameMainMenu === true || Number(probe.gameMainMenu) === 1) {
+        await pulseMainMenuAdvance(frameHandle);
+      }
+      await page.waitForTimeout(600);
+    }
+
+    const playableStart = Date.now();
+    while ((Date.now() - playableStart) < 30000) {
+      frameHandle = getFrameHandle() || frameHandle;
+      probe = await captureFrameProbe(frameHandle, 'playable');
+      if (probe.error && /detach/i.test(probe.error)) {
+        await page.waitForTimeout(1000);
+        continue;
+      }
+      playableProbes.push({ t_ms: Date.now() - playableStart, probe });
+      if (!probe.overlayVisible && probeShowsWorldStarted(probe)) {
+        playable = true;
+        playableProbe = probe;
+        break;
+      }
+      await page.waitForTimeout(500);
+    }
+
+    const playablePass = assert(
+      playable,
+      fail, 'runtime_playable', 'Skin dock never reached playable world state',
+      { probes: playableProbes.slice(-5) }
+    );
+    steps.runtime_playable = {
+      step: 'runtime_playable',
+      pass: playablePass,
+      probe: playableProbe,
+      probes: playableProbes.slice(-5),
+    };
+    if (!playablePass) {
+      allPass = false;
+    } else {
+      await screenshot(page, outDir, 'step13_runtime_playable');
+    }
+  }
+
+  // ── Step 14: Runtime movement stability ──
+  console.log('=== Step 14: Runtime movement stability ===');
+  if (!playable || !frameHandle) {
+    steps.runtime_runaround = { step: 'runtime_runaround', pass: false, blocked: 'runtime_not_playable' };
+    allPass = false;
+  } else {
+    const directions = ['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'];
+    let prevRaf = null;
+    let prevCrashes = 0;
+    let runaroundPass = true;
+    const runaroundProbes = [];
+    for (let sec = 0; sec < 10; sec++) {
+      const dir = directions[sec % directions.length];
+      frameHandle = getFrameHandle() || frameHandle;
+      try {
+        for (let k = 0; k < 5; k++) {
+          await frameHandle.locator('body').press(dir, { delay: 100 });
+        }
+      } catch (_e) {
+        frameHandle = getFrameHandle() || frameHandle;
+      }
+
+      await page.waitForTimeout(500);
+      frameHandle = getFrameHandle() || frameHandle;
+      const runProbe = await captureFrameProbe(frameHandle, `runaround_${sec}`);
+      runaroundProbes.push({ sec, dir, probe: runProbe });
+
+      if (runProbe.error && /detach/i.test(runProbe.error)) {
+        fail('runtime_runaround', `Skin dock iframe detached at second ${sec}`);
+        runaroundPass = false;
+        break;
+      }
+
+      const crashes = Number(runProbe.renderCrashes) || 0;
+      const raf = Number(runProbe.rafCount) || 0;
+      if (crashes > prevCrashes) {
+        fail('runtime_runaround', `renderCrashes rose from ${prevCrashes} to ${crashes} at second ${sec}`);
+        runaroundPass = false;
+        break;
+      }
+      if (prevRaf !== null && raf <= prevRaf) {
+        fail('runtime_runaround', `rafCount stalled at ${raf} (was ${prevRaf}) at second ${sec}`);
+        runaroundPass = false;
+        break;
+      }
+      prevCrashes = crashes;
+      prevRaf = raf;
+    }
+    steps.runtime_runaround = {
+      step: 'runtime_runaround',
+      pass: runaroundPass,
+      probes: runaroundProbes,
+    };
+    if (!runaroundPass) {
+      allPass = false;
+    } else {
+      await screenshot(page, outDir, 'step14_runtime_runaround');
+    }
+  }
 
   // ── Write report ──
   report.steps = steps;
