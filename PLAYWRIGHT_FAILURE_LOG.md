@@ -11,6 +11,50 @@
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 
+## Audit — UQ-002 Secondary Projection Idle Queue (2026-04-26)
+
+This is a product/code checkpoint entry for the fourth required UQ-002
+hot-path refactor step. It is **not** UQ-002 headed proof and it does **not**
+claim a worker/off-main-thread implementation.
+
+### What changed
+
+1. Dirty frame-grid thumbnail projection is no longer run synchronously from
+   ordinary whole-sheet stroke completion.
+   - `web/workbench.js:2777-2795` now coalesces dirty frame-grid projection
+     through `requestIdleCallback` with a short timeout, falling back to
+     `requestAnimationFrame` / `setTimeout`.
+   - `web/workbench.js:6560-6566` now queues that secondary projection from
+     `onStrokeComplete` instead of running it inline.
+2. Render-suppression replay resumes by queuing the same dirty projection flush
+   instead of forcing synchronous projection in the control call.
+
+### Verification evidence
+
+- `node --check web/workbench.js`
+  - PASS
+- `node --test tests/web/whole-sheet-history-ownership.test.mjs`
+  - PASS (`4 tests`)
+- `node --test tests/web/whole-sheet-clipboard.test.mjs tests/web/whole-sheet-cell-ops.test.mjs tests/web/whole-sheet-input-policy.test.mjs`
+  - PASS
+- `node tests/web/workbench-template-gating.test.js`
+  - PASS (`38 passed`)
+
+### Audit consequence
+
+The four-step UQ-002 hot-path refactor order is complete for code-state
+purposes:
+
+1. whole-sheet history ownership moved into the root editor
+2. ordinary root edits stopped rebuilding the full frame-grid projection
+3. autosave/full-session serialization moved out of edit completion
+4. remaining dirty frame-grid projection is coalesced into an idle secondary
+   refresh queue
+
+`UQ-002` should remain honest until the shipped headed proof is rerun. If that
+proof finds residual slowness, log the measured residual before adding more
+offload or worker machinery.
+
 ## Audit — UQ-002 Save/Autosave Hot-Path Decoupling (2026-04-26)
 
 This is a product/code checkpoint entry for the third required UQ-002 hot-path

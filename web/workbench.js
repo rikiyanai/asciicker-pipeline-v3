@@ -58,6 +58,7 @@
   const WEBBUILD_READY_TIMEOUT_MS = 180000;
   const WHOLE_SHEET_AUTOSAVE_DEBOUNCE_MS = 1500;
   const WHOLE_SHEET_AUTOSAVE_IDLE_TIMEOUT_MS = 3000;
+  const FRAME_GRID_REFRESH_IDLE_TIMEOUT_MS = 250;
   const DEFAULT_FLATMAP_NAME = "minimal_2x2.a3d";
   const WEBBUILD_BASE_SRC = (() => {
     const u = new URL(bp("/termpp-web-flat/index.html?solo=1&player=player"), window.location.origin);
@@ -116,6 +117,9 @@
     rowCategories: {},
     frameGroups: [],
     frameGridDirtyCells: new Set(),
+    frameGridRefreshQueued: false,
+    frameGridRefreshPreview: false,
+    frameGridRefreshIdleHandle: null,
     layers: [],
     hasUploadedLayers: false,
     layerNames: [...DEFAULT_LAYER_NAMES],
@@ -2767,6 +2771,28 @@
       if (dirtyFrames.some((coord) => Number(coord.row) === previewRow && Number(coord.col) === 0)) {
         renderPreviewFrame(previewRow, 0);
       }
+    }
+  }
+
+  function queueDirtyFrameGridRefresh(opts = {}) {
+    if (opts.updatePreview) state.frameGridRefreshPreview = true;
+    if (state.frameGridRefreshQueued) return;
+    state.frameGridRefreshQueued = true;
+    const run = function() {
+      state.frameGridRefreshQueued = false;
+      state.frameGridRefreshIdleHandle = null;
+      const updatePreview = !!state.frameGridRefreshPreview;
+      state.frameGridRefreshPreview = false;
+      refreshDirtyFrameGridCells({ updatePreview });
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      state.frameGridRefreshIdleHandle = window.requestIdleCallback(run, { timeout: FRAME_GRID_REFRESH_IDLE_TIMEOUT_MS });
+      return;
+    }
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(run);
+    } else {
+      setTimeout(run, 0);
     }
   }
 
@@ -6537,7 +6563,7 @@
         // inspector, metadata, and syncWholeSheetFromState (editor canvas
         // already correct).
         if (!state._suppressRender) {
-          refreshDirtyFrameGridCells({ updatePreview: true });
+          queueDirtyFrameGridRefresh({ updatePreview: true });
         }
         updateSessionDirtyBadge();
         updateUndoRedoButtons();
@@ -8443,7 +8469,7 @@
       const wasSuppressed = !!state._suppressRender;
       state._suppressRender = !!on;
       if (wasSuppressed && !state._suppressRender) {
-        refreshDirtyFrameGridCells({ updatePreview: true });
+        queueDirtyFrameGridRefresh({ updatePreview: true });
       }
     },
     // Layer-aware accessors for browser-level proof automation.

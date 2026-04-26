@@ -52,8 +52,13 @@ test('ordinary whole-sheet stroke completion avoids full frame-grid rebuilds', (
   );
   assert.match(
     strokeBlock[0],
-    /refreshDirtyFrameGridCells/,
-    'ordinary whole-sheet stroke completion should refresh only dirty frame-grid cells'
+    /queueDirtyFrameGridRefresh/,
+    'ordinary whole-sheet stroke completion should queue dirty frame-grid cells for secondary refresh'
+  );
+  assert.equal(
+    /refreshDirtyFrameGridCells\(/.test(strokeBlock[0]),
+    false,
+    'ordinary whole-sheet stroke completion must not run secondary frame-grid projection synchronously'
   );
 });
 

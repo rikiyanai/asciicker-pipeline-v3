@@ -884,8 +884,7 @@ What remains open and still blocks honest `UQ-002` closure:
 The remaining "super slow" feel is treated as part of `UQ-002`, not as a later
 polish lane.
 
-Current checkpoint state after the 2026-04-26 history, frame-grid, and
-save/autosave hot-path cuts:
+Current checkpoint state after the 2026-04-26 UQ-002 hot-path refactor cuts:
 
 1. whole-sheet live undo/redo is now owned in `web/whole-sheet-init.js`.
    `web/workbench.js` may delegate UI commands and expose combined diagnostic
@@ -898,9 +897,9 @@ save/autosave hot-path cuts:
 3. explicit/checkpoint saves still serialize full session payloads through
    `saveSessionState()`, but ordinary whole-sheet edit completion now only
    queues autosave intent for the idle autosave pump.
-4. any remaining UQ-002 hot-path work must be measured as secondary projection
-   or serialization work after the first three ownership cuts, not patched by
-   reintroducing wrapper ownership.
+4. dirty frame-grid thumbnail projection is now coalesced through an idle
+   secondary refresh queue instead of running synchronously from ordinary
+   whole-sheet edit completion.
 
 Required execution order inside `UQ-002`:
 
@@ -913,8 +912,14 @@ Required execution order inside `UQ-002`:
 3. completed for code-state: decouple session save/autosave from edit
    completion so normal drawing does not immediately serialize the full live
    session payload
-4. next: only after the hot-path cut is stable, move any remaining secondary
-   projection or serialization work off the main thread
+4. completed for code-state: only after the hot-path cut is stable, move any
+   remaining secondary projection or serialization work out of the direct edit
+   completion path
+
+Next proof step:
+
+1. rerun the shipped headed Section 1 proof path and log any measured residual
+   before adding worker/off-main-thread machinery
 
 Stop rules:
 
