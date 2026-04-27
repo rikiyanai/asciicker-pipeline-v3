@@ -84,6 +84,7 @@ if (typeof HTMLCanvasElement === 'undefined') {
       this.font = '12px monospace';
       this.textAlign = 'left';
       this.textBaseline = 'top';
+      this.globalCompositeOperation = 'source-over';
       this.pixelData = new Map();
     }
 
@@ -102,6 +103,14 @@ if (typeof HTMLCanvasElement === 'undefined') {
         this.drawImageCalls = [];
       }
       this.drawImageCalls.push({ source, sx, sy, sw, sh, dx, dy, dw, dh });
+    }
+
+    clearRect(x, y, w, h) {
+      for (let py = y; py < y + h; py++) {
+        for (let px = x; px < x + w; px++) {
+          this.pixelData.delete(`${px},${py}`);
+        }
+      }
     }
 
     fillText(text, x, y, maxWidth) {}
@@ -219,6 +228,45 @@ runner.describe('CP437Font', () => {
     // Position in spritesheet: x=12, y=48
     const glyph = cp437.getGlyph(65);
     expect(glyph).toBeDefined();
+  });
+
+  runner.it('should build an atlas once and render glyphs through drawImage', () => {
+    const cp437 = new CP437Font('fonts/cp437-12x12.png', 12, 12);
+    cp437.spriteSheet = document.createElement('canvas');
+    cp437.spriteSheet.width = 192;
+    cp437.spriteSheet.height = 192;
+    cp437.spriteSheet.getContext = function (type) {
+      return {
+        drawImage: () => {},
+        getImageData: () => ({
+          data: new Uint8ClampedArray(144 * 4),
+          width: 12,
+          height: 12,
+        }),
+      };
+    };
+
+    cp437._buildAtlas();
+
+    expect(cp437.atlasCanvas).toBeDefined();
+    expect(cp437.atlasCanvas.width).toBe(192);
+    expect(cp437.atlasCanvas.height).toBe(192);
+
+    const target = document.createElement('canvas').getContext('2d');
+    cp437.drawGlyph(target, 65, 0, 0, [255, 255, 255], [0, 0, 0]);
+
+    if (!cp437._tintCtx || !cp437._tintCtx.drawImageCalls || cp437._tintCtx.drawImageCalls.length === 0) {
+      throw new Error('Expected tint buffer drawImage to be called');
+    }
+
+    const atlasCall = cp437._tintCtx.drawImageCalls[0];
+    if (atlasCall.source !== cp437.atlasCanvas) {
+      throw new Error('Expected atlas canvas to be the drawImage source');
+    }
+
+    if (!target.drawImageCalls || target.drawImageCalls.length === 0) {
+      throw new Error('Expected final glyph drawImage call');
+    }
   });
 
 });

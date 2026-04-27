@@ -19,6 +19,8 @@ export class CP437Font {
     this.glyphWidth = glyphWidth;
     this.glyphHeight = glyphHeight;
     this.spriteSheet = null;
+    this.atlasCanvas = null;
+    this.atlasCtx = null;
     this.glyphCache = new Map(); // Maps glyph code (0-255) to extracted ImageData
     this.loadPromise = null;
   }
@@ -45,6 +47,7 @@ export class CP437Font {
         ctx.drawImage(image, 0, 0);
 
         this.spriteSheet = canvas;
+        this._buildAtlas();
         resolve();
       };
 
@@ -56,6 +59,76 @@ export class CP437Font {
     });
 
     return this.loadPromise;
+  }
+
+  /**
+   * Create a canvas element compatible with browser and test environments.
+   * @param {number} width
+   * @param {number} height
+   * @returns {HTMLCanvasElement|OffscreenCanvas}
+   * @private
+   */
+  _createCanvas(width, height) {
+    if (typeof OffscreenCanvas !== 'undefined') {
+      return new OffscreenCanvas(width, height);
+    }
+    if (typeof document !== 'undefined' && document.createElement) {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      return canvas;
+    }
+    if (typeof HTMLCanvasElement !== 'undefined') {
+      const canvas = new HTMLCanvasElement();
+      canvas.width = width;
+      canvas.height = height;
+      return canvas;
+    }
+    throw new Error('No canvas implementation available to build CP437 atlas.');
+  }
+
+  /**
+   * Build the atlas canvas from the loaded sprite sheet.
+   * @private
+   */
+  _buildAtlas() {
+    if (!this.spriteSheet) {
+      return;
+    }
+
+    const needsNewAtlas =
+      !this.atlasCanvas ||
+      this.atlasCanvas.width !== this.spriteSheet.width ||
+      this.atlasCanvas.height !== this.spriteSheet.height;
+
+    if (needsNewAtlas) {
+      this.atlasCanvas = this._createCanvas(this.spriteSheet.width, this.spriteSheet.height);
+      this.atlasCtx = this.atlasCanvas.getContext('2d');
+      if (!this.atlasCtx) {
+        throw new Error('Failed to get atlas canvas context.');
+      }
+    }
+
+    this.atlasCtx.drawImage(this.spriteSheet, 0, 0);
+  }
+
+  /**
+   * Ensure the atlas exists before attempting atlas-backed rendering.
+   * @private
+   */
+  _ensureAtlas() {
+    if (!this.atlasCanvas && this.spriteSheet) {
+      this._buildAtlas();
+    }
+    return this.atlasCanvas;
+  }
+
+  /**
+   * Get the atlas canvas, building it on demand if needed.
+   * @returns {HTMLCanvasElement|OffscreenCanvas|null}
+   */
+  getAtlas() {
+    return this._ensureAtlas();
   }
 
   /**
@@ -144,15 +217,51 @@ export class CP437Font {
     ctx.fillStyle = `rgb(${br},${bGreen},${bb})`;
     ctx.fillRect(x, y, this.glyphWidth, this.glyphHeight);
 
-    // Get glyph mask data (cached after first access)
+    const atlas = this._ensureAtlas();
+    if (atlas && ctx && typeof ctx.drawImage === 'function' && typeof ctx.createImageData === 'function') {
+      if (!this._tintCanvas) {
+        this._tintCanvas = this._createCanvas(this.glyphWidth, this.glyphHeight);
+        this._tintCtx = this._tintCanvas.getContext('2d');
+        if (!this._tintCtx) {
+          this._tintCanvas = null;
+        }
+      }
+
+      if (this._tintCtx && typeof this._tintCtx.clearRect === 'function') {
+        const col = code % 16;
+        const row = Math.floor(code / 16);
+        const sx = col * this.glyphWidth;
+        const sy = row * this.glyphHeight;
+
+        this._tintCtx.clearRect(0, 0, this.glyphWidth, this.glyphHeight);
+        this._tintCtx.globalCompositeOperation = 'source-over';
+        this._tintCtx.drawImage(
+          atlas,
+          sx,
+          sy,
+          this.glyphWidth,
+          this.glyphHeight,
+          0,
+          0,
+          this.glyphWidth,
+          this.glyphHeight
+        );
+        this._tintCtx.globalCompositeOperation = 'source-in';
+        this._tintCtx.fillStyle = `rgb(${fr},${fGreen},${fb})`;
+        this._tintCtx.fillRect(0, 0, this.glyphWidth, this.glyphHeight);
+        this._tintCtx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(this._tintCanvas, x, y);
+        return;
+      }
+    }
+
+    // Fallback: blend the cached glyph mask per call if no atlas buffer is available.
     const glyphData = this.getGlyph(code);
     const data = glyphData.data;
 
     // Lazy-init single reusable offscreen buffer
     if (!this._blendCanvas) {
-      this._blendCanvas = document.createElement('canvas');
-      this._blendCanvas.width = this.glyphWidth;
-      this._blendCanvas.height = this.glyphHeight;
+      this._blendCanvas = this._createCanvas(this.glyphWidth, this.glyphHeight);
       this._blendCtx = this._blendCanvas.getContext('2d');
       this._blendImageData = this._blendCtx.createImageData(this.glyphWidth, this.glyphHeight);
     }
