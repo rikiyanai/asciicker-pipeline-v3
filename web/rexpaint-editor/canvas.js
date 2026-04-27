@@ -142,6 +142,8 @@ export class Canvas {
     this.selectionTool = null;
     this._animationFrame = 0; // For marching ants animation
     this._animationFrameId = null; // For requestAnimationFrame cancellation
+    this._selectionDirty = false;
+    this._lastSelectionBounds = null;
 
     // Dirty cell tracking for incremental rendering
     this._dirtyCells = new Set();
@@ -651,6 +653,41 @@ export class Canvas {
     this._drawCellToContext(this.ctx, cell, x, y);
   }
 
+  _cloneBounds(bounds) {
+    return bounds ? { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height } : null;
+  }
+
+  _mergeBounds(a, b) {
+    if (!a) return this._cloneBounds(b);
+    if (!b) return this._cloneBounds(a);
+    const minX = Math.min(a.x, b.x);
+    const minY = Math.min(a.y, b.y);
+    const maxX = Math.max(a.x + a.width - 1, b.x + b.width - 1);
+    const maxY = Math.max(a.y + a.height - 1, b.y + b.height - 1);
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1,
+    };
+  }
+
+  _expandBounds(bounds, padding = 1) {
+    if (!bounds) {
+      return null;
+    }
+    const x = Math.max(0, bounds.x - padding);
+    const y = Math.max(0, bounds.y - padding);
+    const maxX = Math.min(this.width - 1, bounds.x + bounds.width - 1 + padding);
+    const maxY = Math.min(this.height - 1, bounds.y + bounds.height - 1 + padding);
+    return {
+      x,
+      y,
+      width: maxX - x + 1,
+      height: maxY - y + 1,
+    };
+  }
+
   _drawCellToContext(ctx, cell, x, y) {
     const pixelCoords = this.cellToPixelCoords(x, y);
     const bgColor = _rgb(cell.bg[0], cell.bg[1], cell.bg[2]);
@@ -778,6 +815,90 @@ export class Canvas {
     }
   }
 
+  _redrawSelectionRegion(bounds = null) {
+    const currentBounds = bounds || (this.selectionTool ? this.selectionTool.getSelectionBounds() : null);
+    if (!currentBounds) {
+      this._lastSelectionBounds = null;
+      return;
+    }
+
+    const regionBounds = this._expandBounds(
+      this._selectionDirty ? this._mergeBounds(currentBounds, this._lastSelectionBounds) : currentBounds,
+      1
+    );
+    if (!regionBounds) {
+      return;
+    }
+
+    const pixelX = regionBounds.x * this.cellSizePixels;
+    const pixelY = regionBounds.y * this.cellSizePixels;
+    const pixelWidth = regionBounds.width * this.cellSizePixels;
+    const pixelHeight = regionBounds.height * this.cellSizePixels;
+
+    if (this.useLayerStack && this.layerStack) {
+      this.ctx.clearRect(pixelX, pixelY, pixelWidth, pixelHeight);
+      const layers = this.layerStack.getLayers();
+      for (const layer of layers) {
+        if (!layer.visible || !layer.offscreenCanvas) {
+          continue;
+        }
+        const priorAlpha = this.ctx.globalAlpha;
+        this.ctx.globalAlpha = layer.opacity;
+        this.ctx.drawImage(
+          layer.offscreenCanvas,
+          pixelX,
+          pixelY,
+          pixelWidth,
+          pixelHeight,
+          pixelX,
+          pixelY,
+          pixelWidth,
+          pixelHeight
+        );
+        this.ctx.globalAlpha = priorAlpha;
+      }
+    } else {
+      for (let y = regionBounds.y; y < regionBounds.y + regionBounds.height; y++) {
+        for (let x = regionBounds.x; x < regionBounds.x + regionBounds.width; x++) {
+          this.drawCell(x, y);
+        }
+      }
+    }
+
+    if (this.showGrid) {
+      this._drawGrid(regionBounds);
+    }
+    this._drawSelectionOutline(currentBounds);
+    this._lastSelectionBounds = this._cloneBounds(currentBounds);
+  }
+
+  _scheduleSelectionAnimation(selectionBounds) {
+    if (selectionBounds) {
+      if (!this._animationFrameId) {
+        this._animationFrameId = requestAnimationFrame(() => this._runSelectionAnimationFrame());
+      }
+      return;
+    }
+    if (this._animationFrameId) {
+      cancelAnimationFrame(this._animationFrameId);
+      this._animationFrameId = null;
+    }
+  }
+
+  _runSelectionAnimationFrame() {
+    this._animationFrameId = null;
+    const selectionBounds = this.selectionTool && this.selectionTool.getSelectionBounds();
+    if (!selectionBounds) {
+      this._lastSelectionBounds = null;
+      return;
+    }
+
+    this._animationFrame++;
+    this._redrawSelectionRegion(selectionBounds);
+    this._selectionDirty = false;
+    this._animationFrameId = requestAnimationFrame(() => this._runSelectionAnimationFrame());
+  }
+
   /**
    * Fill a rectangular region with uniform cell data
    * @param {number} x - Starting column
@@ -817,6 +938,7 @@ export class Canvas {
 
     // Re-render with new offset
     this._fullRenderNeeded = true;
+    this._selectionDirty = true;
     this.render();
   }
 
@@ -826,13 +948,30 @@ export class Canvas {
    * falls back to full render when needed (layer switch, visibility toggle, etc).
    */
   render() {
-    const needsFull = this._fullRenderNeeded || this.showGrid ||
-      (this.selectionTool && this.selectionTool.getSelectionBounds());
+    const selectionBounds = this.selectionTool && this.selectionTool.getSelectionBounds();
+    if (selectionBounds) {
+      const last = this._lastSelectionBounds;
+      if (
+        !last ||
+        last.x !== selectionBounds.x ||
+        last.y !== selectionBounds.y ||
+        last.width !== selectionBounds.width ||
+        last.height !== selectionBounds.height
+      ) {
+        this._selectionDirty = true;
+      }
+    }
+    const needsFull = this._fullRenderNeeded || this.showGrid;
 
     if (this.useLayerStack && this.layerStack) {
       const offscreenChanged = this._syncLayerOffscreens();
       const needsComposite = needsFull || offscreenChanged;
       if (!needsComposite) {
+        if (selectionBounds) {
+          this._redrawSelectionRegion(selectionBounds);
+          this._selectionDirty = false;
+          this._scheduleSelectionAnimation(selectionBounds);
+        }
         return;
       }
 
@@ -842,17 +981,12 @@ export class Canvas {
       if (this.showGrid) {
         this._drawGrid();
       }
-      this._drawSelectionOutline();
-      this._animationFrame++;
-      if (this.selectionTool && this.selectionTool.getSelectionBounds()) {
-        if (this._animationFrameId) {
-          cancelAnimationFrame(this._animationFrameId);
-        }
-        this._animationFrameId = requestAnimationFrame(() => this.render());
-      } else if (this._animationFrameId) {
-        cancelAnimationFrame(this._animationFrameId);
-        this._animationFrameId = null;
+      if (selectionBounds) {
+        this._drawSelectionOutline(selectionBounds);
+        this._lastSelectionBounds = this._cloneBounds(selectionBounds);
       }
+      this._selectionDirty = false;
+      this._scheduleSelectionAnimation(selectionBounds);
       return;
     }
 
@@ -871,6 +1005,12 @@ export class Canvas {
         this.drawCell(x, y);
       }
       this._dirtyCells.clear();
+      if (selectionBounds) {
+        this._selectionDirty = true;
+        this._redrawSelectionRegion(selectionBounds);
+        this._selectionDirty = false;
+      }
+      this._scheduleSelectionAnimation(selectionBounds);
       return;
     }
 
@@ -888,21 +1028,12 @@ export class Canvas {
     }
 
     // Draw selection outline last (on top of all cells)
-    this._drawSelectionOutline();
-
-    // Schedule next animation frame for marching ants
-    this._animationFrame++;
-    if (this.selectionTool && this.selectionTool.getSelectionBounds()) {
-      if (this._animationFrameId) {
-        cancelAnimationFrame(this._animationFrameId);
-      }
-      this._animationFrameId = requestAnimationFrame(() => this.render());
-    } else {
-      if (this._animationFrameId) {
-        cancelAnimationFrame(this._animationFrameId);
-        this._animationFrameId = null;
-      }
+    if (selectionBounds) {
+      this._drawSelectionOutline(selectionBounds);
+      this._lastSelectionBounds = this._cloneBounds(selectionBounds);
     }
+    this._selectionDirty = false;
+    this._scheduleSelectionAnimation(selectionBounds);
   }
 
   /**
@@ -928,6 +1059,7 @@ export class Canvas {
    */
   setSelectionTool(tool) {
     this.selectionTool = tool;
+    this._selectionDirty = true;
     this.render();
   }
 
@@ -935,21 +1067,17 @@ export class Canvas {
    * Draw selection outline (marching ants) if selection is active
    * @private
    */
-  _drawSelectionOutline() {
-    if (!this.selectionTool) {
-      return;
-    }
-
-    const bounds = this.selectionTool.getSelectionBounds();
-    if (!bounds) {
+  _drawSelectionOutline(bounds = null) {
+    const selectionBounds = bounds || (this.selectionTool && this.selectionTool.getSelectionBounds());
+    if (!selectionBounds) {
       return; // No active selection
     }
 
     // Convert cell bounds to pixel coordinates
-    const pixelX = bounds.x * this.cellSizePixels - this.offsetX;
-    const pixelY = bounds.y * this.cellSizePixels - this.offsetY;
-    const pixelWidth = bounds.width * this.cellSizePixels;
-    const pixelHeight = bounds.height * this.cellSizePixels;
+    const pixelX = selectionBounds.x * this.cellSizePixels - this.offsetX;
+    const pixelY = selectionBounds.y * this.cellSizePixels - this.offsetY;
+    const pixelWidth = selectionBounds.width * this.cellSizePixels;
+    const pixelHeight = selectionBounds.height * this.cellSizePixels;
 
     // Draw marching ants outline (dashed line with animation)
     this.ctx.strokeStyle = '#FFFF00'; // Bright yellow
@@ -972,7 +1100,7 @@ export class Canvas {
    * Draw cross-mark grid overlay at cell intersections
    * @private
    */
-  _drawGrid() {
+  _drawGrid(regionBounds = null) {
     const sx = this.gridStepX || 1;
     const sy = this.gridStepY || 1;
     const cs = this.cellSizePixels;
@@ -1004,6 +1132,13 @@ export class Canvas {
     startY = Math.max(sy, Math.ceil(startY / sy) * sy);
     let endY = Math.ceil((vpY + vpH + margin) / cs);
     endY = Math.min(this.height, endY);
+
+    if (regionBounds) {
+      startX = Math.max(startX, regionBounds.x);
+      endX = Math.min(endX, regionBounds.x + regionBounds.width);
+      startY = Math.max(startY, regionBounds.y);
+      endY = Math.min(endY, regionBounds.y + regionBounds.height);
+    }
 
     this.ctx.strokeStyle = 'rgba(220,230,240,0.7)';
     this.ctx.lineWidth = 1;

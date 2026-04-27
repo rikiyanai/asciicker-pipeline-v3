@@ -91,13 +91,6 @@ const vi = {
 // Mock EditorApp
 class MockEditorApp {
   constructor() {
-    this.cellTool = { name: 'cellTool' };
-    this.lineTool = { name: 'lineTool' };
-    this.rectTool = { name: 'rectTool' };
-    this.ovalTool = { name: 'ovalTool' };
-    this.fillTool = { name: 'fillTool' };
-    this.textTool = { name: 'textTool' };
-
     this.activateTool = vi.fn();
     this.undo = vi.fn();
     this.redo = vi.fn();
@@ -153,7 +146,7 @@ runner.describe('KeyboardHandler', () => {
     keydownCallback(event);
 
     expect(app.activateTool.called).toBe(true);
-    expect(app.activateTool.lastArgs[0]).toBe(app.textTool);
+    expect(app.activateTool.lastArgs[0]).toBe('text');
   });
 
   runner.it('should undo on Ctrl+Z', () => {

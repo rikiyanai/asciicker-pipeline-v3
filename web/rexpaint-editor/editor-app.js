@@ -39,21 +39,15 @@ export class EditorApp {
     this.canvas = canvas;
     this.palette = palette;
     this.glyphPicker = glyphPicker;
-    this.tools = tools;
+    this.tools = new Map();
+    for (const tool of tools) {
+      this.registerTool(this._inferToolName(tool), tool);
+    }
 
     // Wire EditorApp reference to Canvas for pan event delegation
     if (this.canvas) {
       this.canvas.editorApp = this;
     }
-
-    // Tool references for keyboard shortcuts
-    this.cellTool = null;
-    this.lineTool = null;
-    this.rectTool = null;
-    this.ovalTool = null;
-    this.fillTool = null;
-    this.textTool = null;
-    this.selectTool = null;
 
     // Canonical state
     this.activeGlyph = 0;
@@ -538,12 +532,40 @@ export class EditorApp {
     }
   }
 
+  _inferToolName(tool) {
+    if (!tool) {
+      return '';
+    }
+    if (typeof tool.toolName === 'string' && tool.toolName.length > 0) {
+      return tool.toolName;
+    }
+    const constructorName = tool.constructor && tool.constructor.name ? tool.constructor.name : tool.name;
+    return String(constructorName || 'tool').replace(/Tool$/, '').toLowerCase();
+  }
+
+  registerTool(name, tool) {
+    if (!name || !tool) {
+      return null;
+    }
+    this.tools.set(name, tool);
+    return tool;
+  }
+
+  getTool(name) {
+    return this.tools.get(name) || null;
+  }
+
   /**
    * Activate a drawing tool and sync current state to it
    * Deactivates the previous tool if one was active
-   * @param {Object} tool - The tool to activate
+   * @param {Object|string} toolOrName - The tool instance or registry key to activate
    */
-  activateTool(tool) {
+  activateTool(toolOrName) {
+    const tool = typeof toolOrName === 'string' ? this.getTool(toolOrName) : toolOrName;
+    if (!tool) {
+      return null;
+    }
+
     // Deactivate previous tool if it has a deactivate method
     if (this.activeTool && typeof this.activeTool.deactivate === 'function') {
       this.activeTool.deactivate();
@@ -576,8 +598,9 @@ export class EditorApp {
     // After tool activation, if it's SelectTool, register it with canvas for visualization
     if (tool instanceof SelectTool) {
       this.canvas.setSelectionTool(tool);
-      this.selectTool = tool;
     }
+
+    return tool;
   }
 
   /**
@@ -984,19 +1007,19 @@ export class EditorApp {
    * @returns {FillTool} The activated fill tool
    */
   activateFillTool() {
-    const fillTool = new FillTool();
+    let fillTool = this.getTool('fill');
+    if (!fillTool) {
+      fillTool = new FillTool();
+      this.registerTool('fill', fillTool);
+    }
+
     fillTool.setCanvas(this.canvas);
     fillTool.setGlyph(this.activeGlyph);
     fillTool.setColors(this.activeFg, this.activeBg);
     fillTool.setApplyModes(this.activeApplyModes);
 
-    // Add to tools array if not already present
-    if (!this.tools.includes(fillTool)) {
-      this.tools.push(fillTool);
-    }
-
     // Activate the tool
-    this.activateTool(fillTool);
+    this.activateTool('fill');
 
     return fillTool;
   }

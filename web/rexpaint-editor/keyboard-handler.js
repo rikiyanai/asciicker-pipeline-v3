@@ -26,14 +26,14 @@ export class KeyboardHandler {
           this.app.copy();
         } else {
           // C: activate cell tool
-          this.app.activateTool(this.app.cellTool);
+          this.app.activateTool('cell');
         }
       },
-      'KeyL': () => this.app.activateTool(this.app.lineTool),
-      'KeyR': () => this.app.activateTool(this.app.rectTool),
-      'KeyO': () => this.app.activateTool(this.app.ovalTool),
-      'KeyF': () => this.app.activateTool(this.app.fillTool),
-      'KeyT': () => this.app.activateTool(this.app.textTool),
+      'KeyL': () => this.app.activateTool('line'),
+      'KeyR': () => this.app.activateTool('rect'),
+      'KeyO': () => this.app.activateTool('oval'),
+      'KeyF': () => this.app.activateTool('fill'),
+      'KeyT': () => this.app.activateTool('text'),
       'KeyV': (evt) => {
         if (evt.ctrlKey) {
           // Ctrl+V: start paste mode

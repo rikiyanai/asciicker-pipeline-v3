@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>REXPaint Editor Selection Benchmark</title>
+</head>
+<body>
+  <canvas id="benchCanvas"></canvas>
+  <pre id="output">pending</pre>
+  <script type="module">
+    import { Canvas } from '../../web/rexpaint-editor/canvas.js';
+
+    const WIDTH = 200;
+    const HEIGHT = 100;
+    const CELL_SIZE = 12;
+    const ITERATIONS = 10;
+
+    function summarize(samples) {
+      return {
+        averageMs: samples.reduce((sum, value) => sum + value, 0) / samples.length,
+        minMs: Math.min(...samples),
+        maxMs: Math.max(...samples),
+        samples,
+      };
+    }
+
+    async function runBenchmark() {
+      const canvas = new Canvas(document.getElementById('benchCanvas'), WIDTH, HEIGHT, CELL_SIZE);
+      canvas.showGrid = true;
+
+      for (let y = 0; y < HEIGHT; y++) {
+        for (let x = 0; x < WIDTH; x++) {
+          canvas.setCell(x, y, 65, [255, 255, 255], [0, 0, 0]);
+        }
+      }
+
+      const selectionTool = {
+        getSelectionBounds() {
+          return { x: 10, y: 10, width: 8, height: 4 };
+        },
+      };
+      canvas.setSelectionTool(selectionTool);
+
+      const originalDrawCell = canvas.drawCell.bind(canvas);
+      let frameDrawCalls = 0;
+      canvas.drawCell = function patchedDrawCell(x, y) {
+        frameDrawCalls++;
+        return originalDrawCell(x, y);
+      };
+
+      canvas.render();
+      const drawCalls = [];
+      const timings = [];
+      for (let i = 0; i < ITERATIONS; i++) {
+        frameDrawCalls = 0;
+        const start = performance.now();
+        canvas._runSelectionAnimationFrame();
+        timings.push(performance.now() - start);
+        drawCalls.push(frameDrawCalls);
+      }
+
+      const result = {
+        width: WIDTH,
+        height: HEIGHT,
+        iterations: ITERATIONS,
+        frameTiming: summarize(timings),
+        maxDrawCellCallsPerFrame: Math.max(...drawCalls),
+        minDrawCellCallsPerFrame: Math.min(...drawCalls),
+        drawCalls,
+      };
+
+      document.getElementById('output').textContent = JSON.stringify(result);
+      window.__selectionBenchmark = result;
+      return result;
+    }
+
+    runBenchmark().catch((error) => {
+      const failure = { error: error.message, stack: error.stack };
+      document.getElementById('output').textContent = JSON.stringify(failure);
+      window.__selectionBenchmark = failure;
+    });
+  </script>
+</body>
+</html>
