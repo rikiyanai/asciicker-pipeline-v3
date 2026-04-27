@@ -9742,3 +9742,137 @@ selection collapsed as soon as the user moved to another row.
 - It does NOT yet add the full canonical current-scope "from scratch" signoff
   lane with Skin Dock/runtime proof at the end.
 - It does NOT say anything about future wearable authoring.
+
+---
+
+## Planning Gaps — Section 2 / Y9-2 Bundle System (2026-04-27)
+
+Source: codebase audit against §2.14 of the canonical spec.
+Four targeted fixes landed in `dbc93e6`. The entries below are the
+remaining gaps that require design decisions before implementation.
+Status labels follow the canon convention: BLOCKED, READY, DEFERRED.
+
+---
+
+### PG-001 — UQ-004: Full session-schema migration (family → filename_prefix) [READY]
+
+**Scope:** `src/pipeline_v2/service.py` (~35 sites), session JSON on disk
+
+The session identity field `"family"` is a legacy schema artifact. The
+normalized registry uses `filename_prefix` (unique file prefix) and
+`skin_family` (family group). Two stale authority sites remain after `dbc93e6`:
+
+- `DEFAULT_ROOT_BLANK_SESSION` at `service.py:54` seeds `"family": "player"`.
+  Classic blank-session callers bypass the normalized registry entirely.
+- `_normalize_template_action_spec` at `service.py:1016` re-injects
+  `spec["family"] = filename_prefix` as a compat alias on every normalization
+  call, keeping all ~35 downstream `family`-reading sites live.
+
+The compat alias cannot be safely removed until all downstream readers are
+migrated to `filename_prefix`/`skin_family` first. Removing the alias without
+migrating the readers breaks session label generation, blank-session parsing,
+load-from-job, and web-skin-payload. This is a coordinated cut-over, not a
+one-liner.
+
+**Also in scope (STALE-2):** `ENABLED_FAMILIES` in `config.py:38` is still a
+static Python set. The backend should derive the enabled-family set from
+`registry.skin_family_scope[*].authorable` the same way `workbench-template-gating.js`
+already does. Requires the registry to be the single authority — safe to do
+after or alongside the session-schema migration.
+
+**Also in scope (STALE-3):** `workbench.js:30–56` `FAMILY_W_RANGE` is a
+hard-coded per-family map in the web classic path. The registry has `ahsw_range`
+per action, used correctly in the bundle path already. The classic path should
+read from the same field. Low risk but needs frontend change.
+
+**Design decision needed:** session-on-disk migration strategy — in-place
+upgrade on load (read old `family`, write back as `filename_prefix`) or a
+one-time migration script. Existing sessions in the wild use `"family"` as
+primary key.
+
+---
+
+### PG-002 — UQ-005: Full G7-G12 export contract (G7/G8/G9 threshold policy) [READY AFTER PG-001]
+
+**Scope:** `src/pipeline_v2/service.py` `_run_structural_gates()`
+
+`dbc93e6` wired G7/G8/G9 into the export path. The gate functions exist and
+run. Two design questions remain open before the contract can be called closed:
+
+1. **G9 semantics at export time.** At pipeline-run time, `gate_g9_handoff`
+   receives `len(cells_layer2)` where `cells_layer2` is the output of the
+   ingest pipeline. At export time it receives `len(xp["cells"][2])` which is
+   always `cols × rows` for a well-formed XP. G9 never fires at export. Either
+   the gate semantics need a separate "export-time populated count" (cells with
+   non-space glyphs on L2) or G9 should be documented as pipeline-only.
+2. **G8 min_ratio threshold.** The current default is 5%. This was chosen for
+   pipeline output. Manually assembled sheets with many blank frames may
+   legitimately fall below 5%. Threshold policy for the manual-assembly path
+   needs an explicit decision before G8 can block export without false positives.
+
+**Tracking:** UQ-005, PB-14 in `app.py:201`.
+
+---
+
+### PG-003 — UQ-007: Runtime identity layer (skin_definition_id / layer_definition_id) [BLOCKED on PG-001]
+
+**Scope:** All of `src/`, `config/template_registry.json`
+
+The Y9-2 bundle system uses a numeric identity layer: `skin_definition_id`
+(body-owner family identity, e.g. cyan_suit=100), `presentation_kind_id`
+(runtime render verb/state token, e.g. idle_walk=600, attack=601, plydie=602),
+and `layer_definition_id` (compiled row binding across six axes). None of these
+identifiers exist anywhere in the pipeline-v3 codebase.
+
+`bundle_contract.mjs` has informational-only rows for `presentation_kind_id`
+values (600–604) but nothing in the backend consumes them.
+`generalized_bundle_port_ready: false` in `bundle_contract.mjs` accurately
+documents this state.
+
+This identity layer cannot be added until UQ-004 (PG-001) settles the
+`filename_prefix`/`skin_family` authority model — the numeric IDs are the
+next abstraction layer above that. Also unresolved: where these IDs live
+(hard-coded constants, a new `id_registry.json`, or emitted by the bundle
+compiler itself).
+
+**Also in scope (STALE-4):** `bundle_contract.mjs:377` `scope_skin_family()`
+returns the string `"human"` not a `skin_definition_id`. This correctly
+reflects current pipeline-v3 scope, but means the contract does not prove
+Y9-2 runtime identity. The flag accurately captures this.
+
+---
+
+### PG-004 — UQ-008: Mounted families (wolfie, wolack) authoring surface [BLOCKED]
+
+**Scope:** `src/pipeline_v2/service.py:1793–1812`, `config/template_registry.json`
+
+`wolfie` and `wolack` are in the registry with `authorable: false` and correct
+`authoring_blockers`. The `_build_native_layers()` dispatcher raises
+`ApiError("no native builder for family")` for any family outside the
+player/attack/plydie set. Three things are missing before mounted families can
+be authored:
+
+1. A native layer builder for mounted sprite geometry (different frame layout
+   and anchor conventions from humanoid families).
+2. Template action specs in `template_registry.json` for mounted actions
+   (`idle_walk_mount`, `attack_mount`).
+3. A SPRITE_CONTRACT entry covering mounted angles/projs/anims.
+
+Blocked on: no design spec for mounted frame layout, no Y9-2 source template
+to reference, and no clarity on whether mounted authoring is in M2 or M3 scope.
+
+---
+
+### PG-005 — S2-FAM-04: Item/wearable authoring surface (world_item, inventory_grid) [DEFERRED]
+
+**Scope:** `config/template_registry.json`, `web/workbench.js`, `scripts/xp_fidelity_test/bundle_contract.mjs`
+
+`world_item` and `inventory_grid` semantic rows are `unmodeled_gap` in
+`bundle_contract.mjs:262–299` with explicit blocker lists. No item/wearable
+template set exists in the registry. No item authoring surface exists in
+the workbench frontend. The Y9-2 SPRITE_CONTRACTS dict has `world_item` and
+`inventory_grid` entries (both 1-angle, 1-proj, 1-anim) but pipeline-v3 has
+no equivalent.
+
+Deferred per canon spec §2.13 S2-FAM-04. Not in M2 scope. Log entry is
+present to prevent silent assumption that it is covered.
