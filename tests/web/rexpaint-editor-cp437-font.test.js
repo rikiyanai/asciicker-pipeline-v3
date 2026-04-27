@@ -216,11 +216,26 @@ runner.describe('CP437Font', () => {
     cp437.spriteSheet.getContext = function (type) {
       return {
         drawImage: () => {},
-        getImageData: () => ({
-          data: new Uint8ClampedArray(144 * 4),
-          width: 12,
-          height: 12,
-        }),
+        getImageData: () => {
+          const data = new Uint8ClampedArray(192 * 192 * 4);
+          for (let y = 0; y < 192; y++) {
+            for (let x = 0; x < 192; x++) {
+              const idx = (y * 192 + x) * 4;
+              const glyphX = x % 12;
+              const glyphY = y % 12;
+              const luminance = (glyphX === 0 || glyphY === 0) ? 255 : 0;
+              data[idx] = luminance;
+              data[idx + 1] = luminance;
+              data[idx + 2] = luminance;
+              data[idx + 3] = 255;
+            }
+          }
+          return {
+            data,
+            width: 192,
+            height: 192,
+          };
+        },
       };
     };
 
@@ -251,6 +266,11 @@ runner.describe('CP437Font', () => {
     expect(cp437.atlasCanvas).toBeDefined();
     expect(cp437.atlasCanvas.width).toBe(192);
     expect(cp437.atlasCanvas.height).toBe(192);
+
+    const atlasPixels = cp437.atlasCtx.getImageData(0, 0, 12, 12).data;
+    if (atlasPixels[3] !== 255 || atlasPixels[(6 * 12 + 6) * 4 + 3] !== 0) {
+      throw new Error('Expected atlas to contain transparent glyph masks');
+    }
 
     const target = document.createElement('canvas').getContext('2d');
     cp437.drawGlyph(target, 65, 0, 0, [255, 255, 255], [0, 0, 0]);

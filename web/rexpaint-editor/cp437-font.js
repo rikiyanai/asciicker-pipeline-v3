@@ -109,7 +109,27 @@ export class CP437Font {
       }
     }
 
-    this.atlasCtx.drawImage(this.spriteSheet, 0, 0);
+    const sourceCtx = this.spriteSheet.getContext && this.spriteSheet.getContext('2d');
+    if (!sourceCtx || typeof sourceCtx.getImageData !== 'function' || typeof this.atlasCtx.createImageData !== 'function') {
+      this.atlasCtx.drawImage(this.spriteSheet, 0, 0);
+      return;
+    }
+
+    const sourceImage = sourceCtx.getImageData(0, 0, this.spriteSheet.width, this.spriteSheet.height);
+    const atlasImage = this.atlasCtx.createImageData(this.spriteSheet.width, this.spriteSheet.height);
+    const sourceData = sourceImage.data;
+    const atlasData = atlasImage.data;
+
+    for (let i = 0; i < sourceData.length; i += 4) {
+      const luminance = ((sourceData[i] + sourceData[i + 1] + sourceData[i + 2]) / 3) | 0;
+      const alpha = sourceData[i + 3] === 0 ? 0 : luminance;
+      atlasData[i] = 255;
+      atlasData[i + 1] = 255;
+      atlasData[i + 2] = 255;
+      atlasData[i + 3] = alpha;
+    }
+
+    this.atlasCtx.putImageData(atlasImage, 0, 0);
   }
 
   /**
