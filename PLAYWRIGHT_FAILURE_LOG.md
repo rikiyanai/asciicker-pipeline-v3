@@ -8,6 +8,72 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Audit — Section 1 Accessibility / UX Follow-Up (2026-04-27)
+
+This is a follow-up audit entry after the same-day whole-sheet proof pass. It is
+explicitly **not** a “final closure” claim. More human testing is still needed,
+especially for usability and workflow correctness under real editing sessions.
+
+### Accessibility / automation audit
+
+1. **Headless UI coverage exists for the current whole-sheet Section 1 families.**
+   - The existing Playwright runners are UI-driven and can run headless by
+     default; `--headed` is optional for visual inspection.
+   - Current whole-sheet UI runners cover tools, clipboard, transforms,
+     bulk-edit, grid, layer operations, and button/mode/browse smoke.
+2. **Direct backend / CLI parity does not exist for all Section 1 editor actions.**
+   - Backend HTTP + MCP surfaces exist for session lifecycle and bundle/pipeline
+     operations such as upload, run, load session, save session, export XP,
+     browse list/open at the session layer, template apply, bundle export, and
+     validation.
+   - There is **no** direct backend or MCP command surface for the core
+     whole-sheet editor interaction families: tool switching, canvas pointer
+     drawing, selection drags, root-grid toggle/step edits, per-cell text
+     entry, selection transforms, or whole-sheet find/replace execution.
+   - Therefore, “everything is accessible through CLI/backend API/headless” is
+     false if “backend API” means first-class non-browser editor control.
+     Current truth is: **headless browser yes; backend API/MCP full parity no.**
+3. Acceptance status remains bounded by the UI-only proof law:
+   diagnostic state reads may observe result state, but they do not replace the
+   shipped browser interaction path.
+
+### Product / UX gaps logged before new UI planning
+
+1. **Grid contrast gap:** current whole-sheet grid overlay is visually too light
+   for reliable editing on some sheets.
+2. **Grid preset gap:** current whole-sheet grid selector only supports
+   `Frame` or square numeric steps (`1`, `2`, `4`, `8`, `16`).
+   Missing from shipped UI:
+   - custom grid dimensions (`m x n`)
+   - “frame from layer 0 metadata” preset
+   - template/action-derived sprite-frame presets from the active template set
+3. **Grid-scoped replace gap:** current whole-sheet find/replace scopes are only
+   `Selection` and `Canvas`. There is no frame-by-frame replace mode using the
+   currently selected grid partition.
+4. **Browse semantics gap / design question:** shipped whole-sheet browse opens
+   saved **sessions** through the session browser, not arbitrary sprite sheets
+   from disk in the REXPaint sense. This needs a product decision if the
+   intended UX is “browse saved workbench sessions” versus “browse/import XP
+   sheets as image assets.”
+5. **Human-usage caution:** same-day automated proof is strong enough to show
+   shipped UI reachability and current non-regression for covered families, but
+   it is not sufficient to claim no further user testing is needed.
+
+### REXPaint manual / layer-0 note
+
+The embedded REXPaint manual in canon does **not** describe layer 0 as
+“normally hidden.” It states:
+
+1. every image starts with one required base layer
+2. new layers are transparent
+3. the active layer is changed by click / `1-9` / wheel
+4. visibility and locking are ordinary layer controls
+
+The “layer 0 carries metadata” rule is a pipeline/Y9-specific XP contract in
+this repo, not a general REXPaint rule. In this codebase, certain exports and
+template-driven validation read metadata rows from XP layer 0; that is separate
+from how vanilla REXPaint treats its base layer.
+
 ## Audit — Whole-Sheet Clipboard Contract Repair And Section 1 Proof Completion (2026-04-27)
 
 This is a verifier/evidence checkpoint entry. It does not claim a new product
