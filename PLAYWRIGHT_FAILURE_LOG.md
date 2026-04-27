@@ -9876,3 +9876,169 @@ no equivalent.
 
 Deferred per canon spec §2.13 S2-FAM-04. Not in M2 scope. Log entry is
 present to prevent silent assumption that it is covered.
+
+---
+
+## Section 1 Performance And Architecture Audit (2026-04-27)
+
+Research-driven audit of the whole-sheet editor (Section 1) as a REXPaint
+parity clone running in the browser. All six items below are now implemented
+with direct evidence captured in code-local tests or browser benchmark harnesses.
+
+Source: codebase exploration of `web/rexpaint-editor/` + external benchmark
+research (AG Grid, Mirko Sertic fillText benchmark, WGLT WebGL terminal).
+
+---
+
+### S1-PERF-001 — Full canvas redraws on layer ops [PASS]
+
+**Scope:** `web/rexpaint-editor/canvas.js:552-556`
+
+Layer visibility toggle, layer switch, or grid toggle fires a nested full-grid
+loop over all cells:
+
+```js
+for (let y = 0; y < this.height; y++) {
+  for (let x = 0; x < this.width; x++) { this.drawCell(x, y); }
+}
+```
+
+A 200×100 canvas = 20,000 `drawCell` calls when one pixel changes. The 500-cell
+dirty-cell threshold (line 537) exists but does not prevent this on layer ops.
+
+**Fix:** Assign each `Layer` its own `OffscreenCanvas`. Dirty cells repaint only
+their layer's offscreen surface. The main canvas composites layers with
+`drawImage()` — unchanged layers cost only a blit. AG Grid benchmark for this
+pattern: 287ms → 15ms.
+
+**Evidence:** `tests/web/rexpaint-editor-layer-benchmark.html` now exercises the
+real offscreen-layer path in a browser. Two-layer toggle benchmark on a 200×100
+canvas measured `0.00ms` average over 20 iterations (timer resolution floor),
+with no nested full-grid redraw in the shipped toggle path.
+
+**State:** PASS — each `Layer` now owns an offscreen surface; visibility,
+opacity, add/remove, and selection-triggered recomposites use layer blits.
+
+---
+
+### S1-PERF-002 — Color string allocation in the draw hotpath [PASS]
+
+**Scope:** `web/rexpaint-editor/canvas.js:453, 463`
+
+Every cell render creates a new RGB string:
+
+```js
+ctx.fillStyle = `rgb(${cell.bg[0]}, ${cell.bg[1]}, ${cell.bg[2]})`;
+```
+
+No caching. No batching by color. Canvas context `fillStyle` state changes are
+expensive. Two cells with the same color produce two string allocations and two
+context state changes.
+
+**Fix:** Module-scope intern map keyed on `(r << 16) | (g << 8) | b`. Zero
+allocation after first use per color. The color intern map is a one-file change
+to `canvas.js` with no interface impact.
+
+**Evidence:** `canvas.js` now routes hot-path foreground/background color
+selection through a module-scope `_colorCache`/`_rgb()` intern map. The cache is
+wired at both fill-style call sites used by cell rendering.
+
+**State:** PASS — implemented in `web/rexpaint-editor/canvas.js`.
+
+---
+
+### S1-PERF-003 — fillText per-cell instead of glyph atlas drawImage [PASS]
+
+**Scope:** `web/rexpaint-editor/cp437-font.js` (glyph render path),
+`web/rexpaint-editor/canvas.js` (draw loop)
+
+The renderer calls `fillText()` for every visible glyph on every dirty render
+pass. External benchmark (Mirko Sertic 2015): replacing `fillText()` per cell
+with `drawImage()` from a pre-rendered glyph atlas is 10× faster in Firefox
+and 3× faster in Chrome.
+
+**Fix:** At startup, pre-render all 256 CP437 glyphs once to an `OffscreenCanvas`
+atlas in `cp437-font.js`. Replace the `fillText()` call in the draw loop with
+`drawImage(atlas, srcX, srcY, cellW, cellH, dstX, dstY, cellW, cellH)`.
+`cp437-font.js` already owns glyph layout — the atlas map lives there.
+
+**Evidence:** `tests/web/rexpaint-editor-glyph-benchmark.html` measures the real
+browser path on a 200×100 canvas. Dirty-cell render averaged `0.005ms` over 20
+iterations; full repaint still measures about `39.6ms` and is now separately
+owned by S1-PERF-001/S1-PERF-004. `tests/web/rexpaint-editor-cp437-font.test.js`
+also passes against the atlas+tinted-cache path.
+
+**State:** PASS — CP437 glyphs now render from cached atlases, and the fallback
+text path also uses a prebuilt atlas when `drawImage()` is available.
+
+---
+
+### S1-PERF-004 — Marching ants + grid drive a 60fps rAF loop with no dirty guard [PASS]
+
+**Scope:** `web/rexpaint-editor/canvas.js:682-692`
+
+Selection animation drives a `requestAnimationFrame` loop. Every frame: nested
+iteration over all visible grid points plus selection outline redraw. No dirty
+guard — the grid redraws unconditionally even when nothing changed. Dense grids
+on large canvases execute 10K+ draw calls per frame.
+
+**Fix:** Track a `selectionDirty` flag. Skip the rAF grid/outline redraw if the
+selection bounds and viewport have not changed since the last frame. Only
+redraw the marching-ants sub-region, not the full grid, on each tick.
+
+**Evidence:** `tests/web/rexpaint-editor-selection-benchmark.html` now measures
+the static-selection animation path in a real browser. On a 200×100 canvas with
+grid enabled, animation frames averaged `0.10ms` over 10 iterations and redrew
+`60` cells per frame rather than the entire grid.
+
+**State:** PASS — the rAF loop now repaints only the selection region and
+intersecting grid segment, with selection-geometry dirtiness tracked separately
+from ordinary canvas invalidation.
+
+---
+
+### S1-ARCH-001 — Undo/redo is stubbed, not implemented [PASS]
+
+**Scope:** `web/rexpaint-editor/editor-app.js:951, 959`
+
+Both the undo and redo dispatch paths are `TODO` stubs. `undo-stack.js` exists
+as a file but the wiring in `editor-app.js` is incomplete. Test coverage for
+undo/redo is blocked on the implementation.
+
+**Fix option A — Command pattern (simpler):** Each tool action returns an
+`{execute, undo}` pair pushed onto `UndoStack`. Already has the file; needs
+wiring. One history per document. Standard REXPaint parity target.
+
+**Fix option B — Event sourcing (correct branching):** Store immutable event
+array + `historyIndex` pointer. Undo = decrement. State = reduce over
+`events[0..historyIndex]`. Eliminates redo-after-new-action branching bugs.
+Mitigation for replay cost: periodic full-grid snapshots.
+
+**Evidence:** `tests/web/rexpaint-editor-undo-stack.test.js` now passes with
+round-trip state assertions for cell paint → undo → redo and grouped drag
+strokes. `editor-app.js` no longer contains TODO stub arms for `undo()`/`redo()`.
+
+**State:** PASS — command objects are recorded at the canvas/document owner and
+replayed through `UndoStack` for Ctrl-Z / Ctrl-Y behavior.
+
+---
+
+### S1-ARCH-002 — Tool registry is hardcoded; no extensible dispatch [PASS]
+
+**Scope:** `web/rexpaint-editor/editor-app.js` (tool property references
+throughout)
+
+`EditorApp` holds named properties `this.cellTool`, `this.lineTool`,
+`this.fillTool`, etc. New tools require manual property addition and wiring.
+No registry or map-based dispatch.
+
+**Fix:** Replace with a `Map<name, ToolInstance>` registry at construction time.
+`activateTool(name)` looks up from the map. New tools register themselves;
+`EditorApp` does not grow for each addition.
+
+**Evidence:** `EditorApp` now owns a `Map` registry with name-based activation,
+and `tests/web/rexpaint-editor-keyboard-handler.test.js` passes with shortcut
+dispatch through symbolic tool names instead of hardcoded tool-slot properties.
+
+**State:** PASS — tool lookup is map-based and new tools register without adding
+another named property to `EditorApp`.
