@@ -860,24 +860,21 @@ Execution evidence:
 - `node --test tests/web/whole-sheet-cell-ops.test.mjs` passed on
   `2026-04-26` (`3 tests`)
 
-What remains open and still blocks honest `UQ-002` closure:
+Closure update for `UQ-002` / `UQ-003` on `2026-04-27`:
 
-1. The root-owner law is still incomplete because `web/workbench.js` still owns
-   the live undo/redo journal and still keeps compatibility mirrors of document
-   state for wrapper rendering.
-2. Root resize is still constrained by the current frame-topology save law; it
-   is not yet the unrestricted Section 1 image action where Section 2 may only
-   warn.
-3. No headed UI-only Section 1 proof has been rerun yet on the root-hosted and
-   prefixed `/xpedit` shipped surfaces.
-4. Loaded headed-use findings now show three additional practical residuals on
-   the shipped root surface:
-   - historical note: these were fixed in product commit `d487e74`; they
-     should not be treated as current blockers unless headed `UQ-003` rerun
-     disproves the fix
-5. The current hot path is still architecturally too slow because root edits
-   fan back out into wrapper history, frame-grid rebuilds, and full-session
-   save work.
+1. The root-owner law is now satisfied for the shipped whole-sheet edit path:
+   live undo/redo is owned in `web/whole-sheet-init.js`, wrapper layer controls
+   delegate into the mounted root API, and ordinary wrapper renders no longer
+   blanket-sync the root editor.
+2. Root resize is no longer constrained by the wrapper frame-topology save law.
+3. Headed shipped-UI Section 1 proof now exists for both the root-hosted and
+   prefixed `/xpedit` surfaces.
+4. The stale whole-sheet `Clear` failure was verifier contract drift. Current
+   canon semantics remain: `Clear` is active-layer-only, while layered clearing
+   belongs to `Cut`.
+5. Hot-path proof for the whole-sheet root path is now present through the
+   history-ownership tests plus same-day headed whole-sheet button, layer,
+   clipboard, tools, transform, bulk-edit, and grid runs.
 
 ### 1.6.2 Required UQ-002 Hot-Path Refactor Order — 2026-04-26
 
@@ -918,8 +915,9 @@ Required execution order inside `UQ-002`:
 
 Next proof step:
 
-1. rerun the shipped headed Section 1 proof path and log any measured residual
-   before adding worker/off-main-thread machinery
+1. completed on `2026-04-27`: rerun the shipped headed Section 1 proof path
+   and log any measured residual before adding worker/off-main-thread
+   machinery
 
 Stop rules:
 
@@ -1298,8 +1296,10 @@ Verification notes:
    ESM-capable runner; plain `node tests/web/...` does not run them under the
    current `commonjs` package metadata.
 2. The PASS state here means the six 2026-04-27 perf/architecture rows are
-   implemented, integrated, and measured. It does not supersede the remaining
-   Section 1 parity blockers in `1.6.1` and `1.6.2`.
+   implemented, integrated, and measured. Combined with the same-day whole-sheet
+   ownership tests and headed root/prefixed proof runs logged in
+   `PLAYWRIGHT_FAILURE_LOG.md`, they no longer leave unresolved Section 1
+   blockers in `1.6.1` and `1.6.2` for the current worktree state.
 
 ---
 
@@ -2412,8 +2412,8 @@ Legacy-step normalization for older references:
 | Seq | State | Robot Task | Preconditions | Do Exactly This | Pass Condition | Stop / Fail Condition | FL / Owner |
 |---|---|---|---|---|---|---|---|
 | UQ-001 | ALWAYS | Establish repo truth before work | none | Run the repo entry checks, check the failure log first, inspect branch/head/dirty files, and identify unrelated dirt that must be left alone | Current authority docs, branch/head, dirty files, and relevant blockers are known before edits begin | Any unknown dirty change intersects the target files and cannot be safely isolated | Repo rule / `PLAYWRIGHT_FAILURE_LOG.md` |
-| UQ-002 | CURRENT | Close Section 1 REXPaint parity and root-owner law | UQ-001 complete | Use Section 1.6 and Section 1.8 as the exact scope. Land only root-editor work: resize, browse parity, undo/redo ownership, apply toggles, oval/text tools, pointer events, zoom/grid completeness, and layer keyboard/persistence parity. Keep `whole-sheet-init.js` the sole document owner. Within this row, cut the hot path in this order: move live history out of `workbench.js`, stop full frame-grid rebuilds on ordinary root edits, decouple save/autosave from edit completion, then offload any still-heavy secondary projection/serialization work. | Section 1 no longer has unresolved root-editor parity blockers, the shipped edit path no longer depends on wrapper-owned history or broad wrapper projection churn for ordinary edits, or any residuals are explicitly logged as open with proof state and no mixed ownership survives | Any patch reintroduces a second editor/root owner, leaves the old owner alive while adding a new authoritative path, or treats wrapper-side throttles/suppression flags as closure while wrapper-owned hot-path authority still survives | Section 1 / `FL-STEP4` family / §1.6 |
-| UQ-003 | BLOCKED | Prove the Section 1 foundation on shipped surfaces | UQ-002 pass condition met | Run UI-only headed proof for the root-hosted and prefixed `/xpedit` Section 1 surface using shipped controls only; record evidence and update the ledger honestly | Root-hosted and prefixed Section 1 flows are proven on the shipped UI with no acceptance-boundary violation | Any proof relies on `fetch()`, `page.evaluate()` mutation, hidden hooks, or diagnostic-only paths and is labeled acceptance | Section 3 acceptance law / Section 1 proof |
+| UQ-002 | PASS | Close Section 1 REXPaint parity and root-owner law | UQ-001 complete | Use Section 1.6 and Section 1.8 as the exact scope. Land only root-editor work: resize, browse parity, undo/redo ownership, apply toggles, oval/text tools, pointer events, zoom/grid completeness, and layer keyboard/persistence parity. Keep `whole-sheet-init.js` the sole document owner. Within this row, cut the hot path in this order: move live history out of `workbench.js`, stop full frame-grid rebuilds on ordinary root edits, decouple save/autosave from edit completion, then offload any still-heavy secondary projection/serialization work. | Section 1 no longer has unresolved root-editor parity blockers, the shipped edit path no longer depends on wrapper-owned history or broad wrapper projection churn for ordinary edits, or any residuals are explicitly logged as open with proof state and no mixed ownership survives | Any patch reintroduces a second editor/root owner, leaves the old owner alive while adding a new authoritative path, or treats wrapper-side throttles/suppression flags as closure while wrapper-owned hot-path authority still survives | Section 1 / `FL-STEP4` family / §1.6 |
+| UQ-003 | PASS | Prove the Section 1 foundation on shipped surfaces | UQ-002 pass condition met | Run UI-only headed proof for the root-hosted and prefixed `/xpedit` Section 1 surface using shipped controls only; record evidence and update the ledger honestly | Root-hosted and prefixed Section 1 flows are proven on the shipped UI with no acceptance-boundary violation | Any proof relies on `fetch()`, `page.evaluate()` mutation, hidden hooks, or diagnostic-only paths and is labeled acceptance | Section 3 acceptance law / Section 1 proof |
 | UQ-004 | READY AFTER UQ-002 | Finish backend authority cleanup on the normalized registry | UQ-002 pass condition met | Add backend-focused tests around `create_bundle()`, `workbench_create_blank_session()`, `bundle_action_run()`, `workbench_export_bundle()`, and `workbench_web_skin_bundle_payload()`. Replace live backend `family` / `ENABLED_FAMILIES` gates with one helper derived from normalized registry truth. Demote the compat `family` alias to compatibility-only data. Surface operator-visible registry load/fetch failures. | No live backend bundle/session/export/runtime path still takes authority from `family` or `ENABLED_FAMILIES`; browser and backend both consume the same normalized contract | Any fix restores browser-side fail-close logic, creates a second registry authority, or claims `UQ-004` closure while backend split-authority code remains | Section 2.5 / normalized-registry authority cleanup |
 | UQ-005 | BLOCKED | Close the Section 2 export-quality contract at the wrapper boundary | UQ-004 pass condition met | Wire the full Step 5 quality contract into `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`. Keep `/api/workbench/validate-xp` aligned with the same contract and do not treat single-XP validation as a substitute for export-path enforcement. | Bundle export and web-skin payload generation reject artifacts that fail the full quality contract, not just G10-G12 | Any closure claim remains contradicted by live service code, or export/web-skin paths still skip G7/G8/G9 | Section 2.4 / quality gates |
 | UQ-006 | BLOCKED | Finish the Section 2 source-wrapper implementation on the canonical manifest contract | UQ-004 pass condition met | Upgrade source authoring from JSON-first manifest editing to direct interactive slicer ergonomics on the same `<source>.asciicker-source.json` contract. Keep `extractedBoxes`, `sourceCutsV`, and `sourceCutsH` derived-only; do not revive session-local source ownership. | Source authoring is no longer JSON-first, and one canonical manifest contract still owns source layout for UI, MCP, and backend paths | Any fix creates a second source-layout model or makes session-local source state authoritative again | Section 2.3 / Step 8 |
