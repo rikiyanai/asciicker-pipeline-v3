@@ -2,7 +2,7 @@
  * Undo/Redo Stack
  *
  * Maintains two stacks (undo and redo) with a maximum history size.
- * Provides LIFO semantics: pushing a new action clears the redo stack.
+ * Stores command objects with `undo()`/`redo()` functions.
  */
 
 export class UndoStack {
@@ -18,17 +18,20 @@ export class UndoStack {
   }
 
   /**
-   * Push a snapshot onto the undo stack.
+   * Push a command onto the undo stack.
    * Clears the redo stack (standard undo/redo behavior).
    * Removes oldest action if maxSize is exceeded.
    *
-   * @param {*} snapshot - Any serializable snapshot object representing the state
+   * @param {{undo: Function, redo: Function}} command
    */
-  push(snapshot) {
+  push(command) {
+    if (!command || typeof command.undo !== 'function' || typeof command.redo !== 'function') {
+      throw new Error('UndoStack only accepts command objects with undo() and redo() methods.');
+    }
     if (this.undoStack.length >= this.maxSize) {
       this.undoStack.shift(); // Remove oldest
     }
-    this.undoStack.push(snapshot);
+    this.undoStack.push(command);
     this.redoStack = []; // Clear redo when new action taken
   }
 
@@ -51,41 +54,30 @@ export class UndoStack {
   }
 
   /**
-   * Undo the last action.
-   * Moves the last action from undo stack to redo stack.
-   * Returns the previous state (new top of undo stack).
-   * Validates snapshot structure before returning to prevent race conditions.
+   * Undo the last action and move it to the redo stack.
    *
-   * @returns {*} The snapshot representing the previous state, or null if undo stack is empty or invalid
+   * @returns {*} The command that was undone, or null if the stack is empty
    */
   undo() {
     if (!this.canUndo()) return null;
 
-    const snapshot = this.undoStack.pop();
-    this.redoStack.push(snapshot);
-
-    // Validate snapshot structure before returning
-    const previousSnapshot = this.undoStack[this.undoStack.length - 1];
-    if (previousSnapshot && typeof previousSnapshot !== 'object') {
-      console.error('Invalid undo snapshot at index', this.undoStack.length - 1);
-      return null;
-    }
-
-    return previousSnapshot || null;
+    const command = this.undoStack.pop();
+    command.undo();
+    this.redoStack.push(command);
+    return command;
   }
 
   /**
-   * Redo the last undone action.
-   * Moves the last action from redo stack to undo stack.
-   * Returns the restored snapshot.
+   * Redo the last undone action and move it back to the undo stack.
    *
-   * @returns {*} The snapshot representing the restored state, or null if redo stack is empty
+   * @returns {*} The command that was redone, or null if redo stack is empty
    */
   redo() {
     if (!this.canRedo()) return null;
-    const snapshot = this.redoStack.pop();
-    this.undoStack.push(snapshot);
-    return snapshot;
+    const command = this.redoStack.pop();
+    command.redo();
+    this.undoStack.push(command);
+    return command;
   }
 
   /**

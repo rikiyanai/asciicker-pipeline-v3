@@ -146,6 +146,8 @@ export class Canvas {
     // Dirty cell tracking for incremental rendering
     this._dirtyCells = new Set();
     this._fullRenderNeeded = true;
+    this._activeOperation = null;
+    this._applyingOperation = false;
 
     // Initialize with default cells (transparent, white on black)
     this._initializeCells();
@@ -167,6 +169,14 @@ export class Canvas {
     if (tool) {
       tool.setCanvas(this);
     }
+  }
+
+  /**
+   * Backwards-compatible alias expected by EditorApp.
+   * @param {Object} tool
+   */
+  setActiveTool(tool) {
+    this.toolActivated(tool);
   }
 
   /**
@@ -256,6 +266,12 @@ export class Canvas {
       }
 
       // Notify tool of drag start
+      if (this.editorApp && typeof this.editorApp.startDrag === 'function') {
+        this.editorApp.startDrag(coords.x, coords.y);
+        this.render();
+        return;
+      }
+
       if (this.activeTool.startDrag) {
         this.activeTool.startDrag(coords.x, coords.y);
         this.render();
@@ -305,7 +321,11 @@ export class Canvas {
       }
 
       // Notify tool of drag continuation
-      this.activeTool.drag(coords.x, coords.y);
+      if (this.editorApp && typeof this.editorApp.drag === 'function') {
+        this.editorApp.drag(coords.x, coords.y);
+      } else {
+        this.activeTool.drag(coords.x, coords.y);
+      }
       this.render();
     } catch (error) {
       console.error('Error in mousemove handler:', error);
@@ -332,7 +352,11 @@ export class Canvas {
       return;
     }
 
-    this.activeTool.endDrag();
+    if (this.editorApp && typeof this.editorApp.endDrag === 'function') {
+      this.editorApp.endDrag();
+    } else {
+      this.activeTool.endDrag();
+    }
     this.render();
   }
 
@@ -350,7 +374,11 @@ export class Canvas {
     }
 
     // Cancel drag if mouse leaves canvas
-    this.activeTool.endDrag();
+    if (this.editorApp && typeof this.editorApp.endDrag === 'function') {
+      this.editorApp.endDrag();
+    } else {
+      this.activeTool.endDrag();
+    }
     this.render();
   }
 
@@ -375,6 +403,99 @@ export class Canvas {
     }
   }
 
+  _cloneCellData(cell) {
+    return {
+      glyph: cell.glyph,
+      fg: [...cell.fg],
+      bg: [...cell.bg],
+    };
+  }
+
+  _getLayerCellSnapshot(layerIndex, x, y) {
+    if (layerIndex == null || !this.layerStack || !this.layerStack.layers[layerIndex]) {
+      const key = `${x},${y}`;
+      const stored = this.cells.get(key) || {
+        glyph: 0,
+        fg: [255, 255, 255],
+        bg: [0, 0, 0],
+      };
+      return this._cloneCellData(stored);
+    }
+    const stored = this.layerStack.layers[layerIndex].data[y][x];
+    return this._cloneCellData(stored);
+  }
+
+  _recordOperationCell(layerIndex, x, y, beforeCell, afterCell) {
+    if (!this._activeOperation || this._applyingOperation) {
+      return;
+    }
+
+    const key = `${layerIndex == null ? 'root' : layerIndex}:${x},${y}`;
+    const existing = this._activeOperation.changes.get(key);
+    if (existing) {
+      existing.after = this._cloneCellData(afterCell);
+      return;
+    }
+
+    this._activeOperation.changes.set(key, {
+      layerIndex,
+      x,
+      y,
+      before: this._cloneCellData(beforeCell),
+      after: this._cloneCellData(afterCell),
+    });
+  }
+
+  beginOperation(label = 'edit') {
+    if (this._activeOperation) {
+      return;
+    }
+    this._activeOperation = {
+      label,
+      changes: new Map(),
+    };
+  }
+
+  endOperation() {
+    if (!this._activeOperation) {
+      return null;
+    }
+
+    const operation = this._activeOperation;
+    this._activeOperation = null;
+    const entries = Array.from(operation.changes.values());
+    if (entries.length === 0) {
+      return null;
+    }
+
+    return {
+      label: operation.label,
+      undo: () => this._applyOperationEntries(entries, 'before'),
+      redo: () => this._applyOperationEntries(entries, 'after'),
+    };
+  }
+
+  _applyOperationEntries(entries, stateKey) {
+    this._applyingOperation = true;
+    try {
+      for (const entry of entries) {
+        this._setCellState(entry.layerIndex, entry.x, entry.y, entry[stateKey]);
+      }
+    } finally {
+      this._applyingOperation = false;
+    }
+  }
+
+  _setCellState(layerIndex, x, y, cell) {
+    const nextCell = this._cloneCellData(cell);
+    if (layerIndex == null || !this.layerStack || !this.layerStack.layers[layerIndex]) {
+      this.cells.set(`${x},${y}`, nextCell);
+    } else {
+      this.layerStack.layers[layerIndex].data[y][x] = nextCell;
+    }
+    this._dirtyCells.add(y * this.width + x);
+  }
+
   /**
    * Set a single cell's glyph and colors
    * @param {number} x - Column coordinate
@@ -389,23 +510,28 @@ export class Canvas {
     this._validateGlyph(glyph);
     this._validateColor(fg, 'foreground');
     this._validateColor(bg, 'background');
+    const layerIndex = this.useLayerStack && this.layerStack ? this.layerStack.activeIndex : null;
+    const previousCell = this._getLayerCellSnapshot(layerIndex, x, y);
+    const nextCell = {
+      glyph: glyph & 0xFF,
+      fg: [...fg],
+      bg: [...bg],
+    };
 
     // If using LayerStack, apply to active layer
     if (this.useLayerStack && this.layerStack) {
       const activeLayer = this.layerStack.getActiveLayer();
-      activeLayer.setCell(x, y, glyph & 0xFF, fg, bg);
+      activeLayer.setCell(x, y, nextCell.glyph, nextCell.fg, nextCell.bg);
       this._dirtyCells.add(y * this.width + x);
+      this._recordOperationCell(layerIndex, x, y, previousCell, nextCell);
       return;
     }
 
     // Use original behavior when not using LayerStack
     const key = `${x},${y}`;
-    this.cells.set(key, {
-      glyph: glyph & 0xFF, // Ensure 0-255
-      fg: [...fg],
-      bg: [...bg],
-    });
+    this.cells.set(key, nextCell);
     this._dirtyCells.add(y * this.width + x);
+    this._recordOperationCell(layerIndex, x, y, previousCell, nextCell);
   }
 
   /**

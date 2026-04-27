@@ -86,6 +86,7 @@ export class EditorApp {
 
     // Undo/Redo stack
     this.undoStack = new UndoStack(50);
+    this._toolOperationOpen = false;
 
     // Store event unsubscribe functions for cleanup
     this._unsubscribers = [];
@@ -581,7 +582,12 @@ export class EditorApp {
    */
   paint(x, y) {
     if (this.activeTool && typeof this.activeTool.paint === 'function') {
-      this.activeTool.paint(x, y);
+      this._beginToolOperation('paint');
+      try {
+        this.activeTool.paint(x, y);
+      } finally {
+        this._commitToolOperation();
+      }
     }
   }
 
@@ -592,6 +598,7 @@ export class EditorApp {
    */
   startDrag(x, y) {
     if (this.activeTool && typeof this.activeTool.startDrag === 'function') {
+      this._beginToolOperation('drag');
       this.activeTool.startDrag(x, y);
     }
   }
@@ -612,7 +619,30 @@ export class EditorApp {
    */
   endDrag() {
     if (this.activeTool && typeof this.activeTool.endDrag === 'function') {
-      this.activeTool.endDrag();
+      try {
+        this.activeTool.endDrag();
+      } finally {
+        this._commitToolOperation();
+      }
+    }
+  }
+
+  _beginToolOperation(label = 'edit') {
+    if (this._toolOperationOpen || !this.canvas || typeof this.canvas.beginOperation !== 'function') {
+      return;
+    }
+    this.canvas.beginOperation(label);
+    this._toolOperationOpen = true;
+  }
+
+  _commitToolOperation() {
+    if (!this._toolOperationOpen || !this.canvas || typeof this.canvas.endOperation !== 'function') {
+      return;
+    }
+    const command = this.canvas.endOperation();
+    this._toolOperationOpen = false;
+    if (command) {
+      this.undoStack.push(command);
     }
   }
 
@@ -845,7 +875,7 @@ export class EditorApp {
 
   /**
    * Paste clipboard contents at the current paste cursor position
-   * Takes a snapshot before pasting for undo support
+   * Records the pasted cell mutations as a single undoable command
    * @param {number} x - Paste position X (cell column)
    * @param {number} y - Paste position Y (cell row)
    */
@@ -853,13 +883,7 @@ export class EditorApp {
     if (!this.clipboard || !this.clipboard.cells || !this.canvas) {
       return;
     }
-
-    // Capture current canvas state for undo
-    const snapshot = {
-      action: 'paste',
-      cells: this._captureCanvasSnapshot(),
-    };
-    this.undoStack.push(snapshot);
+    this._beginToolOperation('paste');
 
     // Apply pasted cells
     const { cells } = this.clipboard;
@@ -882,28 +906,14 @@ export class EditorApp {
 
     // Exit paste mode and re-render
     this.cancelPaste();
+    this._commitToolOperation();
     this.canvas.render();
-  }
-
-  /**
-   * Capture current canvas state for undo/redo
-   * @private
-   * @returns {Object} Canvas snapshot
-   */
-  _captureCanvasSnapshot() {
-    if (!this.canvas) return null;
-    // Return reference to active layer data
-    return {
-      width: this.canvas.width,
-      height: this.canvas.height,
-      cells: this.canvas.cells.map(row => [...row]),
-    };
   }
 
   /**
    * Delete all cells in the current selection
    * Clears selected cells to empty (glyph 0) while preserving background color
-   * Supports undo via snapshot before deletion
+   * Records the selection clear as a single undoable command
    * @returns {boolean} True if deletion was successful, false if no selection
    */
   deleteSelection() {
@@ -918,8 +928,7 @@ export class EditorApp {
     }
 
     try {
-      // Capture canvas state before deletion for undo support
-      const before = new Map(this.canvas.cells);
+      this._beginToolOperation('delete-selection');
 
       // Clear all cells in selection
       for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
@@ -934,6 +943,7 @@ export class EditorApp {
       }
 
       // Re-render canvas
+      this._commitToolOperation();
       this.canvas.render();
 
       return true;
@@ -945,18 +955,22 @@ export class EditorApp {
 
   /**
    * Undo the last action
-   * Placeholder for future undo/redo stack integration
    */
   undo() {
-    // TODO: Implement undo stack (Task 14)
+    const command = this.undoStack.undo();
+    if (command && this.canvas) {
+      this.canvas.render();
+    }
   }
 
   /**
    * Redo the last undone action
-   * Placeholder for future undo/redo stack integration
    */
   redo() {
-    // TODO: Implement redo stack (Task 14)
+    const command = this.undoStack.redo();
+    if (command && this.canvas) {
+      this.canvas.render();
+    }
   }
 
   /**
