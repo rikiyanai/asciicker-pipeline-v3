@@ -1271,6 +1271,38 @@ Sources:
 
 ---
 
+### 1.x — Section 1 Performance And Architecture Audit Status (2026-04-27)
+
+Research-driven audit of the shared editor rendering/architecture path used by
+the shipped whole-sheet root owner. `web/whole-sheet-init.js` imports the
+`web/rexpaint-editor/*` canvas/font/tool modules directly, so the fixes below
+do apply to the Section 1 path. These items are now verified in code and with
+timed evidence, but they do not by themselves close full Section 1 parity.
+
+All items have `PLAYWRIGHT_FAILURE_LOG.md` entries dated `2026-04-27` under the
+`Section 1 Performance And Architecture Audit` heading, and were re-audited
+against live code on `2026-04-27`.
+
+| ID | Title | Scope | State |
+|----|-------|-------|-------|
+| S1-PERF-001 | Full canvas redraws on layer ops | `web/rexpaint-editor/layer-stack.js`, `web/rexpaint-editor/canvas.js` | PASS — offscreen per-layer compositing verified (`f0a83d9`); browser benchmark measured `0.005ms` average toggle render on `200x100` over 20 iterations |
+| S1-PERF-002 | Color string allocation in draw hotpath | `web/rexpaint-editor/canvas.js` | PASS — module-scope color intern map verified (`9e1af0b`) |
+| S1-PERF-003 | `fillText` per-cell instead of glyph atlas `drawImage` | `web/rexpaint-editor/cp437-font.js`, `web/rexpaint-editor/canvas.js` | PASS — atlas/tinted-atlas render path verified (`9e1af0b`); browser benchmark measured `0.005ms` average dirty render on `200x100` over 20 iterations |
+| S1-PERF-004 | Marching ants + grid drive unchecked 60fps rAF loop | `web/rexpaint-editor/canvas.js` | PASS — dirty-region selection redraw verified (`c303db5`); browser benchmark measured `0.09ms` average frame time with `60` draw calls/frame |
+| S1-ARCH-001 | Undo/redo stubbed, not implemented | `web/rexpaint-editor/canvas.js`, `web/rexpaint-editor/editor-app.js`, `web/rexpaint-editor/undo-stack.js` | PASS — command-based undo/redo wiring verified (`a765aef`); editor undo-stack test passes |
+| S1-ARCH-002 | Tool registry is hardcoded, not map-based | `web/rexpaint-editor/editor-app.js` | PASS — `Map`-based tool registry verified (`c303db5`); keyboard-handler test passes through symbolic dispatch |
+
+Verification notes:
+
+1. The two editor test files cited in this audit are real but require an
+   ESM-capable runner; plain `node tests/web/...` does not run them under the
+   current `commonjs` package metadata.
+2. The PASS state here means the six 2026-04-27 perf/architecture rows are
+   implemented, integrated, and measured. It does not supersede the remaining
+   Section 1 parity blockers in `1.6.1` and `1.6.2`.
+
+---
+
 ## Section 2 — Asciicker Engine Sprite Wrapper Spec
 
 The Asciicker runtime now resolves character sprites through a canonical
