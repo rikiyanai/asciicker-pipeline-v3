@@ -2,6 +2,94 @@
  * Canvas Module - Handles CP437 cell rendering on HTML5 Canvas
  */
 
+const _colorCache = new Map();
+const _fallbackBaseAtlasCache = new Map();
+const _fallbackTintedAtlasCache = new Map();
+
+function _rgb(r, g, b) {
+  const key = (r << 16) | (g << 8) | b;
+  if (!_colorCache.has(key)) {
+    _colorCache.set(key, `rgb(${r},${g},${b})`);
+  }
+  return _colorCache.get(key);
+}
+
+function _createAtlasCanvas(width, height) {
+  if (typeof OffscreenCanvas !== 'undefined') {
+    return new OffscreenCanvas(width, height);
+  }
+  if (typeof document !== 'undefined' && document.createElement) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    return canvas;
+  }
+  if (typeof HTMLCanvasElement !== 'undefined') {
+    const canvas = new HTMLCanvasElement();
+    canvas.width = width;
+    canvas.height = height;
+    return canvas;
+  }
+  throw new Error('No canvas implementation available to build fallback glyph atlas.');
+}
+
+function _getFallbackBaseAtlas(cellSizePixels) {
+  if (_fallbackBaseAtlasCache.has(cellSizePixels)) {
+    return _fallbackBaseAtlasCache.get(cellSizePixels);
+  }
+
+  const atlas = _createAtlasCanvas(cellSizePixels * 16, cellSizePixels * 16);
+  const ctx = atlas.getContext('2d');
+  if (!ctx || typeof ctx.fillText !== 'function') {
+    return null;
+  }
+
+  ctx.fillStyle = 'rgb(255,255,255)';
+  ctx.font = `${cellSizePixels}px monospace`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+
+  for (let code = 0; code < 256; code++) {
+    const sx = (code % 16) * cellSizePixels;
+    const sy = Math.floor(code / 16) * cellSizePixels;
+    ctx.fillText(String.fromCharCode(code), sx, sy, cellSizePixels);
+  }
+
+  _fallbackBaseAtlasCache.set(cellSizePixels, atlas);
+  return atlas;
+}
+
+function _getFallbackTintedAtlas(cellSizePixels, fg) {
+  const fr = Math.max(0, Math.min(255, Math.round(fg[0]) || 0));
+  const fGreen = Math.max(0, Math.min(255, Math.round(fg[1]) || 0));
+  const fb = Math.max(0, Math.min(255, Math.round(fg[2]) || 0));
+  const colorKey = (fr << 16) | (fGreen << 8) | fb;
+  const cacheKey = `${cellSizePixels}:${colorKey}`;
+  if (_fallbackTintedAtlasCache.has(cacheKey)) {
+    return _fallbackTintedAtlasCache.get(cacheKey);
+  }
+
+  const baseAtlas = _getFallbackBaseAtlas(cellSizePixels);
+  if (!baseAtlas) {
+    return null;
+  }
+
+  const tintedAtlas = _createAtlasCanvas(baseAtlas.width, baseAtlas.height);
+  const tintedCtx = tintedAtlas.getContext('2d');
+  if (!tintedCtx) {
+    return null;
+  }
+
+  tintedCtx.drawImage(baseAtlas, 0, 0);
+  tintedCtx.globalCompositeOperation = 'source-in';
+  tintedCtx.fillStyle = _rgb(fr, fGreen, fb);
+  tintedCtx.fillRect(0, 0, tintedAtlas.width, tintedAtlas.height);
+  tintedCtx.globalCompositeOperation = 'source-over';
+
+  _fallbackTintedAtlasCache.set(cacheKey, tintedAtlas);
+  return tintedAtlas;
+}
+
 export class Canvas {
   /**
    * Create a new Canvas instance
@@ -429,6 +517,19 @@ export class Canvas {
   drawCell(x, y) {
     const cell = this.getCell(x, y);
     const pixelCoords = this.cellToPixelCoords(x, y);
+    const bgColor = _rgb(cell.bg[0], cell.bg[1], cell.bg[2]);
+
+    this.ctx.fillStyle = bgColor;
+    this.ctx.fillRect(
+      pixelCoords.x,
+      pixelCoords.y,
+      this.cellSizePixels,
+      this.cellSizePixels
+    );
+
+    if (cell.glyph === 0) {
+      return;
+    }
 
     // Use CP437 font renderer if available and loaded
     if (this.cp437Font && this.cp437Font.spriteSheet) {
@@ -438,8 +539,7 @@ export class Canvas {
           cell.glyph,
           pixelCoords.x,
           pixelCoords.y,
-          cell.fg,
-          cell.bg
+          cell.fg
         );
         return;
       } catch (e) {
@@ -448,31 +548,38 @@ export class Canvas {
       }
     }
 
-    // Fallback: render with monospace text
-    // Draw background
-    const bgColor = `rgb(${cell.bg[0]}, ${cell.bg[1]}, ${cell.bg[2]})`;
-    this.ctx.fillStyle = bgColor;
-    this.ctx.fillRect(
-      pixelCoords.x,
-      pixelCoords.y,
-      this.cellSizePixels,
-      this.cellSizePixels
-    );
+    // Fallback: render from a prebuilt monospace atlas when drawImage is available.
+    if (typeof this.ctx.drawImage === 'function') {
+      const tintedAtlas = _getFallbackTintedAtlas(this.cellSizePixels, cell.fg);
+      if (tintedAtlas) {
+        const srcX = (cell.glyph % 16) * this.cellSizePixels;
+        const srcY = Math.floor(cell.glyph / 16) * this.cellSizePixels;
+        this.ctx.drawImage(
+          tintedAtlas,
+          srcX,
+          srcY,
+          this.cellSizePixels,
+          this.cellSizePixels,
+          pixelCoords.x,
+          pixelCoords.y,
+          this.cellSizePixels,
+          this.cellSizePixels
+        );
+        return;
+      }
+    }
 
-    // Draw glyph as character (basic ASCII support)
-    const fgColor = `rgb(${cell.fg[0]}, ${cell.fg[1]}, ${cell.fg[2]})`;
-    this.ctx.fillStyle = fgColor;
+    // Last resort: render with monospace text if no atlas path is available.
+    this.ctx.fillStyle = _rgb(cell.fg[0], cell.fg[1], cell.fg[2]);
     this.ctx.font = `${this.cellSizePixels}px monospace`;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'top';
 
-    if (cell.glyph > 0 && cell.glyph < 256) {
-      try {
-        const char = String.fromCharCode(cell.glyph);
-        this.ctx.fillText(char, pixelCoords.x, pixelCoords.y, this.cellSizePixels);
-      } catch (e) {
-        // Silently skip glyphs that can't be rendered
-      }
+    try {
+      const char = String.fromCharCode(cell.glyph);
+      this.ctx.fillText(char, pixelCoords.x, pixelCoords.y, this.cellSizePixels);
+    } catch (e) {
+      // Silently skip glyphs that can't be rendered
     }
   }
 

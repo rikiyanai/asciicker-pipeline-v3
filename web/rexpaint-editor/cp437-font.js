@@ -21,6 +21,7 @@ export class CP437Font {
     this.spriteSheet = null;
     this.atlasCanvas = null;
     this.atlasCtx = null;
+    this.tintedAtlasCache = new Map();
     this.glyphCache = new Map(); // Maps glyph code (0-255) to extracted ImageData
     this.loadPromise = null;
   }
@@ -152,6 +153,57 @@ export class CP437Font {
   }
 
   /**
+   * Resolve the source rectangle for a glyph code inside the 16x16 atlas.
+   * @param {number} code
+   * @returns {{ sx: number, sy: number, sw: number, sh: number }}
+   */
+  getGlyphSourceRect(code) {
+    const glyphCode = code & 0xFF;
+    return {
+      sx: (glyphCode % 16) * this.glyphWidth,
+      sy: Math.floor(glyphCode / 16) * this.glyphHeight,
+      sw: this.glyphWidth,
+      sh: this.glyphHeight,
+    };
+  }
+
+  /**
+   * Build or reuse a tinted atlas for the requested foreground color.
+   * @param {Array<number>} fg
+   * @returns {HTMLCanvasElement|OffscreenCanvas|null}
+   */
+  getTintedAtlas(fg) {
+    const atlas = this._ensureAtlas();
+    if (!atlas) {
+      return null;
+    }
+
+    const fr = Array.isArray(fg) && fg.length >= 3 ? Math.max(0, Math.min(255, Math.round(fg[0]) || 0)) : 255;
+    const fGreen = Array.isArray(fg) && fg.length >= 3 ? Math.max(0, Math.min(255, Math.round(fg[1]) || 0)) : 255;
+    const fb = Array.isArray(fg) && fg.length >= 3 ? Math.max(0, Math.min(255, Math.round(fg[2]) || 0)) : 255;
+    const colorKey = (fr << 16) | (fGreen << 8) | fb;
+
+    if (this.tintedAtlasCache.has(colorKey)) {
+      return this.tintedAtlasCache.get(colorKey);
+    }
+
+    const tintedAtlas = this._createCanvas(atlas.width, atlas.height);
+    const tintedCtx = tintedAtlas.getContext('2d');
+    if (!tintedCtx) {
+      return null;
+    }
+
+    tintedCtx.drawImage(atlas, 0, 0);
+    tintedCtx.globalCompositeOperation = 'source-in';
+    tintedCtx.fillStyle = `rgb(${fr},${fGreen},${fb})`;
+    tintedCtx.fillRect(0, 0, tintedAtlas.width, tintedAtlas.height);
+    tintedCtx.globalCompositeOperation = 'source-over';
+
+    this.tintedAtlasCache.set(colorKey, tintedAtlas);
+    return tintedAtlas;
+  }
+
+  /**
    * Extract a single glyph from the spritesheet
    * Spritesheet layout: 16 glyphs per row (columns 0-15)
    * Code 0-15 → row 0, 16-31 → row 1, etc.
@@ -221,7 +273,7 @@ export class CP437Font {
    * @param {Array<number>} bg - Background color [R, G, B] (0-255)
    * @throws {Error} If code is invalid or glyph not available
    */
-  drawGlyph(ctx, code, x, y, fg, bg) {
+  drawGlyph(ctx, code, x, y, fg, bg = null) {
     if (code < 0 || code > 255) {
       throw new Error(`Invalid glyph code ${code}. Must be 0-255.`);
     }
@@ -229,50 +281,24 @@ export class CP437Font {
     const fr = Array.isArray(fg) && fg.length >= 3 ? Math.max(0, Math.min(255, Math.round(fg[0]) || 0)) : 255;
     const fGreen = Array.isArray(fg) && fg.length >= 3 ? Math.max(0, Math.min(255, Math.round(fg[1]) || 0)) : 255;
     const fb = Array.isArray(fg) && fg.length >= 3 ? Math.max(0, Math.min(255, Math.round(fg[2]) || 0)) : 255;
-    const br = Array.isArray(bg) && bg.length >= 3 ? Math.max(0, Math.min(255, Math.round(bg[0]) || 0)) : 0;
-    const bGreen = Array.isArray(bg) && bg.length >= 3 ? Math.max(0, Math.min(255, Math.round(bg[1]) || 0)) : 0;
-    const bb = Array.isArray(bg) && bg.length >= 3 ? Math.max(0, Math.min(255, Math.round(bg[2]) || 0)) : 0;
 
-    // Draw background rectangle
-    ctx.fillStyle = `rgb(${br},${bGreen},${bb})`;
-    ctx.fillRect(x, y, this.glyphWidth, this.glyphHeight);
+    if (Array.isArray(bg) && bg.length >= 3 && typeof ctx.fillRect === 'function') {
+      const br = Math.max(0, Math.min(255, Math.round(bg[0]) || 0));
+      const bGreen = Math.max(0, Math.min(255, Math.round(bg[1]) || 0));
+      const bb = Math.max(0, Math.min(255, Math.round(bg[2]) || 0));
+      ctx.fillStyle = `rgb(${br},${bGreen},${bb})`;
+      ctx.fillRect(x, y, this.glyphWidth, this.glyphHeight);
+    }
 
-    const atlas = this._ensureAtlas();
-    if (atlas && ctx && typeof ctx.drawImage === 'function' && typeof ctx.createImageData === 'function') {
-      if (!this._tintCanvas) {
-        this._tintCanvas = this._createCanvas(this.glyphWidth, this.glyphHeight);
-        this._tintCtx = this._tintCanvas.getContext('2d');
-        if (!this._tintCtx) {
-          this._tintCanvas = null;
-        }
-      }
+    if (code === 0) {
+      return;
+    }
 
-      if (this._tintCtx && typeof this._tintCtx.clearRect === 'function') {
-        const col = code % 16;
-        const row = Math.floor(code / 16);
-        const sx = col * this.glyphWidth;
-        const sy = row * this.glyphHeight;
-
-        this._tintCtx.clearRect(0, 0, this.glyphWidth, this.glyphHeight);
-        this._tintCtx.globalCompositeOperation = 'source-over';
-        this._tintCtx.drawImage(
-          atlas,
-          sx,
-          sy,
-          this.glyphWidth,
-          this.glyphHeight,
-          0,
-          0,
-          this.glyphWidth,
-          this.glyphHeight
-        );
-        this._tintCtx.globalCompositeOperation = 'source-in';
-        this._tintCtx.fillStyle = `rgb(${fr},${fGreen},${fb})`;
-        this._tintCtx.fillRect(0, 0, this.glyphWidth, this.glyphHeight);
-        this._tintCtx.globalCompositeOperation = 'source-over';
-        ctx.drawImage(this._tintCanvas, x, y);
-        return;
-      }
+    const tintedAtlas = this.getTintedAtlas([fr, fGreen, fb]);
+    if (tintedAtlas && ctx && typeof ctx.drawImage === 'function') {
+      const { sx, sy, sw, sh } = this.getGlyphSourceRect(code);
+      ctx.drawImage(tintedAtlas, sx, sy, sw, sh, x, y, sw, sh);
+      return;
     }
 
     // Fallback: blend the cached glyph mask per call if no atlas buffer is available.
@@ -311,5 +337,6 @@ export class CP437Font {
    */
   clearCache() {
     this.glyphCache.clear();
+    this.tintedAtlasCache.clear();
   }
 }

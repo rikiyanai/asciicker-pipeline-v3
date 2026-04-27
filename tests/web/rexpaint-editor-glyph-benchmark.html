@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>REXPaint Editor Glyph Benchmark</title>
+</head>
+<body>
+  <canvas id="benchCanvas"></canvas>
+  <pre id="output">pending</pre>
+  <script type="module">
+    import { Canvas } from '../../web/rexpaint-editor/canvas.js';
+    import { CP437Font } from '../../web/rexpaint-editor/cp437-font.js';
+
+    const WIDTH = 200;
+    const HEIGHT = 100;
+    const CELL_SIZE = 12;
+    const ITERATIONS = 20;
+
+    function buildMockSpriteSheet() {
+      const spriteSheet = document.createElement('canvas');
+      spriteSheet.width = CELL_SIZE * 16;
+      spriteSheet.height = CELL_SIZE * 16;
+      const ctx = spriteSheet.getContext('2d');
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, spriteSheet.width, spriteSheet.height);
+      ctx.fillStyle = 'white';
+      ctx.font = `${CELL_SIZE}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+
+      for (let code = 0; code < 256; code++) {
+        const sx = (code % 16) * CELL_SIZE;
+        const sy = Math.floor(code / 16) * CELL_SIZE;
+        ctx.fillText(String.fromCharCode(code), sx, sy, CELL_SIZE);
+      }
+
+      return spriteSheet;
+    }
+
+    function summarizeSamples(samples) {
+      return {
+        averageMs: samples.reduce((sum, value) => sum + value, 0) / samples.length,
+        minMs: Math.min(...samples),
+        maxMs: Math.max(...samples),
+        samples,
+      };
+    }
+
+    function measureFullRender(canvas) {
+      const samples = [];
+      for (let i = 0; i < ITERATIONS; i++) {
+        canvas.invalidateAll();
+        const start = performance.now();
+        canvas.render();
+        samples.push(performance.now() - start);
+      }
+      return summarizeSamples(samples);
+    }
+
+    function measureDirtyRender(canvas) {
+      const samples = [];
+      for (let i = 0; i < ITERATIONS; i++) {
+        const x = i % WIDTH;
+        const y = (i * 3) % HEIGHT;
+        canvas.setCell(x, y, 65 + (i % 26), [255, 255, 255], [0, 0, 0]);
+        const start = performance.now();
+        canvas.render();
+        samples.push(performance.now() - start);
+      }
+      return summarizeSamples(samples);
+    }
+
+    async function runBenchmark() {
+      const cp437Font = new CP437Font('mock', CELL_SIZE, CELL_SIZE);
+      cp437Font.spriteSheet = buildMockSpriteSheet();
+      cp437Font._buildAtlas();
+
+      const canvasElement = document.getElementById('benchCanvas');
+      const canvas = new Canvas(canvasElement, WIDTH, HEIGHT, CELL_SIZE);
+      canvas.cp437Font = cp437Font;
+
+      const palette = [
+        [255, 255, 255],
+        [255, 128, 0],
+        [0, 200, 255],
+        [150, 255, 150],
+      ];
+
+      for (let y = 0; y < HEIGHT; y++) {
+        for (let x = 0; x < WIDTH; x++) {
+          const fg = palette[(x + y) % palette.length];
+          const bg = [0, 0, 0];
+          canvas.setCell(x, y, 33 + ((x + y) % 90), fg, bg);
+        }
+      }
+
+      canvas.render();
+      window.__glyphBenchmarkCanvas = canvas;
+
+      const result = {
+        width: WIDTH,
+        height: HEIGHT,
+        iterations: ITERATIONS,
+        fullRender: measureFullRender(canvas),
+        dirtyRender: measureDirtyRender(canvas),
+      };
+
+      document.getElementById('output').textContent = JSON.stringify(result);
+      window.__glyphBenchmark = result;
+      return result;
+    }
+
+    runBenchmark().catch((error) => {
+      const failure = { error: error.message, stack: error.stack };
+      document.getElementById('output').textContent = JSON.stringify(failure);
+      window.__glyphBenchmark = failure;
+    });
+  </script>
+</body>
+</html>

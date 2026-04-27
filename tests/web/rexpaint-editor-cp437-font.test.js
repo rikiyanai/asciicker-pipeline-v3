@@ -253,11 +253,25 @@ runner.describe('CP437Font', () => {
     cp437.spriteSheet.getContext = function (type) {
       return {
         drawImage: () => {},
-        getImageData: () => ({
-          data: new Uint8ClampedArray(144 * 4),
-          width: 12,
-          height: 12,
-        }),
+        getImageData: () => {
+          const data = new Uint8ClampedArray(192 * 192 * 4);
+          for (let y = 0; y < 192; y++) {
+            for (let x = 0; x < 192; x++) {
+              const idx = (y * 192 + x) * 4;
+              const lit = (x % 12 === 0 || y % 12 === 0);
+              const value = lit ? 255 : 0;
+              data[idx] = value;
+              data[idx + 1] = value;
+              data[idx + 2] = value;
+              data[idx + 3] = 255;
+            }
+          }
+          return {
+            data,
+            width: 192,
+            height: 192,
+          };
+        },
       };
     };
 
@@ -275,17 +289,22 @@ runner.describe('CP437Font', () => {
     const target = document.createElement('canvas').getContext('2d');
     cp437.drawGlyph(target, 65, 0, 0, [255, 255, 255], [0, 0, 0]);
 
-    if (!cp437._tintCtx || !cp437._tintCtx.drawImageCalls || cp437._tintCtx.drawImageCalls.length === 0) {
-      throw new Error('Expected tint buffer drawImage to be called');
+    const tintedAtlas = cp437.getTintedAtlas([255, 255, 255]);
+    if (!tintedAtlas) {
+      throw new Error('Expected tinted atlas to be created');
     }
 
-    const atlasCall = cp437._tintCtx.drawImageCalls[0];
-    if (atlasCall.source !== cp437.atlasCanvas) {
-      throw new Error('Expected atlas canvas to be the drawImage source');
+    if (cp437.getTintedAtlas([255, 255, 255]) !== tintedAtlas) {
+      throw new Error('Expected tinted atlas cache to return the same canvas instance');
     }
 
     if (!target.drawImageCalls || target.drawImageCalls.length === 0) {
       throw new Error('Expected final glyph drawImage call');
+    }
+
+    const atlasCall = target.drawImageCalls[0];
+    if (atlasCall.source !== tintedAtlas) {
+      throw new Error('Expected final drawImage call to use the tinted atlas');
     }
   });
 
