@@ -5,6 +5,25 @@
  * Each layer has independent cell data, visibility, and ordering.
  */
 
+function _createLayerCanvas(width, height) {
+  if (typeof OffscreenCanvas !== 'undefined') {
+    return new OffscreenCanvas(width, height);
+  }
+  if (typeof document !== 'undefined' && document.createElement) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    return canvas;
+  }
+  if (typeof HTMLCanvasElement !== 'undefined') {
+    const canvas = new HTMLCanvasElement();
+    canvas.width = width;
+    canvas.height = height;
+    return canvas;
+  }
+  throw new Error('No canvas implementation available for layer offscreen surfaces.');
+}
+
 export class Layer {
   /**
    * Create a layer
@@ -21,6 +40,11 @@ export class Layer {
     this.opacity = 1; // 0-1 range, 1 = fully opaque
     this.width = width;
     this.height = height;
+    this.offscreenCanvas = null;
+    this.offscreenCtx = null;
+    this.offscreenCellSize = 0;
+    this.offscreenDirtyAll = true;
+    this.offscreenDirtyCells = new Set();
 
     // Initialize empty cell grid
     this.data = Array.from({ length: height }, () =>
@@ -43,6 +67,7 @@ export class Layer {
   setCell(x, y, glyph, fg, bg) {
     if (x >= 0 && x < this.width && y >= 0 && y < this.height) {
       this.data[y][x] = { glyph, fg: [...fg], bg: [...bg] };
+      this.offscreenDirtyCells.add(y * this.width + x);
     }
   }
 
@@ -70,6 +95,31 @@ export class Layer {
   setLocked(locked) {
     this.locked = locked;
   }
+
+  ensureOffscreen(cellSizePixels) {
+    const widthPx = this.width * cellSizePixels;
+    const heightPx = this.height * cellSizePixels;
+    const needsNewSurface =
+      !this.offscreenCanvas ||
+      this.offscreenCanvas.width !== widthPx ||
+      this.offscreenCanvas.height !== heightPx ||
+      this.offscreenCellSize !== cellSizePixels;
+
+    if (!needsNewSurface) {
+      return;
+    }
+
+    this.offscreenCanvas = _createLayerCanvas(widthPx, heightPx);
+    this.offscreenCtx = this.offscreenCanvas.getContext('2d');
+    this.offscreenCellSize = cellSizePixels;
+    this.offscreenDirtyAll = true;
+    this.offscreenDirtyCells.clear();
+  }
+
+  markOffscreenDirty() {
+    this.offscreenDirtyAll = true;
+    this.offscreenDirtyCells.clear();
+  }
 }
 
 export class LayerStack {
@@ -83,6 +133,7 @@ export class LayerStack {
     this.height = height;
     this.layers = [];
     this.activeIndex = 0;
+    this.offscreenCellSize = 0;
 
     // Create default layer
     this.addLayer('Layer 0');
@@ -94,6 +145,9 @@ export class LayerStack {
    */
   addLayer(name) {
     const layer = new Layer(this.layers.length, name, this.width, this.height);
+    if (this.offscreenCellSize > 0) {
+      layer.ensureOffscreen(this.offscreenCellSize);
+    }
     this.layers.push(layer);
     this.activeIndex = this.layers.length - 1;
   }
@@ -148,5 +202,13 @@ export class LayerStack {
    */
   getLayers() {
     return [...this.layers];
+  }
+
+  ensureOffscreenCanvases(cellSizePixels) {
+    this.offscreenCellSize = cellSizePixels;
+    for (const layer of this.layers) {
+      layer.ensureOffscreen(cellSizePixels);
+      layer.markOffscreenDirty();
+    }
   }
 }

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>REXPaint Editor Layer Benchmark</title>
+</head>
+<body>
+  <canvas id="benchCanvas"></canvas>
+  <pre id="output">pending</pre>
+  <script type="module">
+    import { Canvas } from '../../web/rexpaint-editor/canvas.js';
+    import { CP437Font } from '../../web/rexpaint-editor/cp437-font.js';
+    import { LayerStack } from '../../web/rexpaint-editor/layer-stack.js';
+
+    const WIDTH = 200;
+    const HEIGHT = 100;
+    const CELL_SIZE = 12;
+    const ITERATIONS = 20;
+
+    function buildMockSpriteSheet() {
+      const spriteSheet = document.createElement('canvas');
+      spriteSheet.width = CELL_SIZE * 16;
+      spriteSheet.height = CELL_SIZE * 16;
+      const ctx = spriteSheet.getContext('2d');
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, spriteSheet.width, spriteSheet.height);
+      ctx.fillStyle = 'white';
+      ctx.font = `${CELL_SIZE}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      for (let code = 0; code < 256; code++) {
+        const sx = (code % 16) * CELL_SIZE;
+        const sy = Math.floor(code / 16) * CELL_SIZE;
+        ctx.fillText(String.fromCharCode(code), sx, sy, CELL_SIZE);
+      }
+      return spriteSheet;
+    }
+
+    function summarizeSamples(samples) {
+      return {
+        averageMs: samples.reduce((sum, value) => sum + value, 0) / samples.length,
+        minMs: Math.min(...samples),
+        maxMs: Math.max(...samples),
+        samples,
+      };
+    }
+
+    async function runBenchmark() {
+      const cp437Font = new CP437Font('mock', CELL_SIZE, CELL_SIZE);
+      cp437Font.spriteSheet = buildMockSpriteSheet();
+      cp437Font._buildAtlas();
+
+      const canvas = new Canvas(document.getElementById('benchCanvas'), WIDTH, HEIGHT, CELL_SIZE);
+      canvas.cp437Font = cp437Font;
+
+      const layerStack = new LayerStack(WIDTH, HEIGHT);
+      layerStack.addLayer('Layer 1');
+      layerStack.layers.forEach((layer, layerIndex) => {
+        for (let y = 0; y < HEIGHT; y++) {
+          for (let x = 0; x < WIDTH; x++) {
+            layer.setCell(
+              x,
+              y,
+              35 + ((x + layerIndex + y) % 40),
+              [255 - layerIndex * 60, 200, 120 + layerIndex * 40],
+              [0, 0, 0]
+            );
+          }
+        }
+      });
+
+      canvas.setLayerStack(layerStack);
+      canvas.render();
+
+      const samples = [];
+      for (let i = 0; i < ITERATIONS; i++) {
+        const layer = layerStack.layers[(i % (layerStack.layers.length - 1)) + 1];
+        layer.setVisible(!layer.visible);
+        canvas.invalidateAll();
+        const start = performance.now();
+        canvas.render();
+        samples.push(performance.now() - start);
+      }
+
+      const result = {
+        width: WIDTH,
+        height: HEIGHT,
+        iterations: ITERATIONS,
+        toggleRender: summarizeSamples(samples),
+      };
+
+      document.getElementById('output').textContent = JSON.stringify(result);
+      window.__layerBenchmark = result;
+      return result;
+    }
+
+    runBenchmark().catch((error) => {
+      const failure = { error: error.message, stack: error.stack };
+      document.getElementById('output').textContent = JSON.stringify(failure);
+      window.__layerBenchmark = failure;
+    });
+  </script>
+</body>
+</html>

@@ -186,6 +186,9 @@ export class Canvas {
   setLayerStack(layerStack) {
     this.layerStack = layerStack;
     this.useLayerStack = true;
+    if (this.layerStack && typeof this.layerStack.ensureOffscreenCanvases === 'function') {
+      this.layerStack.ensureOffscreenCanvases(this.cellSizePixels);
+    }
     this._fullRenderNeeded = true;
     this.render();
   }
@@ -632,6 +635,9 @@ export class Canvas {
     if (cp437Font) {
       await cp437Font.load();
     }
+    if (this.layerStack && typeof this.layerStack.ensureOffscreenCanvases === 'function') {
+      this.layerStack.ensureOffscreenCanvases(this.cellSizePixels);
+    }
   }
 
   /**
@@ -642,11 +648,15 @@ export class Canvas {
    */
   drawCell(x, y) {
     const cell = this.getCell(x, y);
+    this._drawCellToContext(this.ctx, cell, x, y);
+  }
+
+  _drawCellToContext(ctx, cell, x, y) {
     const pixelCoords = this.cellToPixelCoords(x, y);
     const bgColor = _rgb(cell.bg[0], cell.bg[1], cell.bg[2]);
 
-    this.ctx.fillStyle = bgColor;
-    this.ctx.fillRect(
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(
       pixelCoords.x,
       pixelCoords.y,
       this.cellSizePixels,
@@ -661,7 +671,7 @@ export class Canvas {
     if (this.cp437Font && this.cp437Font.spriteSheet) {
       try {
         this.cp437Font.drawGlyph(
-          this.ctx,
+          ctx,
           cell.glyph,
           pixelCoords.x,
           pixelCoords.y,
@@ -675,12 +685,12 @@ export class Canvas {
     }
 
     // Fallback: render from a prebuilt monospace atlas when drawImage is available.
-    if (typeof this.ctx.drawImage === 'function') {
+    if (typeof ctx.drawImage === 'function') {
       const tintedAtlas = _getFallbackTintedAtlas(this.cellSizePixels, cell.fg);
       if (tintedAtlas) {
         const srcX = (cell.glyph % 16) * this.cellSizePixels;
         const srcY = Math.floor(cell.glyph / 16) * this.cellSizePixels;
-        this.ctx.drawImage(
+        ctx.drawImage(
           tintedAtlas,
           srcX,
           srcY,
@@ -696,16 +706,75 @@ export class Canvas {
     }
 
     // Last resort: render with monospace text if no atlas path is available.
-    this.ctx.fillStyle = _rgb(cell.fg[0], cell.fg[1], cell.fg[2]);
-    this.ctx.font = `${this.cellSizePixels}px monospace`;
-    this.ctx.textAlign = 'left';
-    this.ctx.textBaseline = 'top';
+    ctx.fillStyle = _rgb(cell.fg[0], cell.fg[1], cell.fg[2]);
+    ctx.font = `${this.cellSizePixels}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
 
     try {
       const char = String.fromCharCode(cell.glyph);
-      this.ctx.fillText(char, pixelCoords.x, pixelCoords.y, this.cellSizePixels);
+      ctx.fillText(char, pixelCoords.x, pixelCoords.y, this.cellSizePixels);
     } catch (e) {
       // Silently skip glyphs that can't be rendered
+    }
+  }
+
+  _syncLayerOffscreens() {
+    if (!this.layerStack) {
+      return false;
+    }
+
+    let changed = false;
+    const layers = this.layerStack.getLayers();
+    for (const layer of layers) {
+      layer.ensureOffscreen(this.cellSizePixels);
+      if (!layer.offscreenCtx) {
+        continue;
+      }
+
+      if (layer.offscreenDirtyAll) {
+        layer.offscreenCtx.clearRect(0, 0, layer.offscreenCanvas.width, layer.offscreenCanvas.height);
+        for (let y = 0; y < layer.height; y++) {
+          for (let x = 0; x < layer.width; x++) {
+            this._drawCellToContext(layer.offscreenCtx, layer.data[y][x], x, y);
+          }
+        }
+        layer.offscreenDirtyAll = false;
+        layer.offscreenDirtyCells.clear();
+        changed = true;
+        continue;
+      }
+
+      if (layer.offscreenDirtyCells.size === 0) {
+        continue;
+      }
+
+      for (const key of layer.offscreenDirtyCells) {
+        const x = key % this.width;
+        const y = (key / this.width) | 0;
+        const pixelX = x * this.cellSizePixels;
+        const pixelY = y * this.cellSizePixels;
+        layer.offscreenCtx.clearRect(pixelX, pixelY, this.cellSizePixels, this.cellSizePixels);
+        this._drawCellToContext(layer.offscreenCtx, layer.data[y][x], x, y);
+      }
+      layer.offscreenDirtyCells.clear();
+      changed = true;
+    }
+
+    return changed;
+  }
+
+  _compositeLayerStack() {
+    this.clear();
+    const layers = this.layerStack.getLayers();
+    for (const layer of layers) {
+      if (!layer.visible || !layer.offscreenCanvas) {
+        continue;
+      }
+      const priorAlpha = this.ctx.globalAlpha;
+      this.ctx.globalAlpha = layer.opacity;
+      this.ctx.drawImage(layer.offscreenCanvas, 0, 0);
+      this.ctx.globalAlpha = priorAlpha;
     }
   }
 
@@ -759,6 +828,33 @@ export class Canvas {
   render() {
     const needsFull = this._fullRenderNeeded || this.showGrid ||
       (this.selectionTool && this.selectionTool.getSelectionBounds());
+
+    if (this.useLayerStack && this.layerStack) {
+      const offscreenChanged = this._syncLayerOffscreens();
+      const needsComposite = needsFull || offscreenChanged;
+      if (!needsComposite) {
+        return;
+      }
+
+      this._dirtyCells.clear();
+      this._fullRenderNeeded = false;
+      this._compositeLayerStack();
+      if (this.showGrid) {
+        this._drawGrid();
+      }
+      this._drawSelectionOutline();
+      this._animationFrame++;
+      if (this.selectionTool && this.selectionTool.getSelectionBounds()) {
+        if (this._animationFrameId) {
+          cancelAnimationFrame(this._animationFrameId);
+        }
+        this._animationFrameId = requestAnimationFrame(() => this.render());
+      } else if (this._animationFrameId) {
+        cancelAnimationFrame(this._animationFrameId);
+        this._animationFrameId = null;
+      }
+      return;
+    }
 
     // Nothing to do: no dirty cells and no reason for a full pass.
     // Without this guard, mouseup triggers a gratuitous clear+redraw
@@ -1039,6 +1135,9 @@ export class Canvas {
     // Update canvas physical size
     this.canvasElement.width = this.width * pixelsPerCell;
     this.canvasElement.height = this.height * pixelsPerCell;
+    if (this.layerStack && typeof this.layerStack.ensureOffscreenCanvases === 'function') {
+      this.layerStack.ensureOffscreenCanvases(pixelsPerCell);
+    }
 
     // Re-render with new size
     this._fullRenderNeeded = true;

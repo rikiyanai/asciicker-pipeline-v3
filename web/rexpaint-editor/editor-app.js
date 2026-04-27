@@ -468,6 +468,7 @@ export class EditorApp {
     if (this.canvas && this.canvas.layerStack) {
       this.canvas.layerStack.selectLayer(index);
       this._renderLayerList();
+      this.canvas.invalidateAll();
       this.canvas.render();
     }
   }
@@ -483,6 +484,7 @@ export class EditorApp {
       if (layer) {
         layer.setVisible(!layer.visible);
         this._renderLayerList();
+        this.canvas.invalidateAll();
         this.canvas.render();
       }
     }
@@ -499,6 +501,7 @@ export class EditorApp {
       const layer = this.canvas.layerStack.layers[index];
       if (layer) {
         layer.opacity = opacity / 100; // Convert to 0-1 range
+        this.canvas.invalidateAll();
         this.canvas.render();
       }
     }
@@ -514,6 +517,7 @@ export class EditorApp {
       const newName = `Layer ${newIndex}`;
       this.canvas.layerStack.addLayer(newName);
       this._renderLayerList();
+      this.canvas.invalidateAll();
       this.canvas.render();
     }
   }
@@ -528,6 +532,7 @@ export class EditorApp {
         const activeIndex = this.canvas.layerStack.activeIndex;
         this.canvas.layerStack.removeLayer(activeIndex);
         this._renderLayerList();
+        this.canvas.invalidateAll();
         this.canvas.render();
       }
     }
