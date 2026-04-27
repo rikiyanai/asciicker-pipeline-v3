@@ -8,6 +8,60 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Audit — Whole-Sheet Rendered-Cell Verifier Repair (2026-04-27)
+
+This is a verifier/code checkpoint entry. It is not a new product claim. It
+records that several apparent whole-sheet Section 1 failures were stale
+verifier click-math drift after the shipped whole-sheet editor began rendering
+at fit zoom.
+
+### What changed
+
+1. The whole-sheet headed verifier lanes that still assumed raw `CELL_SIZE=12`
+   canvas clicks/drags were repaired to use rendered cell size from live
+   whole-sheet zoom state.
+   - `scripts/xp_fidelity_test/run_whole_sheet_tools_test.mjs`
+   - `scripts/xp_fidelity_test/run_whole_sheet_transform_test.mjs`
+   - `scripts/xp_fidelity_test/run_whole_sheet_bulkedit_test.mjs`
+   - `scripts/xp_fidelity_test/run_whole_sheet_grid_test.mjs`
+2. The fix mirrors the already-correct rendered-cell-size strategy used by
+   `run_whole_sheet_clipboard_test.mjs`.
+
+### Verification evidence
+
+- `node --check scripts/xp_fidelity_test/run_whole_sheet_tools_test.mjs`
+  - PASS
+- `node --check scripts/xp_fidelity_test/run_whole_sheet_transform_test.mjs`
+  - PASS
+- `node --check scripts/xp_fidelity_test/run_whole_sheet_bulkedit_test.mjs`
+  - PASS
+- `node --check scripts/xp_fidelity_test/run_whole_sheet_grid_test.mjs`
+  - PASS
+- headed real browser, root-hosted:
+  - `node scripts/xp_fidelity_test/run_whole_sheet_tools_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5071/workbench --out-dir output/ws_tools_root`
+    - PASS (`8/8`)
+  - `node scripts/xp_fidelity_test/run_whole_sheet_transform_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5071/workbench --out-dir output/ws_transform_root`
+    - PASS (`9/9`)
+  - `node scripts/xp_fidelity_test/run_whole_sheet_bulkedit_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5071/workbench --out-dir output/ws_bulkedit_root`
+    - PASS
+  - `node scripts/xp_fidelity_test/run_whole_sheet_grid_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5071/workbench --out-dir output/ws_grid_root`
+    - PASS (`7/7`)
+- headed real browser, prefixed `/xpedit`:
+  - `node scripts/xp_fidelity_test/run_whole_sheet_tools_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5073/xpedit/workbench --out-dir output/ws_tools_prefixed`
+    - PASS (`8/8`)
+  - `node scripts/xp_fidelity_test/run_whole_sheet_transform_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5073/xpedit/workbench --out-dir output/ws_transform_prefixed`
+    - PASS (`9/9`)
+  - `node scripts/xp_fidelity_test/run_whole_sheet_bulkedit_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5073/xpedit/workbench --out-dir output/ws_bulkedit_prefixed`
+    - PASS
+  - `node scripts/xp_fidelity_test/run_whole_sheet_grid_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5073/xpedit/workbench --out-dir output/ws_grid_prefixed`
+    - PASS (`7/7`)
+
+### Audit consequence
+
+The earlier whole-sheet failures in these lanes should not be treated as
+current product regressions. They were stale verifier assumptions about canvas
+pixel geometry after fit zoom / rendered zoom became the shipped behavior.
+
 **Date:** 2026-03-10
 **Status:** FAILED - Test did not reach editor steps
 

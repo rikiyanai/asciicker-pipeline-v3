@@ -31,22 +31,32 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const CELL_SIZE = 12;
 
+async function getRenderedCellSize(page) {
+  return page.evaluate((baseCellSize) => {
+    const ws = window.__wholeSheetEditor;
+    const state = ws?.getState?.() ?? null;
+    const zoom = Math.max(0.05, Number(state?.appliedCanvasZoom || 1));
+    return baseCellSize * zoom;
+  }, CELL_SIZE);
+}
+
 async function dragCells(page, x1, y1, x2, y2) {
+  const renderedCellSize = await getRenderedCellSize(page);
   await page.evaluate(({ tx, ty }) => {
     const scroll = document.getElementById('wholeSheetScroll');
     if (!scroll) return;
     scroll.scrollLeft = Math.max(0, tx - scroll.clientWidth / 2);
     scroll.scrollTop = Math.max(0, ty - scroll.clientHeight / 2);
-  }, { tx: x1 * CELL_SIZE, ty: y1 * CELL_SIZE });
+  }, { tx: x1 * renderedCellSize, ty: y1 * renderedCellSize });
   await page.waitForTimeout(200);
 
   const canvasBox = await page.locator('#wholeSheetCanvas').boundingBox();
   if (!canvasBox) throw new Error('wholeSheetCanvas not found');
 
-  const vpX1 = canvasBox.x + x1 * CELL_SIZE + CELL_SIZE / 2;
-  const vpY1 = canvasBox.y + y1 * CELL_SIZE + CELL_SIZE / 2;
-  const vpX2 = canvasBox.x + x2 * CELL_SIZE + CELL_SIZE / 2;
-  const vpY2 = canvasBox.y + y2 * CELL_SIZE + CELL_SIZE / 2;
+  const vpX1 = canvasBox.x + x1 * renderedCellSize + renderedCellSize / 2;
+  const vpY1 = canvasBox.y + y1 * renderedCellSize + renderedCellSize / 2;
+  const vpX2 = canvasBox.x + x2 * renderedCellSize + renderedCellSize / 2;
+  const vpY2 = canvasBox.y + y2 * renderedCellSize + renderedCellSize / 2;
 
   await page.mouse.move(vpX1, vpY1);
   await page.mouse.down();
