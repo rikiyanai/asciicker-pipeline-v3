@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import math
 import os
 import shlex
@@ -12,6 +13,8 @@ import subprocess
 import threading
 import time
 import uuid
+
+_log = logging.getLogger(__name__)
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -971,6 +974,11 @@ def _resolve_preview_xp_fields(spec: dict[str, Any]) -> tuple[str, str]:
     preview_xp_sha256 = str(spec.get("preview_xp_sha256") or "").strip()
     if preview_xp:
         return preview_xp, preview_xp_sha256
+    _log.warning(
+        "preview_xp missing for spec %r — falling back to l0_ref %r",
+        spec.get("filename_prefix") or spec.get("family"),
+        spec.get("l0_ref"),
+    )
     return str(spec.get("l0_ref") or "").strip(), str(spec.get("l0_ref_sha256") or "").strip()
 
 
@@ -1092,6 +1100,7 @@ def load_template_registry() -> dict[str, Any]:
         return _template_registry
     reg_path = CONFIG_DIR / "template_registry.json"
     if not reg_path.exists():
+        _log.error("template_registry.json not found at %s — serving empty registry", reg_path)
         _template_registry = {"template_sets": {}, "schema_version": 2}
         return _template_registry
     _template_registry = _normalize_template_registry(json.loads(reg_path.read_text(encoding="utf-8")))
@@ -2537,7 +2546,7 @@ def _blank_session_spec(blank_session: Any, req_id: str) -> dict[str, Any]:
             422,
         )
     family = str(payload.get("family", default["family"])).strip() or str(default["family"])
-    if family not in ("player", "attack", "plydie"):
+    if family not in ENABLED_FAMILIES:
         raise ApiError(f"unknown family: {family}", "invalid_family", "workbench", req_id, 422)
     return {
         "angles": angles,
@@ -3535,7 +3544,12 @@ def _run_structural_gates(
     action_spec: dict[str, Any],
     req_id: str,
 ) -> list[GateResult]:
-    """Run G10-G12 structural gates on an exported XP against its template spec."""
+    """Run G7-G12 structural gates on an exported XP against its template spec.
+
+    G7/G8/G9 run on the art layer (layer index 2) to catch blank or near-blank
+    sheets that were manually edited after pipeline (PB-14).
+    G10/G11/G12 enforce dimension, layer count, and L0 metadata.
+    """
     xp = read_xp(xp_path)
     expected_dims = action_spec.get("xp_dims", [0, 0])
     expected_layers = action_spec.get("layers", 0)
@@ -3543,6 +3557,15 @@ def _run_structural_gates(
     expected_l0 = _FAMILY_L0_COL0.get(family, [])
 
     results = []
+
+    # G7/G8/G9: content layer quality gates (layer index 2 = art/content layer).
+    if len(xp["cells"]) >= 3:
+        layer2 = xp["cells"][2]
+        expected_cells = expected_dims[0] * expected_dims[1]
+        glyphs = [cell[0] for cell in layer2]
+        results.append(gate_g7_geometry(expected_cells, len(layer2)))
+        results.append(gate_g8_nonempty(glyphs))
+        results.append(gate_g9_handoff(len(layer2)))
 
     # G10: dimension match
     results.append(gate_g10_action_dims(
@@ -3587,7 +3610,7 @@ def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
             continue
         export = workbench_export_xp(act_state.session_id, req_id)
 
-        # Run structural gates G10-G12
+        # Run structural gates G7-G12
         gates = _run_structural_gates(export["xp_path"], action_spec, req_id)
         gate_dicts = [{"gate": g.gate, "verdict": g.verdict, "details": g.details} for g in gates]
         gate_reports[act_key] = gate_dicts
@@ -3651,7 +3674,7 @@ def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, 
         export = workbench_export_xp(act_state.session_id, req_id)
         xp_path = Path(export["xp_path"]).expanduser().resolve()
 
-        # Structural gates G10-G12
+        # Structural gates G7-G12
         gates = _run_structural_gates(str(xp_path), action_spec, req_id)
         blocked = [g for g in gates if g.verdict == THRESHOLD_BREACHED]
         if blocked:
