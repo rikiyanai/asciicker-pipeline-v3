@@ -8,6 +8,81 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Audit — Whole-Sheet Clipboard Contract Repair And Section 1 Proof Completion (2026-04-27)
+
+This is a verifier/evidence checkpoint entry. It does not claim a new product
+feature landed in this slice. It corrects the whole-sheet clipboard verifier so
+it matches the current Section 1 contract for `Clear`, then records the full
+headed proof set now present in this worktree.
+
+### What changed
+
+1. `scripts/xp_fidelity_test/run_whole_sheet_clipboard_test.mjs` no longer
+   expects `W22 Clear` to wipe every visible layer.
+   - The current Section 1 canon defines `Delete` / `Backspace` / shipped
+     `Clear` as clearing the current selection on the active visible unlocked
+     layer.
+   - Multi-layer clearing remains attached to `Cut`, which captures the visible
+     layer clipboard payload and then clears the visible unlocked layer set as
+     one transaction.
+2. The clipboard verifier comments, strategy text, failure wording, and step
+   evidence were aligned to that contract.
+
+### Verification evidence
+
+- `node --check scripts/xp_fidelity_test/run_whole_sheet_clipboard_test.mjs`
+  - PASS
+- `node --test tests/web/whole-sheet-history-ownership.test.mjs`
+  - PASS (`8 tests`)
+- headed real browser, root-hosted:
+  - `node scripts/xp_fidelity_test/run_whole_sheet_clipboard_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5071/workbench --out-dir output/ws_clipboard_root`
+    - PASS (`8/8`)
+  - existing same-day report artifacts also show:
+    - `output/ws_button_smoke_root/report.json`
+      - PASS (`5/5`) for tool buttons, mode/browse buttons, resize button, wrapper layer controls
+    - `output/ws_layer_root_rerun/report.json`
+      - PASS (`6/6`)
+    - `output/ws_tools_root/report.json`
+      - PASS (`8/8`)
+    - `output/ws_transform_root/report.json`
+      - PASS (`9/9`)
+    - `output/ws_bulkedit_root/report.json`
+      - PASS
+    - `output/ws_grid_root/report.json`
+      - PASS (`7/7`)
+- headed real browser, prefixed `/xpedit`:
+  - `node scripts/xp_fidelity_test/run_whole_sheet_clipboard_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5073/xpedit/workbench --out-dir output/ws_clipboard_prefixed`
+    - PASS (`8/8`)
+  - existing same-day report artifacts also show:
+    - `output/ws_button_smoke_prefixed/report.json`
+      - PASS (`5/5`) for tool buttons, mode/browse buttons, resize button, wrapper layer controls
+    - `output/ws_layer_prefixed_rerun/report.json`
+      - PASS (`6/6`)
+    - `output/ws_tools_prefixed/report.json`
+      - PASS (`8/8`)
+    - `output/ws_transform_prefixed/report.json`
+      - PASS (`9/9`)
+    - `output/ws_bulkedit_prefixed/report.json`
+      - PASS
+    - `output/ws_grid_prefixed/report.json`
+      - PASS (`7/7`)
+
+### Audit consequence
+
+For the current worktree state, the previously listed Section 1 closure blockers
+are now closed by code and proof:
+
+1. wrapper history ownership is no longer the live whole-sheet editor owner
+2. resize is no longer constrained by wrapper frame topology
+3. headed shipped-UI proof now exists for both root-hosted and prefixed
+   `/xpedit`
+4. the stale whole-sheet `Clear` failure was verifier contract drift, not a
+   product regression
+
+Any remaining Section 1 follow-up should be treated as doc/ledger alignment or
+broader architecture cleanup, not as an unresolved root-editor parity blocker in
+the shipped whole-sheet surface proved above.
+
 ## Audit — Whole-Sheet Rendered-Cell Verifier Repair (2026-04-27)
 
 This is a verifier/code checkpoint entry. It is not a new product claim. It

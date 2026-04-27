@@ -15,11 +15,12 @@
  *   W22: Delete/clear selection from shipped Clear button
  *   W23: Select all (Ctrl+A — selection bounds match canvas dimensions)
  *   Layer-preserving clipboard semantics across every visible layer
+ *   Active-layer-only clear semantics for Delete/Clear
  *
  * Strategy:
  *   1. Import XP → session with grid + WS editor
  *   2. Show three layers and paint distinct content on each visible layer
- *   3. W22: Select region → Clear button → verify every visible layer is cleared
+ *   3. W22: Select region → Clear button → verify only the active visible unlocked layer is cleared
  *   4. W19: Repaint layered block → Copy button → verify layered clipboard payload size
  *   5. W20: Paste button → click target → verify every layer pastes independently
  *   6. W21: Paint fresh layered block → Cut button → verify source cleared on all visible layers
@@ -300,12 +301,17 @@ async function main() {
   const afterDelete2 = await readLayerCell(page, 1, 1, 2);
   const afterDelete3 = await readLayerCell(page, 2, 2, 1);
   const deletePass = assert(
-    afterDelete1?.glyph === 0 && afterDelete2?.glyph === 0 && afterDelete3?.glyph === 0,
+    afterDelete1?.glyph === 65 && afterDelete2?.glyph === 66 && afterDelete3?.glyph === 0,
     fail, 'w22_delete',
-    `Layered clear should zero all visible layers, got ${[afterDelete1?.glyph, afterDelete2?.glyph, afterDelete3?.glyph].join('/')}`,
-    { afterDelete1, afterDelete2, afterDelete3 }
+    `Clear should zero only the active visible unlocked layer, got ${[afterDelete1?.glyph, afterDelete2?.glyph, afterDelete3?.glyph].join('/')}`,
+    { afterDelete1, afterDelete2, afterDelete3, activeLayer: preDeleteState?.activeLayer }
   );
-  steps.w22_delete = { step: 'delete_selection', pass: deletePass };
+  steps.w22_delete = {
+    step: 'delete_selection',
+    pass: deletePass,
+    activeLayer: preDeleteState?.activeLayer,
+    postDeleteGlyphs: [afterDelete1?.glyph, afterDelete2?.glyph, afterDelete3?.glyph],
+  };
   if (!deletePass) allPass = false;
   await screenshot(page, outDir, 'step04_w22_delete');
 
