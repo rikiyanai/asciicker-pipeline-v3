@@ -2662,6 +2662,7 @@ not a task plan — it is a gate list. Migration is ready when all blocking gate
 | Proof-only color-variant family authoring surface | §2.5 misalignment ledger | PROOF-ONLY by policy (`service.py`, `workbench.js`) |
 | M2 E2E proof run (PNG→WS→export, committed headed run) | §Milestone 2 | PARTIAL |
 | UQ-013 small-screen layout and persistence | §Unified Queue `UQ-013` | OPEN |
+| Whole-sheet browse-model split decision | §1.8 / §2 boundary | EXPLICITLY DEFERRED until after grid contrast, expanded grid presets, grid-scoped replace semantics, and their proof updates; changing browse earlier would reopen the Section 1/Section 2 owner boundary instead of clarifying it |
 
 ### Gate Maintenance Rule
 

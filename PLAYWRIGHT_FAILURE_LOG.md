@@ -59,6 +59,22 @@ especially for usability and workflow correctness under real editing sessions.
    shipped UI reachability and current non-regression for covered families, but
    it is not sufficient to claim no further user testing is needed.
 
+### Sequencing rule for the next implementation slice
+
+Treat the next whole-sheet/editor follow-up in this exact order:
+
+1. grid contrast
+2. grid model expansion (`frame`, custom `m x n`, layer-0-metadata preset,
+   template/action-derived preset)
+3. grid-scoped replace / frame-partition editing semantics
+4. proof updates for those new root-editor behaviors
+5. **only then** revisit browse semantics
+
+Browse semantics stays last because it crosses the Section 1 / Section 2
+boundary. Current shipped browse opens saved workbench sessions through the
+wrapper/session model; changing that earlier would blur the owner split instead
+of strengthening it.
+
 ### REXPaint manual / layer-0 note
 
 The embedded REXPaint manual in canon does **not** describe layer 0 as
