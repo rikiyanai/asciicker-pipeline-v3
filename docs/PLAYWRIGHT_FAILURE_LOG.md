@@ -294,6 +294,54 @@ sync with the shipped controls.
 2. broader human UI testing is still required; headed verifier PASS is not a
    substitute for final product acceptance
 
+## Audit — Layer-0 Policy By Session Kind (2026-04-27)
+
+This is a focused Section 1 follow-up slice for the browse/layer-0 canon
+decision. It does not claim total closure. It proves the shipped UI now honors
+the layer-0 default policy for `root_blank`, `raw_xp`, and `template_owned`
+sessions.
+
+### What changed
+
+1. The wrapper no longer pre-claims template ownership on page load.
+   - `state.templateSetKey` now starts empty until the user explicitly clicks
+     `Apply Template`.
+   - This re-exposes the shipped Section 1 `New XP` root-blank path through the
+     normal UI.
+2. Added a backend assertion for `template_owned` default layer-0 policy.
+3. Added a headed whole-sheet verifier lane for session-kind layer-0 behavior:
+   - `root_blank`: layer 0 visible/editable by default
+   - `raw_xp`: layer 0 visible/editable by default
+   - `template_owned`: layer 0 hidden+locked by default, but discoverable and
+     intentionally inspectable after reveal/unlock
+
+### Verification evidence
+
+1. Backend/session assertions:
+   - `python3 -m pytest tests/test_workbench_flow.py -k "root_blank_session_defaults or template_owned_session_layer0_defaults or upload_raw_xp_opens_without_template_metadata_and_roundtrips"`
+   - PASS (`3 passed, 11 deselected`)
+2. Root-hosted headed verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_layer0_policy_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5071/workbench --out-dir output/ws_layer0_policy_root`
+   - PASS
+3. Prefixed headed verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_layer0_policy_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5073/xpedit/workbench --out-dir output/ws_layer0_policy_prefixed`
+   - PASS
+
+### Verification note
+
+1. The first root-blank failure was a real product bug, not verifier drift.
+2. `#btnNewXp` remained disabled because `workbench.js` initialized
+   `state.templateSetKey` to `player_native_idle_only` before any template
+   apply, which forced the wrapper into template-owned mode at startup.
+3. Clearing that implicit template owner restored the classic root-blank UI
+   entry path and aligned the shipped browser behavior with the canon decision.
+
+### Still open after this slice
+
+1. browse-model work remains deferred behind the Section 1 / Section 2 split
+2. broader human UI testing is still required; headed verifier PASS is not a
+   substitute for final product acceptance
+
 ## Audit — Whole-Sheet Clipboard Contract Repair And Section 1 Proof Completion (2026-04-27)
 
 This is a verifier/evidence checkpoint entry. It does not claim a new product

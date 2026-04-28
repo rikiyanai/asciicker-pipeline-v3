@@ -203,7 +203,7 @@
     gridPanelZoom: 0,
     // ── Bundle state ──
     bundleId: null,
-    templateSetKey: "player_native_idle_only",
+    templateSetKey: "",
     activeActionKey: "idle",
     actionStates: {},       // { idle: {sessionId, jobId, status}, attack: {...}, ... }
     templateRegistry: null, // cached from GET /api/workbench/templates

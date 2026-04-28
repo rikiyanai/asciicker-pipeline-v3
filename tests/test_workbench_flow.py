@@ -350,6 +350,25 @@ def test_root_blank_session_accepts_explicit_geometry(client):
     assert payload["metadata_status"] == "generated"
 
 
+def test_template_owned_session_layer0_defaults(client):
+    create_resp = client.post(
+        "/api/workbench/create-blank-session",
+        data=json.dumps({
+            "template_set_key": "player_native_idle_only",
+            "action_key": "idle",
+        }),
+        content_type="application/json",
+    )
+    assert create_resp.status_code == 201
+    payload = create_resp.get_json()
+    assert payload["session_kind"] == "template_owned"
+    assert payload["metadata_status"] == "generated"
+    assert payload["layer_count"] == 4
+    assert payload["active_layer"] == 2
+    assert payload["visible_layers"] == [2]
+    assert payload["locked_layers"] == [0]
+
+
 def test_upload_raw_xp_opens_without_template_metadata_and_roundtrips(client, tmp_path: Path):
     width, height = 4, 3
     layer0 = [_xp_cell() for _ in range(width * height)]
