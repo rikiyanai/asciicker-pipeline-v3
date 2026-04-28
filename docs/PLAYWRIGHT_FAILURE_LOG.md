@@ -10443,6 +10443,66 @@ present to prevent silent assumption that it is covered.
 
 ---
 
+### PG-006 — Section 2 deletion-first cutover plan (registry → source manifest → gateway) [READY]
+
+**Scope:** `src/pipeline_v2/service.py`, `web/workbench.js`,
+`scripts/workbench_mcp_server.py`, Y9-2 launcher/wizard/MCP follow-through
+
+The remaining Section 2 work is still split across three live authority
+problems:
+
+1. **Registry authority is mixed.** Live backend paths still read
+   `family`/`ENABLED_FAMILIES` while the normalized registry already exposes
+   `filename_prefix`/`skin_family`.
+2. **Source-layout authority is mixed.** The source panel is interactive, but
+   persisted authority is still session-local `source_boxes` /
+   `source_cuts_v` / `source_cuts_h` rather than one canonical source-layout
+   manifest contract.
+3. **Gateway authority is mixed.** Section 2 docs currently describe
+   headless/API/MCP surfaces that the live code does not yet expose, while
+   Y9-2 still owns real bundle-authoring flow through local CLI/wizard paths.
+
+Adding new vocabulary, new MCP front doors, or new bundle-authoring wrappers
+before deleting those old owners would violate the Section 2 single-owner law.
+
+**Deletion-first order:**
+
+1. **Delete live backend authority from `family` / `ENABLED_FAMILIES`.**
+   - Migrate bundle/session/export/runtime reads to one registry-derived helper.
+   - Keep compat aliases as mirror-only data until session migration lands; do
+     not leave them authoritative.
+2. **Delete classic frontend hard-coded family truth.**
+   - Remove `FAMILY_W_RANGE` / similar classic-path assumptions as authority.
+   - Derive AHSW/export/runtime scope from the normalized registry/prefix
+     contract instead of keeping a second browser-side map.
+3. **Delete session-local source layout as authority.**
+   - Introduce one canonical `<source>.asciicker-source.json` contract.
+   - Demote `source_boxes`, `source_cuts_v`, and `source_cuts_h` to derived
+     guide/cache state only; they must not survive as a second source-layout
+     model.
+4. **Delete false/planned gateway claims before adding more gateways.**
+   - Do not add an asset-editor MCP or Y9-2 gateway layer on top of routes/tools
+     that are only named in docs.
+   - Either land the real headless endpoints first or remove the claims from
+     canon/log text.
+5. **Delete local-subprocess pipeline ownership in Y9-2 only after one stable
+   pipeline-v3 contract exists.**
+   - Launcher / wizard / MCP should become thin clients over one HTTP/API
+     contract.
+   - They must not remain parallel owners of bundle conversion, validation, or
+     compile truth.
+
+**Pass condition:** one registry authority, one source-layout authority, and
+one headless Section 2 gateway exist before runtime-id work, mounted-family
+work, or item/wearable work expands scope.
+
+**Stop / fail condition:** any patch adds a new Section 2 front door, new
+bundle-authoring vocabulary surface, or new runtime-identity layer while the old
+`family`, `ENABLED_FAMILIES`, session-local source-layout, or local CLI gateway
+owners are still authoritative.
+
+---
+
 ## Section 1 Performance And Architecture Audit (2026-04-27)
 
 Research-driven audit of the whole-sheet editor (Section 1) as a REXPaint
