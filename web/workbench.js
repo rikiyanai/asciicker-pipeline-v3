@@ -2926,22 +2926,25 @@
       status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
       return false;
     }
-    pushHistory();
     const step = to > from ? 1 : -1;
-    let cur = from;
-    while (cur !== to) {
-      swapRowBlocks(cur, cur + step);
-      cur += step;
+    const changed = commitWholeSheetDocumentMutation("move-row-to-index", function() {
+      let cur = from;
+      while (cur !== to) {
+        swapRowBlocks(cur, cur + step);
+        cur += step;
+      }
+      const cols = rowHasSelectedFrames(from) ? selectedColsForRow(from) : (state.selectedRow === from ? selectedFrameColsSorted() : []);
+      if (cols.length) {
+        setGridSelection(cols.map((col) => ({ row: to, col })), {
+          anchor: { row: to, col: cols[0] },
+          focus: { row: to, col: cols[0] },
+        });
+      }
+    });
+    if (!changed) {
+      status("Move row made no changes", "warn");
+      return false;
     }
-    const cols = rowHasSelectedFrames(from) ? selectedColsForRow(from) : (state.selectedRow === from ? selectedFrameColsSorted() : []);
-    if (cols.length) {
-      setGridSelection(cols.map((col) => ({ row: to, col })), {
-        anchor: { row: to, col: cols[0] },
-        focus: { row: to, col: cols[0] },
-      });
-    }
-    renderAll();
-    saveSessionState("move-row-to-index");
     status(`Moved row to ${to} (${angleNameForIndex(to)})`, "ok");
     return true;
   }
@@ -3384,20 +3387,16 @@
     else if (kind === "rot_cw") dst = selectionMatrixRotate(src, true);
     else if (kind === "rot_ccw") dst = selectionMatrixRotate(src, false);
     else return false;
-    const wasDirty = !!state.sessionDirty;
-    pushHistory();
-    let changed = 0;
-    changed += writeInspectorSelectionMatrix(row, col, sel, Array.isArray(src) ? src.map((r) => r.map(() => transparentCell(0))) : []);
-    const nextSel = selectionBoundsFromMatrixAtAnchor(sel.x1, sel.y1, dst);
-    changed += writeInspectorSelectionMatrix(row, col, nextSel, dst);
-    state.inspectorSelection = normalizeInspectorSelection(nextSel);
+    const changed = commitWholeSheetDocumentMutation(`inspector-${kind}`, function() {
+      writeInspectorSelectionMatrix(row, col, sel, Array.isArray(src) ? src.map((r) => r.map(() => transparentCell(0))) : []);
+      const nextSel = selectionBoundsFromMatrixAtAnchor(sel.x1, sel.y1, dst);
+      writeInspectorSelectionMatrix(row, col, nextSel, dst);
+      state.inspectorSelection = normalizeInspectorSelection(nextSel);
+    });
     if (!changed) {
-      revertNoopHistory(wasDirty);
       status("Selection transform made no changes", "warn");
       return false;
     }
-    renderAll();
-    saveSessionState(`inspector-${kind}`);
     status(`Applied ${kind.replace("_", " ")} to selection`, "ok");
     return true;
   }
@@ -3413,6 +3412,7 @@
     const next = currentInspectorGlyphCell();
     if (cellEquals(rec.cell, next)) return false;
     setCell(rec.gx, rec.gy, next);
+    markFrameGridDirtyForCell(rec.gx, rec.gy);
     return true;
   }
 
@@ -3453,16 +3453,13 @@
       sel = selectionBoundsFromMatrixAtAnchor(anchor.x, anchor.y, state.inspectorSelectionClipboard);
       state.inspectorSelection = normalizeInspectorSelection(sel);
     }
-    const wasDirty = !!state.sessionDirty;
-    pushHistory();
-    const changed = writeInspectorSelectionMatrix(row, col, sel, state.inspectorSelectionClipboard);
+    const changed = commitWholeSheetDocumentMutation("inspector-paste-selection", function() {
+      writeInspectorSelectionMatrix(row, col, sel, state.inspectorSelectionClipboard);
+    });
     if (!changed) {
-      revertNoopHistory(wasDirty);
       status("Paste selection made no changes", "warn");
       return false;
     }
-    renderAll();
-    saveSessionState("inspector-paste-selection");
     status(`Pasted selection into ${inspectorSelectionLabel()}`, "ok");
     return true;
   }
@@ -3480,26 +3477,21 @@
       return false;
     }
     const { row, col } = inspectorCurrentFrameCoord();
-    const wasDirty = !!state.sessionDirty;
-    pushHistory();
-    let changed = 0;
-    for (let y = sel.y1; y <= sel.y2; y++) {
-      for (let x = sel.x1; x <= sel.x2; x++) {
-        const rec = inspectorCellFromLocal(row, col, x, y);
-        if (!rec) continue;
-        const next = transparentCell(0);
-        if (cellEquals(rec.cell, next)) continue;
-        setCell(rec.gx, rec.gy, next);
-        changed += 1;
+    const changed = commitWholeSheetDocumentMutation("inspector-clear-selection", function() {
+      for (let y = sel.y1; y <= sel.y2; y++) {
+        for (let x = sel.x1; x <= sel.x2; x++) {
+          const rec = inspectorCellFromLocal(row, col, x, y);
+          if (!rec) continue;
+          const next = transparentCell(0);
+          if (cellEquals(rec.cell, next)) continue;
+          setCell(rec.gx, rec.gy, next);
+        }
       }
-    }
+    });
     if (!changed) {
-      revertNoopHistory(wasDirty);
       status("Selection already empty", "warn");
       return false;
     }
-    renderAll();
-    saveSessionState("inspector-clear-selection");
     status(`Cleared selection ${inspectorSelectionLabel()}`, "ok");
     return true;
   }
@@ -3523,25 +3515,20 @@
     }
     const fillCell = currentInspectorGlyphCell();
     const { row, col } = inspectorCurrentFrameCoord();
-    const wasDirty = !!state.sessionDirty;
-    pushHistory();
-    let changed = 0;
-    for (let y = sel.y1; y <= sel.y2; y++) {
-      for (let x = sel.x1; x <= sel.x2; x++) {
-        const rec = inspectorCellFromLocal(row, col, x, y);
-        if (!rec) continue;
-        if (cellEquals(rec.cell, fillCell)) continue;
-        setCell(rec.gx, rec.gy, fillCell);
-        changed += 1;
+    const changed = commitWholeSheetDocumentMutation("inspector-fill-selection", function() {
+      for (let y = sel.y1; y <= sel.y2; y++) {
+        for (let x = sel.x1; x <= sel.x2; x++) {
+          const rec = inspectorCellFromLocal(row, col, x, y);
+          if (!rec) continue;
+          if (cellEquals(rec.cell, fillCell)) continue;
+          setCell(rec.gx, rec.gy, fillCell);
+        }
       }
-    }
+    });
     if (!changed) {
-      revertNoopHistory(wasDirty);
       status("Fill selection made no changes", "warn");
       return false;
     }
-    renderAll();
-    saveSessionState("inspector-fill-selection");
     status(`Filled selection ${inspectorSelectionLabel()}`, "ok");
     return true;
   }
@@ -3566,31 +3553,29 @@
     const target = channel === "bg" ? sample.bg : sample.fg;
     const replacement = channel === "bg" ? state.inspectorGlyphBgColor : state.inspectorGlyphFgColor;
     const { row, col } = inspectorCurrentFrameCoord();
-    const wasDirty = !!state.sessionDirty;
-    pushHistory();
-    let changed = 0;
-    for (let y = sel.y1; y <= sel.y2; y++) {
-      for (let x = sel.x1; x <= sel.x2; x++) {
-        const rec = inspectorCellFromLocal(row, col, x, y);
-        if (!rec) continue;
-        const cur = rec.cell;
-        const next = { ...cur, fg: [...cur.fg], bg: [...cur.bg] };
-        const before = channel === "bg" ? cur.bg : cur.fg;
-        if (!colorsEqual(before, target)) continue;
-        if (channel === "bg") next.bg = [...replacement];
-        else next.fg = [...replacement];
-        if (cellEquals(cur, next)) continue;
-        setCell(rec.gx, rec.gy, next);
-        changed += 1;
+    const changed = commitWholeSheetDocumentMutation(
+      channel === "bg" ? "inspector-replace-bg-selection" : "inspector-replace-fg-selection",
+      function() {
+        for (let y = sel.y1; y <= sel.y2; y++) {
+          for (let x = sel.x1; x <= sel.x2; x++) {
+            const rec = inspectorCellFromLocal(row, col, x, y);
+            if (!rec) continue;
+            const cur = rec.cell;
+            const next = { ...cur, fg: [...cur.fg], bg: [...cur.bg] };
+            const before = channel === "bg" ? cur.bg : cur.fg;
+            if (!colorsEqual(before, target)) continue;
+            if (channel === "bg") next.bg = [...replacement];
+            else next.fg = [...replacement];
+            if (cellEquals(cur, next)) continue;
+            setCell(rec.gx, rec.gy, next);
+          }
+        }
       }
-    }
+    );
     if (!changed) {
-      revertNoopHistory(wasDirty);
       status(`No ${channel.toUpperCase()} matches in selection`, "warn");
       return false;
     }
-    renderAll();
-    saveSessionState(channel === "bg" ? "inspector-replace-bg-selection" : "inspector-replace-fg-selection");
     status(`Replaced ${channel.toUpperCase()} color in selection`, "ok");
     return true;
   }
@@ -3631,40 +3616,37 @@
       status("Find/Replace scope is selection, but no selection exists", "warn");
       return false;
     }
-    const wasDirty = !!state.sessionDirty;
-    pushHistory();
-    let changed = 0;
-    for (let y = sel.y1; y <= sel.y2; y++) {
-      for (let x = sel.x1; x <= sel.x2; x++) {
-        const rec = inspectorCellFromLocal(row, col, x, y);
-        if (!rec) continue;
-        const cur = rec.cell;
-        if (matchGlyph && Number(cur.glyph || 0) !== findGlyph) continue;
-        if (matchFg && !colorsEqual(cur.fg || [0, 0, 0], findFg)) continue;
-        if (matchBg && !colorsEqual(cur.bg || [0, 0, 0], findBg)) continue;
-        const next = {
-          ...cur,
-          glyph: replGlyphOn ? replGlyph : Number(cur.glyph || 0),
-          fg: replFgOn ? [...replFg] : [...(cur.fg || [0, 0, 0])],
-          bg: replBgOn ? [...replBg] : [...(cur.bg || [0, 0, 0])],
-        };
-        if (cellEquals(cur, next)) continue;
-        setCell(rec.gx, rec.gy, next);
-        changed += 1;
+    let changedCount = 0;
+    const changed = commitWholeSheetDocumentMutation("inspector-find-replace", function() {
+      for (let y = sel.y1; y <= sel.y2; y++) {
+        for (let x = sel.x1; x <= sel.x2; x++) {
+          const rec = inspectorCellFromLocal(row, col, x, y);
+          if (!rec) continue;
+          const cur = rec.cell;
+          if (matchGlyph && Number(cur.glyph || 0) !== findGlyph) continue;
+          if (matchFg && !colorsEqual(cur.fg || [0, 0, 0], findFg)) continue;
+          if (matchBg && !colorsEqual(cur.bg || [0, 0, 0], findBg)) continue;
+          const next = {
+            ...cur,
+            glyph: replGlyphOn ? replGlyph : Number(cur.glyph || 0),
+            fg: replFgOn ? [...replFg] : [...(cur.fg || [0, 0, 0])],
+            bg: replBgOn ? [...replBg] : [...(cur.bg || [0, 0, 0])],
+          };
+          if (cellEquals(cur, next)) continue;
+          setCell(rec.gx, rec.gy, next);
+          changedCount += 1;
+        }
       }
-    }
+    });
     if (!changed) {
-      revertNoopHistory(wasDirty);
       status("Find/Replace made no changes", "warn");
       const info = $("inspectorFindReplaceInfo");
       if (info) info.textContent = "Find & Replace: no matching cells in scope.";
       return false;
     }
-    renderAll();
-    saveSessionState("inspector-find-replace");
     const info = $("inspectorFindReplaceInfo");
-    if (info) info.textContent = `Find & Replace updated ${changed} cell(s) in ${scope === "frame" ? "whole frame" : "selection"}.`;
-    status(`Find/Replace updated ${changed} cell(s)`, "ok");
+    if (info) info.textContent = `Find & Replace updated ${changedCount} cell(s) in ${scope === "frame" ? "whole frame" : "selection"}.`;
+    status(`Find/Replace updated ${changedCount} cell(s)`, "ok");
     return true;
   }
 
@@ -3703,10 +3685,13 @@
       return false;
     }
     const { row, col } = inspectorCurrentFrameCoord();
-    pushHistory();
-    writeFrameCellMatrix(row, col, state.inspectorFrameClipboard);
-    renderAll();
-    saveSessionState("inspector-paste-frame");
+    const changed = commitWholeSheetDocumentMutation("inspector-paste-frame", function() {
+      writeFrameCellMatrix(row, col, state.inspectorFrameClipboard);
+    });
+    if (!changed) {
+      status("Paste frame made no changes", "warn");
+      return false;
+    }
     status(`Pasted frame into row=${row} col=${col}`, "ok");
     return true;
   }
@@ -3719,11 +3704,14 @@
       return false;
     }
     const { row, col } = inspectorCurrentFrameCoord();
-    pushHistory();
-    const flipped = flipFrameMatrixH(inspectorFrameCellMatrix(row, col));
-    writeFrameCellMatrix(row, col, flipped);
-    renderAll();
-    saveSessionState("inspector-flip-frame-h");
+    const changed = commitWholeSheetDocumentMutation("inspector-flip-frame-h", function() {
+      const flipped = flipFrameMatrixH(inspectorFrameCellMatrix(row, col));
+      writeFrameCellMatrix(row, col, flipped);
+    });
+    if (!changed) {
+      status("Frame flip made no changes", "warn");
+      return false;
+    }
     status(`Flipped frame horizontally row=${row} col=${col}`, "ok");
     return true;
   }
@@ -3736,10 +3724,13 @@
       return false;
     }
     const { row, col } = inspectorCurrentFrameCoord();
-    pushHistory();
-    clearFrame(row, col);
-    renderAll();
-    saveSessionState("inspector-clear-frame");
+    const changed = commitWholeSheetDocumentMutation("inspector-clear-frame", function() {
+      clearFrame(row, col);
+    });
+    if (!changed) {
+      status("Frame already empty", "warn");
+      return false;
+    }
     status(`Cleared frame row=${row} col=${col}`, "ok");
     return true;
   }
@@ -3951,6 +3942,7 @@
       !colorsEqual(prev.bg || [0, 0, 0], next.bg || [0, 0, 0]);
     if (!changed) return false;
     setCell(gx, gy, next);
+    markFrameGridDirtyForCell(gx, gy);
     return true;
   }
 
@@ -3980,7 +3972,6 @@
     if (!state.inspectorPainting) return;
     state.inspectorPainting = false;
     if (!state.inspectorStrokeChanged) {
-      if (state.inspectorStrokeHadHistory) revertNoopHistory(!!state.inspectorStrokeWasDirty);
       state.inspectorStrokeChanged = false;
       state.inspectorStrokeHadHistory = false;
       state.inspectorStrokeWasDirty = false;
@@ -3990,8 +3981,7 @@
     state.inspectorStrokeChanged = false;
     state.inspectorStrokeHadHistory = false;
     state.inspectorStrokeWasDirty = false;
-    renderAll();
-    saveSessionState("inspector-edit");
+    replaceWholeSheetDocumentSnapshot(buildWholeSheetDocumentSnapshotFromState(), "inspector-edit");
   }
 
   function stopPreview() {
@@ -4210,7 +4200,6 @@
     const row = state.selectedRow === null ? 0 : state.selectedRow;
     renderPreviewFrame(Math.max(0, Math.min(state.angles - 1, row)), 0);
     renderInspector();
-    syncWholeSheetFromState();
     updateSessionDirtyBadge();
   }
 
@@ -5783,20 +5772,23 @@
     }
     const row = Number(state.selectedRow);
     const cols = selectedFrameColsSorted();
-    pushHistory();
     let moved = 0;
     let clipped = 0;
     let clampedFrames = 0;
-    for (const col of cols) {
-      const bounds = frameVisualBounds(row, col);
-      const shift = clampShiftToFrameBounds(bounds, dx, dy);
-      if (shift.clamped) clampedFrames += 1;
-      const res = shiftFrameContents(row, col, shift.dx, shift.dy);
-      if (res.moved) moved += 1;
-      clipped += Number(res.clippedCells || 0);
+    const changed = commitWholeSheetDocumentMutation("nudge-frame-jitter", function() {
+      for (const col of cols) {
+        const bounds = frameVisualBounds(row, col);
+        const shift = clampShiftToFrameBounds(bounds, dx, dy);
+        if (shift.clamped) clampedFrames += 1;
+        const res = shiftFrameContents(row, col, shift.dx, shift.dy);
+        if (res.moved) moved += 1;
+        clipped += Number(res.clippedCells || 0);
+      }
+    });
+    if (!changed) {
+      status("Nudge made no changes", "warn");
+      return false;
     }
-    renderAll();
-    saveSessionState("nudge-frame-jitter");
     status(
       `Nudged ${moved} frame(s) by dx=${dx}, dy=${dy}${clampedFrames ? ` (clamped ${clampedFrames} frame(s) at bounds)` : ""}${clipped ? ` (clipped ${clipped} cells)` : ""}`,
       clipped ? "warn" : (clampedFrames ? "warn" : "ok")
@@ -5833,21 +5825,27 @@
     const alignMode = String($("jitterAlignMode")?.value || "bottom_center");
     const refMode = String($("jitterRefMode")?.value || "first_selected");
     const target = computeAlignTarget(entries, refMode);
-    pushHistory();
     let shifted = 0;
     let clipped = 0;
     let clampedFrames = 0;
-    for (const entry of entries) {
-      const wanted = computeAlignShift(entry.bounds, target, alignMode);
-      const shift = clampShiftToFrameBounds(entry.bounds, wanted.dx, wanted.dy);
-      if (shift.clamped) clampedFrames += 1;
-      if (!shift.dx && !shift.dy) continue;
-      const res = shiftFrameContents(row, entry.col, shift.dx, shift.dy);
-      if (res.moved) shifted += 1;
-      clipped += Number(res.clippedCells || 0);
+    const changed = commitWholeSheetDocumentMutation(
+      useEntireRow ? "auto-align-row-jitter" : "auto-align-selected-jitter",
+      function() {
+        for (const entry of entries) {
+          const wanted = computeAlignShift(entry.bounds, target, alignMode);
+          const shift = clampShiftToFrameBounds(entry.bounds, wanted.dx, wanted.dy);
+          if (shift.clamped) clampedFrames += 1;
+          if (!shift.dx && !shift.dy) continue;
+          const res = shiftFrameContents(row, entry.col, shift.dx, shift.dy);
+          if (res.moved) shifted += 1;
+          clipped += Number(res.clippedCells || 0);
+        }
+      }
+    );
+    if (!changed) {
+      status("Auto-align made no changes", "warn");
+      return false;
     }
-    renderAll();
-    saveSessionState(useEntireRow ? "auto-align-row-jitter" : "auto-align-selected-jitter");
     status(
       `Auto-aligned ${shifted} frame(s) on row ${row} (${alignMode}, ${refMode})${clampedFrames ? `; clamped ${clampedFrames} at frame bounds` : ""}${clipped ? `; clipped ${clipped} cells` : ""}`,
       (clipped || clampedFrames) ? "warn" : "ok"
@@ -6001,22 +5999,19 @@
       status("No grid/session loaded", "warn");
       return false;
     }
-    const beforeDirty = !!state.sessionDirty;
-    pushHistory();
     const charColsPerSemanticFrame = Math.max(1, Number(state.frameWChars || 1) * Math.max(1, authoringProjectionCount()));
-    if (!Array.isArray(state.anims) || !state.anims.length) state.anims = [1];
-    else state.anims[state.anims.length - 1] = Math.max(1, Number(state.anims[state.anims.length - 1] || 1) + 1);
-    const resized = resizeGridCharCanvas(Number(state.gridCols || 0) + charColsPerSemanticFrame, state.gridRows || 1);
-    if (!resized) {
-      revertNoopHistory(beforeDirty);
+    const changed = commitWholeSheetDocumentMutation("grid-add-frame", function() {
+      if (!Array.isArray(state.anims) || !state.anims.length) state.anims = [1];
+      else state.anims[state.anims.length - 1] = Math.max(1, Number(state.anims[state.anims.length - 1] || 1) + 1);
+      resizeGridCharCanvas(Number(state.gridCols || 0) + charColsPerSemanticFrame, state.gridRows || 1);
+      const lastCol = Math.max(0, totalGridFrameCols() - 1);
+      const row = state.selectedRow === null ? 0 : Math.max(0, Math.min(state.angles - 1, Number(state.selectedRow)));
+      setGridSelection([{ row, col: lastCol }], { anchor: { row, col: lastCol }, focus: { row, col: lastCol } });
+    });
+    if (!changed) {
       status("Add Frame made no changes", "warn");
       return false;
     }
-    const lastCol = Math.max(0, totalGridFrameCols() - 1);
-    const row = state.selectedRow === null ? 0 : Math.max(0, Math.min(state.angles - 1, Number(state.selectedRow)));
-    setGridSelection([{ row, col: lastCol }], { anchor: { row, col: lastCol }, focus: { row, col: lastCol } });
-    renderAll();
-    saveSessionState("grid-add-frame");
     status(`Added frame slot (frames=${state.anims.reduce((a, b) => a + b, 0)})`, "ok");
     return true;
   }
@@ -6047,46 +6042,43 @@
 
     const selectedRows = selectedRowsSorted();
     const focusRow = state.selectedRow === null ? 0 : Math.max(0, Math.min(state.angles - 1, Number(state.selectedRow)));
-    const beforeDirty = !!state.sessionDirty;
-    pushHistory();
     const projections = authoringProjectionCount();
-    const keepCols = [];
-    for (let col = 0; col < authoringFrameCols(); col++) {
-      if (!targetFrames.includes(frameColInfo(col).frame)) keepCols.push(col);
-    }
-    if (!keepCols.length) {
-      revertNoopHistory(beforeDirty);
+    const changed = commitWholeSheetDocumentMutation("grid-delete-frame", function() {
+      const keepCols = [];
+      for (let col = 0; col < authoringFrameCols(); col++) {
+        if (!targetFrames.includes(frameColInfo(col).frame)) keepCols.push(col);
+      }
+      if (!keepCols.length) return;
+      state.anims = removeSemanticFramesFromAnims(targetFrames);
+      remapFrameGroupsAfterDeletion(targetFrames);
+      rebuildGridWithAuthoringCols(keepCols);
+      recomputeFrameGeometry();
+
+      const nextSemanticFrames = semanticFrameCount();
+      const selectionFrame = Math.max(0, Math.min(nextSemanticFrames - 1, targetFrames[0]));
+      const nextRows = selectedRows.length ? selectedRows : [focusRow];
+      const repairedCoords = [];
+      for (const row of nextRows) {
+        for (const col of semanticFrameAuthoringCols(selectionFrame, nextSemanticFrames, projections)) {
+          repairedCoords.push({ row, col });
+        }
+      }
+      const repairedRow = Math.max(0, Math.min(state.angles - 1, focusRow));
+      const repairedCols = semanticFrameAuthoringCols(selectionFrame, nextSemanticFrames, projections);
+      const repairedCol = repairedCols.length ? repairedCols[0] : 0;
+      setGridSelection(repairedCoords, {
+        anchor: { row: repairedRow, col: repairedCol },
+        focus: { row: repairedRow, col: repairedCol },
+      });
+      if (state.inspectorOpen) {
+        state.inspectorRow = state.selectedRow;
+        state.inspectorCol = Math.min(...state.selectedCols);
+      }
+    });
+    if (!changed) {
       status("Delete Frame made no changes", "warn");
       return false;
     }
-
-    state.anims = removeSemanticFramesFromAnims(targetFrames);
-    remapFrameGroupsAfterDeletion(targetFrames);
-    rebuildGridWithAuthoringCols(keepCols);
-    recomputeFrameGeometry();
-
-    const nextSemanticFrames = semanticFrameCount();
-    const selectionFrame = Math.max(0, Math.min(nextSemanticFrames - 1, targetFrames[0]));
-    const nextRows = selectedRows.length ? selectedRows : [focusRow];
-    const repairedCoords = [];
-    for (const row of nextRows) {
-      for (const col of semanticFrameAuthoringCols(selectionFrame, nextSemanticFrames, projections)) {
-        repairedCoords.push({ row, col });
-      }
-    }
-    const repairedRow = Math.max(0, Math.min(state.angles - 1, focusRow));
-    const repairedCols = semanticFrameAuthoringCols(selectionFrame, nextSemanticFrames, projections);
-    const repairedCol = repairedCols.length ? repairedCols[0] : 0;
-    setGridSelection(repairedCoords, {
-      anchor: { row: repairedRow, col: repairedCol },
-      focus: { row: repairedRow, col: repairedCol },
-    });
-    if (state.inspectorOpen) {
-      state.inspectorRow = state.selectedRow;
-      state.inspectorCol = Math.min(...state.selectedCols);
-    }
-    renderAll();
-    saveSessionState("grid-delete-frame");
     status(`Deleted ${targetFrames.length} semantic frame slot(s)`, "ok");
     return true;
   }
@@ -6180,40 +6172,43 @@
       return false;
     }
 
-    pushHistory();
     let inserted = 0;
     let rowsInserted = 0;
     let firstRow = null;
     let firstRowCols = [];
-    for (let rOff = 0; rOff < rowGroups.length; rOff++) {
-      const row = targetRow + rOff;
-      if (row < 0 || row >= state.angles) break;
-      const group = rowGroups[rOff];
-      const usable = group.boxes.filter((_b, i) => (startCol + i) < totalCols);
-      if (!usable.length) continue;
-      rowsInserted += 1;
-      const colsUsed = [];
-      for (let i = 0; i < usable.length; i++) {
-        const col = startCol + i;
-        const cells = frameCellsFromSourceBox(usable[i]);
-        if (!cells) continue;
-        writeSourceCellsToFrame(row, col, cells);
-        inserted += 1;
-        colsUsed.push(col);
+    const changed = commitWholeSheetDocumentMutation("drop-source-selection-to-grid", function() {
+      for (let rOff = 0; rOff < rowGroups.length; rOff++) {
+        const row = targetRow + rOff;
+        if (row < 0 || row >= state.angles) break;
+        const group = rowGroups[rOff];
+        const usable = group.boxes.filter((_b, i) => (startCol + i) < totalCols);
+        if (!usable.length) continue;
+        rowsInserted += 1;
+        const colsUsed = [];
+        for (let i = 0; i < usable.length; i++) {
+          const col = startCol + i;
+          const cells = frameCellsFromSourceBox(usable[i]);
+          if (!cells) continue;
+          writeSourceCellsToFrame(row, col, cells);
+          inserted += 1;
+          colsUsed.push(col);
+        }
+        if (firstRow === null && colsUsed.length) {
+          firstRow = row;
+          firstRowCols = colsUsed;
+        }
       }
-      if (firstRow === null && colsUsed.length) {
-        firstRow = row;
-        firstRowCols = colsUsed;
+      if (firstRow !== null && firstRowCols.length) {
+        setGridSelection(firstRowCols.map((col) => ({ row: firstRow, col })), {
+          anchor: { row: firstRow, col: firstRowCols[0] },
+          focus: { row: firstRow, col: firstRowCols[0] },
+        });
       }
+    });
+    if (!changed) {
+      status("Drop selected source sprites made no changes", "warn");
+      return false;
     }
-    if (firstRow !== null && firstRowCols.length) {
-      setGridSelection(firstRowCols.map((col) => ({ row: firstRow, col })), {
-        anchor: { row: firstRow, col: firstRowCols[0] },
-        focus: { row: firstRow, col: firstRowCols[0] },
-      });
-    }
-    renderAll();
-    saveSessionState("drop-source-selection-to-grid");
     status(`Dropped ${inserted} source sprite box(es) into ${rowsInserted} grid row(s)`, inserted > 0 ? "ok" : "warn");
     return inserted > 0;
   }
@@ -6264,11 +6259,14 @@
       status("Failed to rasterize source box", "err");
       return false;
     }
-    pushHistory();
-    writeSourceCellsToFrame(state.selectedRow, col, cells);
-    setGridSelection([{ row: state.selectedRow, col }], { anchor: { row: state.selectedRow, col }, focus: { row: state.selectedRow, col } });
-    renderAll();
-    saveSessionState("source-box-to-row-seq");
+    const changed = commitWholeSheetDocumentMutation("source-box-to-row-seq", function() {
+      writeSourceCellsToFrame(state.selectedRow, col, cells);
+      setGridSelection([{ row: state.selectedRow, col }], { anchor: { row: state.selectedRow, col }, focus: { row: state.selectedRow, col } });
+    });
+    if (!changed) {
+      status("Insert source sprite made no changes", "warn");
+      return false;
+    }
     status(`Inserted source sprite into row ${state.selectedRow}, col ${col}`, "ok");
     return true;
   }
@@ -6351,10 +6349,10 @@
     }
     const coords = selectedFrameCoordsSorted();
     if (!coords.length) return;
-    pushHistory();
-    for (const coord of coords) clearFrame(coord.row, coord.col);
-    renderAll();
-    saveSessionState("delete");
+    const changed = commitWholeSheetDocumentMutation("delete", function() {
+      for (const coord of coords) clearFrame(coord.row, coord.col);
+    });
+    if (!changed) return;
   }
 
   function swapRowBlocks(r1, r2) {
@@ -6389,15 +6387,15 @@
     if (state.selectedRow === null) return;
     const target = state.selectedRow + delta;
     if (target < 0 || target >= state.angles) return;
-    pushHistory();
-    swapRowBlocks(state.selectedRow, target);
-    const cols = selectedFrameColsSorted();
-    setGridSelection(cols.map((col) => ({ row: target, col })), {
-      anchor: { row: target, col: cols[0] ?? 0 },
-      focus: { row: target, col: cols[0] ?? 0 },
+    const changed = commitWholeSheetDocumentMutation("row-move", function() {
+      swapRowBlocks(state.selectedRow, target);
+      const cols = selectedFrameColsSorted();
+      setGridSelection(cols.map((col) => ({ row: target, col })), {
+        anchor: { row: target, col: cols[0] ?? 0 },
+        focus: { row: target, col: cols[0] ?? 0 },
+      });
     });
-    renderAll();
-    saveSessionState("row-move");
+    if (!changed) return;
   }
 
   function swapColBlocks(c1, c2) {
@@ -6432,16 +6430,16 @@
     const maxCol = Math.max(0, authoringFrameCols() - 1);
     if (delta < 0 && cols[0] <= 0) return;
     if (delta > 0 && cols[cols.length - 1] >= maxCol) return;
-    pushHistory();
-    const work = delta < 0 ? cols : [...cols].reverse();
-    for (const c of work) swapColBlocks(c, c + delta);
-    const nextCols = cols.map((c) => c + delta);
-    setGridSelection(nextCols.map((col) => ({ row: state.selectedRow, col })), {
-      anchor: { row: state.selectedRow, col: nextCols[0] ?? 0 },
-      focus: { row: state.selectedRow, col: nextCols[0] ?? 0 },
+    const changed = commitWholeSheetDocumentMutation("col-move", function() {
+      const work = delta < 0 ? cols : [...cols].reverse();
+      for (const c of work) swapColBlocks(c, c + delta);
+      const nextCols = cols.map((c) => c + delta);
+      setGridSelection(nextCols.map((col) => ({ row: state.selectedRow, col })), {
+        anchor: { row: state.selectedRow, col: nextCols[0] ?? 0 },
+        focus: { row: state.selectedRow, col: nextCols[0] ?? 0 },
+      });
     });
-    renderAll();
-    saveSessionState("col-move");
+    if (!changed) return;
   }
 
   function assignRowCategory() {
@@ -6657,6 +6655,57 @@
     }
   }
 
+  function getMountedWholeSheetEditor() {
+    const wsEditor = window.__wholeSheetEditor;
+    if (!wsEditor || !wsEditor.getState || !wsEditor.getState().mounted) return null;
+    return wsEditor;
+  }
+
+  function buildWholeSheetDocumentSnapshotFromState() {
+    return {
+      gridCols: Math.max(1, Number(state.gridCols || 1)),
+      gridRows: Math.max(1, Number(state.gridRows || 1)),
+      frameW: Math.max(1, Number(state.frameWChars || state.cellWChars || 1)),
+      frameH: Math.max(1, Number(state.frameHChars || state.cellHChars || 1)),
+      layers: (state.layers || []).map((layer) => deepCloneCells(layer)),
+      layerNames: Array.isArray(state.layerNames) ? [...state.layerNames] : [],
+      activeLayer: Math.max(0, Number(state.activeLayer || 0)),
+      visibleLayers: [...(state.visibleLayers instanceof Set ? state.visibleLayers : [])],
+      lockedLayers: [...(state.lockedLayers instanceof Set ? state.lockedLayers : [])],
+      canvasZoom: Number.isFinite(Number(state.wholeSheetCanvasZoom)) ? Number(state.wholeSheetCanvasZoom) : 0,
+      gridVisible: !!state.wholeSheetGridVisible,
+      gridStep: String(state.wholeSheetGridStep || "frame"),
+      gridCustomW: Math.max(1, Number(state.wholeSheetGridCustomW || 1)),
+      gridCustomH: Math.max(1, Number(state.wholeSheetGridCustomH || 1)),
+    };
+  }
+
+  function wholeSheetDocumentSnapshotKey(snapshot) {
+    return JSON.stringify(snapshot || {});
+  }
+
+  function replaceWholeSheetDocumentSnapshot(snapshot, reason) {
+    const nextSnapshot = snapshot || buildWholeSheetDocumentSnapshotFromState();
+    const wsEditor = getMountedWholeSheetEditor();
+    if (wsEditor && typeof wsEditor.replaceDocumentSnapshot === "function") {
+      return !!wsEditor.replaceDocumentSnapshot(nextSnapshot, reason);
+    }
+    if (!applyWholeSheetDocumentSnapshot(nextSnapshot)) return false;
+    markSessionDirty(`whole-sheet-${String(reason || "document")}`);
+    renderInspector();
+    saveSessionState(`whole-sheet-${String(reason || "document")}`);
+    return true;
+  }
+
+  function commitWholeSheetDocumentMutation(reason, mutate) {
+    const beforeSnapshot = getWholeSheetDocumentSnapshot() || buildWholeSheetDocumentSnapshotFromState();
+    const beforeKey = wholeSheetDocumentSnapshotKey(beforeSnapshot);
+    if (typeof mutate === "function") mutate();
+    const afterSnapshot = buildWholeSheetDocumentSnapshotFromState();
+    if (wholeSheetDocumentSnapshotKey(afterSnapshot) === beforeKey) return false;
+    return replaceWholeSheetDocumentSnapshot(afterSnapshot, reason);
+  }
+
   function applyWholeSheetDocumentSnapshot(snapshot) {
     if (!snapshot || !Array.isArray(snapshot.layers) || !snapshot.layers.length) return false;
     state.layers = snapshot.layers.map((layer) => deepCloneCells(layer));
@@ -6685,6 +6734,7 @@
     renderSession();
     const row = state.selectedRow === null ? 0 : state.selectedRow;
     renderPreviewFrame(Math.max(0, Math.min(state.angles - 1, row)), 0);
+    renderInspector();
     updateClassicGeometryControls();
     updateSessionDirtyBadge();
     return true;
@@ -6737,18 +6787,15 @@
       status("Selected layer is read-only. Switch to Visual layer (2) to edit.", "warn");
       return false;
     }
-    const wasDirty = !!state.sessionDirty;
     const beforeSig = gridFrameSignature(coord.row, coord.col);
-    pushHistory();
-    writeFrameCellMatrix(coord.row, coord.col, state.inspectorFrameClipboard);
+    const changed = commitWholeSheetDocumentMutation("grid-paste-frame", function() {
+      writeFrameCellMatrix(coord.row, coord.col, state.inspectorFrameClipboard);
+    });
     const afterSig = gridFrameSignature(coord.row, coord.col);
-    if (String(beforeSig) === String(afterSig)) {
-      revertNoopHistory(wasDirty);
+    if (!changed || String(beforeSig) === String(afterSig)) {
       status("Paste frame made no changes", "warn");
       return false;
     }
-    renderAll();
-    saveSessionState("grid-paste-frame");
     status(`Pasted frame into row=${coord.row} col=${coord.col}`, "ok");
     return true;
   }
@@ -6797,25 +6844,25 @@
     if (fr === tr && fc === tc) return false;
     const src = inspectorFrameCellMatrix(fr, fc);
     const dst = inspectorFrameCellMatrix(tr, tc);
-    const wasDirty = !!state.sessionDirty;
-    pushHistory();
-    if (String(mode) === "swap") {
-      writeFrameCellMatrix(tr, tc, src);
-      writeFrameCellMatrix(fr, fc, dst);
-    } else {
-      writeFrameCellMatrix(tr, tc, src);
-    }
+    const changed = commitWholeSheetDocumentMutation(
+      String(mode) === "swap" ? "grid-cell-swap" : "grid-cell-replace",
+      function() {
+        if (String(mode) === "swap") {
+          writeFrameCellMatrix(tr, tc, src);
+          writeFrameCellMatrix(fr, fc, dst);
+        } else {
+          writeFrameCellMatrix(tr, tc, src);
+        }
+      }
+    );
     const srcAfter = inspectorFrameCellMatrix(fr, fc);
     const dstAfter = inspectorFrameCellMatrix(tr, tc);
-    const changed = !frameCellMatricesEqual(src, dstAfter) || (String(mode) === "swap" && !frameCellMatricesEqual(dst, srcAfter));
-    if (!changed) {
-      revertNoopHistory(wasDirty);
+    const changedCells = !frameCellMatricesEqual(src, dstAfter) || (String(mode) === "swap" && !frameCellMatricesEqual(dst, srcAfter));
+    if (!changed || !changedCells) {
       status(`Grid ${mode} made no changes`, "warn");
       return false;
     }
     setGridSelection([{ row: tr, col: tc }], { anchor: { row: tr, col: tc }, focus: { row: tr, col: tc } });
-    renderAll();
-    saveSessionState(String(mode) === "swap" ? "grid-cell-swap" : "grid-cell-replace");
     status(String(mode) === "swap"
       ? `Swapped frame row=${fr} col=${fc} with row=${tr} col=${tc}`
       : `Replaced target row=${tr} col=${tc} with dragged frame row=${fr} col=${fc}`, "ok");
@@ -7988,7 +8035,13 @@
       renderPreviewFrame(row, 0);
     });
     $("layerSelect").addEventListener("change", () => {
-      state.activeLayer = Math.max(0, Number($("layerSelect").value || 2));
+      const nextLayer = Math.max(0, Number($("layerSelect").value || 2));
+      const wsEditor = getMountedWholeSheetEditor();
+      if (wsEditor && typeof wsEditor.setActiveLayer === "function") {
+        wsEditor.setActiveLayer(nextLayer);
+        return;
+      }
+      state.activeLayer = nextLayer;
       renderAll();
     });
     $("layerVisibility").addEventListener("change", (e) => {
@@ -7997,6 +8050,11 @@
       if (t.type !== "checkbox") return;
       const layer = Number(t.dataset.layer || -1);
       if (layer < 0) return;
+      const wsEditor = getMountedWholeSheetEditor();
+      if (wsEditor && typeof wsEditor.setLayerVisibility === "function") {
+        wsEditor.setLayerVisibility(layer, !!t.checked);
+        return;
+      }
       if (t.checked) state.visibleLayers.add(layer);
       else state.visibleLayers.delete(layer);
       if (state.visibleLayers.size === 0) {
@@ -8137,10 +8195,6 @@
         state.inspectorStrokeWasDirty = !!state.sessionDirty;
       }
       let changed = false;
-      if (state.inspectorPainting && (state.inspectorTool === "paint" || state.inspectorTool === "erase" || state.inspectorTool === "glyph") && !state.inspectorStrokeHadHistory) {
-        pushHistory();
-        state.inspectorStrokeHadHistory = true;
-      }
       if (state.inspectorTool === "glyph") {
         changed = applyInspectorGlyphAtCell(hit);
       } else {
@@ -8148,7 +8202,8 @@
       }
       if (changed) state.inspectorStrokeChanged = true;
       if (changed) {
-        renderAll();
+        renderInspector();
+        queueDirtyFrameGridRefresh({ updatePreview: true });
       }
       if (state.inspectorTool === "dropper" || state.inspectorTool === "inspect") {
         state.inspectorPainting = false;
@@ -8173,14 +8228,12 @@
       if (state.inspectorTool !== "paint" && state.inspectorTool !== "erase" && state.inspectorTool !== "glyph") return;
       const hit = hoverHit;
       if (!hit) return;
-      if (!state.inspectorStrokeHadHistory) {
-        state.inspectorStrokeWasDirty = !!state.sessionDirty;
-        pushHistory();
-        state.inspectorStrokeHadHistory = true;
-      }
       const changed = state.inspectorTool === "glyph" ? applyInspectorGlyphAtCell(hit) : applyInspectorToolAt(hit);
       if (changed) state.inspectorStrokeChanged = true;
-      if (changed) renderAll();
+      if (changed) {
+        renderInspector();
+        queueDirtyFrameGridRefresh({ updatePreview: true });
+      }
     });
     $("cellInspectorCanvas").addEventListener("mouseleave", () => {
       setInspectorHoverFromHit(null);

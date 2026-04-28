@@ -42,6 +42,16 @@ test('whole-sheet edit completion no longer writes wrapper history', () => {
   );
 });
 
+test('wrapper render path no longer force-syncs the root whole-sheet editor', () => {
+  const renderAllBlock = workbenchJs.match(/function renderAll\(\)\s*\{[\s\S]*?\n  \}/);
+  assert.ok(renderAllBlock, 'expected renderAll() block');
+  assert.equal(
+    /syncWholeSheetFromState\(\)/.test(renderAllBlock[0]),
+    false,
+    'renderAll() must not push blanket whole-sheet syncs on every wrapper render'
+  );
+});
+
 test('ordinary whole-sheet stroke completion avoids full frame-grid rebuilds', () => {
   const strokeBlock = workbenchJs.match(/onStrokeComplete:\s*function\(\)\s*\{[\s\S]*?\n\s*\},\n\s*onSave:/);
   assert.ok(strokeBlock, 'expected whole-sheet onStrokeComplete callback');
@@ -74,5 +84,41 @@ test('ordinary whole-sheet stroke completion queues autosave instead of serializ
     strokeBlock[0],
     /queueWholeSheetAutosave/,
     'ordinary whole-sheet stroke completion should hand off persistence to the autosave queue'
+  );
+});
+
+test('whole-sheet root exports a document replacement API for wrapper button flows', () => {
+  assert.match(
+    wholeSheetInitJs,
+    /function replaceDocumentSnapshot\(/,
+    'whole-sheet-init.js should define replaceDocumentSnapshot()'
+  );
+  assert.match(
+    wholeSheetInitJs,
+    /window\.__wholeSheetEditor\s*=\s*\{[\s\S]*replaceDocumentSnapshot/,
+    'whole-sheet public API should expose replaceDocumentSnapshot()'
+  );
+});
+
+test('whole-sheet resize is no longer constrained by wrapper frame topology', () => {
+  const resizeBlock = wholeSheetInitJs.match(/async function _promptResizeDocument\(\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(resizeBlock, 'expected _promptResizeDocument() block');
+  assert.equal(
+    /Resize must preserve the current frame topology/.test(resizeBlock[0]),
+    false,
+    'whole-sheet resize prompt must not enforce wrapper frame-topology divisibility'
+  );
+});
+
+test('wrapper layer controls delegate to the mounted whole-sheet editor API', () => {
+  assert.match(
+    workbenchJs,
+    /\$\("layerSelect"\)\.addEventListener\("change", \(\) => \{[\s\S]*wsEditor\.setActiveLayer/,
+    'layerSelect control should delegate active-layer changes to whole-sheet editor'
+  );
+  assert.match(
+    workbenchJs,
+    /\$\("layerVisibility"\)\.addEventListener\("change", \(e\) => \{[\s\S]*wsEditor\.setLayerVisibility/,
+    'layerVisibility control should delegate visibility changes to whole-sheet editor'
   );
 });

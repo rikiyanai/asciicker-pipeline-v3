@@ -3471,28 +3471,18 @@ function _resizeLayerStack(nextCols, nextRows) {
 }
 
 async function _promptResizeDocument() {
-  const frameCols = Math.max(1, Math.round(editorState.gridCols / Math.max(1, editorState.frameW)));
-  const frameRows = Math.max(1, Math.round(editorState.gridRows / Math.max(1, editorState.frameH)));
   const raw = window.prompt('Resize image (cols x rows)', `${editorState.gridCols}x${editorState.gridRows}`);
   if (raw === null) return false;
   const match = String(raw).trim().match(/^(\d+)\s*[x, ]\s*(\d+)$/i);
   if (!match) return false;
   const nextCols = Math.max(1, Number(match[1]));
   const nextRows = Math.max(1, Number(match[2]));
-  if ((nextCols % frameCols) !== 0 || (nextRows % frameRows) !== 0) {
-    window.alert(`Resize must preserve the current frame topology (${frameCols} column groups x ${frameRows} row groups).`);
-    return false;
-  }
-  const nextFrameW = Math.max(1, Math.floor(nextCols / frameCols));
-  const nextFrameH = Math.max(1, Math.floor(nextRows / frameRows));
   if (!editorState._strokeDirty) _beginDocumentTransaction();
   const changed = _resizeLayerStack(nextCols, nextRows);
   if (!changed) {
     _cancelDocumentTransaction();
     return false;
   }
-  editorState.frameW = nextFrameW;
-  editorState.frameH = nextFrameH;
   editorState._strokeDirty = true;
   _commitLayerMutation();
   _applyCanvasZoom({ preserveCenter: true });
@@ -3962,6 +3952,21 @@ function getDocumentSnapshot() {
   return _buildDocumentSnapshot();
 }
 
+function replaceDocumentSnapshot(snapshot, reason = 'document-replace', opts = {}) {
+  if (!editorState.mounted || !editorState.canvas || !snapshot) return false;
+  if (editorState._strokeDirty) _commitLayerMutation();
+  if (opts.recordHistory !== false) {
+    editorState.history.push(_buildDocumentSnapshot());
+    if (editorState.history.length > HISTORY_LIMIT) editorState.history.shift();
+    editorState.future = [];
+    editorState._pendingHistorySnapshot = null;
+    _updateHistoryButtons();
+  }
+  const applied = _applyDocumentSnapshot(snapshot);
+  if (applied) _emitDocumentStateChange(String(reason || 'document-replace'));
+  return applied;
+}
+
 function undo() {
   if (!editorState.mounted || editorState.history.length === 0) return false;
   if (editorState._strokeDirty) _commitLayerMutation();
@@ -3996,6 +4001,7 @@ window.__wholeSheetEditor = {
   syncFromState,
   getState,
   getDocumentSnapshot,
+  replaceDocumentSnapshot,
   undo,
   redo,
   setDrawState,

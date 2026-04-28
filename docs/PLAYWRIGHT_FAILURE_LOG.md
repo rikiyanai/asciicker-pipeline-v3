@@ -8,6 +8,72 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Audit — Wrapper Mutation Paths Now Delegate Through The Root Document Owner (2026-04-27)
+
+This is a code-state correction entry. It does not claim a new Section 1
+feature. Earlier same-day `UQ-002` / `UQ-003` closure prose already said the
+root-owner law was satisfied, but the committed baseline still left several
+wrapper-owned mutation paths alive. This slice makes those earlier claims true
+in code.
+
+### What changed
+
+1. `web/whole-sheet-init.js` now exports a root API for wrapper-owned button
+   flows:
+   - `replaceDocumentSnapshot(snapshot, reason)`
+2. `web/workbench.js` now routes wrapper-side document mutations through that
+   root API instead of keeping local history/render/save authority:
+   - row/frame move and delete
+   - inspector selection transforms / clear / fill / replace / find-replace
+   - source-to-grid insert/drop flows
+   - frame paste / drag-replace / drag-swap
+3. Wrapper layer controls now delegate directly into the mounted root owner:
+   - `#layerSelect` -> `wsEditor.setActiveLayer(...)`
+   - `#layerVisibility` -> `wsEditor.setLayerVisibility(...)`
+4. Root resize no longer enforces wrapper frame-topology divisibility. The
+   whole-sheet document can resize as a document first, rather than preserving
+   legacy frame group math as an owner law.
+5. Ordinary wrapper render passes no longer blanket-sync the mounted
+   whole-sheet editor back from wrapper state.
+
+### Why this entry exists
+
+1. `docs/PLAYWRIGHT_FAILURE_LOG.md` and the canonical spec already claimed:
+   - wrapper layer controls delegate to the root owner
+   - root resize is not constrained by wrapper frame topology
+   - wrapper render no longer force-syncs the root owner
+2. The committed baseline before this slice still contradicted those claims:
+   - `layerSelect` / `layerVisibility` mutated wrapper state directly
+   - `_promptResizeDocument()` rejected sizes that broke wrapper frame-group
+     divisibility
+   - wrapper mutation helpers still relied on local `pushHistory()` +
+     `renderAll()` + `saveSessionState()` ownership
+3. This slice closes that doc/code mismatch instead of adding a second owner
+   path.
+
+### Verification evidence
+
+1. Owner-boundary regression guard:
+   - `node --test tests/web/whole-sheet-history-ownership.test.mjs`
+   - PASS (`8 tests`)
+2. Whole-sheet cell semantics:
+   - `node --test tests/web/whole-sheet-cell-ops.test.mjs`
+   - PASS (`3 tests`)
+3. Wheel/layer input policy:
+   - `node --test tests/web/whole-sheet-input-policy.test.mjs`
+   - PASS (`3 tests`)
+4. Clipboard ownership helpers:
+   - `node --test tests/web/whole-sheet-clipboard.test.mjs`
+   - PASS (`4 tests`)
+
+### Still open after this slice
+
+1. This is repo-test / code-state proof for the corrected owner boundary. It
+   does not add a new headed verifier lane for every wrapper-only mutation
+   family rerouted here.
+2. Broader human UI testing remains required; this slice only closes the code
+   contradiction against same-day root-owner claims.
+
 ## Audit — Section 1 Accessibility / UX Follow-Up (2026-04-27)
 
 This is a follow-up audit entry after the same-day whole-sheet proof pass. It is
