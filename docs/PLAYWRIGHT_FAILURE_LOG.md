@@ -10560,6 +10560,50 @@ owners are still authoritative.
 
 ---
 
+### PG-007 — Section 2 execution slice matrix (backend → quality → manifest → gateway) [READY]
+
+**Scope:** `docs/plans/2026-03-23-workbench-canonical-spec.md` Section 2 queue
+decomposition, `src/pipeline_v2/app.py`, `src/pipeline_v2/service.py`,
+`web/workbench.html`, `web/workbench.js`, `scripts/workbench_mcp_server.py`
+
+Section 2 was still underspecified at the execution level even after the
+deletion-first cutover card. The spec now needs to state:
+
+1. the exact live gaps by surface
+2. the locked design decisions that are no longer up for reopening
+3. the required UI changes that follow from the new owner model
+4. the robot-sized slice order inside `UQ-004` through `UQ-010`
+
+**Required decomposition:**
+
+1. `UQ-004`
+   - `S2-R1` remove live backend `family` / `ENABLED_FAMILIES` authority
+   - `S2-R2` make registry failures operator-visible
+2. `UQ-005`
+   - `S2-R3` use one shared quality evaluator at export/web-payload boundary
+   - `S2-R4` lock G8/G9 policy and report shape
+3. `UQ-006`
+   - `S2-R5` sidecar source-manifest plumbing and session-authority deletion
+   - `S2-R6` manifest-first source-panel UI
+   - `S2-R7` shared headless mark/materialize/validate/status surface
+4. `UQ-007`
+   - `S2-R8` runtime proof for `item.world_item` and `item.inventory_grid`
+5. `UQ-008`
+   - `S2-R9` mounted `wolfie` / `wolack` authoring/runtime parity
+6. `UQ-010`
+   - `S2-R10` wire browser, MCP, launcher, and Y9-2 bundle wizard to the
+     shared owner
+
+**Pass condition:** Section 2 queue rows are no longer broad prose only; each
+row now has an exact execution surface and slice ordering that can be audited
+against live code.
+
+**Stop / fail condition:** any future queue or UI work collapses these slices
+back into vague “finish Section 2” language, or pulls `S2-R10` client wiring
+ahead of the backend/manifest ownership cleanup slices.
+
+---
+
 ## Section 1 Performance And Architecture Audit (2026-04-27)
 
 Research-driven audit of the whole-sheet editor (Section 1) as a REXPaint

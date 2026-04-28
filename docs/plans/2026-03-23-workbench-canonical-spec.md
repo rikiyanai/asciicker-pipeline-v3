@@ -2098,6 +2098,126 @@ The live wrapper architecture is still misaligned in these exact ways after the
 | **GAP: No wearable or item templates, and no backend parity runner for wearable slot/style contracts** | `config/template_registry.json`, `scripts/xp_fidelity_test/`, `tests/` | Pipeline-v2 has no wearable/item authoring surface, and there is no structural-contract runner that proves the local schema matches Y9-2 slot/style truth. That means gold/dark/default wearable semantics are still only partially covered by ad hoc runtime or engine-side knowledge. Tracked as S2-FAM-04. |
 | **GAP: Semantic runtime contract is now modeled, but runtime selector proof is still missing** | `scripts/xp_fidelity_test/bundle_contract.mjs`, `scripts/xp_fidelity_test/run_semantic_runtime_contract_test.mjs`, `tests/xp_fidelity_test/semantic_runtime_contract.test.mjs`, `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs`, `scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs`, `config/template_registry.json`, `Y9-2 server/network.h`, `Y9-2 engine/inventory.h`, `Y9-2 scripts/pipeline/staging/appearance_bundle/phase2-positive/appearance_bundle.json` | This repo now explicitly models the minimum 7 semantic runtime rows plus mounted blockers, so the contract gap is no longer silent. But the only headed/browser/runtime proof lanes still center on authoring actions such as `idle`, `attack`, and `death`, and item/world/inventory semantic rows still have no runtime-facing verifier lane. Generalized bundle-port readiness therefore remains blocked on actual semantic selector proof, not just contract modeling. |
 
+#### 2.5.1 Exact Live Gap Inventory By Surface
+
+The rows above are the canonical misalignment ledger. This subsection turns them
+into exact implementation gaps by live surface so Section 2 execution can be
+queued without hand-waving.
+
+| Surface | Live owner(s) | Exact gap | Must change in |
+|---------|---------------|-----------|----------------|
+| Bundle creation API | `src/pipeline_v2/app.py::api_wb_bundle_create()`, `src/pipeline_v2/service.py::create_bundle()` | Still takes `template_set_key` and seeds bundle state through legacy template-family language instead of a bundle blueprint / presentation-target contract | `UQ-004`, `UQ-010` |
+| Conversion API | `src/pipeline_v2/app.py::api_wb_action_grid_apply()`, `src/pipeline_v2/service.py::bundle_action_run()` | Still accepts only `{bundle_id, action_key, source_path}`. There is no request artifact, no manifest path owner, and no separate intake / convert / register / compile phases | `UQ-006`, `UQ-010` |
+| Session persistence | `src/pipeline_v2/service.py::workbench_save_session()` | Still persists `source_boxes`, `source_cuts_v`, and `source_cuts_h` as saved authority | `UQ-006` |
+| Registry authority | `src/pipeline_v2/service.py::create_bundle()`, `workbench_create_blank_session()`, `workbench_export_bundle()`, `workbench_web_skin_bundle_payload()` | Live bundle/runtime/export paths still branch on compat `family` and `ENABLED_FAMILIES` | `UQ-004` |
+| Registry operator visibility | `src/pipeline_v2/service.py::load_template_registry()`, `web/workbench.js::fetchTemplateRegistry()` | Missing or malformed registry still degrades too quietly: empty fallback cache, `preview_xp` fallback to `l0_ref`, and silent client empty-state behavior | `UQ-004` |
+| Export-quality contract | `src/pipeline_v2/service.py::_run_structural_gates()`, `workbench_export_bundle()`, `workbench_web_skin_bundle_payload()` | Export/web payload paths still enforce only G10-G12; G7-G9 are not part of the export stop gate | `UQ-005` |
+| Headless validation surface | `scripts/workbench_mcp_server.py`, `src/pipeline_v2/app.py` | Live MCP/API surface is still the older workbench wrapper. There is no shared `validate-xp`, `status`, `register-skin-request`, or `compile-skin-request` owner | `UQ-005`, `UQ-010` |
+| Browser bundle UI | `web/workbench.html`, `web/workbench.js` | User-facing controls still speak in template/bundle-action terms and do not expose request-artifact lifecycle, manifest ownership, or explicit register/compile phases | `UQ-006`, `UQ-010` |
+| Source panel UI | `web/workbench.html#source`, `web/workbench.js` source-box/cut handlers | Source slicing is interactive but not manifest-first; there is no explicit sidecar path, save/load status, or per-region presentation assignment workflow | `UQ-006` |
+| Y9-2 client parity | `scripts/pipeline/bundle_wizard/main.py` in Y9-2 vs `pipeline-v3` workbench routes | Y9-2 has a useful local request-artifact flow, but it is still a separate owner rather than a thin client over shared commands | `UQ-010` |
+| Semantic runtime proof | `scripts/xp_fidelity_test/` plus headed runtime lanes | The minimum 7-row semantic contract is modeled, but item/world/inventory runtime proof is still absent | `UQ-007` |
+| Mounted-family parity | `config/template_registry.json`, runtime scope helpers, Y9-2 bundle truth | `wolfie` / `wolack` exist as declared runtime prefixes, but there is still no mounted authoring surface, builder, or proof lane | `UQ-008` |
+
+#### 2.5.2 Locked Design Decisions For Section 2
+
+The following design decisions are now fixed. Later implementation may refine
+mechanics, but it may not reopen these decisions without a canon change.
+
+1. Section 1 stays Section 1. The whole-sheet XP editor remains the root
+   document owner. Section 2 may not absorb or redefine it.
+2. The user-facing workflow shape stays familiar: upload, slice, drag, inspect,
+   validate, and export/compile. The paradigm change is in naming and state
+   ownership, not in making the tool fundamentally less direct.
+3. `template set` / `action key` are no longer the canonical user-facing
+   selection nouns. The replacement nouns are `bundle blueprint`,
+   `presentation target`, `source manifest`, `materialized XP`, and
+   `compile bundle`.
+4. One versioned request artifact owns cross-presentation bundle-authoring
+   progress. Per-presentation root sessions remain editable artifacts, but they
+   do not become the cross-client workflow owner.
+5. Separate-file and combined-sheet intake are both valid, but their authority
+   differs:
+   - separate-file intake may stay the easier default path
+   - combined-sheet intake must use one canonical
+     `<source>.asciicker-source.json` sidecar
+6. Intake may be permissive; canonical mutation is not. Walk-only intake
+   validation may pass, but register/compile for the current skin lane must
+   require walk + attack + death coverage.
+7. Every safety check that matters to users or agents must be reachable through
+   the shared headless contract. No browser-only or launcher-only protection is
+   allowed to remain authoritative.
+8. Current-scope closure is still on-foot skin authoring. Wearables, items, and
+   mounted-family authoring remain later rows and must not be pulled forward to
+   avoid unresolved current-scope gaps.
+
+#### 2.5.3 Required UI Changes
+
+Section 2 UI changes are now specific enough to execute. These are not optional
+polish; they are the visible shape of the ownership cutover.
+
+| Current UI surface | Required change | Why |
+|--------------------|-----------------|-----|
+| `templateSelect` + `Apply Template` | Keep the basic entry control but rename/reframe it as blueprint selection and bundle-authoring start. The action must create or load a bundle-authoring request context, not sell itself as template application. | Removes false template-first product language while preserving a familiar top-of-workflow action |
+| `bundleActionTabs` | Rename and restyle as presentation-target coverage tabs/status chips. Status must show coverage and workflow state, not only converted/saved action state. | The user is authoring bundle contributions, not isolated template actions |
+| `templateGuide`, `templateStatus`, `uploadPanelLabel` copy | Rewrite around `Single XP` vs `Bundle Authoring` modes, and around intake / convert / register / compile phases. Remove “Bundle mode” and “Classic workflow” copy that still assumes template-first semantics. | Product language must match the new owner model |
+| Upload + Convert panel | Split one overloaded panel into explicit staged actions: `Validate Intake`, `Convert`, `Register Dry-Run`, `Register`, `Compile Bundle`, and `Validate XP`. | The current single `Convert to XP` button hides the real lifecycle and cannot represent Y9-2 parity |
+| Source Panel | Add explicit manifest status/path, save/load sidecar affordances, per-region target assignment, and clear derived-vs-authoritative guide labeling. | Source slicing must become canonical-manifest-first rather than session-box-first |
+| Bundle status area | Add request-artifact summary: current blueprint, coverage completeness, blockers, next steps, copied assets, and compile result/provenance. | Browser users need the same state model headless clients use |
+| Whole-sheet panel helper text | Keep Section 1 as primary surface, but explain that Save marks presentation progress while register/compile mutate bundle-level state. | Preserves Section 1 ownership while clarifying Section 2 workflow |
+| Runtime test controls | Keep runtime proof controls, but disable bundle-level runtime actions based on shared bundle-authoring readiness rather than ad hoc local action-tab heuristics. | Runtime gating must reflect the shared contract, not UI-local guesses |
+
+#### 2.5.4 Section 2 Execution Tasks Needed
+
+Section 2 execution is no longer one vague “finish Section 2” task. The needed
+work is the following exact slice stack.
+
+| Slice | Parent row | Files / surfaces | Do exactly this | Done when |
+|-------|------------|------------------|-----------------|-----------|
+| `S2-R1` | `UQ-004` | `src/pipeline_v2/service.py`, `tests/test_template_registry_schema.py`, bundle/runtime/export tests | Extract one registry-derived backend helper and remove live `family` / `ENABLED_FAMILIES` authority from bundle create, blank-session create, bundle run, export, and web-skin payload code | No live Section 2 backend branch takes authority from compat family fields |
+| `S2-R2` | `UQ-004` | `load_template_registry()`, `web/workbench.js::fetchTemplateRegistry()` | Make malformed/missing registry failures operator-visible and fail-closed for authoring surfaces without silently caching empty truth | Registry errors are explicit in backend responses and visible in the UI |
+| `S2-R3` | `UQ-005` | `src/pipeline_v2/service.py` gate/export paths | Refactor one shared quality evaluator and apply it to export-bundle and web-skin payload generation, not only convert-time checks | Export/web payload reject the same failures the quality contract defines |
+| `S2-R4` | `UQ-005` | quality contract docs + gate code | Lock the G8/G9 threshold policy and report shape so browser, MCP, and CI all see the same verdict contract | `validate-xp`, export, and payload paths use the same PASS/WARN/FAIL semantics |
+| `S2-R5` | `UQ-006` | source-manifest library + session save/load | Introduce real sidecar read/write/materialize plumbing and demote `source_boxes` / `source_cuts_*` to derived mirror state | Session save/load no longer owns combined-sheet slicing |
+| `S2-R6` | `UQ-006` | `web/workbench.html`, `web/workbench.js` source panel | Rebuild the source panel around manifest-first editing, sidecar status, and per-region target assignment while preserving the current direct slicer feel | Browser slicing edits one manifest contract rather than local-only arrays |
+| `S2-R7` | `UQ-006` | shared headless surface | Add shared mark/materialize/validate/status commands over the same manifest contract for agents and CLI | Agent and browser paths hit the same source-authoring contract |
+| `S2-R8` | `UQ-007` | semantic runtime proof lanes | Add runtime-facing proof for `item.world_item` and `item.inventory_grid` on top of the already-modeled on-foot rows | Minimum 7-row semantic runtime parity is proven, not only modeled |
+| `S2-R9` | `UQ-008` | mounted authoring/runtime proof | Add mounted presentation-target surfaces plus builder/export/runtime proof for `wolfie` and `wolack` | Mounted rows are authorable and proven on the live contract |
+| `S2-R10` | `UQ-010` | shared CLI/API surface + clients | Land the shared request-artifact/headless contract (`phase0-status`, `phase0-build`, `validate-skin-intake`, `convert-skin-request`, `register-skin-request`, `compile-skin-request`, `validate-xp`, `status`) | Browser, MCP, Y9-2 launcher/wizard, and manual CLI become thin clients over one owner |
+
+#### 2.5.5 Robot Queue Changes Needed
+
+Top-level unified queue order does **not** change. The accepted order remains
+bottom-up:
+
+1. `UQ-004`
+2. `UQ-005`
+3. `UQ-006`
+4. `UQ-007`
+5. `UQ-008`
+6. `UQ-009`
+7. `UQ-010`
+
+What changes is the decomposition inside those rows. Section 2 robot work must
+execute in this exact slice order:
+
+1. `S2-R1` then `S2-R2`
+2. `S2-R3` then `S2-R4`
+3. `S2-R5` then `S2-R6` then `S2-R7`
+4. `S2-R8`
+5. `S2-R9`
+6. `S2-R10`
+
+Queue law for these slices:
+
+1. Do not start `S2-R3` while `S2-R1`/`S2-R2` are still open.
+2. Do not start `S2-R5` UI work until registry authority cleanup has already
+   landed; otherwise the UI is built against mixed backend truth.
+3. Do not start `S2-R10` client wiring while browser, MCP, and Y9-2 still point
+   at different owners.
+4. `UQ-009` remains a support row. It updates proof/harness surfaces after each
+   landed Section 2 slice; it does not pull future product work forward.
+
 ### 2.6 Section-2 Scope Boundary
 
 Section 2 must respect the following boundary:
@@ -2648,7 +2768,7 @@ Legacy-step normalization for older references:
 - The overloaded label "Step 11" is normalized here to exactly one live meaning:
   backend registry-authority cleanup on the normalized registry = `UQ-004`.
 - The Y9-2 launcher/wizard/MCP follow-through work is not Step 11 here. It is
-  `UQ-010`, on top of the already-landed Section 2.10 HTTP backend contract.
+  `UQ-010`, on top of the shared Section 2.10 bundle-authoring contract.
 - `UQ-011` remains the public replacement / cutover lane.
 - `UQ-013` remains the small-screen layout and persistence follow-through lane.
 
@@ -2675,13 +2795,13 @@ Legacy-step normalization for older references:
 | UQ-001 | ALWAYS | Establish repo truth before work | none | Run the repo entry checks, check the failure log first, inspect branch/head/dirty files, and identify unrelated dirt that must be left alone | Current authority docs, branch/head, dirty files, and relevant blockers are known before edits begin | Any unknown dirty change intersects the target files and cannot be safely isolated | Repo rule / `PLAYWRIGHT_FAILURE_LOG.md` |
 | UQ-002 | PASS | Close Section 1 REXPaint parity and root-owner law | UQ-001 complete | Use Section 1.6 and Section 1.8 as the exact scope. Land only root-editor work: resize, browse parity, undo/redo ownership, apply toggles, oval/text tools, pointer events, zoom/grid completeness, and layer keyboard/persistence parity. Keep `whole-sheet-init.js` the sole document owner. Within this row, cut the hot path in this order: move live history out of `workbench.js`, stop full frame-grid rebuilds on ordinary root edits, decouple save/autosave from edit completion, then offload any still-heavy secondary projection/serialization work. | Section 1 no longer has unresolved root-editor parity blockers, the shipped edit path no longer depends on wrapper-owned history or broad wrapper projection churn for ordinary edits, or any residuals are explicitly logged as open with proof state and no mixed ownership survives | Any patch reintroduces a second editor/root owner, leaves the old owner alive while adding a new authoritative path, or treats wrapper-side throttles/suppression flags as closure while wrapper-owned hot-path authority still survives | Section 1 / `FL-STEP4` family / §1.6 |
 | UQ-003 | PASS | Prove the Section 1 foundation on shipped surfaces | UQ-002 pass condition met | Run UI-only headed proof for the root-hosted and prefixed `/xpedit` Section 1 surface using shipped controls only; record evidence and update the ledger honestly | Root-hosted and prefixed Section 1 flows are proven on the shipped UI with no acceptance-boundary violation | Any proof relies on `fetch()`, `page.evaluate()` mutation, hidden hooks, or diagnostic-only paths and is labeled acceptance | Section 3 acceptance law / Section 1 proof |
-| UQ-004 | READY AFTER UQ-002 | Finish backend authority cleanup on the normalized registry | UQ-002 pass condition met | Add backend-focused tests around `create_bundle()`, `workbench_create_blank_session()`, `bundle_action_run()`, `workbench_export_bundle()`, and `workbench_web_skin_bundle_payload()`. Replace live backend `family` / `ENABLED_FAMILIES` gates with one helper derived from normalized registry truth. Demote the compat `family` alias to compatibility-only data. Surface operator-visible registry load/fetch failures. | No live backend bundle/session/export/runtime path still takes authority from `family` or `ENABLED_FAMILIES`; browser and backend both consume the same normalized contract | Any fix restores browser-side fail-close logic, creates a second registry authority, or claims `UQ-004` closure while backend split-authority code remains | Section 2.5 / normalized-registry authority cleanup |
-| UQ-005 | BLOCKED | Close the Section 2 export-quality contract at the wrapper boundary | UQ-004 pass condition met | Wire the full Step 5 quality contract into `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`. Keep the shared `validate-xp` surface aligned with the same contract and do not treat single-XP validation as a substitute for export-path enforcement. | Bundle export and web-skin payload generation reject artifacts that fail the full quality contract, not just G10-G12 | Any closure claim remains contradicted by live service code, or export/web-skin paths still skip G7/G8/G9 | Section 2.4 / quality gates |
-| UQ-006 | BLOCKED | Finish the Section 2 source-wrapper implementation on the canonical manifest contract | UQ-004 pass condition met | Upgrade source authoring from JSON-first manifest editing to direct interactive slicer ergonomics on the same `<source>.asciicker-source.json` contract. Keep `extractedBoxes`, `sourceCutsV`, and `sourceCutsH` derived-only; do not revive session-local source ownership. | Source authoring is no longer JSON-first, and one canonical manifest contract still owns source layout for UI, MCP, and backend paths | Any fix creates a second source-layout model or makes session-local source state authoritative again | Section 2.3 / Step 8 |
+| UQ-004 | READY AFTER UQ-002 | Finish backend authority cleanup on the normalized registry | UQ-002 pass condition met | Execute `S2-R1` then `S2-R2`: add backend-focused tests around `create_bundle()`, `workbench_create_blank_session()`, `bundle_action_run()`, `workbench_export_bundle()`, and `workbench_web_skin_bundle_payload()`; replace live backend `family` / `ENABLED_FAMILIES` gates with one helper derived from normalized registry truth; demote the compat `family` alias to compatibility-only data; surface operator-visible registry load/fetch failures. | No live backend bundle/session/export/runtime path still takes authority from `family` or `ENABLED_FAMILIES`; browser and backend both consume the same normalized contract | Any fix restores browser-side fail-close logic, creates a second registry authority, or claims `UQ-004` closure while backend split-authority code remains | Section 2.5 / `S2-R1` / `S2-R2` |
+| UQ-005 | BLOCKED | Close the Section 2 export-quality contract at the wrapper boundary | UQ-004 pass condition met | Execute `S2-R3` then `S2-R4`: wire the full Step 5 quality contract into `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`, then lock the G8/G9 threshold/report policy. Keep the shared `validate-xp` surface aligned with the same contract and do not treat single-XP validation as a substitute for export-path enforcement. | Bundle export and web-skin payload generation reject artifacts that fail the full quality contract, not just G10-G12 | Any closure claim remains contradicted by live service code, or export/web-skin paths still skip G7/G8/G9 | Section 2.4 / `S2-R3` / `S2-R4` |
+| UQ-006 | BLOCKED | Finish the Section 2 source-wrapper implementation on the canonical manifest contract | UQ-004 pass condition met | Execute `S2-R5` then `S2-R6` then `S2-R7`: land sidecar read/write/materialize plumbing, demote `extractedBoxes` / `sourceCutsV` / `sourceCutsH` to derived mirror state, rebuild the source panel around canonical manifest ownership, and expose the same mark/materialize/validate/status contract to headless clients. | Source authoring is no longer JSON-first, and one canonical manifest contract still owns source layout for UI, MCP, and backend paths | Any fix creates a second source-layout model or makes session-local source state authoritative again | Section 2.3 / `S2-R5` / `S2-R6` / `S2-R7` |
 | UQ-007 | BLOCKED | Close the minimum Section 2 semantic runtime parity row set | UQ-004 through UQ-006 pass conditions met | Implement and prove the minimum semantic row set on runtime-facing lanes: preserve the already-mapped on-foot rows and add the missing `item.world_item` and `item.inventory_grid` rows. Keep the proof runtime-facing; do not confuse contract modeling with runtime closure. | The minimum seven-row semantic parity slice is implemented and proven on honest runtime-facing lanes | Any row is still only modeled, not proven, or the proof surface remains action-tab-only while claiming semantic closure | Section 2.3.9 / semantic parity |
-| UQ-008 | BLOCKED | Extend Section 2 to mounted-family authoring and runtime parity | UQ-007 pass condition met | On top of the normalized registry and minimum semantic rows, add mounted-family authoring/runtime parity for `wolfie` and `wolack`: mounted presentation-target surface, native builder support, export/runtime proof, and mounted semantic-row closure. Keep `bigbee` explicitly deferred unless canon changes. | `wolfie` and `wolack` are authorable/provable on the live Section 2 contract, and mounted rows are no longer “specified_not_authorable” | Any fix pulls `bigbee` into scope without canon change, or adds mounted support via a proof-only shim instead of the live authoring/runtime path | Section 2.5 / mounted parity |
+| UQ-008 | BLOCKED | Extend Section 2 to mounted-family authoring and runtime parity | UQ-007 pass condition met | Execute `S2-R9`: on top of the normalized registry and minimum semantic rows, add mounted-family authoring/runtime parity for `wolfie` and `wolack`: mounted presentation-target surface, native builder support, export/runtime proof, and mounted semantic-row closure. Keep `bigbee` explicitly deferred unless canon changes. | `wolfie` and `wolack` are authorable/provable on the live Section 2 contract, and mounted rows are no longer “specified_not_authorable” | Any fix pulls `bigbee` into scope without canon change, or adds mounted support via a proof-only shim instead of the live authoring/runtime path | Section 2.5 / `S2-R9` |
 | UQ-009 | CURRENT / SUPPORT | Keep Section 3 harness and structural-contract runners aligned to what exists | UQ-001 complete; target Section 1/2 source state exists | Update the Section 3 action graph, headed signoff lanes, and backend schema/contract runners only for the surfaces that actually exist after each landed Section 1/2 slice. Keep acceptance UI-only. Keep backend schema/runtime parity runners separate from UI acceptance. Keep legacy repaint/truth-table entrypoints demoted. | Section 3 proof describes current code honestly: no false-green acceptance lane, no stale action graph, no structural-contract runner claiming UI acceptance | Any verifier lane outruns product reality, uses debug/API mutation as acceptance, or implies mounted/item closure from player-only lanes | Section 3 / harness law |
-| UQ-010 | PARKED | Finish Y9-2 gateway follow-through on the shared bundle-authoring contract | UQ-004 through UQ-009 passed, or user explicitly reprioritizes it after backend truth is stable | Wire launcher / bundle-wizard / MCP front doors to the shared Section 2.10 headless contract (`phase0-status`, `phase0-build`, `validate-skin-intake`, `convert-skin-request`, `register-skin-request`, `compile-skin-request`, `validate-xp`, `status`) and remove any surviving second pipeline owner or local CLI substitution from the execution path. | Y9-2 front doors use the same stable bundle-authoring contract that Section 2 and Section 3 already prove | Any fix creates a second pipeline owner, keeps local subprocess behavior alive as parallel truth, or reclassifies missing contract ownership as launcher-only wiring after Section 2.10 defined the shared owner | Section 2.10 / B-13 / launcher-wiring follow-through |
+| UQ-010 | PARKED | Finish Y9-2 gateway follow-through on the shared bundle-authoring contract | UQ-004 through UQ-009 passed, or user explicitly reprioritizes it after backend truth is stable | Execute `S2-R10`: wire launcher / bundle-wizard / MCP front doors to the shared Section 2.10 headless contract (`phase0-status`, `phase0-build`, `validate-skin-intake`, `convert-skin-request`, `register-skin-request`, `compile-skin-request`, `validate-xp`, `status`) and remove any surviving second pipeline owner or local CLI substitution from the execution path. | Y9-2 front doors use the same stable bundle-authoring contract that Section 2 and Section 3 already prove | Any fix creates a second pipeline owner, keeps local subprocess behavior alive as parallel truth, or reclassifies missing contract ownership as launcher-only wiring after Section 2.10 defined the shared owner | Section 2.10 / `S2-R10` / B-13 |
 | UQ-011 | PARKED | Public replacement / cutover lane | UQ-003 through UQ-010 passed; user explicitly starts cutover | Run the direct public-parity audit against `rikiworld.com/xpedit`, freeze the exact replacement SHA and proof artifacts, validate the `/xpedit` deploy path, deploy the frozen candidate, and re-run headed proof on the live URL | Public replacement is backed by the same root-hosted, prefixed, and public evidence chain with no unresolved earlier-layer blocker | Any earlier row is still open, any public parity check fails, or cutover is claimed from code state alone | Replacement lane / public parity |
 | UQ-012 | ALWAYS | Canon hygiene and anti-overclaiming | Every non-trivial source/doc/proof change | Keep `PLAYWRIGHT_FAILURE_LOG.md`, this canon spec, and any directly-adjacent proof-summary text aligned. Separate code state, proof state, and doc state explicitly. Reopen rows when live code falsifies an earlier closeout. | Authority docs and live source agree, and no stale completion claim survives a contradiction | A lower-priority note, stale sequence summary, or old “COMPLETE” wording contradicts the current failure log or source | Canon authority / process |
 | UQ-013 | PARKED | Small-screen layout and browser persistence follow-through | Core Section 1-3 queue rows passed, or user explicitly reprioritizes | Finish the Section 1.9.1 pointer/touch migration, three-tier persistence model, and narrow-screen layout contract without reopening the Section 1 owner graph | Small-screen/persistence work lands on the proven root editor rather than competing with it | Any fix reopens owner boundaries or is used to dodge unfinished Section 1 parity work | Section 1.9.1 / legacy Step 14 |
@@ -3702,7 +3822,7 @@ not a task plan — it is a gate list. Migration is ready when all blocking gate
 | UQ-007 minimum seven-row semantic runtime parity proven | §Unified Queue `UQ-007` | OPEN |
 | UQ-008 mounted-family parity for `wolfie` / `wolack` proven | §Unified Queue `UQ-008` | OPEN |
 | UQ-009 current-scope Section 3 signoff + contract runners current | §Unified Queue `UQ-009` | PARTIAL |
-| UQ-010 Y9-2 wizard / launcher gateway wired to stable HTTP backend | §Unified Queue `UQ-010` | OPEN |
+| UQ-010 Y9-2 wizard / launcher gateway wired to shared bundle-authoring contract | §Unified Queue `UQ-010` | OPEN |
 | UQ-011 cutover support gates ready (`§2.11`, `§2.12`) | §Unified Queue `UQ-011` | OPEN |
 
 ### Non-Blocking Gaps (required for full parity, not migration gate)
