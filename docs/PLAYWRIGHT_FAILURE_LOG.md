@@ -152,6 +152,38 @@ Still not claimed in this checkpoint:
 2. no browse-model UX change yet
 3. no grid preset / grid replace work yet
 
+## Audit — Whole-Sheet Grid Contrast Darkening (2026-04-27)
+
+This is a narrow UI checkpoint for the first queued post-parity grid slice. It
+does not claim completion of the broader grid roadmap.
+
+### What changed
+
+1. Darkened the whole-sheet cross-mark grid overlay in the canvas owner so the
+   grid is more legible over bright sheets.
+2. Added a narrow canvas-owner assertion for the darker overlay stroke style.
+
+### Verification evidence
+
+1. Direct owner-path check:
+   - imported `web/rexpaint-editor/canvas.js` in the JS REPL
+   - instantiated the canvas with a minimal mock context
+   - toggled grid visibility
+   - verified `strokeStyle = rgba(48,72,96,0.92)`
+2. Root-hosted headed verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_grid_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5071/workbench --out-dir output/ws_grid_root`
+   - PASS (`7/7`)
+3. Prefixed headed verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_grid_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5073/xpedit/workbench --out-dir output/ws_grid_prefixed`
+   - PASS (`7/7`)
+
+### Still open after this slice
+
+1. custom `m x n` grid
+2. layer-0-metadata-derived grid preset
+3. template/action-derived grid presets
+4. grid-scoped replace semantics
+
 ## Audit — Whole-Sheet Clipboard Contract Repair And Section 1 Proof Completion (2026-04-27)
 
 This is a verifier/evidence checkpoint entry. It does not claim a new product

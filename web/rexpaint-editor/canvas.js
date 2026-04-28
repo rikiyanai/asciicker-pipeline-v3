@@ -1140,7 +1140,7 @@ export class Canvas {
       endY = Math.min(endY, regionBounds.y + regionBounds.height);
     }
 
-    this.ctx.strokeStyle = 'rgba(220,230,240,0.7)';
+    this.ctx.strokeStyle = 'rgba(48,72,96,0.92)';
     this.ctx.lineWidth = 1;
     this.ctx.beginPath();
     for (let x = startX; x < endX; x += sx) {

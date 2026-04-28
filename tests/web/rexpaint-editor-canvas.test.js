@@ -116,6 +116,14 @@ if (typeof HTMLCanvasElement === 'undefined') {
       this.strokeRectCalls.push([x, y, w, h]);
     }
 
+    beginPath() {}
+
+    moveTo(x, y) {}
+
+    lineTo(x, y) {}
+
+    stroke() {}
+
     fillText(text, x, y, maxWidth) {}
 
     setLineDash(dash) {
@@ -482,6 +490,16 @@ runner.describe('Canvas Module', () => {
 
     const ctx = canvasElement.getContext('2d');
     expect(ctx.strokeRectCalls.length).toBe(0);
+  });
+
+  runner.it('should use a darker grid overlay stroke for whole-sheet visibility', () => {
+    const canvasElement = document.createElement('canvas');
+    const canvas = new Canvas(canvasElement, 4, 4);
+
+    canvas.setGridVisible(true);
+    const ctx = canvasElement.getContext('2d');
+
+    expect(ctx.strokeStyle).toBe('rgba(48,72,96,0.92)');
   });
 
   runner.it('should composite multiple visible layers in z-order', () => {
