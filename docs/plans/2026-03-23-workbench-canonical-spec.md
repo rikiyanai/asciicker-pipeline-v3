@@ -1106,6 +1106,64 @@ must be intercepted where necessary.
 11. Each open image keeps its own undo journal. Switching images in browse mode
    swaps journals with the active document.
 
+
+#### 1.8.6a Session Kind And Metadata Compatibility Contract
+
+This subsection is the implementation contract for landing the browse/layer-0
+decision without mixing Section 1 editor truth and Section 2 template/runtime
+truth.
+
+1. Persisted workbench sessions must distinguish document kind from template
+   ownership. Minimum required fields:
+   - `session_kind`: one of `root_blank`, `raw_xp`, `pipeline_job`,
+     `template_owned`
+   - `metadata_status`: one of `valid`, `missing`, `invalid`, `generated`
+2. `template_set_key` and `action_key` remain the only authoritative markers of
+   template ownership. Non-empty `template_set_key` means the session is
+   Section 2/template-owned. Empty `template_set_key` means it is a generic
+   Section 1 document regardless of `family` label.
+3. `family` remains compatibility/display data only. It must not decide whether
+   an XP can be opened in the root editor.
+4. `Open` / `Import XP` must accept syntactically valid XP files with one or
+   more layers. A single-base-layer XP is a valid Section 1 document even if it
+   is not sufficient for current Section 2 template/runtime workflows.
+5. Raw XP ingest must stop treating missing or invalid layer-0 template
+   metadata as a fatal open error. Instead:
+   - parse all available layers into the root document
+   - preserve the original layer count and cells
+   - set `metadata_status = valid` when template/runtime metadata parses cleanly
+   - set `metadata_status = missing` when the expected metadata is absent
+   - set `metadata_status = invalid` when metadata is present but malformed
+6. Geometry for raw-XP open must come from the XP itself when template metadata
+   is missing or invalid. Section 2 geometry derivation from layer-0 metadata
+   remains a later wrapper/runtime concern, not an open precondition.
+7. `Save`, `load-session`, browse summaries, and public session payloads must
+   round-trip `session_kind` and `metadata_status` so the browser can apply the
+   correct layer-0 defaults without guessing from `family`.
+8. Layer-0 defaults must derive from session kind:
+   - `raw_xp`, `root_blank`, `pipeline_job`: layer 0 visible and editable by
+     default
+   - `template_owned`: layer 0 may start hidden and locked by default, but it
+     must remain discoverable and intentionally inspectable
+9. Generic `Export XP` remains a Section 1 operation and must work for any
+   session kind by serializing the current root document/layer set. It must not
+   silently inject or rewrite template metadata for raw XP documents.
+10. Template/bundle export and runtime payload endpoints are where metadata
+    compatibility is enforced. For sessions with `metadata_status != valid`
+    where template/runtime metadata is required, those endpoints must fail with
+    an explicit repair/conversion-needed error instead of rewriting the
+    document silently.
+11. Converting a raw XP into a template-compatible session must be an explicit
+    Section 2 action. That action may inject/repair layer-0 metadata, update
+    `metadata_status` to `generated`, and switch the session into
+    `template_owned`, but browse-open itself may not do this implicitly.
+12. Minimum backend proof required before UI work:
+    - raw one-layer XP opens successfully
+    - raw multi-layer XP with no valid metadata opens successfully
+    - save/load/browse preserve `session_kind` and `metadata_status`
+    - generic export preserves raw XP layers without template injection
+    - template/runtime endpoints refuse incompatible metadata with explicit
+      repair-needed errors
 #### 1.8.7 Pointer, Pan, Zoom, And Grid Contract
 
 1. Pointer input follows Section 1.9.1 exactly: Pointer Events are the only

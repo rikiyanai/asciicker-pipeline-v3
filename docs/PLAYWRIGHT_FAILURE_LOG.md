@@ -90,6 +90,42 @@ this repo, not a general REXPaint rule. In this codebase, certain exports and
 template-driven validation read metadata rows from XP layer 0; that is separate
 from how vanilla REXPaint treats its base layer.
 
+## Audit — Browse / Layer-0 Backend Implementation Contract (2026-04-27)
+
+This is a canon-alignment implementation contract entry. It records the backend
+and session-state changes required by the now-decided product model:
+
+1. browse/open must load XP/root-editor documents first
+2. template compatibility is enforced later at wrapper export/runtime points
+3. layer 0 is editable in principle, with stricter defaults only for
+   template-owned sessions
+
+### Backend changes required before UI work
+
+1. XP ingest must stop rejecting raw XP files solely because layer-0 template
+   metadata is missing or malformed.
+2. XP ingest must stop requiring three layers just to open a document; a
+   one-layer base XP is valid Section 1 input.
+3. Persisted session payloads and browse summaries must carry explicit
+   `session_kind` and `metadata_status` fields so the browser does not infer
+   template ownership from `family`.
+4. Generic `Export XP` must serialize the current root document without
+   silently injecting template metadata.
+5. Template/bundle export and runtime payload endpoints must become the
+   explicit refusal boundary for incompatible or missing template metadata.
+6. Any conversion from raw XP to template-compatible session must be an
+   explicit Section 2 repair/conversion action, not a side effect of browse-open
+   or import.
+
+### Minimum proof required before UI patching
+
+1. raw one-layer XP opens
+2. raw multi-layer XP with missing/invalid metadata opens
+3. save/load/browse preserve `session_kind` and `metadata_status`
+4. generic export preserves raw layers without template injection
+5. template/runtime endpoints fail with explicit repair-needed errors instead of
+   hidden mutation
+
 ## Audit — Whole-Sheet Clipboard Contract Repair And Section 1 Proof Completion (2026-04-27)
 
 This is a verifier/evidence checkpoint entry. It does not claim a new product
