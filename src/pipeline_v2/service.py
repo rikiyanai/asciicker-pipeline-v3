@@ -2479,6 +2479,8 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
     return {
         "session_id": str(sess_dict["session_id"]),
         "job_id": str(sess_dict.get("job_id") or ""),
+        "name": str(sess_dict.get("name") or "").strip(),
+        "label": _session_label(sess_dict),
         "session_kind": session_kind,
         "metadata_status": metadata_status,
         "populated_cells": sum(
@@ -3136,7 +3138,7 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
     }
 
 
-def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
+def workbench_upload_xp(xp_bytes: bytes, req_id: str, source_name: str = "") -> dict[str, Any]:
     """Upload and parse an XP file into a new workbench session."""
     if not isinstance(xp_bytes, bytes):
         raise ApiError("xp_bytes must be bytes", "invalid_type", "workbench", req_id, 400)
@@ -3231,6 +3233,9 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
     sess_path = _session_path(session_id)
     sess_dict = asdict(sess)
     sess_dict["family"] = "uploaded"
+    clean_name = Path(str(source_name or "").strip()).name
+    if clean_name:
+        sess_dict["name"] = clean_name
     save_json(sess_path, sess_dict)
 
     response = _session_payload(sess_dict)

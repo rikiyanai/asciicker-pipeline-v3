@@ -383,6 +383,7 @@ def test_upload_raw_xp_opens_without_template_metadata_and_roundtrips(client, tm
         )
     assert upload_resp.status_code == 201
     uploaded = upload_resp.get_json()
+    assert uploaded["name"] == xp_path.name
     assert uploaded["session_kind"] == "raw_xp"
     assert uploaded["metadata_status"] == "missing"
     assert uploaded["grid_cols"] == width
@@ -410,6 +411,8 @@ def test_upload_raw_xp_opens_without_template_metadata_and_roundtrips(client, tm
     browse_resp = client.get("/api/workbench/browse/list")
     assert browse_resp.status_code == 200
     browse_sessions = {item["session_id"]: item for item in browse_resp.get_json()["sessions"]}
+    assert browse_sessions[session_id]["name"] == xp_path.name
+    assert browse_sessions[session_id]["label"] == xp_path.name
     assert browse_sessions[session_id]["session_kind"] == "raw_xp"
     assert browse_sessions[session_id]["metadata_status"] == "missing"
 

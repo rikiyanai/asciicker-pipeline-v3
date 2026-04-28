@@ -294,6 +294,54 @@ sync with the shipped controls.
 2. broader human UI testing is still required; headed verifier PASS is not a
    substitute for final product acceptance
 
+## Audit — Browse Open As Root-Document Switch (2026-04-27)
+
+This is a narrow Section 1 browse semantics slice. It does not claim a new
+filesystem browser. It brings the shipped browse surface into alignment with
+the canon rule that browse-open loads another XP/root-editor document into the
+same whole-sheet owner.
+
+### What changed
+
+1. Raw XP upload now persists the imported XP filename as the document name.
+2. Public session payloads now expose `name` and `label` for imported XP
+   documents.
+3. Whole-sheet browse copy is document-first instead of session-first:
+   - `Browse documents`
+   - `Loading documents...`
+   - `No documents`
+   - `Rename document`
+4. The current browse collection remains session-backed, but imported raw XP
+   documents now appear as named documents in that collection, which the canon
+   explicitly allows as an implementation detail.
+
+### Verification evidence
+
+1. Backend raw-XP round-trip:
+   - `python3 -m pytest tests/test_workbench_flow.py -k "upload_raw_xp_opens_without_template_metadata_and_roundtrips"`
+   - PASS (`1 passed, 13 deselected`)
+   - Confirms upload response + browse summary retain `name` / `label`
+2. Root-hosted headed verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_browse_document_test.mjs --headed --xp-a sprites/item-armor.xp --xp-b sprites/item-mace.xp --url http://127.0.0.1:5071/workbench --out-dir output/ws_browse_document_root`
+   - PASS
+3. Prefixed headed verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_browse_document_test.mjs --headed --xp-a sprites/item-armor.xp --xp-b sprites/item-mace.xp --url http://127.0.0.1:5073/xpedit/workbench --out-dir output/ws_browse_document_prefixed`
+   - PASS
+
+### Verification note
+
+1. This proof does not claim a dedicated disk-directory XP browser exists.
+2. It proves the shipped browse surface already satisfies the Section 1 owner
+   law when the backing items are imported XP/root-editor documents preserved as
+   session-backed document entries.
+3. That is consistent with canon §1.8.3 item 6: session-backed storage is an
+   implementation detail; browse-open semantics are what matter.
+
+### Still open after this slice
+
+1. broader human UI testing is still required; headed verifier PASS is not a
+   substitute for final product acceptance
+
 ## Audit — Layer-0 Policy By Session Kind (2026-04-27)
 
 This is a focused Section 1 follow-up slice for the browse/layer-0 canon

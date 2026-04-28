@@ -626,7 +626,7 @@ def create_app() -> Flask:
             xp_bytes = file.read()
             if not xp_bytes:
                 raise ApiError("file is empty", "empty_file", "workbench", req_id, 400)
-            return jsonify(workbench_upload_xp(xp_bytes, req_id)), 201
+            return jsonify(workbench_upload_xp(xp_bytes, req_id, file.filename)), 201
         except ApiError as e:
             return _err(e)
 

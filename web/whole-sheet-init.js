@@ -2115,7 +2115,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   browseBtn.id = 'wsModeBrowse';
   browseBtn.textContent = 'BROWSE';
   browseBtn.className = 'ws-tool-btn';
-  browseBtn.title = 'Browse saved sessions';
+  browseBtn.title = 'Browse documents';
   browseBtn.addEventListener('click', () => _setMode('browse'));
   modeGroup.appendChild(paintBtn);
   modeGroup.appendChild(browseBtn);
@@ -2981,9 +2981,9 @@ function _updateBrowseControls() {
     if (bundleOwner) {
       deleteBtn.title = `Delete blocked: bundle ${bundleOwner.bundle_id} owns this session`;
     } else if (isCurrent) {
-      deleteBtn.title = 'Open another session before deleting the active session';
+      deleteBtn.title = 'Open another document before deleting the active document';
     } else {
-      deleteBtn.title = 'Delete selected session';
+      deleteBtn.title = 'Delete selected document';
     }
   }
   if (reloadBtn) reloadBtn.disabled = busy;
@@ -2997,7 +2997,7 @@ function _renderBrowseList() {
   if (!editorState.browseItems.length) {
     const empty = document.createElement('div');
     empty.className = 'ws-placeholder';
-    empty.textContent = editorState.browseLoading ? 'Loading sessions...' : 'No saved sessions';
+    empty.textContent = editorState.browseLoading ? 'Loading documents...' : 'No documents';
     listEl.appendChild(empty);
     _updateBrowseControls();
     return;
@@ -3048,7 +3048,7 @@ async function _refreshBrowseItems({ preserveSelection = true } = {}) {
     return [];
   }
   editorState.browseLoading = true;
-  _setBrowseStatus('Loading sessions...');
+  _setBrowseStatus('Loading documents...');
   _updateBrowseControls();
   try {
     const payload = await editorState.onBrowseList();
@@ -3060,7 +3060,7 @@ async function _refreshBrowseItems({ preserveSelection = true } = {}) {
       const current = items.find((item) => String(item.session_id || '') === String(editorState.currentSessionId || ''));
       editorState.browseSelectedId = String((current || items[0] || {}).session_id || '');
     }
-    _setBrowseStatus(`${items.length} saved session${items.length === 1 ? '' : 's'}`);
+    _setBrowseStatus(`${items.length} document${items.length === 1 ? '' : 's'}`);
     _renderBrowseList();
     return items;
   } catch (err) {
@@ -3101,7 +3101,7 @@ async function _browseRenameSelected() {
   const selected = _selectedBrowseItem();
   if (!selected || typeof editorState.onBrowseRename !== 'function') return;
   const seed = String(selected.name || selected.label || '').trim();
-  const nextName = window.prompt('Rename session', seed);
+  const nextName = window.prompt('Rename document', seed);
   if (nextName === null) return;
   const clean = String(nextName || '').trim();
   if (!clean) return;
