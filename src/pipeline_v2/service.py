@@ -2481,6 +2481,8 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
         "job_id": str(sess_dict.get("job_id") or ""),
         "name": str(sess_dict.get("name") or "").strip(),
         "label": _session_label(sess_dict),
+        "template_set_key": str(sess_dict.get("template_set_key") or "").strip(),
+        "action_key": str(sess_dict.get("action_key") or "").strip(),
         "session_kind": session_kind,
         "metadata_status": metadata_status,
         "populated_cells": sum(

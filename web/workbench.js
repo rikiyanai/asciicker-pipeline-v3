@@ -4214,7 +4214,28 @@
     updateSessionDirtyBadge();
   }
 
-  function hydrateLoadedSession(j) {
+  function applyLoadedSessionOwnership(j, opts = {}) {
+      const preserveBundleContext = !!opts.preserveBundleContext;
+      const sessionKind = String(j.session_kind || "");
+      const templateSetKey = String(j.template_set_key || "").trim();
+      const actionKey = String(j.action_key || "").trim();
+      const templateOwned = sessionKind === "template_owned" || !!templateSetKey;
+      if (templateOwned) {
+        state.templateSetKey = templateSetKey;
+        state.activeActionKey = actionKey || "idle";
+        if (!preserveBundleContext || !state.bundleId) {
+          state.bundleId = null;
+          state.actionStates = {};
+        }
+        return;
+      }
+      state.bundleId = null;
+      state.actionStates = {};
+      state.templateSetKey = "";
+      state.activeActionKey = "idle";
+  }
+
+  function hydrateLoadedSession(j, opts = {}) {
       state.sessionId = j.session_id;
       state.jobId = String(j.job_id || state.jobId || "");
       state.gridCols = Number(j.grid_cols || 0);
@@ -4227,6 +4248,7 @@
       state.cellHChars = Number(j.cell_h || 1);
       state.sessionKind = String(j.session_kind || "");
       state.metadataStatus = String(j.metadata_status || "");
+      applyLoadedSessionOwnership(j, opts);
       state.layerNames = Array.isArray(j.layer_names) && j.layer_names.length ? [...j.layer_names] : [...DEFAULT_LAYER_NAMES];
       state.wholeSheetCanvasZoom = Number.isFinite(Number(j.whole_sheet_canvas_zoom)) ? Number(j.whole_sheet_canvas_zoom) : 0;
       state.wholeSheetGridVisible = !!j.whole_sheet_grid_visible;
@@ -4268,8 +4290,7 @@
       updateUndoRedoButtons();
       $("btnSave").disabled = false;
       $("btnExport").disabled = false;
-      if (state.templateSetKey) $("btnNewXp").disabled = false;
-      updateClassicGeometryControls();
+      $("btnNewXp").disabled = false;
       // Use real layers from backend when available (B3: persisted layers are
       // the source of truth for uploaded XP sessions).
       if (Array.isArray(j.layers) && j.layers.length > 0) {
@@ -4313,11 +4334,13 @@
         webbuildFrame.classList.add("hidden");
         try { webbuildFrame.removeAttribute("src"); } catch (_e) {}
       }
+      renderBundleActionTabs();
+      updateBundleUI();
       updateWebbuildUI();
       setWebbuildState("Webbuild not loaded", "");
   }
 
-  async function loadFromJob() {
+  async function loadFromJob(opts = {}) {
     if (!state.jobId) {
       status("Missing job_id in URL", "err");
       return;
@@ -4339,7 +4362,7 @@
         status("Load failed", "err");
         return;
       }
-      hydrateLoadedSession(j);
+      hydrateLoadedSession(j, opts);
     } catch (e) {
       status("Load failed: fetch/timeout", "err");
       $("sessionOut").textContent = String(e);
@@ -4372,7 +4395,7 @@
         return false;
       }
       state.jobId = String(j.job_id || "");
-      hydrateLoadedSession(j);
+      hydrateLoadedSession(j, opts);
       return true;
     } catch (e) {
       status("Session load failed: fetch/timeout", "err");
@@ -7136,9 +7159,11 @@
 
   function setClassicGeometryInputs(geometry) {
     if (!geometry) return;
-    if ($("classicGeomAngles")) $("classicGeomAngles").value = String(Math.max(1, Number(geometry.angles || 1)));
+    const angles = Math.max(1, Number(geometry.angles || 1));
+    const sourceProjs = angles <= 1 ? 1 : Math.max(1, Number(geometry.source_projs || 1));
+    if ($("classicGeomAngles")) $("classicGeomAngles").value = String(angles);
     if ($("classicGeomFrames")) $("classicGeomFrames").value = formatAnimsCsv(geometry.anims || [1]);
-    if ($("classicGeomSourceProjs")) $("classicGeomSourceProjs").value = String(Math.max(1, Number(geometry.source_projs || 1)));
+    if ($("classicGeomSourceProjs")) $("classicGeomSourceProjs").value = String(sourceProjs);
     if ($("classicGeomCellW")) $("classicGeomCellW").value = String(Math.max(1, Number(geometry.cell_w || 1)));
     if ($("classicGeomCellH")) $("classicGeomCellH").value = String(Math.max(1, Number(geometry.cell_h || 1)));
     updateClassicGeometryHint();
@@ -7414,7 +7439,10 @@
     const wbFileEl = $("wbFile"); if (wbFileEl) wbFileEl.value = "";
     const actState = state.actionStates[actionKey];
     if (actState && actState.sessionId) {
-      await loadSession(actState.sessionId, { reason: `Loading ${actionKey} authoring session...` });
+      await loadSession(actState.sessionId, {
+        reason: `Loading ${actionKey} authoring session...`,
+        preserveBundleContext: true,
+      });
     } else {
       // Empty action — clear session
       state.sessionId = null;
@@ -7586,7 +7614,10 @@
       }
       const firstAction = state.actionStates[state.activeActionKey];
       if (firstAction && firstAction.sessionId) {
-        await loadSession(firstAction.sessionId, { reason: `Loading ${state.activeActionKey} authoring session...` });
+        await loadSession(firstAction.sessionId, {
+          reason: `Loading ${state.activeActionKey} authoring session...`,
+          preserveBundleContext: true,
+        });
       }
       renderBundleActionTabs();
       updateBundleUI();
@@ -7624,7 +7655,7 @@
       };
       state.sessionId = j.session_id;
       state.jobId = j.job_id;
-      await loadFromJob();
+      await loadFromJob({ preserveBundleContext: true });
       renderBundleActionTabs();
       updateBundleUI();
       status(`${actionKey} converted: ${j.grid_cols}x${j.grid_rows}`, "ok");

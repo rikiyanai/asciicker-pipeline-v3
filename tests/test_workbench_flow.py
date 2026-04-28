@@ -320,6 +320,8 @@ def test_root_blank_session_defaults(client):
     assert payload["layer_count"] == 4
     assert payload["session_kind"] == "root_blank"
     assert payload["metadata_status"] == "generated"
+    assert payload["template_set_key"] == ""
+    assert payload["action_key"] == ""
     assert payload["visible_layers"] == [0, 1, 2, 3]
     assert payload["locked_layers"] == []
 
@@ -348,6 +350,8 @@ def test_root_blank_session_accepts_explicit_geometry(client):
     assert payload["projs"] == 2
     assert payload["session_kind"] == "root_blank"
     assert payload["metadata_status"] == "generated"
+    assert payload["template_set_key"] == ""
+    assert payload["action_key"] == ""
 
 
 def test_template_owned_session_layer0_defaults(client):
@@ -363,10 +367,22 @@ def test_template_owned_session_layer0_defaults(client):
     payload = create_resp.get_json()
     assert payload["session_kind"] == "template_owned"
     assert payload["metadata_status"] == "generated"
+    assert payload["template_set_key"] == "player_native_idle_only"
+    assert payload["action_key"] == "idle"
     assert payload["layer_count"] == 4
     assert payload["active_layer"] == 2
     assert payload["visible_layers"] == [2]
     assert payload["locked_layers"] == [0]
+    load_resp = client.post(
+        "/api/workbench/load-session",
+        data=json.dumps({"session_id": payload["session_id"]}),
+        content_type="application/json",
+    )
+    assert load_resp.status_code == 200
+    loaded = load_resp.get_json()
+    assert loaded["template_set_key"] == "player_native_idle_only"
+    assert loaded["action_key"] == "idle"
+    assert loaded["session_kind"] == "template_owned"
 
 
 def test_upload_raw_xp_opens_without_template_metadata_and_roundtrips(client, tmp_path: Path):
@@ -386,6 +402,8 @@ def test_upload_raw_xp_opens_without_template_metadata_and_roundtrips(client, tm
     assert uploaded["name"] == xp_path.name
     assert uploaded["session_kind"] == "raw_xp"
     assert uploaded["metadata_status"] == "missing"
+    assert uploaded["template_set_key"] == ""
+    assert uploaded["action_key"] == ""
     assert uploaded["grid_cols"] == width
     assert uploaded["grid_rows"] == height
     assert uploaded["angles"] == 1
@@ -407,6 +425,8 @@ def test_upload_raw_xp_opens_without_template_metadata_and_roundtrips(client, tm
     loaded = load_resp.get_json()
     assert loaded["session_kind"] == "raw_xp"
     assert loaded["metadata_status"] == "missing"
+    assert loaded["template_set_key"] == ""
+    assert loaded["action_key"] == ""
 
     browse_resp = client.get("/api/workbench/browse/list")
     assert browse_resp.status_code == 200

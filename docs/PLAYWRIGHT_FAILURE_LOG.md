@@ -347,6 +347,63 @@ ownership regression risk in the load/hydration boundary.
 3. When changing this boundary, remove the old owner instead of layering a new
    authoritative path on top of it.
 
+## Audit — Session Load Boundary Purified For Section 1 / Section 2 (2026-04-27)
+
+This is a targeted ownership-boundary slice. It does not claim final Section 1
+closure. It proves that direct Section 1 loads now clear stale template
+ownership, while `template_owned` sessions restore their wrapper ownership from
+authoritative session payload data.
+
+### What changed
+
+1. `_session_payload()` now returns `template_set_key` and `action_key`, so
+   session loads carry explicit template identity when it exists.
+2. `hydrateLoadedSession()` now applies an ownership rule instead of keeping the
+   prior mixed boundary:
+   - `raw_xp` / `root_blank` direct loads clear stale wrapper template state
+   - `template_owned` loads restore `templateSetKey` / `activeActionKey` from
+     payload
+   - bundle-tab/session-switch paths explicitly preserve Section 2 bundle
+     context instead of relying on stale ambient state
+3. The classic `New XP` path no longer fails after a raw XP import just because
+   the imported session geometry carried `angles=1` with `source_projs=2`.
+   Classic geometry inputs now normalize that seed data back to the valid
+   root-blank law before creation.
+4. Added a dedicated whole-sheet session-ownership verifier lane that exercises:
+   - template-owned load
+   - rename in browse
+   - raw-XP import clearing wrapper ownership
+   - `New XP` producing `root_blank`
+   - browse-open restoring the template-owned document
+
+### Verification evidence
+
+1. Backend/session assertions:
+   - `python3 -m pytest tests/test_workbench_flow.py -k "root_blank_session_defaults or root_blank_session_accepts_explicit_geometry or template_owned_session_layer0_defaults or upload_raw_xp_opens_without_template_metadata_and_roundtrips"`
+   - PASS (`4 passed, 10 deselected`)
+2. Root-hosted headed verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_session_ownership_test.mjs --headed --xp sprites/item-armor.xp --url http://127.0.0.1:5071/workbench --out-dir output/ws_session_ownership_root`
+   - PASS
+3. Prefixed headed verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_session_ownership_test.mjs --headed --xp sprites/item-armor.xp --url http://127.0.0.1:5073/xpedit/workbench --out-dir output/ws_session_ownership_prefixed`
+   - PASS
+
+### Verification note
+
+1. The first verifier draft exposed a real product bug, not verifier drift:
+   `New XP` after raw-XP import failed with `Source Projs must be 1 when Angles
+   is 1.`
+2. The root cause was not stale template ownership anymore. It was raw imported
+   session geometry being mirrored directly into the classic root-blank
+   creation controls without normalization.
+3. After clamping that imported seed geometry for the classic `New XP` form,
+   the full ownership-transition lane passed on both hosts.
+
+### Still open after this slice
+
+1. broader human UI testing is still required; verifier PASS is not a
+   substitute for final product acceptance
+
 ## Audit — Browse Open As Root-Document Switch (2026-04-27)
 
 This is a narrow Section 1 browse semantics slice. It does not claim a new
