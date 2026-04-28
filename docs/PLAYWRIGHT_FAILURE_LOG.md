@@ -235,6 +235,65 @@ It does not claim broader Section 2 or browse-model completion.
 1. grid-scoped replace / frame-partition editing semantics
 2. browse-model work remains deferred behind the Section 1 / Section 2 split
 
+## Audit — Whole-Sheet Grid-Scoped Replace And Contract Coverage (2026-04-27)
+
+This is the next whole-sheet editor checkpoint after grid model expansion. It
+does not claim full closure. It closes the specific `W31` per-grid-frame
+replace gap and brings the generated SAR/action-contract inventory back into
+sync with the shipped controls.
+
+### What changed
+
+1. Whole-sheet `W31` find/replace now supports a third scope:
+   - `grid_frames`
+2. `grid_frames` applies the configured match/replace operation at one
+   frame-local `(x,y)` coordinate within every partition of the current
+   resolved grid.
+3. Added whole-sheet sidebar inputs for the frame-local target coordinate:
+   - `#wsFrGridCellX`
+   - `#wsFrGridCellY`
+4. The whole-sheet bulk-edit verifier now proves:
+   - selection scope
+   - canvas scope
+   - grid-frames scope
+   - undo of the grid-frames operation
+5. The generated whole-sheet SAR/action-contract inventory was updated for the
+   new grid and find/replace controls:
+   - custom grid width / height
+   - grid-frame local X / Y
+   - expanded grid preset states
+   - expanded `W31` scope states
+
+### Verification evidence
+
+1. Root-hosted headed bulk-edit verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_bulkedit_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5071/workbench --out-dir output/ws_bulkedit_root`
+   - PASS
+   - Includes `W31` selection, canvas, grid-frames, and undo
+2. Prefixed headed bulk-edit verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_bulkedit_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5073/xpedit/workbench --out-dir output/ws_bulkedit_prefixed`
+   - PASS
+3. Generated whole-sheet SAR/action contracts:
+   - `node --test tests/web/whole-sheet-action-contracts.test.mjs`
+   - PASS (`2 passed`)
+   - `node scripts/xp_fidelity_test/generate_whole_sheet_action_contracts.mjs --stdout`
+   - PASS with `57` extracted controls, `57` mapped controls, `0` unmapped
+
+### Verification note
+
+1. Raw-XP sessions now open with layer `0` active by default after the
+   raw-session parity work.
+2. The whole-sheet bulk-edit verifier was updated to switch to visual layer `2`
+   and hide layers `0`, `1`, and `3` before its color/readback assertions.
+3. That verifier adjustment reflects the current raw-XP document owner model.
+   It is not evidence of a new product regression in `W28`-`W31`.
+
+### Still open after this slice
+
+1. browse-model work remains deferred behind the Section 1 / Section 2 split
+2. broader human UI testing is still required; headed verifier PASS is not a
+   substitute for final product acceptance
+
 ## Audit — Whole-Sheet Clipboard Contract Repair And Section 1 Proof Completion (2026-04-27)
 
 This is a verifier/evidence checkpoint entry. It does not claim a new product

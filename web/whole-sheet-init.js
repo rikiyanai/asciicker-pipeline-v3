@@ -511,6 +511,43 @@ function _syncGridControlsUI() {
       ? `Layer0 Meta (${dims.width}×${dims.height})`
       : 'Layer0 Meta';
   }
+  _syncFindReplaceScopeUI();
+}
+
+function _coerceGridOffset(value, fallback, maxInclusive) {
+  const n = Number(value);
+  const safeFallback = Math.max(0, Number(fallback) || 0);
+  const bounded = Number.isFinite(maxInclusive) ? Math.max(0, Math.floor(maxInclusive)) : null;
+  const next = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : safeFallback;
+  if (bounded === null) return next;
+  return Math.max(0, Math.min(bounded, next));
+}
+
+function _syncFindReplaceScopeUI() {
+  const scopeSel = document.getElementById('wsFrScope');
+  const xInput = document.getElementById('wsFrGridCellX');
+  const yInput = document.getElementById('wsFrGridCellY');
+  const hint = document.getElementById('wsFrGridHint');
+  if (!scopeSel) return;
+  const resolved = _resolveGridStepConfig();
+  const maxX = Math.max(0, Number(resolved.width || 1) - 1);
+  const maxY = Math.max(0, Number(resolved.height || 1) - 1);
+  const gridScope = scopeSel.value === 'grid_frames';
+  if (xInput) {
+    xInput.min = '0';
+    xInput.max = String(maxX);
+    xInput.disabled = !gridScope;
+    xInput.value = String(_coerceGridOffset(xInput.value, xInput.value, maxX));
+  }
+  if (yInput) {
+    yInput.min = '0';
+    yInput.max = String(maxY);
+    yInput.disabled = !gridScope;
+    yInput.value = String(_coerceGridOffset(yInput.value, yInput.value, maxY));
+  }
+  if (hint) {
+    hint.textContent = gridScope ? `Frame-local cell 0-${maxX}, 0-${maxY}` : '';
+  }
 }
 
 function _disconnectViewportResizeObserver() {
@@ -1202,10 +1239,11 @@ function _replaceSelectionColor(channel) {
 }
 
 /**
- * W31: Find & Replace in selection or whole-sheet canvas.
+ * W31: Find & Replace in selection, whole-sheet canvas, or per-grid-frame scope.
  * Scope semantics (whole-sheet contract):
  *   - 'selection': operates on current selection bounds only
  *   - 'canvas': operates on entire canvas (all cells)
+ *   - 'grid_frames': operates on one frame-local coordinate within each current-grid partition
  * @returns {boolean} true if any cells changed
  */
 function _findReplace() {
@@ -1231,31 +1269,59 @@ function _findReplace() {
 
   const scope = document.getElementById('wsFrScope')?.value || 'selection';
 
-  let x1, y1, x2, y2;
-  if (scope === 'canvas') {
-    x1 = 0; y1 = 0; x2 = canvas.width - 1; y2 = canvas.height - 1;
-  } else {
-    const tool = editorState.selectTool;
-    if (!tool) return false;
-    const bounds = tool.getSelectionBounds();
-    if (!bounds) return false;
-    x1 = bounds.x; y1 = bounds.y;
-    x2 = bounds.x + bounds.width - 1; y2 = bounds.y + bounds.height - 1;
-  }
-
   let changed = 0;
-  for (let y = y1; y <= y2; y++) {
-    for (let x = x1; x <= x2; x++) {
-      const cell = canvas.getCell(x, y);
-      if (!cell) continue;
-      if (matchGlyph && (cell.glyph & 0xFF) !== findGlyph) continue;
-      if (matchFg && !_colorsEqual(cell.fg || [0, 0, 0], findFg)) continue;
-      if (matchBg && !_colorsEqual(cell.bg || [0, 0, 0], findBg)) continue;
-      const ng = replGlyphOn ? replGlyph : (cell.glyph & 0xFF);
-      const nf = replFgOn ? [...replFg] : [...(cell.fg || [0, 0, 0])];
-      const nb = replBgOn ? [...replBg] : [...(cell.bg || [0, 0, 0])];
-      canvas.setCell(x, y, ng, nf, nb);
-      changed++;
+  const applyAtCell = (x, y) => {
+    const cell = canvas.getCell(x, y);
+    if (!cell) return;
+    if (matchGlyph && (cell.glyph & 0xFF) !== findGlyph) return;
+    if (matchFg && !_colorsEqual(cell.fg || [0, 0, 0], findFg)) return;
+    if (matchBg && !_colorsEqual(cell.bg || [0, 0, 0], findBg)) return;
+    const ng = replGlyphOn ? replGlyph : (cell.glyph & 0xFF);
+    const nf = replFgOn ? [...replFg] : [...(cell.fg || [0, 0, 0])];
+    const nb = replBgOn ? [...replBg] : [...(cell.bg || [0, 0, 0])];
+    if ((cell.glyph & 0xFF) === ng && _colorsEqual(cell.fg || [0, 0, 0], nf) && _colorsEqual(cell.bg || [0, 0, 0], nb)) {
+      return;
+    }
+    canvas.setCell(x, y, ng, nf, nb);
+    changed++;
+  };
+
+  if (scope === 'grid_frames') {
+    const resolved = _resolveGridStepConfig();
+    const localX = _coerceGridOffset(
+      document.getElementById('wsFrGridCellX')?.value,
+      0,
+      Math.max(0, Number(resolved.width || 1) - 1)
+    );
+    const localY = _coerceGridOffset(
+      document.getElementById('wsFrGridCellY')?.value,
+      0,
+      Math.max(0, Number(resolved.height || 1) - 1)
+    );
+    for (let frameY = 0; frameY < canvas.height; frameY += Math.max(1, Number(resolved.height || 1))) {
+      for (let frameX = 0; frameX < canvas.width; frameX += Math.max(1, Number(resolved.width || 1))) {
+        const x = frameX + localX;
+        const y = frameY + localY;
+        if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) continue;
+        applyAtCell(x, y);
+      }
+    }
+  } else {
+    let x1, y1, x2, y2;
+    if (scope === 'canvas') {
+      x1 = 0; y1 = 0; x2 = canvas.width - 1; y2 = canvas.height - 1;
+    } else {
+      const tool = editorState.selectTool;
+      if (!tool) return false;
+      const bounds = tool.getSelectionBounds();
+      if (!bounds) return false;
+      x1 = bounds.x; y1 = bounds.y;
+      x2 = bounds.x + bounds.width - 1; y2 = bounds.y + bounds.height - 1;
+    }
+    for (let y = y1; y <= y2; y++) {
+      for (let x = x1; x <= x2; x++) {
+        applyAtCell(x, y);
+      }
     }
   }
   if (!changed) return false;
@@ -2686,8 +2752,11 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   frScopeSel.style.cssText = 'font-size:10px;padding:2px;background:var(--bg);color:var(--fg);border:1px solid #2a3345;';
   const optSel = document.createElement('option'); optSel.value = 'selection'; optSel.textContent = 'Selection';
   const optCanvas = document.createElement('option'); optCanvas.value = 'canvas'; optCanvas.textContent = 'Canvas';
+  const optGridFrames = document.createElement('option'); optGridFrames.value = 'grid_frames'; optGridFrames.textContent = 'Grid Frames';
   frScopeSel.appendChild(optSel);
   frScopeSel.appendChild(optCanvas);
+  frScopeSel.appendChild(optGridFrames);
+  frScopeSel.addEventListener('change', () => _syncFindReplaceScopeUI());
   frActionRow.appendChild(frScopeSel);
   const frApplyBtn = document.createElement('button');
   frApplyBtn.id = 'wsFrApply';
@@ -2697,6 +2766,39 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   frApplyBtn.addEventListener('click', () => _findReplace());
   frActionRow.appendChild(frApplyBtn);
   frWrap.appendChild(frActionRow);
+
+  const frGridRow = document.createElement('div');
+  frGridRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
+  const frGridLabel = document.createElement('span');
+  frGridLabel.textContent = 'At';
+  frGridLabel.style.cssText = 'font-size:10px;color:var(--muted);min-width:16px;';
+  frGridRow.appendChild(frGridLabel);
+  const frGridX = document.createElement('input');
+  frGridX.id = 'wsFrGridCellX';
+  frGridX.type = 'number';
+  frGridX.min = '0';
+  frGridX.value = '0';
+  frGridX.style.cssText = 'width:48px;font-size:10px;padding:1px 3px;';
+  frGridX.addEventListener('change', () => _syncFindReplaceScopeUI());
+  frGridRow.appendChild(frGridX);
+  const frGridSep = document.createElement('span');
+  frGridSep.textContent = ',';
+  frGridRow.appendChild(frGridSep);
+  const frGridY = document.createElement('input');
+  frGridY.id = 'wsFrGridCellY';
+  frGridY.type = 'number';
+  frGridY.min = '0';
+  frGridY.value = '0';
+  frGridY.style.cssText = 'width:48px;font-size:10px;padding:1px 3px;';
+  frGridY.addEventListener('change', () => _syncFindReplaceScopeUI());
+  frGridRow.appendChild(frGridY);
+  frWrap.appendChild(frGridRow);
+
+  const frGridHint = document.createElement('div');
+  frGridHint.id = 'wsFrGridHint';
+  frGridHint.style.cssText = 'font-size:9px;color:#5a6a7a;min-height:12px;';
+  frWrap.appendChild(frGridHint);
+  _syncFindReplaceScopeUI();
 
   frDetails.appendChild(frWrap);
   frSection.appendChild(frDetails);

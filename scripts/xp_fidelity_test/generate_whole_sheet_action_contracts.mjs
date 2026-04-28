@@ -413,9 +413,73 @@ function buildGridStepContract() {
       },
       {
         key: 'grid_step_numeric',
-        label: 'Grid step select switched to numeric spacing',
+        label: 'Grid step select switched to numeric square spacing',
         preconditions: [stateCondition('mode', 'eq', 'paint')],
         expected: [stateCondition('gridStep', 'changed', null)],
+      },
+      {
+        key: 'grid_step_custom',
+        label: 'Grid step select switched to custom spacing',
+        preconditions: [stateCondition('mode', 'eq', 'paint')],
+        expected: [
+          stateCondition('gridStep', 'eq', 'custom'),
+          stateCondition('gridCustomW', 'truthy', true),
+          stateCondition('gridCustomH', 'truthy', true),
+        ],
+      },
+      {
+        key: 'grid_step_layer0_metadata',
+        label: 'Grid step select switched to layer-0 metadata preset',
+        preconditions: [
+          stateCondition('mode', 'eq', 'paint'),
+          noteCondition('Layer-0 metadata dimensions are available for the current document.'),
+        ],
+        expected: [stateCondition('gridStep', 'eq', 'layer0_metadata')],
+      },
+      {
+        key: 'grid_step_template_preset',
+        label: 'Grid step select switched to template-derived preset',
+        preconditions: [
+          stateCondition('mode', 'eq', 'paint'),
+          noteCondition('At least one template-derived grid preset is available for the current session.'),
+        ],
+        expected: [stateCondition('gridStep', 'changed', null)],
+      },
+    ],
+  };
+}
+
+function buildGridCustomDimensionContract(axis) {
+  const field = axis === 'width' ? 'gridCustomW' : 'gridCustomH';
+  const reason = axis === 'width' ? 'grid-custom-width' : 'grid-custom-height';
+  return {
+    actionKind: `grid-custom-${axis}`,
+    variants: [
+      {
+        key: `grid_custom_${axis}_inactive_preset`,
+        label: `Custom grid ${axis} changed while another grid preset is active`,
+        preconditions: [
+          stateCondition('mode', 'eq', 'paint'),
+          noteCondition('Current gridStep is not custom.'),
+        ],
+        expected: [
+          stateCondition(field, 'changed', null),
+          stateCondition('gridStep', 'unchanged', null),
+          noteCondition(`Stored custom ${axis} is updated for later use, but the active grid preset remains unchanged.`),
+        ],
+      },
+      {
+        key: `grid_custom_${axis}_active_preset`,
+        label: `Custom grid ${axis} changed while custom grid preset is active`,
+        preconditions: [
+          stateCondition('mode', 'eq', 'paint'),
+          stateCondition('gridStep', 'eq', 'custom'),
+        ],
+        expected: [
+          stateCondition(field, 'changed', null),
+          stateCondition('gridStep', 'eq', 'custom'),
+          noteCondition(`Resolved grid updates immediately and emits document change reason "${reason}".`),
+        ],
       },
     ],
   };
@@ -759,13 +823,65 @@ function buildFindReplaceContract() {
         expected: [stateCondition('historyDepth', 'unchanged', null)],
       },
       {
-        key: 'find_replace_valid_run',
-        label: 'Find & Replace with valid criteria and addressable scope',
+        key: 'find_replace_selection_scope_valid_run',
+        label: 'Find & Replace with valid criteria in selection scope',
         preconditions: [
           noteCondition('At least one match and one replacement criterion are enabled.'),
-          noteCondition('Scope is canvas or selection with a current selection.'),
+          stateCondition('selectionBounds', 'truthy', true),
+          noteCondition('Scope is set to selection.'),
         ],
         expected: [stateCondition('historyDepth', 'changed', null)],
+      },
+      {
+        key: 'find_replace_canvas_scope_valid_run',
+        label: 'Find & Replace with valid criteria in canvas scope',
+        preconditions: [
+          noteCondition('At least one match and one replacement criterion are enabled.'),
+          noteCondition('Scope is set to canvas.'),
+        ],
+        expected: [stateCondition('historyDepth', 'changed', null)],
+      },
+      {
+        key: 'find_replace_grid_frames_scope_valid_run',
+        label: 'Find & Replace with valid criteria in grid-frames scope',
+        preconditions: [
+          noteCondition('At least one match and one replacement criterion are enabled.'),
+          noteCondition('Scope is set to grid_frames.'),
+          noteCondition('Current resolved grid exposes valid frame-local X/Y offsets.'),
+        ],
+        expected: [stateCondition('historyDepth', 'changed', null)],
+      },
+    ],
+  };
+}
+
+function buildFindReplaceGridOffsetContract(axis) {
+  const coord = axis === 'x' ? 'X' : 'Y';
+  return {
+    actionKind: `find-replace-grid-offset-${axis}`,
+    variants: [
+      {
+        key: `find_replace_grid_offset_${axis}_inactive`,
+        label: `Grid-frame local ${coord} input while another scope is active`,
+        preconditions: [
+          noteCondition('Find & Replace scope is selection or canvas.'),
+        ],
+        expected: [
+          domCondition(`#wsFrGridCell${coord}`, 'disabled', true),
+          noteCondition('Input remains disabled until grid_frames scope is selected.'),
+        ],
+      },
+      {
+        key: `find_replace_grid_offset_${axis}_active`,
+        label: `Grid-frame local ${coord} input while grid-frames scope is active`,
+        preconditions: [
+          noteCondition('Find & Replace scope is grid_frames.'),
+          noteCondition('Current resolved grid exposes finite frame bounds.'),
+        ],
+        expected: [
+          domCondition(`#wsFrGridCell${coord}`, 'disabled', false),
+          noteCondition('Input value is clamped into the inclusive frame-local range for the current grid preset.'),
+        ],
       },
     ],
   };
@@ -958,6 +1074,10 @@ function buildWrapperLayerContract(kind) {
 function classifyContract(control) {
   const handler = normalizeWhitespace(control.handlers[0]?.handlerSource || '');
   if (control.id === 'wsGlyphPickerCanvas') return buildDrawStateContract('glyph');
+  if (control.id === 'wsGridCustomW') return buildGridCustomDimensionContract('width');
+  if (control.id === 'wsGridCustomH') return buildGridCustomDimensionContract('height');
+  if (control.id === 'wsFrGridCellX') return buildFindReplaceGridOffsetContract('x');
+  if (control.id === 'wsFrGridCellY') return buildFindReplaceGridOffsetContract('y');
 
   const toolMatch = handler.match(/_switchTool\('([^']+)'\)/);
   if (toolMatch) return buildToolActionContract(control, toolMatch[1]);
@@ -978,7 +1098,7 @@ function classifyContract(control) {
   if (handler.includes("_setApplyChannel('foreground', on)")) return buildApplyToggleContract('foreground', control.selector);
   if (handler.includes("_setApplyChannel('background', on)")) return buildApplyToggleContract('background', control.selector);
   if (handler.includes('editorState.gridVisible') || handler.includes("setGridVisible(on)")) return buildGridToggleContract();
-  if (handler.includes('editorState.gridStep = gridStepSel.value')) return buildGridStepContract();
+  if (handler.includes('editorState.gridStep = _normalizeGridStepToken(gridStepSel.value)')) return buildGridStepContract();
   if (handler.includes('_promptResizeDocument(')) return buildResizeContract();
   if (handler.includes('editorState.onSave')) return buildHookOnlyContract('save', 'onSave', 'Save is owned by the wrapper/service callback.');
   if (handler.includes('editorState.onExport')) return buildHookOnlyContract('export', 'onExport', 'Export is owned by the wrapper/service callback.');

@@ -13,7 +13,7 @@
  *   W29: Replace FG in selection (button #wsReplaceFg)
  *   W30: Replace BG in selection (button #wsReplaceBg)
  *   W31: Find & Replace (sidebar section, button #wsFrApply)
- *        Scope semantics: 'selection' and 'canvas'
+ *        Scope semantics: 'selection', 'canvas', and 'grid_frames'
  *   Undo: Ctrl+Z reverts each bulk-edit as single operation
  *
  * Match-source contract (W29/W30):
@@ -32,6 +32,9 @@
  *   7. W31 (selection scope): Set up find/replace criteria, Apply → verify
  *   8. W31 (canvas scope): Replace all matching cells on canvas → verify
  *   9. Undo → verify single-operation revert
+ *  10. W31 (grid_frames scope): replace only the configured local cell in each
+ *      current-grid frame
+ *  11. Undo grid-frames replace
  *
  * Usage:
  *   node run_whole_sheet_bulkedit_test.mjs --xp sprites/attack-0001.xp --out-dir output/ws_bulkedit_test
@@ -207,6 +210,26 @@ async function main() {
   steps.ws_focus = { step: 'focus_ws_editor', pass: true };
   await page.setViewportSize({ width: 1400, height: 2400 });
   await page.waitForTimeout(300);
+
+  // Raw XP sessions now open with layer 0 active by default. Bulk-edit parity
+  // checks should operate on the visual layer the frame-grid readers observe.
+  await page.selectOption('#layerSelect', '2');
+  await page.waitForTimeout(200);
+  const wsLayerState = await getWsState(page);
+  if (wsLayerState?.activeLayerIndex !== 2) {
+    fail('ws_layer', `Expected active whole-sheet layer 2 before bulk-edit assertions: ${JSON.stringify(wsLayerState)}`);
+    report.overall_pass = false;
+    writeReport(outDir, 'report.json', report);
+    await browser.close();
+    process.exit(1);
+  }
+  for (const layer of [0, 1, 3]) {
+    const checkbox = page.locator(`#layerVisibility input[type="checkbox"][data-layer="${layer}"]`);
+    if (await checkbox.isChecked()) {
+      await checkbox.uncheck();
+      await page.waitForTimeout(80);
+    }
+  }
 
   // ── Step 3: Paint known pattern ──
   // (BX,BY)=65/red  (BX+1,BY)=66/green
@@ -407,6 +430,96 @@ async function main() {
     cells: { undoFrA } };
   if (!undoFrPass) { allPass = false; fail('W31_undo', 'Undo F&R did not revert'); }
   console.log(`  W31 undo: ${undoFrPass ? 'PASS' : 'FAIL'}`);
+
+  // ── Step 10: W31 — Find & Replace (grid-frames scope) ──
+  console.log('=== Step 10: W31 — Find & Replace (grid frames) ===');
+  await page.selectOption('#wsGridStep', '2');
+  await page.waitForTimeout(200);
+
+  const gridFrameTargets = [
+    [BX, BY], [BX + 1, BY + 1],
+    [BX + 2, BY], [BX + 3, BY + 1],
+    [BX, BY + 2], [BX + 1, BY + 3],
+    [BX + 2, BY + 2], [BX + 3, BY + 3],
+  ];
+  await activateTool(page, '#wsToolCell');
+  await setDrawState(page, 77, '#ffffff', '#000000');
+  for (const [x, y] of gridFrameTargets) {
+    await clickCell(page, x, y);
+    await page.waitForTimeout(40);
+  }
+
+  await page.check('#wsFrMatchGlyph');
+  await page.fill('#wsFrFindGlyphVal', '77');
+  await page.check('#wsFrReplGlyph');
+  await page.fill('#wsFrReplGlyphVal', '88');
+  await page.uncheck('#wsFrMatchFg');
+  await page.uncheck('#wsFrMatchBg');
+  await page.uncheck('#wsFrReplFg');
+  await page.uncheck('#wsFrReplBg');
+  await page.selectOption('#wsFrScope', 'grid_frames');
+  await page.fill('#wsFrGridCellX', '1');
+  await page.locator('#wsFrGridCellX').dispatchEvent('change');
+  await page.fill('#wsFrGridCellY', '1');
+  await page.locator('#wsFrGridCellY').dispatchEvent('change');
+  await page.click('#wsFrApply');
+  await page.waitForTimeout(200);
+
+  const gridFrameChangedA = await readWsCell(page, BX + 1, BY + 1);
+  const gridFrameChangedB = await readWsCell(page, BX + 3, BY + 1);
+  const gridFrameChangedC = await readWsCell(page, BX + 1, BY + 3);
+  const gridFrameChangedD = await readWsCell(page, BX + 3, BY + 3);
+  const gridFrameUnchangedA = await readWsCell(page, BX, BY);
+  const gridFrameUnchangedB = await readWsCell(page, BX + 2, BY);
+  const gridFrameUnchangedC = await readWsCell(page, BX, BY + 2);
+  const gridFrameUnchangedD = await readWsCell(page, BX + 2, BY + 2);
+  const w31GridFramesPass =
+    c(gridFrameChangedA)?.glyph === 88 &&
+    c(gridFrameChangedB)?.glyph === 88 &&
+    c(gridFrameChangedC)?.glyph === 88 &&
+    c(gridFrameChangedD)?.glyph === 88 &&
+    c(gridFrameUnchangedA)?.glyph === 77 &&
+    c(gridFrameUnchangedB)?.glyph === 77 &&
+    c(gridFrameUnchangedC)?.glyph === 77 &&
+    c(gridFrameUnchangedD)?.glyph === 77;
+  steps.w31_fr_grid_frames = {
+    step: 'W31_find_replace_grid_frames',
+    pass: w31GridFramesPass,
+    cells: {
+      gridFrameChangedA,
+      gridFrameChangedB,
+      gridFrameChangedC,
+      gridFrameChangedD,
+      gridFrameUnchangedA,
+      gridFrameUnchangedB,
+      gridFrameUnchangedC,
+      gridFrameUnchangedD,
+    },
+  };
+  if (!w31GridFramesPass) {
+    allPass = false;
+    fail('W31_grid_frames', 'F&R grid-frames scope failed');
+  }
+  console.log(`  W31 F&R (grid frames): ${w31GridFramesPass ? 'PASS' : 'FAIL'}`);
+  await screenshot(page, outDir, 'step10_w31_fr_grid_frames');
+
+  // ── Step 11: Undo grid-frames F&R ──
+  console.log('=== Step 11: Undo grid-frames F&R ===');
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(200);
+  const undoGridFrameA = await readWsCell(page, BX + 1, BY + 1);
+  const undoGridFrameB = await readWsCell(page, BX + 3, BY + 3);
+  const undoGridFramesPass = c(undoGridFrameA)?.glyph === 77 && c(undoGridFrameB)?.glyph === 77;
+  steps.w31_grid_frames_undo = {
+    step: 'W31_undo_grid_frames',
+    pass: undoGridFramesPass,
+    cells: { undoGridFrameA, undoGridFrameB },
+  };
+  if (!undoGridFramesPass) {
+    allPass = false;
+    fail('W31_grid_frames_undo', 'Undo grid-frames F&R did not revert');
+  }
+  console.log(`  W31 grid-frames undo: ${undoGridFramesPass ? 'PASS' : 'FAIL'}`);
 
   // ── Final ──
   report.steps = steps;
