@@ -970,7 +970,11 @@ to invent a second behavior model in code.
    seed the initial layer set, but they do so by calling the same root command.
 2. `Open` / `Import XP` are root image actions. They replace the active
    document in the same whole-sheet owner; they do not mount a second editor.
-3. `Resize` is a root image action. It opens a geometry dialog seeded from the
+3. `Open` / `Import XP` must accept ordinary XP documents as root-editor
+   documents even when they do not satisfy Section 2 template/runtime metadata
+   conventions. Missing layer-0 metadata may block later wrapper export/runtime
+   flows, but it may not block Section 1 open/edit/browse behavior itself.
+4. `Resize` is a root image action. It opens a geometry dialog seeded from the
    current image size. Confirming resize:
    - applies one transaction to every layer
    - anchors preservation at top-left
@@ -978,10 +982,14 @@ to invent a second behavior model in code.
    - crops right/bottom extents when shrinking
    - clips or clears selections outside the new bounds
    - recomputes frame/grid overlays derived from image geometry
-4. Section 2 may warn that a resize breaks template/runtime expectations, but
+5. If a wrapper/template flow requires template-compatible metadata and an
+   opened XP lacks it, Section 2 may offer an explicit conversion/repair step
+   after open. It may not silently mutate the document on browse open, and it
+   may not redefine the root browse/open contract around template ownership.
+6. Section 2 may warn that a resize breaks template/runtime expectations, but
    it may not block or own the resize behavior itself.
-5. `Save` persists the current root document/session without download.
-6. `Export XP` serializes the same root-document snapshot. If the document is
+7. `Save` persists the current root document/session without download.
+8. `Export XP` serializes the same root-document snapshot. If the document is
    dirty, export flushes save/autosave first, then exports from that snapshot.
 
 #### 1.8.3 Mode Model: Paint And Browse
@@ -996,6 +1004,13 @@ to invent a second behavior model in code.
 5. Browse mode supports list/select/open/rename/duplicate/delete/reload over
    the current image collection, regardless of whether that collection is
    backed by server sessions, local drafts, or file-picker imports.
+6. The semantic meaning of browse-open is: load the chosen XP/root-editor
+   document into the root whole-sheet owner. Whether the backing item is stored
+   as a session, a local draft, or a plain XP file is an implementation detail,
+   not a different editor model.
+7. Template/workflow ownership is a Section 2 concern layered after browse-open.
+   Browse must not require template selection merely to inspect or edit an XP
+   document in the Section 1 editor.
 
 #### 1.8.4 Apply, Tool, Selection, And Clipboard Contract
 
@@ -1068,6 +1083,16 @@ must be intercepted where necessary.
    selection transforms, and merge targets.
 6. Lock state, visibility, ordering, and layer names are part of session/draft
    persistence even if `.xp` export cannot encode every editor-only flag.
+7. Layer 0 is an ordinary document layer in principle. It is inspectable and
+   editable under the same root-editor law as any other layer.
+8. Section 2 may impose stricter defaults for template-owned sessions when
+   layer 0 carries pipeline/runtime metadata: hide it by default, lock it by
+   default, and warn on unlock/edit. Those defaults are wrapper policy, not a
+   redefinition of layer 0 as a non-editable or hidden-only root concept.
+9. Raw XP / non-template sessions should expose layer 0 as a normal layer by
+   default. Template-owned sessions may start with different visibility/lock
+   defaults, but the layer must remain discoverable and intentionally
+   inspectable.
 7. Undo/redo history is owned by the whole-sheet editor. Each of these is one
    history transaction:
    - one drag stroke
@@ -1076,9 +1101,9 @@ must be intercepted where necessary.
    - one paste/cut/delete/transform command
    - one resize
    - one layer add/delete/reorder/visibility/lock/merge command
-8. Viewport pan/zoom, active tool, browse selection, and other non-document UI
+10. Viewport pan/zoom, active tool, browse selection, and other non-document UI
    state are not history transactions.
-9. Each open image keeps its own undo journal. Switching images in browse mode
+11. Each open image keeps its own undo journal. Switching images in browse mode
    swaps journals with the active document.
 
 #### 1.8.7 Pointer, Pan, Zoom, And Grid Contract
@@ -2662,7 +2687,7 @@ not a task plan — it is a gate list. Migration is ready when all blocking gate
 | Proof-only color-variant family authoring surface | §2.5 misalignment ledger | PROOF-ONLY by policy (`service.py`, `workbench.js`) |
 | M2 E2E proof run (PNG→WS→export, committed headed run) | §Milestone 2 | PARTIAL |
 | UQ-013 small-screen layout and persistence | §Unified Queue `UQ-013` | OPEN |
-| Whole-sheet browse-model split decision | §1.8 / §2 boundary | EXPLICITLY DEFERRED until after grid contrast, expanded grid presets, grid-scoped replace semantics, and their proof updates; changing browse earlier would reopen the Section 1/Section 2 owner boundary instead of clarifying it |
+| Whole-sheet browse-model split implementation | §1.8 / §2 boundary | DECISION FIXED — browse opens XP/root-editor documents first, layer 0 is editable in principle, and template metadata compatibility is a later wrapper concern; implementation remains intentionally sequenced after grid contrast, expanded grid presets, grid-scoped replace semantics, and their proof updates |
 
 ### Gate Maintenance Rule
 
