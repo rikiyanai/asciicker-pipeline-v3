@@ -114,6 +114,8 @@ class WorkbenchSession:
     # for non-visual layers.  `cells` is kept for backward compatibility only and
     # is always derived from the visual layer (layers[2]).
     layers: list[list[dict[str, Any]]] | None = None
+    session_kind: str = "template_owned"
+    metadata_status: str = "generated"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

@@ -1284,6 +1284,8 @@ def _browse_session_summary(
         "family": str(sess_dict.get("family") or "").strip(),
         "template_set_key": str(sess_dict.get("template_set_key") or "").strip(),
         "action_key": str(sess_dict.get("action_key") or "").strip(),
+        "session_kind": _session_kind(sess_dict),
+        "metadata_status": _metadata_status(sess_dict),
         "job_id": str(sess_dict.get("job_id") or "").strip(),
         "grid_cols": int(sess_dict.get("grid_cols") or 0),
         "grid_rows": int(sess_dict.get("grid_rows") or 0),
@@ -1296,6 +1298,69 @@ def _browse_session_summary(
         "bundle_owner": bundle_owner or None,
     }
     return summary
+
+
+_SESSION_KINDS = {"root_blank", "raw_xp", "pipeline_job", "template_owned"}
+_METADATA_STATUSES = {"valid", "missing", "invalid", "generated"}
+
+
+def _session_kind(sess_dict: dict[str, Any]) -> str:
+    explicit = str(sess_dict.get("session_kind") or "").strip()
+    if explicit in _SESSION_KINDS:
+        return explicit
+    template_set_key = str(sess_dict.get("template_set_key") or "").strip()
+    family = str(sess_dict.get("family") or "").strip()
+    job_id = str(sess_dict.get("job_id") or "").strip()
+    if template_set_key:
+        return "template_owned"
+    if family == "uploaded":
+        return "raw_xp"
+    if job_id:
+        return "pipeline_job"
+    return "root_blank"
+
+
+def _metadata_status(sess_dict: dict[str, Any]) -> str:
+    explicit = str(sess_dict.get("metadata_status") or "").strip()
+    if explicit in _METADATA_STATUSES:
+        return explicit
+    if _session_kind(sess_dict) == "raw_xp":
+        return "valid"
+    return "generated"
+
+
+def _template_metadata_compatible(sess_dict: dict[str, Any]) -> bool:
+    return _metadata_status(sess_dict) in {"valid", "generated"}
+
+
+def _default_layer_names(sess_dict: dict[str, Any], layer_count: int) -> list[str]:
+    if layer_count <= 0:
+        return []
+    if _session_kind(sess_dict) == "raw_xp":
+        return [f"Layer {idx}" for idx in range(layer_count)]
+    return ["Metadata", "Layer 1", "Visual", "Layer 3"][:layer_count]
+
+
+def _default_active_layer(sess_dict: dict[str, Any], layer_count: int) -> int:
+    if layer_count <= 0:
+        return 0
+    if _session_kind(sess_dict) == "template_owned" and layer_count > 2:
+        return 2
+    return 0
+
+
+def _default_visible_layers(sess_dict: dict[str, Any], layer_count: int) -> list[int]:
+    if layer_count <= 0:
+        return []
+    if _session_kind(sess_dict) == "template_owned" and layer_count > 2:
+        return [2]
+    return list(range(layer_count))
+
+
+def _default_locked_layers(sess_dict: dict[str, Any]) -> list[int]:
+    if _session_kind(sess_dict) == "template_owned":
+        return [0]
+    return []
 
 
 def create_bundle(template_set_key: str, req_id: str) -> dict[str, Any]:
@@ -1648,6 +1713,39 @@ def _derive_geometry_from_l0(
         "frame_rows": frame_rows,
         "frame_cols": frame_cols,
     }
+
+
+def _row0_has_metadata_signal(xp_data: dict, cols: int) -> bool:
+    if not xp_data.get("cells"):
+        return False
+    l0_cells = xp_data["cells"][0]
+    limit = min(cols, len(l0_cells))
+    for c in range(limit):
+        glyph, _fg, _bg = l0_cells[c]
+        if _glyph_to_digit(glyph) > 0:
+            return True
+    return False
+
+
+def _derive_raw_xp_geometry(
+    xp_data: dict,
+    cols: int,
+    rows: int,
+    req_id: str,
+) -> tuple[dict[str, int | list[int]], str]:
+    try:
+        return _derive_geometry_from_l0(xp_data, cols, rows, req_id), "valid"
+    except ApiError:
+        status = "invalid" if _row0_has_metadata_signal(xp_data, cols) else "missing"
+        return {
+            "angles": 1,
+            "anims": [1],
+            "projs": 1,
+            "cell_w": cols,
+            "cell_h": rows,
+            "frame_rows": 1,
+            "frame_cols": 1,
+        }, status
 
 
 Cell = tuple[int, tuple[int, int, int], tuple[int, int, int]]
@@ -2376,18 +2474,22 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
     projs = int(sess_dict["projs"])
     frame_cols = sum(anims) * projs
     frame_rows = angles
+    session_kind = _session_kind(sess_dict)
+    metadata_status = _metadata_status(sess_dict)
     return {
         "session_id": str(sess_dict["session_id"]),
         "job_id": str(sess_dict.get("job_id") or ""),
+        "session_kind": session_kind,
+        "metadata_status": metadata_status,
         "populated_cells": sum(
             1 for c in (sess_dict.get("cells") or [])
             if int(c.get("glyph", 0)) not in (0, 32)
         ),
         "layer_count": layer_count,
-        "layer_names": list(sess_dict.get("layer_names") or ["Metadata", "Layer 1", "Visual", "Layer 3"][:layer_count]),
-        "active_layer": int(sess_dict.get("active_layer", 2 if layer_count > 2 else 0)),
-        "visible_layers": list(sess_dict.get("visible_layers") or ([2] if layer_count > 2 else [0])),
-        "locked_layers": list(sess_dict.get("locked_layers") or []),
+        "layer_names": list(sess_dict.get("layer_names") or _default_layer_names(sess_dict, layer_count)),
+        "active_layer": int(sess_dict.get("active_layer", _default_active_layer(sess_dict, layer_count))),
+        "visible_layers": list(sess_dict.get("visible_layers") or _default_visible_layers(sess_dict, layer_count)),
+        "locked_layers": list(sess_dict.get("locked_layers") or _default_locked_layers(sess_dict)),
         "whole_sheet_canvas_zoom": sess_dict.get("whole_sheet_canvas_zoom", 0),
         "whole_sheet_grid_visible": bool(sess_dict.get("whole_sheet_grid_visible", False)),
         "whole_sheet_grid_step": str(sess_dict.get("whole_sheet_grid_step", "frame")),
@@ -2766,6 +2868,8 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
         grid_rows=height,
         cells=cells,
         layers=all_layers,
+        session_kind="pipeline_job",
+        metadata_status="generated",
     )
     sess_dict = sess.to_dict()
     sess_dict["family"] = str(meta.get("family", "player"))
@@ -2802,6 +2906,8 @@ def workbench_create_blank_session(
             grid_rows=rows,
             cells=cells,
             layers=wire_layers,
+            session_kind="root_blank",
+            metadata_status="generated",
         )
         sess_dict = sess.to_dict()
         sess_dict["family"] = str(spec["family"])
@@ -2862,6 +2968,8 @@ def workbench_create_blank_session(
         grid_rows=rows,
         cells=cells,
         layers=wire_layers,
+        session_kind="template_owned",
+        metadata_status="generated",
     )
     sess_dict = sess.to_dict()
     sess_dict["family"] = family
@@ -2942,6 +3050,7 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
     expected_cells = cols * rows
 
     family = str(sess.get("family", "player"))
+    session_kind = _session_kind(sess)
     angles = int(sess.get("angles", 1))
     anims = [int(x) for x in sess.get("anims", [1])]
     projs = int(sess.get("projs", 1))
@@ -2957,7 +3066,7 @@ def workbench_export_xp(session_id: str, req_id: str) -> dict[str, Any]:
         and isinstance(persisted_layers, list)
         and len(persisted_layers) >= 1
         and (
-            family == "uploaded"
+            session_kind == "raw_xp"
             or family_dims is None
             or family_dims != (cols, rows)
         )
@@ -3043,9 +3152,6 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
     if cols <= 0 or rows <= 0:
         raise ApiError("XP dimensions must be positive", "invalid_xp_dims", "workbench", req_id, 422)
 
-    if layer_count < 3:
-        raise ApiError(f"XP must have at least 3 layers, got {layer_count}", "insufficient_layers", "workbench", req_id, 422)
-
     # Convert ALL layers to standard dict format (B2: stop discarding non-L2 layers)
     all_layers: list[list[dict]] = []
     for layer_idx in range(layer_count):
@@ -3068,9 +3174,9 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
     visual_layer_idx = 2 if layer_count >= 3 else 0
     cells = all_layers[visual_layer_idx]
 
-    # Derive geometry from L0 row 0 metadata (matches xp_core.py:242-292).
-    # Hard-fails if metadata is absent, malformed, or inconsistent with grid dims.
-    geo = _derive_geometry_from_l0(xp_data, cols, rows, req_id)
+    # Raw XP import accepts missing/malformed template metadata and falls back
+    # to a single-frame whole-sheet geometry owned by the document itself.
+    geo, metadata_status = _derive_raw_xp_geometry(xp_data, cols, rows, req_id)
 
     # Save uploaded XP to disk so workbench_load_from_job can read it
     job_id = str(uuid.uuid4())
@@ -3094,6 +3200,7 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
             "cell_w_chars": geo["cell_w"],
             "cell_h_chars": geo["cell_h"],
             "family": "uploaded",
+            "metadata_status": metadata_status,
         },
         gate_report_path=None,
         trace_path=None,
@@ -3114,27 +3221,20 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str) -> dict[str, Any]:
         grid_rows=rows,
         cells=cells,
         layers=all_layers,
+        session_kind="raw_xp",
+        metadata_status=metadata_status,
     )
 
     # Save session
     sess_path = _session_path(session_id)
-    save_json(sess_path, asdict(sess))
+    sess_dict = asdict(sess)
+    sess_dict["family"] = "uploaded"
+    save_json(sess_path, sess_dict)
 
-    return {
-        "session_id": session_id,
-        "job_id": job_id,
-        "grid_cols": cols,
-        "grid_rows": rows,
-        "cell_count": len(cells),
-        "layer_count": layer_count,
-        "angles": geo["angles"],
-        "anims": geo["anims"],
-        "projs": geo["projs"],
-        "cell_w": geo["cell_w"],
-        "cell_h": geo["cell_h"],
-        "frame_rows": geo["frame_rows"],
-        "frame_cols": geo["frame_cols"],
-    }
+    response = _session_payload(sess_dict)
+    response["job_id"] = job_id
+    response["cell_count"] = len(cells)
+    return response
 
 
 def workbench_xp_tool_command(xp_path: str, req_id: str) -> dict[str, Any]:
@@ -3474,6 +3574,14 @@ def workbench_web_skin_payload(session_id: str, req_id: str) -> dict[str, Any]:
     if not p.exists():
         raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
     sess = load_json(p)
+    if not _template_metadata_compatible(sess):
+        raise ApiError(
+            "session requires template metadata repair/conversion before runtime payload export",
+            "template_metadata_repair_required",
+            "workbench",
+            req_id,
+            422,
+        )
     family = str(sess.get("family", "player"))
     cols = int(sess["grid_cols"])
     rows = int(sess["grid_rows"])
@@ -3604,6 +3712,18 @@ def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
     for act_key, act_state in bundle.actions.items():
         if not act_state.session_id:
             continue
+        sess_path = _session_path(act_state.session_id)
+        if not sess_path.exists():
+            raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+        sess = load_json(sess_path)
+        if not _template_metadata_compatible(sess):
+            raise ApiError(
+                f"action '{act_key}' requires template metadata repair/conversion before bundle export",
+                "template_metadata_repair_required",
+                "workbench",
+                req_id,
+                422,
+            )
         action_spec = ts.get("actions", {}).get(act_key, {})
         family = action_spec.get("family", "player")
         if family not in ENABLED_FAMILIES:
@@ -3669,6 +3789,19 @@ def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, 
             raise ApiError(
                 f"required action '{act_key}' not ready",
                 "bundle_incomplete", "workbench", req_id, 422,
+            )
+
+        sess_path = _session_path(act_state.session_id)
+        if not sess_path.exists():
+            raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+        sess = load_json(sess_path)
+        if not _template_metadata_compatible(sess):
+            raise ApiError(
+                f"action '{act_key}' requires template metadata repair/conversion before runtime payload export",
+                "template_metadata_repair_required",
+                "workbench",
+                req_id,
+                422,
             )
 
         export = workbench_export_xp(act_state.session_id, req_id)
@@ -3882,6 +4015,9 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
         if not isinstance(source_cuts_h, list):
             raise ApiError("source_cuts_h must be list", "invalid_source_cuts_h", "workbench", req_id, 422)
         sess["source_cuts_h"] = source_cuts_h
+
+    sess["session_kind"] = _session_kind(sess)
+    sess["metadata_status"] = _metadata_status(sess)
 
     save_json(p, sess)
     response = _session_payload(sess)

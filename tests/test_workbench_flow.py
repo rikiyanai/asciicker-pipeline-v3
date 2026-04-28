@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from PIL import Image, ImageDraw
 
-from pipeline_v2.xp_codec import read_xp
+from pipeline_v2.xp_codec import read_xp, write_xp
 
 
 def _upload(client, path: Path, prefix: str = ""):
@@ -17,6 +17,15 @@ def _upload(client, path: Path, prefix: str = ""):
 
 def _blank_cells(count: int):
     return [{"idx": idx, "glyph": 0, "fg": [0, 0, 0], "bg": [255, 0, 255]} for idx in range(count)]
+
+
+def _xp_cell(glyph: int = 32, fg: tuple[int, int, int] = (255, 255, 255), bg: tuple[int, int, int] = (0, 0, 0)):
+    return (glyph, fg, bg)
+
+
+def _write_test_xp(path: Path, width: int, height: int, layers: list[list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]]) -> Path:
+    write_xp(path, width, height, layers)
+    return path
 
 
 def test_run_to_workbench_to_export(client):
@@ -309,6 +318,10 @@ def test_root_blank_session_defaults(client):
     assert payload["source_projs"] == 1
     assert payload["projs"] == 2
     assert payload["layer_count"] == 4
+    assert payload["session_kind"] == "root_blank"
+    assert payload["metadata_status"] == "generated"
+    assert payload["visible_layers"] == [0, 1, 2, 3]
+    assert payload["locked_layers"] == []
 
 
 def test_root_blank_session_accepts_explicit_geometry(client):
@@ -333,6 +346,105 @@ def test_root_blank_session_accepts_explicit_geometry(client):
     assert payload["anims"] == [3]
     assert payload["source_projs"] == 2
     assert payload["projs"] == 2
+    assert payload["session_kind"] == "root_blank"
+    assert payload["metadata_status"] == "generated"
+
+
+def test_upload_raw_xp_opens_without_template_metadata_and_roundtrips(client, tmp_path: Path):
+    width, height = 4, 3
+    layer0 = [_xp_cell() for _ in range(width * height)]
+    layer0[width + 1] = _xp_cell(ord("A"), (255, 200, 200), (0, 0, 0))
+    xp_path = _write_test_xp(tmp_path / "raw-missing-meta.xp", width, height, [layer0])
+
+    with xp_path.open("rb") as fh:
+        upload_resp = client.post(
+            "/api/workbench/upload-xp",
+            data={"file": (fh, xp_path.name)},
+            content_type="multipart/form-data",
+        )
+    assert upload_resp.status_code == 201
+    uploaded = upload_resp.get_json()
+    assert uploaded["session_kind"] == "raw_xp"
+    assert uploaded["metadata_status"] == "missing"
+    assert uploaded["grid_cols"] == width
+    assert uploaded["grid_rows"] == height
+    assert uploaded["angles"] == 1
+    assert uploaded["anims"] == [1]
+    assert uploaded["projs"] == 1
+    assert uploaded["layer_count"] == 1
+    assert uploaded["layer_names"] == ["Layer 0"]
+    assert uploaded["active_layer"] == 0
+    assert uploaded["visible_layers"] == [0]
+    assert uploaded["locked_layers"] == []
+
+    session_id = uploaded["session_id"]
+    load_resp = client.post(
+        "/api/workbench/load-session",
+        data=json.dumps({"session_id": session_id}),
+        content_type="application/json",
+    )
+    assert load_resp.status_code == 200
+    loaded = load_resp.get_json()
+    assert loaded["session_kind"] == "raw_xp"
+    assert loaded["metadata_status"] == "missing"
+
+    browse_resp = client.get("/api/workbench/browse/list")
+    assert browse_resp.status_code == 200
+    browse_sessions = {item["session_id"]: item for item in browse_resp.get_json()["sessions"]}
+    assert browse_sessions[session_id]["session_kind"] == "raw_xp"
+    assert browse_sessions[session_id]["metadata_status"] == "missing"
+
+    export_resp = client.post(
+        "/api/workbench/export-xp",
+        data=json.dumps({"session_id": session_id}),
+        content_type="application/json",
+    )
+    assert export_resp.status_code == 200
+    export_data = export_resp.get_json()
+    assert export_data["source"] == "persisted_layers"
+    parsed = read_xp(Path(export_data["xp_path"]))
+    assert parsed["layers"] == 1
+    assert parsed["width"] == width
+    assert parsed["height"] == height
+    assert parsed["cells"][0][width + 1][0] == ord("A")
+
+
+def test_upload_invalid_metadata_xp_still_exports_but_runtime_payload_refuses(client, tmp_path: Path):
+    width, height = 4, 3
+    layer0 = [_xp_cell() for _ in range(width * height)]
+    layer0[1] = _xp_cell(ord("5"))
+    layer0[width + 2] = _xp_cell(ord("B"), (200, 255, 200), (0, 0, 0))
+    xp_path = _write_test_xp(tmp_path / "raw-invalid-meta.xp", width, height, [layer0])
+
+    with xp_path.open("rb") as fh:
+        upload_resp = client.post(
+            "/api/workbench/upload-xp",
+            data={"file": (fh, xp_path.name)},
+            content_type="multipart/form-data",
+        )
+    assert upload_resp.status_code == 201
+    uploaded = upload_resp.get_json()
+    assert uploaded["session_kind"] == "raw_xp"
+    assert uploaded["metadata_status"] == "invalid"
+
+    export_resp = client.post(
+        "/api/workbench/export-xp",
+        data=json.dumps({"session_id": uploaded["session_id"]}),
+        content_type="application/json",
+    )
+    assert export_resp.status_code == 200
+    parsed = read_xp(Path(export_resp.get_json()["xp_path"]))
+    assert parsed["layers"] == 1
+    assert parsed["cells"][0][width + 2][0] == ord("B")
+
+    runtime_resp = client.post(
+        "/api/workbench/web-skin-payload",
+        data=json.dumps({"session_id": uploaded["session_id"]}),
+        content_type="application/json",
+    )
+    assert runtime_resp.status_code == 422
+    runtime_err = runtime_resp.get_json()
+    assert runtime_err["code"] == "template_metadata_repair_required"
 
 
 def test_save_session_persists_explicit_geometry(client):

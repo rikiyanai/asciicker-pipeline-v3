@@ -126,6 +126,32 @@ and session-state changes required by the now-decided product model:
 5. template/runtime endpoints fail with explicit repair-needed errors instead of
    hidden mutation
 
+### 2026-04-27 implementation checkpoint
+
+Backend/session-state implementation for this contract is now partially landed in
+the current worktree. This is not a Section 1 closure claim; it is a backend
+owner-boundary checkpoint.
+
+Verified by `python3 -m pytest tests/test_workbench_flow.py -k "root_blank_session or upload_raw_xp or upload_invalid_metadata_xp or save_session_persists_explicit_geometry or run_to_workbench_to_export or web_skin_payload_maps_four_angle_sessions_to_cardinal_native_rows or workbench_browse_crud_endpoints"`:
+
+1. **PASS:** raw one-layer XP opens through `/api/workbench/upload-xp`
+2. **PASS:** missing and malformed layer-0 metadata no longer block generic
+   root-editor session creation
+3. **PASS:** `session_kind` / `metadata_status` now round-trip through
+   load-session and browse-list responses
+4. **PASS:** generic `Export XP` preserves raw imported layer sets via persisted
+   layers
+5. **PASS:** runtime/web-skin payload export now refuses incompatible raw XP
+   sessions with explicit `template_metadata_repair_required`
+6. **CODE GUARD ADDED:** bundle export / bundle web-skin payload now reject
+   incompatible session metadata at the bundle/runtime boundary as well
+
+Still not claimed in this checkpoint:
+
+1. no new whole-sheet UI work
+2. no browse-model UX change yet
+3. no grid preset / grid replace work yet
+
 ## Audit — Whole-Sheet Clipboard Contract Repair And Section 1 Proof Completion (2026-04-27)
 
 This is a verifier/evidence checkpoint entry. It does not claim a new product
