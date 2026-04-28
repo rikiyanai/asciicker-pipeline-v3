@@ -2493,6 +2493,8 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
         "whole_sheet_canvas_zoom": sess_dict.get("whole_sheet_canvas_zoom", 0),
         "whole_sheet_grid_visible": bool(sess_dict.get("whole_sheet_grid_visible", False)),
         "whole_sheet_grid_step": str(sess_dict.get("whole_sheet_grid_step", "frame")),
+        "whole_sheet_grid_custom_w": int(sess_dict.get("whole_sheet_grid_custom_w", 1) or 1),
+        "whole_sheet_grid_custom_h": int(sess_dict.get("whole_sheet_grid_custom_h", 1) or 1),
         "grid_cols": width,
         "grid_rows": height,
         "cell_w": int(sess_dict["cell_w"]),
@@ -3985,6 +3987,10 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
         sess["whole_sheet_grid_visible"] = bool(payload.get("whole_sheet_grid_visible"))
     if "whole_sheet_grid_step" in payload:
         sess["whole_sheet_grid_step"] = str(payload.get("whole_sheet_grid_step") or "frame")
+    if "whole_sheet_grid_custom_w" in payload:
+        sess["whole_sheet_grid_custom_w"] = max(1, int(payload.get("whole_sheet_grid_custom_w") or 1))
+    if "whole_sheet_grid_custom_h" in payload:
+        sess["whole_sheet_grid_custom_h"] = max(1, int(payload.get("whole_sheet_grid_custom_h") or 1))
     if "frame_groups" in payload:
         frame_groups = payload.get("frame_groups")
         if not isinstance(frame_groups, list):

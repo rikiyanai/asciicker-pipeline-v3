@@ -294,6 +294,11 @@ let editorState = {
   appliedCanvasZoom: 1,
   gridVisible: false,
   gridStep: 'frame',
+  gridCustomW: 1,
+  gridCustomH: 1,
+  gridTemplatePresets: [],
+  sessionKind: '',
+  metadataStatus: '',
   viewportResizeObserver: null,
   layerNames: [],
   // Match-source cell for Replace FG/BG (W29/W30 parity).
@@ -399,8 +404,113 @@ function _toggleGridVisibility() {
   editorState.gridVisible = next;
   const gridBtn = document.getElementById('wsGridToggle');
   if (gridBtn) gridBtn.classList.toggle('ws-toggle-on', next);
+  if (next) _applyGridStepToCanvas();
   if (editorState.canvas) editorState.canvas.setGridVisible(next);
   _emitDocumentStateChange('grid-toggle');
+}
+
+function _coerceGridSize(value, fallback = 1) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1) return Math.max(1, Number(fallback) || 1);
+  return Math.max(1, Math.floor(n));
+}
+
+function _normalizeGridStepToken(value) {
+  const token = String(value || 'frame').trim();
+  if (!token) return 'frame';
+  if (/^\d+$/.test(token)) return String(_coerceGridSize(token, 1));
+  if (token === 'frame' || token === 'custom' || token === 'layer0_metadata') return token;
+  if (token.startsWith('template:')) return token;
+  return 'frame';
+}
+
+function _findTemplateGridPreset(tokenOrKey) {
+  const key = String(tokenOrKey || '').replace(/^template:/, '');
+  return (editorState.gridTemplatePresets || []).find((preset) => String(preset?.key || '') === key) || null;
+}
+
+function _metadataGridDimensions() {
+  const status = String(editorState.metadataStatus || '');
+  if (status !== 'valid' && status !== 'generated') return null;
+  return {
+    width: _coerceGridSize(editorState.frameW, editorState.gridCols || 1),
+    height: _coerceGridSize(editorState.frameH, editorState.gridRows || 1),
+  };
+}
+
+function _ensureValidGridStepToken() {
+  const token = _normalizeGridStepToken(editorState.gridStep);
+  if (token.startsWith('template:') && !_findTemplateGridPreset(token)) {
+    editorState.gridStep = 'frame';
+    return;
+  }
+  editorState.gridStep = token;
+}
+
+function _resolveGridStepConfig() {
+  _ensureValidGridStepToken();
+  const token = editorState.gridStep;
+  if (token === 'frame') {
+    return {
+      token,
+      width: _coerceGridSize(editorState.frameW, editorState.gridCols || 1),
+      height: _coerceGridSize(editorState.frameH, editorState.gridRows || 1),
+    };
+  }
+  if (token === 'custom') {
+    return {
+      token,
+      width: _coerceGridSize(editorState.gridCustomW, 1),
+      height: _coerceGridSize(editorState.gridCustomH, 1),
+    };
+  }
+  if (token === 'layer0_metadata') {
+    const dims = _metadataGridDimensions();
+    if (dims) {
+      return { token, width: dims.width, height: dims.height };
+    }
+    return {
+      token,
+      width: _coerceGridSize(editorState.frameW, editorState.gridCols || 1),
+      height: _coerceGridSize(editorState.frameH, editorState.gridRows || 1),
+    };
+  }
+  if (token.startsWith('template:')) {
+    const preset = _findTemplateGridPreset(token);
+    if (preset) {
+      return {
+        token,
+        width: _coerceGridSize(preset.width, editorState.frameW || 1),
+        height: _coerceGridSize(preset.height, editorState.frameH || 1),
+      };
+    }
+  }
+  const step = _coerceGridSize(token, 1);
+  return { token: String(step), width: step, height: step };
+}
+
+function _syncGridControlsUI() {
+  const select = document.getElementById('wsGridStep');
+  if (select) select.value = editorState.gridStep;
+  const customW = document.getElementById('wsGridCustomW');
+  const customH = document.getElementById('wsGridCustomH');
+  const customActive = editorState.gridStep === 'custom';
+  if (customW) {
+    customW.value = String(_coerceGridSize(editorState.gridCustomW, 1));
+    customW.disabled = !customActive;
+  }
+  if (customH) {
+    customH.value = String(_coerceGridSize(editorState.gridCustomH, 1));
+    customH.disabled = !customActive;
+  }
+  const metaOption = document.getElementById('wsGridStepLayer0Meta');
+  if (metaOption) {
+    const dims = _metadataGridDimensions();
+    metaOption.disabled = !dims;
+    metaOption.textContent = dims
+      ? `Layer0 Meta (${dims.width}×${dims.height})`
+      : 'Layer0 Meta';
+  }
 }
 
 function _disconnectViewportResizeObserver() {
@@ -435,6 +545,11 @@ async function mount({
   visibleLayers,
   lockedLayers,
   currentSessionId,
+  sessionKind,
+  metadataStatus,
+  gridCustomW,
+  gridCustomH,
+  gridTemplatePresets,
   canvasZoom,
   gridVisible,
   gridStep,
@@ -464,10 +579,21 @@ async function mount({
   editorState.frameH = frameH || gridRows;
   editorState.containerEl = container;
   editorState.currentSessionId = String(currentSessionId || '').trim();
+  editorState.sessionKind = String(sessionKind || '').trim();
+  editorState.metadataStatus = String(metadataStatus || '').trim();
   editorState.layerNames = Array.isArray(layerNames) ? [...layerNames] : [];
   editorState.canvasZoom = _normalizeCanvasZoomValue(canvasZoom);
   editorState.gridVisible = !!gridVisible;
-  editorState.gridStep = String(gridStep || 'frame') || 'frame';
+  editorState.gridStep = _normalizeGridStepToken(gridStep);
+  editorState.gridCustomW = _coerceGridSize(gridCustomW, 1);
+  editorState.gridCustomH = _coerceGridSize(gridCustomH, 1);
+  editorState.gridTemplatePresets = Array.isArray(gridTemplatePresets) ? gridTemplatePresets.map((preset) => ({
+    key: String(preset?.key || ''),
+    label: String(preset?.label || preset?.key || ''),
+    width: _coerceGridSize(preset?.width, 1),
+    height: _coerceGridSize(preset?.height, 1),
+  })).filter((preset) => preset.key) : [];
+  _ensureValidGridStepToken();
   editorState.onCellEdited = onCellEdited || null;
   editorState.onStrokeComplete = onStrokeComplete || null;
   editorState.onActiveLayerChanged = onActiveLayerChanged || null;
@@ -1181,7 +1307,9 @@ function _buildDocumentSnapshot() {
     canvasZoom: editorState.canvasZoom,
     appliedCanvasZoom: editorState.appliedCanvasZoom,
     gridVisible: !!editorState.gridVisible,
-    gridStep: String(editorState.gridStep || 'frame'),
+    gridStep: _normalizeGridStepToken(editorState.gridStep),
+    gridCustomW: _coerceGridSize(editorState.gridCustomW, 1),
+    gridCustomH: _coerceGridSize(editorState.gridCustomH, 1),
   };
 }
 
@@ -1221,12 +1349,9 @@ function _buildLayerStackFromSnapshot(snapshot, cols, rows) {
 
 function _applyGridStepToCanvas() {
   if (!editorState.canvas || typeof editorState.canvas.setGridStep !== 'function') return;
-  if (editorState.gridStep === 'frame') {
-    editorState.canvas.setGridStep(editorState.frameW, editorState.frameH);
-  } else {
-    const step = Math.max(1, Number(editorState.gridStep) || 1);
-    editorState.canvas.setGridStep(step, step);
-  }
+  const resolved = _resolveGridStepConfig();
+  editorState.canvas.setGridStep(resolved.width, resolved.height);
+  _syncGridControlsUI();
 }
 
 function _applyDocumentSnapshot(snapshot) {
@@ -1240,7 +1365,10 @@ function _applyDocumentSnapshot(snapshot) {
   editorState.layerNames = Array.isArray(snapshot.layerNames) ? [...snapshot.layerNames] : [];
   editorState.canvasZoom = _normalizeCanvasZoomValue(snapshot.canvasZoom);
   editorState.gridVisible = !!snapshot.gridVisible;
-  editorState.gridStep = String(snapshot.gridStep || 'frame') || 'frame';
+  editorState.gridStep = _normalizeGridStepToken(snapshot.gridStep);
+  editorState.gridCustomW = _coerceGridSize(snapshot.gridCustomW, editorState.gridCustomW || 1);
+  editorState.gridCustomH = _coerceGridSize(snapshot.gridCustomH, editorState.gridCustomH || 1);
+  _ensureValidGridStepToken();
 
   const stack = _buildLayerStackFromSnapshot(snapshot, cols, rows);
   editorState.layerStack = stack;
@@ -1248,6 +1376,7 @@ function _applyDocumentSnapshot(snapshot) {
   editorState.canvas.setLayerStack(stack);
   editorState.canvas.setGridVisible(editorState.gridVisible);
   _applyGridStepToCanvas();
+  _syncGridControlsUI();
   _updateLayersPanelUI();
   const dimsEl = document.getElementById('wsDims');
   if (dimsEl) dimsEl.textContent = `${cols}\u00d7${rows} · ${stack.layers.length}L`;
@@ -2153,13 +2282,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   toolsCol.appendChild(_buildToggle('Grid', 'wsGridToggle', editorState.gridVisible, (on) => {
     editorState.gridVisible = !!on;
     if (editorState.canvas) {
-      // Apply current step selection before showing
-      if (on) {
-        const sel = document.getElementById('wsGridStep');
-        if (sel && sel.value === 'frame') {
-          editorState.canvas.setGridStep(editorState.frameW, editorState.frameH);
-        }
-      }
+      if (on) _applyGridStepToCanvas();
       editorState.canvas.setGridVisible(on);
     }
     _emitDocumentStateChange('grid-toggle');
@@ -2168,31 +2291,83 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   const gridStepSel = document.createElement('select');
   gridStepSel.id = 'wsGridStep';
   gridStepSel.title = 'Grid cell spacing';
-  gridStepSel.style.cssText = 'width:62px;padding:2px;font-size:11px;background:var(--bg);color:var(--fg);border:1px solid #2a3345;';
+  gridStepSel.style.cssText = 'width:146px;padding:2px;font-size:11px;background:var(--bg);color:var(--fg);border:1px solid #2a3345;';
   const frameOpt = document.createElement('option');
   frameOpt.value = 'frame';
   frameOpt.textContent = 'Frame';
   gridStepSel.appendChild(frameOpt);
+  const metaOpt = document.createElement('option');
+  metaOpt.id = 'wsGridStepLayer0Meta';
+  metaOpt.value = 'layer0_metadata';
+  metaOpt.textContent = 'Layer0 Meta';
+  gridStepSel.appendChild(metaOpt);
   for (const v of [1, 2, 4, 8, 16]) {
     const opt = document.createElement('option');
     opt.value = String(v);
     opt.textContent = `${v}\u00d7${v}`;
     gridStepSel.appendChild(opt);
   }
+  for (const preset of editorState.gridTemplatePresets) {
+    const opt = document.createElement('option');
+    opt.value = `template:${preset.key}`;
+    opt.textContent = `Template: ${preset.label} (${preset.width}\u00d7${preset.height})`;
+    gridStepSel.appendChild(opt);
+  }
+  const customOpt = document.createElement('option');
+  customOpt.value = 'custom';
+  customOpt.textContent = 'Custom';
+  gridStepSel.appendChild(customOpt);
   gridStepSel.value = editorState.gridStep;
   gridStepSel.addEventListener('change', () => {
-    editorState.gridStep = gridStepSel.value;
-    if (editorState.canvas && typeof editorState.canvas.setGridStep === 'function') {
-      if (gridStepSel.value === 'frame') {
-        editorState.canvas.setGridStep(editorState.frameW, editorState.frameH);
-      } else {
-        const v = Number(gridStepSel.value) || 1;
-        editorState.canvas.setGridStep(v, v);
-      }
-    }
+    editorState.gridStep = _normalizeGridStepToken(gridStepSel.value);
+    _applyGridStepToCanvas();
     _emitDocumentStateChange('grid-step');
   });
   toolsCol.appendChild(gridStepSel);
+
+  const gridCustomRow = document.createElement('div');
+  gridCustomRow.className = 'ws-inline-row';
+  gridCustomRow.style.cssText = 'display:flex;gap:4px;align-items:center;flex-wrap:nowrap;';
+
+  const gridCustomW = document.createElement('input');
+  gridCustomW.id = 'wsGridCustomW';
+  gridCustomW.type = 'number';
+  gridCustomW.min = '1';
+  gridCustomW.title = 'Custom grid width';
+  gridCustomW.value = String(_coerceGridSize(editorState.gridCustomW, 1));
+  gridCustomW.style.cssText = 'width:56px;padding:2px;font-size:11px;background:var(--bg);color:var(--fg);border:1px solid #2a3345;';
+  gridCustomW.addEventListener('change', () => {
+    editorState.gridCustomW = _coerceGridSize(gridCustomW.value, editorState.gridCustomW || 1);
+    _syncGridControlsUI();
+    if (editorState.gridStep === 'custom') {
+      _applyGridStepToCanvas();
+      _emitDocumentStateChange('grid-custom-width');
+    }
+  });
+  gridCustomRow.appendChild(gridCustomW);
+
+  const timesLabel = document.createElement('span');
+  timesLabel.textContent = '\u00d7';
+  gridCustomRow.appendChild(timesLabel);
+
+  const gridCustomH = document.createElement('input');
+  gridCustomH.id = 'wsGridCustomH';
+  gridCustomH.type = 'number';
+  gridCustomH.min = '1';
+  gridCustomH.title = 'Custom grid height';
+  gridCustomH.value = String(_coerceGridSize(editorState.gridCustomH, 1));
+  gridCustomH.style.cssText = 'width:56px;padding:2px;font-size:11px;background:var(--bg);color:var(--fg);border:1px solid #2a3345;';
+  gridCustomH.addEventListener('change', () => {
+    editorState.gridCustomH = _coerceGridSize(gridCustomH.value, editorState.gridCustomH || 1);
+    _syncGridControlsUI();
+    if (editorState.gridStep === 'custom') {
+      _applyGridStepToCanvas();
+      _emitDocumentStateChange('grid-custom-height');
+    }
+  });
+  gridCustomRow.appendChild(gridCustomH);
+  toolsCol.appendChild(gridCustomRow);
+  _syncGridControlsUI();
 
   // Right column — Apply: G, F, B toggles
   const applyCol = document.createElement('div');
@@ -3563,6 +3738,7 @@ function syncFromState(layers) {
 
 function getState() {
   const hist = _historyState();
+  const resolvedGrid = _resolveGridStepConfig();
   return {
     mounted: editorState.mounted,
     gridCols: editorState.gridCols,
@@ -3583,8 +3759,14 @@ function getState() {
     drawBg: editorState.drawBg,
     canvasZoom: editorState.canvasZoom,
     appliedCanvasZoom: editorState.appliedCanvasZoom,
+    sessionKind: editorState.sessionKind,
+    metadataStatus: editorState.metadataStatus,
     gridVisible: editorState.gridVisible,
     gridStep: editorState.gridStep,
+    gridCustomW: editorState.gridCustomW,
+    gridCustomH: editorState.gridCustomH,
+    resolvedGridW: resolvedGrid.width,
+    resolvedGridH: resolvedGrid.height,
     canUndo: hist.canUndo,
     canRedo: hist.canRedo,
     historyDepth: hist.historyDepth,

@@ -129,6 +129,10 @@
     wholeSheetCanvasZoom: 0,
     wholeSheetGridVisible: false,
     wholeSheetGridStep: "frame",
+    wholeSheetGridCustomW: 1,
+    wholeSheetGridCustomH: 1,
+    sessionKind: "",
+    metadataStatus: "",
     inspectorOpen: false,
     inspectorRow: 0,
     inspectorCol: 0,
@@ -1983,6 +1987,8 @@
       wholeSheetCanvasZoom: state.wholeSheetCanvasZoom,
       wholeSheetGridVisible: !!state.wholeSheetGridVisible,
       wholeSheetGridStep: String(state.wholeSheetGridStep || "frame"),
+      wholeSheetGridCustomW: Math.max(1, Number(state.wholeSheetGridCustomW || 1)),
+      wholeSheetGridCustomH: Math.max(1, Number(state.wholeSheetGridCustomH || 1)),
       selectedFrames: [...state.selectedFrames],
       selectionAnchor: state.selectionAnchor ? { ...state.selectionAnchor } : null,
       selectionFocus: state.selectionFocus ? { ...state.selectionFocus } : null,
@@ -2029,6 +2035,8 @@
     state.wholeSheetCanvasZoom = Number.isFinite(Number(snap.wholeSheetCanvasZoom)) ? Number(snap.wholeSheetCanvasZoom) : state.wholeSheetCanvasZoom;
     state.wholeSheetGridVisible = !!snap.wholeSheetGridVisible;
     state.wholeSheetGridStep = String(snap.wholeSheetGridStep || state.wholeSheetGridStep || "frame");
+    state.wholeSheetGridCustomW = Math.max(1, Number(snap.wholeSheetGridCustomW || state.wholeSheetGridCustomW || 1));
+    state.wholeSheetGridCustomH = Math.max(1, Number(snap.wholeSheetGridCustomH || state.wholeSheetGridCustomH || 1));
     const legacySelectedFrames = Number.isFinite(Number(snap.selectedRow))
       ? (snap.selectedCols || []).map((x) => ({ row: Number(snap.selectedRow), col: Number(x) }))
       : [];
@@ -4130,6 +4138,8 @@
       const saveCanvasZoom = Number.isFinite(Number(wsSnapshot?.canvasZoom)) ? Number(wsSnapshot.canvasZoom) : state.wholeSheetCanvasZoom;
       const saveGridVisible = typeof wsSnapshot?.gridVisible === "boolean" ? !!wsSnapshot.gridVisible : !!state.wholeSheetGridVisible;
       const saveGridStep = String(wsSnapshot?.gridStep || state.wholeSheetGridStep || "frame");
+      const saveGridCustomW = Math.max(1, Number(wsSnapshot?.gridCustomW || state.wholeSheetGridCustomW || 1));
+      const saveGridCustomH = Math.max(1, Number(wsSnapshot?.gridCustomH || state.wholeSheetGridCustomH || 1));
       const payload = {
         session_id: state.sessionId,
         cells: saveCells,
@@ -4147,6 +4157,8 @@
         whole_sheet_canvas_zoom: saveCanvasZoom,
         whole_sheet_grid_visible: saveGridVisible,
         whole_sheet_grid_step: saveGridStep,
+        whole_sheet_grid_custom_w: saveGridCustomW,
+        whole_sheet_grid_custom_h: saveGridCustomH,
         source_projs: state.sourceProjs,
         projs: state.projs,
         row_categories: state.rowCategories,
@@ -4213,10 +4225,14 @@
       state.projs = Number(j.projs || 1);
       state.cellWChars = Number(j.cell_w || 1);
       state.cellHChars = Number(j.cell_h || 1);
+      state.sessionKind = String(j.session_kind || "");
+      state.metadataStatus = String(j.metadata_status || "");
       state.layerNames = Array.isArray(j.layer_names) && j.layer_names.length ? [...j.layer_names] : [...DEFAULT_LAYER_NAMES];
       state.wholeSheetCanvasZoom = Number.isFinite(Number(j.whole_sheet_canvas_zoom)) ? Number(j.whole_sheet_canvas_zoom) : 0;
       state.wholeSheetGridVisible = !!j.whole_sheet_grid_visible;
       state.wholeSheetGridStep = String(j.whole_sheet_grid_step || "frame");
+      state.wholeSheetGridCustomW = Math.max(1, Number(j.whole_sheet_grid_custom_w || 1));
+      state.wholeSheetGridCustomH = Math.max(1, Number(j.whole_sheet_grid_custom_h || 1));
       state.anchorBox = j.source_anchor_box ? { ...j.source_anchor_box } : null;
       state.drawCurrent = j.source_draft_box ? { ...j.source_draft_box } : null;
       state.extractedBoxes = cloneBoxes(j.source_boxes || []);
@@ -4473,9 +4489,8 @@
         $("sessionOut").textContent = JSON.stringify(j, null, 2);
         return;
       }
-      // Reuse loadFromJob for full session hydration
       state.jobId = j.job_id;
-      await loadFromJob();
+      await loadSession(j.session_id, { reason: "Imported XP session ready..." });
     } catch (e) {
       status("Import failed: " + String(e), "err");
       $("sessionOut").textContent = String(e);
@@ -6549,6 +6564,11 @@
       visibleLayers: state.visibleLayers,
       lockedLayers: state.lockedLayers,
       currentSessionId: state.sessionId,
+      sessionKind: state.sessionKind,
+      metadataStatus: state.metadataStatus,
+      gridCustomW: state.wholeSheetGridCustomW,
+      gridCustomH: state.wholeSheetGridCustomH,
+      gridTemplatePresets: getWholeSheetTemplateGridPresets(),
       canvasZoom: state.wholeSheetCanvasZoom,
       gridVisible: state.wholeSheetGridVisible,
       gridStep: state.wholeSheetGridStep,
@@ -6630,6 +6650,8 @@
     state.wholeSheetCanvasZoom = Number.isFinite(Number(snapshot.canvasZoom)) ? Number(snapshot.canvasZoom) : state.wholeSheetCanvasZoom;
     state.wholeSheetGridVisible = !!snapshot.gridVisible;
     state.wholeSheetGridStep = String(snapshot.gridStep || state.wholeSheetGridStep || "frame");
+    state.wholeSheetGridCustomW = Math.max(1, Number(snapshot.gridCustomW || state.wholeSheetGridCustomW || 1));
+    state.wholeSheetGridCustomH = Math.max(1, Number(snapshot.gridCustomH || state.wholeSheetGridCustomH || 1));
     state.cells = state.layers[2] ? deepCloneCells(state.layers[2]) : buildBlankLayerCells();
     recomputeFrameGeometry();
     renderLayerControls();
@@ -7203,6 +7225,21 @@
   function getActiveTemplateSet() {
     if (!state.templateRegistry) return null;
     return state.templateRegistry.template_sets?.[state.templateSetKey] || null;
+  }
+
+  function getWholeSheetTemplateGridPresets() {
+    const ts = getActiveTemplateSet();
+    if (!ts || !ts.actions || typeof ts.actions !== "object") return [];
+    return Object.entries(ts.actions).map(([actionKey, spec]) => {
+      const width = Math.max(1, Number(spec?.cell_w || 1));
+      const height = Math.max(1, Number(spec?.cell_h || 1));
+      return {
+        key: String(actionKey),
+        label: String(spec?.label || actionKey),
+        width,
+        height,
+      };
+    });
   }
 
   // Canonical action order for bundle tabs and initial selection.

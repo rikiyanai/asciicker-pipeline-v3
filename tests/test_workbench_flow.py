@@ -471,7 +471,9 @@ def test_save_session_persists_explicit_geometry(client):
             "locked_layers": [0, 3],
             "whole_sheet_canvas_zoom": 1.5,
             "whole_sheet_grid_visible": True,
-            "whole_sheet_grid_step": "4",
+            "whole_sheet_grid_step": "custom",
+            "whole_sheet_grid_custom_w": 5,
+            "whole_sheet_grid_custom_h": 7,
             "source_projs": 2,
             "projs": 2,
             "cells": _blank_cells(count),
@@ -493,7 +495,9 @@ def test_save_session_persists_explicit_geometry(client):
     assert saved["locked_layers"] == [0, 3]
     assert saved["whole_sheet_canvas_zoom"] == 1.5
     assert saved["whole_sheet_grid_visible"] is True
-    assert saved["whole_sheet_grid_step"] == "4"
+    assert saved["whole_sheet_grid_step"] == "custom"
+    assert saved["whole_sheet_grid_custom_w"] == 5
+    assert saved["whole_sheet_grid_custom_h"] == 7
 
     load_resp = client.post(
         "/api/workbench/load-session",
@@ -514,7 +518,9 @@ def test_save_session_persists_explicit_geometry(client):
     assert loaded["locked_layers"] == [0, 3]
     assert loaded["whole_sheet_canvas_zoom"] == 1.5
     assert loaded["whole_sheet_grid_visible"] is True
-    assert loaded["whole_sheet_grid_step"] == "4"
+    assert loaded["whole_sheet_grid_step"] == "custom"
+    assert loaded["whole_sheet_grid_custom_w"] == 5
+    assert loaded["whole_sheet_grid_custom_h"] == 7
 
 
 def test_run_pipeline_honors_explicit_target_geometry(client):

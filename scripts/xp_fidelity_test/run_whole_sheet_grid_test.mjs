@@ -11,8 +11,10 @@
  * Validates:
  *   1. Grid renders correctly at step=1
  *   2. Grid renders correctly at step=16
- *   3. Grid renders with active selection (marching ants coexist)
- *   4. Grid renders after scrolling (viewport culling doesn't skip visible marks)
+ *   3. Custom grid dimensions apply
+ *   4. Layer-0 metadata preset applies
+ *   5. Grid renders with active selection (marching ants coexist)
+ *   6. Grid renders after scrolling (viewport culling doesn't skip visible marks)
  */
 
 import {
@@ -84,6 +86,7 @@ async function main() {
 
   const steps = {};
   let allPass = true;
+  const expectedMetadataGrid = { width: 9, height: 10 };
 
   // ── Step 1: Import XP ──
   console.log('=== Step 1: Import XP ===');
@@ -143,8 +146,48 @@ async function main() {
   if (selVal5 !== '16') { allPass = false; console.warn('  FAIL: grid step not 16'); }
   else console.log('  PASS: grid at step=16');
 
-  // ── Step 6: Grid + active selection ──
-  console.log('=== Step 6: Grid + selection ===');
+  // ── Step 6: Custom grid 5x7 ──
+  console.log('=== Step 6: Custom grid 5x7 ===');
+  await page.selectOption('#wsGridStep', 'custom');
+  await page.locator('#wsGridCustomW').fill('5');
+  await page.locator('#wsGridCustomW').dispatchEvent('change');
+  await page.locator('#wsGridCustomH').fill('7');
+  await page.locator('#wsGridCustomH').dispatchEvent('change');
+  await page.waitForTimeout(300);
+  await screenshot(page, outDir, 'step06_grid_custom_5x7');
+  const customGridState = await page.evaluate(() => window.__wholeSheetEditor?.getState?.() ?? null);
+  const customGridPass = customGridState?.gridStep === 'custom'
+    && customGridState?.gridCustomW === 5
+    && customGridState?.gridCustomH === 7
+    && customGridState?.resolvedGridW === 5
+    && customGridState?.resolvedGridH === 7;
+  steps.grid_custom = {
+    step: 'grid_custom_5x7',
+    pass: !!customGridPass,
+    state: customGridState,
+  };
+  if (!customGridPass) { allPass = false; console.warn('  FAIL: custom grid 5x7 did not apply'); }
+  else console.log('  PASS: custom grid 5x7 applied');
+
+  // ── Step 7: Grid from layer-0 metadata ──
+  console.log('=== Step 7: Grid from layer-0 metadata ===');
+  await page.selectOption('#wsGridStep', 'layer0_metadata');
+  await page.waitForTimeout(300);
+  await screenshot(page, outDir, 'step07_grid_layer0_metadata');
+  const metadataGridState = await page.evaluate(() => window.__wholeSheetEditor?.getState?.() ?? null);
+  const metadataGridPass = metadataGridState?.gridStep === 'layer0_metadata'
+    && metadataGridState?.resolvedGridW === expectedMetadataGrid.width
+    && metadataGridState?.resolvedGridH === expectedMetadataGrid.height;
+  steps.grid_layer0_metadata = {
+    step: 'grid_layer0_metadata',
+    pass: !!metadataGridPass,
+    state: metadataGridState,
+  };
+  if (!metadataGridPass) { allPass = false; console.warn('  FAIL: layer-0 metadata grid did not apply'); }
+  else console.log(`  PASS: layer-0 metadata grid applied (${expectedMetadataGrid.width}x${expectedMetadataGrid.height})`);
+
+  // ── Step 8: Grid + active selection ──
+  console.log('=== Step 8: Grid + selection ===');
   // Reset step to 1 for denser visual
   await page.selectOption('#wsGridStep', '1');
   await page.waitForTimeout(200);
@@ -164,8 +207,8 @@ async function main() {
   if (!coexist) { allPass = false; console.warn('  FAIL: grid+selection coexistence'); }
   else console.log('  PASS: grid + selection coexist');
 
-  // ── Step 7: Grid after scroll ──
-  console.log('=== Step 7: Grid after scroll ===');
+  // ── Step 9: Grid after scroll ──
+  console.log('=== Step 9: Grid after scroll ===');
   await page.evaluate(() => {
     const scroll = document.getElementById('wholeSheetScroll');
     if (scroll) {
@@ -174,7 +217,7 @@ async function main() {
     }
   });
   await page.waitForTimeout(400);
-  await screenshot(page, outDir, 'step07_grid_after_scroll');
+  await screenshot(page, outDir, 'step09_grid_after_scroll');
   steps.grid_after_scroll = { step: 'grid_after_scroll', pass: true, note: 'Visual: screenshot shows grid after scroll' };
   console.log('  PASS: grid after scroll (visual evidence in screenshot)');
 

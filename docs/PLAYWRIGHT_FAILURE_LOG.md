@@ -184,6 +184,57 @@ does not claim completion of the broader grid roadmap.
 3. template/action-derived grid presets
 4. grid-scoped replace semantics
 
+## Audit — Whole-Sheet Grid Model Expansion (2026-04-27)
+
+This is the next whole-sheet grid checkpoint after the contrast darkening pass.
+It does not claim broader Section 2 or browse-model completion.
+
+### What changed
+
+1. Whole-sheet grid state now supports:
+   - `frame`
+   - square numeric steps
+   - custom `m x n`
+   - `layer0_metadata`
+   - template-derived `template:<action>`
+2. Root/session payloads now persist custom grid width and height.
+3. Raw-XP import now rehydrates the uploaded session directly in the browser
+   instead of discarding that session through the old job-load path.
+4. Added a dedicated template-grid verifier lane for template-owned sessions.
+
+### Verification evidence
+
+1. Backend/session round-trip:
+   - `python3 -m pytest tests/test_workbench_flow.py -k "root_blank_session or upload_raw_xp or upload_invalid_metadata_xp or save_session_persists_explicit_geometry"`
+   - PASS (`5 passed, 8 deselected`)
+2. Root-hosted imported-XP headed verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_grid_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5071/workbench --out-dir output/ws_grid_root`
+   - PASS (`9/9`)
+   - Includes `custom 5x7` and `layer-0 metadata 9x10`
+3. Prefixed imported-XP headed verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_grid_test.mjs --headed --xp sprites/attack-0001.xp --url http://127.0.0.1:5073/xpedit/workbench --out-dir output/ws_grid_prefixed`
+   - PASS (`9/9`)
+4. Root-hosted template-owned headed verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_grid_template_preset_test.mjs --headed --url http://127.0.0.1:5071/workbench --out-dir output/ws_grid_template_root`
+   - PASS (`4/4`)
+5. Prefixed template-owned headed verifier:
+   - `node scripts/xp_fidelity_test/run_whole_sheet_grid_template_preset_test.mjs --headed --url http://127.0.0.1:5073/xpedit/workbench --out-dir output/ws_grid_template_prefixed`
+   - PASS (`4/4`)
+
+### Verification note
+
+1. The first browser failure on `layer0_metadata` was caused by stale local
+   Flask processes on `5071` and `5073`, not by the current code in this
+   worktree.
+2. Direct live-API probe before restart omitted `session_kind` and
+   `metadata_status`; after restart, both APIs returned the new fields and the
+   browser verifiers passed.
+
+### Still open after this slice
+
+1. grid-scoped replace / frame-partition editing semantics
+2. browse-model work remains deferred behind the Section 1 / Section 2 split
+
 ## Audit — Whole-Sheet Clipboard Contract Repair And Section 1 Proof Completion (2026-04-27)
 
 This is a verifier/evidence checkpoint entry. It does not claim a new product
