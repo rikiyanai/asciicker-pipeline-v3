@@ -59,6 +59,21 @@ especially for usability and workflow correctness under real editing sessions.
    shipped UI reachability and current non-regression for covered families, but
    it is not sufficient to claim no further user testing is needed.
 
+### Testing aid added later the same day
+
+1. Generated a source-driven whole-sheet manual checklist from the
+   SAR/action-contract inventory:
+   - `node scripts/xp_fidelity_test/generate_whole_sheet_manual_checklist.mjs`
+2. Artifacts:
+   - `output/whole_sheet_manual_checklist.md`
+   - `output/whole_sheet_manual_checklist.json`
+3. Coverage guard:
+   - `node --test tests/web/whole-sheet-manual-checklist.test.mjs`
+   - PASS
+4. This is not acceptance evidence.
+   - It is a human-test execution aid that marks which controls already have
+     headed proof and which still remain `contract-only` / node-test-only.
+
 ### Sequencing rule for the next implementation slice
 
 Treat the next whole-sheet/editor follow-up in this exact order:
