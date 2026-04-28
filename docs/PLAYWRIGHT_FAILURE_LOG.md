@@ -294,6 +294,59 @@ sync with the shipped controls.
 2. broader human UI testing is still required; headed verifier PASS is not a
    substitute for final product acceptance
 
+## Review Finding — Session Hydration Still Mixes Section 1 And Section 2 Ownership (2026-04-27)
+
+This is a code-review finding against the recent browse/layer-0 slices. It is
+not a closure claim and not a new verifier PASS/FAIL lane. It records an
+ownership regression risk in the load/hydration boundary.
+
+### Finding
+
+1. `loadSession()` / `hydrateLoadedSession()` still restore only part of the
+   session identity.
+2. Backend browse summaries expose `template_set_key` and `action_key`, but the
+   root load payload returned by `_session_payload()` does not currently include
+   them.
+3. `hydrateLoadedSession()` applies `session_kind` / `metadata_status`, but it
+   neither restores nor clears `state.templateSetKey` and
+   `state.activeActionKey` from authoritative session payload data.
+4. Wrapper behavior still branches on `state.templateSetKey` for template/grid/
+   bundle decisions even after the raw-XP and root-blank decoupling slices.
+
+### Why this matters
+
+1. A fresh load of a `template_owned` session can degrade to generic classic
+   wrapper behavior because the frontend no longer knows which template/action
+   owns it.
+2. A raw-XP document loaded after a template-owned document can inherit stale
+   template wrapper state from the prior session.
+3. This violates the repo rule against mixed ownership patches: the root editor
+   is moving toward Section 1 ownership, but the wrapper still keeps live
+   Section 2 mode decisions on stale local state.
+
+### Evidence
+
+1. `src/pipeline_v2/service.py::_session_payload()` returns
+   `session_kind` / `metadata_status` but not `template_set_key` /
+   `action_key`.
+2. `web/workbench.js::hydrateLoadedSession()` writes `state.sessionKind` and
+   `state.metadataStatus` but does not authoritatively set or clear
+   `state.templateSetKey` / `state.activeActionKey`.
+3. `web/workbench.js::newXp()`, `updateClassicGeometryControls()`, and template
+   preset/grid helpers still branch on `state.templateSetKey`.
+
+### Required direction
+
+1. Do not keep the current half-generic, half-template hydration boundary.
+2. Either:
+   - make loaded session payloads fully authoritative for wrapper template
+     ownership and replace local stale ownership during hydration
+   - or delete wrapper dependence on per-session template keys for Section 1
+     behavior and move those decisions behind explicit Section 2/session-bound
+     state only
+3. When changing this boundary, remove the old owner instead of layering a new
+   authoritative path on top of it.
+
 ## Audit — Browse Open As Root-Document Switch (2026-04-27)
 
 This is a narrow Section 1 browse semantics slice. It does not claim a new
