@@ -1982,7 +1982,7 @@ Therefore the porting/testing precondition is strict:
    Section 1 changed materially, while the specific missing generalized-bundle
    parity layer lives in Section 2 semantic-runtime coverage.
 
-#### 2.3.9 Semantic Runtime Parity Contract And Current Coverage
+#### 2.3.9 Semantic Runtime Coverage Model And Current-Scope Rows
 
 The repo now has an explicit contract-model layer for the Y9-2 semantic runtime
 rows it must eventually prove.
@@ -1996,21 +1996,20 @@ Current contract surfaces:
 3. `tests/xp_fidelity_test/semantic_runtime_contract.test.mjs`
    - row/blocker assertions
 
-Minimum semantic-runtime parity row set now modeled:
+Current-scope actor-row set now modeled:
 
 1. `actor.on_foot_idle`
 2. `actor.on_foot_move`
 3. `actor.melee_attack`
 4. `actor.fall_dead.fall`
 5. `actor.fall_dead.dead`
-6. `item.world_item`
-7. `item.inventory_grid`
 
-Full generalized-bundle readiness remains broader than that minimum row set.
-The next blocking extension rows are:
+Deferred or later-scope rows that remain modeled as blockers:
 
-1. `actor.mounted_idle_walk`
-2. `actor.mounted_attack`
+1. `item.world_item`
+2. `item.inventory_grid`
+3. `actor.mounted_idle_walk`
+4. `actor.mounted_attack`
 
 Current modeled coverage state in this repo:
 
@@ -2020,11 +2019,12 @@ Current modeled coverage state in this repo:
    - `actor.melee_attack` -> `player_native_full / attack / attack`
    - `actor.fall_dead.fall` -> `player_native_full / death / plydie`
    - `actor.fall_dead.dead` -> `player_native_full / death / plydie`
-2. Explicit current gaps:
+2. Explicit deferred/not-yet-authorable rows:
    - `item.world_item`
    - `item.inventory_grid`
 3. Explicit broader-readiness blockers:
    - mounted rows are specified but not authorable in the current registry
+   - the live pipeline-v3 backend still lacks the Y9-2 runtime identity layer
    - headed semantic gameplay proof is still missing
 
 What this contract slice means:
@@ -2034,11 +2034,58 @@ What this contract slice means:
 2. The contract layer is necessary, but it is not the same thing as runtime
    proof.
 3. `generalized_bundle_port_ready` remains `false` until:
-   - the 7-row minimum is proven in runtime-facing lanes, not just modeled
-   - item/world/inventory rows are implemented and verified
-   - mounted extension rows are no longer blocked
+   - a live runtime identity layer exists in pipeline-v3 backend/compiler truth
+   - the current-scope actor rows are proven in runtime-facing lanes, not just
+     modeled
+   - any deferred item/wearable or mounted rows are explicitly brought into
+     scope and then implemented/proven
    - headed semantic gameplay proof exists for the same action surface Y9-2
      canon requires
+
+#### 2.3.10 Runtime Identity Layer Contract And Queue Placement
+
+The Y9-2 bundle system depends on a numeric runtime identity layer. Pipeline-v3
+cannot honestly claim generalized-bundle parity until that identity layer
+exists in live backend/compiler state rather than only in explanatory docs.
+
+Required identity surfaces:
+
+1. `skin_definition_id`
+2. `presentation_kind_id`
+3. `layer_definition_id`
+
+Current honest state:
+
+1. The Y9-2 architecture reference in §2.14 explains these IDs.
+2. Pipeline-v3 backend/service code does not yet own them as live execution
+   truth.
+3. `scripts/xp_fidelity_test/bundle_contract.mjs` may carry informational rows
+   or string-scoped helper data, but that does not count as runtime-identity
+   implementation.
+4. A helper that still returns string scope such as `"human"` is honest as a
+   current-scope placeholder, but it must not be presented as Y9-2 runtime-id
+   parity.
+
+Queue placement and scope law:
+
+1. `UQ-007` owns the runtime identity layer in this repo.
+2. `UQ-007` is blocked on `UQ-004` normalized registry authority cleanup. Do
+   not bolt numeric runtime IDs onto mixed `family` / `filename_prefix`
+   authority.
+3. `UQ-008` mounted-family authoring/runtime parity sits on top of that
+   identity layer and may not replace it.
+4. Item/wearable authoring surface (`S2-FAM-04`, including `world_item` and
+   `inventory_grid`) remains explicitly deferred post skin-authoring signoff.
+   Keeping those rows visible in contract helpers is allowed; treating them as a
+   current blocking queue row is not.
+
+Minimum `UQ-007` deliverables:
+
+1. one live owner for pipeline-side runtime identity
+2. consistent ID use across bundle contract helper, register/compile outputs,
+   and any backend/API proof surfaces that claim Y9-2 bundle parity
+3. no remaining claim that string-only scope is sufficient for generalized
+   bundle-runtime readiness
 
 ### 2.4 Structural Gate, Export, And Injection Contract
 
@@ -2096,7 +2143,7 @@ The live wrapper architecture is still misaligned in these exact ways after the
 | Y9-2 stable bundle-authoring API contract does not yet exist in live pipeline-v3 routes | `src/pipeline_v2/app.py`, `scripts/workbench_mcp_server.py` | Live routes are still the older `/api/workbench/*` family plus `/healthz`, and the MCP server is still a workbench wrapper. Y9-2 has a useful local CLI wizard, but there is still no single truthful bundle-authoring API/CLI surface shared across repos. |
 | Y9-2 bundle wizard not wired as launcher sub-action | `Y9-2 scripts/launcher.py`, `Y9-2 scripts/pipeline/bundle_wizard/main.py` | The current bundle-wizard client exists, but `[3] ASSET PIPELINE` is still absent from the launcher rather than wired to the shared owner contract. Tracked as Y9-2 DESIGN OPEN B-13. |
 | **GAP: No wearable or item templates, and no backend parity runner for wearable slot/style contracts** | `config/template_registry.json`, `scripts/xp_fidelity_test/`, `tests/` | Pipeline-v2 has no wearable/item authoring surface, and there is no structural-contract runner that proves the local schema matches Y9-2 slot/style truth. That means gold/dark/default wearable semantics are still only partially covered by ad hoc runtime or engine-side knowledge. Tracked as S2-FAM-04. |
-| **GAP: Semantic runtime contract is now modeled, but runtime selector proof is still missing** | `scripts/xp_fidelity_test/bundle_contract.mjs`, `scripts/xp_fidelity_test/run_semantic_runtime_contract_test.mjs`, `tests/xp_fidelity_test/semantic_runtime_contract.test.mjs`, `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs`, `scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs`, `config/template_registry.json`, `Y9-2 server/network.h`, `Y9-2 engine/inventory.h`, `Y9-2 scripts/pipeline/staging/appearance_bundle/phase2-positive/appearance_bundle.json` | This repo now explicitly models the minimum 7 semantic runtime rows plus mounted blockers, so the contract gap is no longer silent. But the only headed/browser/runtime proof lanes still center on authoring actions such as `idle`, `attack`, and `death`, and item/world/inventory semantic rows still have no runtime-facing verifier lane. Generalized bundle-port readiness therefore remains blocked on actual semantic selector proof, not just contract modeling. |
+| **GAP: Runtime identity and semantic-runtime proof are still split from live backend truth** | `scripts/xp_fidelity_test/bundle_contract.mjs`, `scripts/xp_fidelity_test/run_semantic_runtime_contract_test.mjs`, `tests/xp_fidelity_test/semantic_runtime_contract.test.mjs`, `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs`, `scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs`, `config/template_registry.json`, `Y9-2 server/network.h`, `Y9-2 engine/inventory.h`, `Y9-2 scripts/pipeline/staging/appearance_bundle/phase2-positive/appearance_bundle.json` | This repo now explicitly models current-scope actor semantic rows and keeps item/world/inventory plus mounted rows visible as blockers, so the gap is no longer silent. But pipeline-v3 still lacks live `skin_definition_id` / `layer_definition_id` ownership, and the headed/browser/runtime proof lanes still center on authoring actions such as `idle`, `attack`, and `death`. Generalized bundle-port readiness therefore remains blocked on runtime identity plus honest runtime-facing selector proof, not just contract modeling. |
 
 #### 2.5.1 Exact Live Gap Inventory By Surface
 
@@ -2108,16 +2155,19 @@ queued without hand-waving.
 |---------|---------------|-----------|----------------|
 | Bundle creation API | `src/pipeline_v2/app.py::api_wb_bundle_create()`, `src/pipeline_v2/service.py::create_bundle()` | Still takes `template_set_key` and seeds bundle state through legacy template-family language instead of a bundle blueprint / presentation-target contract | `UQ-004`, `UQ-010` |
 | Conversion API | `src/pipeline_v2/app.py::api_wb_action_grid_apply()`, `src/pipeline_v2/service.py::bundle_action_run()` | Still accepts only `{bundle_id, action_key, source_path}`. There is no request artifact, no manifest path owner, and no separate intake / convert / register / compile phases | `UQ-006`, `UQ-010` |
-| Session persistence | `src/pipeline_v2/service.py::workbench_save_session()` | Still persists `source_boxes`, `source_cuts_v`, and `source_cuts_h` as saved authority | `UQ-006` |
+| Session persistence / schema migration | `src/pipeline_v2/service.py::workbench_save_session()`, session JSON on disk | Legacy sessions still center on compat `family`, and the canon had not yet fixed the migration strategy for normalizing them to `filename_prefix` / `skin_family` while demoting `family` to mirror-only data | `UQ-004` |
+| Session persistence / source layout | `src/pipeline_v2/service.py::workbench_save_session()` | Still persists `source_boxes`, `source_cuts_v`, and `source_cuts_h` as saved authority | `UQ-006` |
 | Registry authority | `src/pipeline_v2/service.py::create_bundle()`, `workbench_create_blank_session()`, `workbench_export_bundle()`, `workbench_web_skin_bundle_payload()` | Live bundle/runtime/export paths still branch on compat `family` and `ENABLED_FAMILIES` | `UQ-004` |
 | Registry operator visibility | `src/pipeline_v2/service.py::load_template_registry()`, `web/workbench.js::fetchTemplateRegistry()` | Missing or malformed registry still degrades too quietly: empty fallback cache, `preview_xp` fallback to `l0_ref`, and silent client empty-state behavior | `UQ-004` |
-| Export-quality contract | `src/pipeline_v2/service.py::_run_structural_gates()`, `workbench_export_bundle()`, `workbench_web_skin_bundle_payload()` | Export/web payload paths still enforce only G10-G12; G7-G9 are not part of the export stop gate | `UQ-005` |
+| Classic browser AHSW range truth | `web/workbench.js` classic-path family/range helpers | Classic-path width/range truth can still drift from the normalized registry if `FAMILY_W_RANGE` remains a second authority instead of consuming registry `ahsw_range` | `UQ-004` |
+| Export-quality contract | `src/pipeline_v2/service.py::_run_structural_gates()`, `workbench_export_bundle()`, `workbench_web_skin_bundle_payload()` | Export/web payload paths still enforce only G10-G12, and the canon had not yet fixed export-time G9 populated-count semantics or the manual-authoring G8 threshold policy | `UQ-005` |
 | Headless validation surface | `scripts/workbench_mcp_server.py`, `src/pipeline_v2/app.py` | Live MCP/API surface is still the older workbench wrapper. There is no shared `validate-xp`, `status`, `register-skin-request`, or `compile-skin-request` owner | `UQ-005`, `UQ-010` |
 | Browser bundle UI | `web/workbench.html`, `web/workbench.js` | User-facing controls still speak in template/bundle-action terms and do not expose request-artifact lifecycle, manifest ownership, or explicit register/compile phases | `UQ-006`, `UQ-010` |
 | Source panel UI | `web/workbench.html#source`, `web/workbench.js` source-box/cut handlers | Source slicing is interactive but not manifest-first; there is no explicit sidecar path, save/load status, or per-region presentation assignment workflow | `UQ-006` |
-| Y9-2 client parity | `scripts/pipeline/bundle_wizard/main.py` in Y9-2 vs `pipeline-v3` workbench routes | Y9-2 has a useful local request-artifact flow, but it is still a separate owner rather than a thin client over shared commands | `UQ-010` |
-| Semantic runtime proof | `scripts/xp_fidelity_test/` plus headed runtime lanes | The minimum 7-row semantic contract is modeled, but item/world/inventory runtime proof is still absent | `UQ-007` |
+| Runtime identity layer | `bundle_contract.mjs`, backend register/compile/export contract, any future ID registry or emitted bundle metadata | Pipeline-v3 still lacks one live owner for `skin_definition_id`, `presentation_kind_id`, and `layer_definition_id`; string-only scope does not satisfy generalized-bundle parity | `UQ-007` |
 | Mounted-family parity | `config/template_registry.json`, runtime scope helpers, Y9-2 bundle truth | `wolfie` / `wolack` exist as declared runtime prefixes, but there is still no mounted authoring surface, builder, or proof lane | `UQ-008` |
+| Deferred item/wearable surface | `bundle_contract.mjs`, `config/template_registry.json`, future template/runner surfaces | `world_item` and `inventory_grid` remain explicit blocker rows with no live authoring surface in pipeline-v3; they stay deferred rather than masquerading as a current blocking queue lane | `S2-FAM-04` |
+| Y9-2 client parity | `scripts/pipeline/bundle_wizard/main.py` in Y9-2 vs `pipeline-v3` workbench routes | Y9-2 has a useful local request-artifact flow, but it is still a separate owner rather than a thin client over shared commands | `UQ-010` |
 
 #### 2.5.2 Locked Design Decisions For Section 2
 
@@ -2150,6 +2200,22 @@ mechanics, but it may not reopen these decisions without a canon change.
 8. Current-scope closure is still on-foot skin authoring. Wearables, items, and
    mounted-family authoring remain later rows and must not be pulled forward to
    avoid unresolved current-scope gaps.
+9. Session-schema migration is in-place on load/save. Legacy `family` values
+   may be accepted on read, but the next successful write must normalize to
+   `filename_prefix` / `skin_family`; a one-time offline migration script is
+   not part of the current queue.
+10. `web/workbench.js` classic-path AHSW/range truth must come from registry
+    `ahsw_range`. A hard-coded browser map such as `FAMILY_W_RANGE` may exist
+    temporarily as compatibility scaffolding, but it may not remain a second
+    authority after `UQ-004`.
+11. `UQ-007` is the runtime-identity row in this repo. It owns
+    `skin_definition_id` / `presentation_kind_id` / `layer_definition_id`
+    integration on the pipeline-v3 side; it is not the item/wearable authoring
+    row.
+12. `world_item` and `inventory_grid` stay deferred under `S2-FAM-04` after
+    skin-authoring signoff unless canon is changed explicitly. Keeping those
+    rows visible in contract helpers is allowed; promoting them into the
+    current blocking queue is not.
 
 #### 2.5.3 Required UI Changes
 
@@ -2174,16 +2240,46 @@ work is the following exact slice stack.
 
 | Slice | Parent row | Files / surfaces | Do exactly this | Done when |
 |-------|------------|------------------|-----------------|-----------|
-| `S2-R1` | `UQ-004` | `src/pipeline_v2/service.py`, `tests/test_template_registry_schema.py`, bundle/runtime/export tests | Extract one registry-derived backend helper and remove live `family` / `ENABLED_FAMILIES` authority from bundle create, blank-session create, bundle run, export, and web-skin payload code | No live Section 2 backend branch takes authority from compat family fields |
+| `S2-R1` | `UQ-004` | `src/pipeline_v2/service.py`, session JSON on disk, `tests/test_template_registry_schema.py`, bundle/runtime/export tests | Extract one registry-derived backend helper, remove live `family` / `ENABLED_FAMILIES` authority from bundle create, blank-session create, bundle run, export, and web-skin payload code, and normalize legacy session `family` values in place on load/save | No live Section 2 backend branch takes authority from compat family fields, and newly written sessions no longer depend on legacy `family` as primary identity |
 | `S2-R2` | `UQ-004` | `load_template_registry()`, `web/workbench.js::fetchTemplateRegistry()` | Make malformed/missing registry failures operator-visible and fail-closed for authoring surfaces without silently caching empty truth | Registry errors are explicit in backend responses and visible in the UI |
-| `S2-R3` | `UQ-005` | `src/pipeline_v2/service.py` gate/export paths | Refactor one shared quality evaluator and apply it to export-bundle and web-skin payload generation, not only convert-time checks | Export/web payload reject the same failures the quality contract defines |
-| `S2-R4` | `UQ-005` | quality contract docs + gate code | Lock the G8/G9 threshold policy and report shape so browser, MCP, and CI all see the same verdict contract | `validate-xp`, export, and payload paths use the same PASS/WARN/FAIL semantics |
+| `S2-R3` | `UQ-005` | `src/pipeline_v2/service.py` gate/export paths | Refactor one shared quality evaluator and apply it to export-bundle and web-skin payload generation, not only convert-time checks; export-time G9 must measure populated visual cells rather than dense-array length | Export/web payload reject the same failures the quality contract defines, and export-time G9 is no longer a dead gate |
+| `S2-R4` | `UQ-005` | quality contract docs + gate code | Lock the G8/G9 threshold policy and report shape so browser, MCP, and CI all see the same verdict contract, including the manual-authoring vs autonomous-flow distinction for sparse XP outputs | `validate-xp`, export, and payload paths use the same PASS/WARN/FAIL semantics and the same threshold/report fields |
 | `S2-R5` | `UQ-006` | source-manifest library + session save/load | Introduce real sidecar read/write/materialize plumbing and demote `source_boxes` / `source_cuts_*` to derived mirror state | Session save/load no longer owns combined-sheet slicing |
 | `S2-R6` | `UQ-006` | `web/workbench.html`, `web/workbench.js` source panel | Rebuild the source panel around manifest-first editing, sidecar status, and per-region target assignment while preserving the current direct slicer feel | Browser slicing edits one manifest contract rather than local-only arrays |
 | `S2-R7` | `UQ-006` | shared headless surface | Add shared mark/materialize/validate/status commands over the same manifest contract for agents and CLI | Agent and browser paths hit the same source-authoring contract |
-| `S2-R8` | `UQ-007` | semantic runtime proof lanes | Add runtime-facing proof for `item.world_item` and `item.inventory_grid` on top of the already-modeled on-foot rows | Minimum 7-row semantic runtime parity is proven, not only modeled |
+| `S2-R8` | `UQ-007` | bundle/runtime contract helper, backend register/compile/export surfaces, ID-bearing test fixtures | Introduce one live pipeline-v3 runtime identity layer for `skin_definition_id`, `presentation_kind_id`, and `layer_definition_id`, keyed off normalized registry/blueprint truth rather than string-only scope | Runtime identity is no longer explanatory-doc-only; bundle helper, backend outputs, and proof surfaces share one ID layer |
 | `S2-R9` | `UQ-008` | mounted authoring/runtime proof | Add mounted presentation-target surfaces plus builder/export/runtime proof for `wolfie` and `wolack` | Mounted rows are authorable and proven on the live contract |
 | `S2-R10` | `UQ-010` | shared CLI/API surface + clients | Land the shared request-artifact/headless contract (`phase0-status`, `phase0-build`, `validate-skin-intake`, `convert-skin-request`, `register-skin-request`, `compile-skin-request`, `validate-xp`, `status`) | Browser, MCP, Y9-2 launcher/wizard, and manual CLI become thin clients over one owner |
+
+#### 2.5.4.1 Resolved Design Policy For The Remaining Open Section-2 Rows
+
+These decisions were still implicit in earlier Section 2 text. They are now
+fixed so `UQ-004` and `UQ-005` can execute without reopening design.
+
+1. Legacy session migration is in-place:
+   - read old `family`
+   - resolve normalized identity through registry truth
+   - write back normalized `filename_prefix` / `skin_family` on the next
+     successful save or rewrite
+   - keep `family` only as compatibility/mirror data during the migration
+2. Classic browser range truth is not a second owner:
+   - `ahsw_range` in the normalized registry is the authority
+   - any `FAMILY_W_RANGE`-style browser map must be temporary compatibility
+     scaffolding only
+3. Export-time `G9` uses populated visual-layer cell count:
+   - do **not** use dense `cols * rows` array length at export time
+   - use populated non-space cells from the authoritative visual layer for the
+     current materialized XP
+4. Current `G8` threshold policy is split by workflow class:
+   - `<5%` populated ratio is a `FAIL` for autonomous convert/register/compile
+     flows in the bundle-authoring request path
+   - the same low ratio is a `WARN` for generic hand-edited root-document XP
+     export unless a stricter blueprint/presentation contract explicitly marks
+     the target as required-nonempty
+5. Deferred item/wearable rows remain visible but non-blocking:
+   - `world_item` and `inventory_grid` stay explicit blocker rows in helpers
+     and docs
+   - they do not define the current `UQ-007` deliverable
 
 #### 2.5.5 Robot Queue Changes Needed
 
@@ -2213,9 +2309,16 @@ Queue law for these slices:
 1. Do not start `S2-R3` while `S2-R1`/`S2-R2` are still open.
 2. Do not start `S2-R5` UI work until registry authority cleanup has already
    landed; otherwise the UI is built against mixed backend truth.
-3. Do not start `S2-R10` client wiring while browser, MCP, and Y9-2 still point
+3. Do not start `S2-R8` while backend/session identity is still mixed between
+   compat `family` and normalized registry truth.
+4. Do not start `S2-R9` mounted-family work until the runtime identity layer
+   exists; mounted support may not substitute for missing IDs.
+5. Do not start `S2-R10` client wiring while browser, MCP, and Y9-2 still point
    at different owners.
-4. `UQ-009` remains a support row. It updates proof/harness surfaces after each
+6. `world_item` / `inventory_grid` remain explicit deferred follow-through under
+   `S2-FAM-04`; they do not execute as a current blocking row during this
+   queue.
+7. `UQ-009` remains a support row. It updates proof/harness surfaces after each
    landed Section 2 slice; it does not pull future product work forward.
 
 ### 2.6 Section-2 Scope Boundary
@@ -2798,8 +2901,8 @@ Legacy-step normalization for older references:
 | UQ-004 | READY AFTER UQ-002 | Finish backend authority cleanup on the normalized registry | UQ-002 pass condition met | Execute `S2-R1` then `S2-R2`: add backend-focused tests around `create_bundle()`, `workbench_create_blank_session()`, `bundle_action_run()`, `workbench_export_bundle()`, and `workbench_web_skin_bundle_payload()`; replace live backend `family` / `ENABLED_FAMILIES` gates with one helper derived from normalized registry truth; demote the compat `family` alias to compatibility-only data; surface operator-visible registry load/fetch failures. | No live backend bundle/session/export/runtime path still takes authority from `family` or `ENABLED_FAMILIES`; browser and backend both consume the same normalized contract | Any fix restores browser-side fail-close logic, creates a second registry authority, or claims `UQ-004` closure while backend split-authority code remains | Section 2.5 / `S2-R1` / `S2-R2` |
 | UQ-005 | BLOCKED | Close the Section 2 export-quality contract at the wrapper boundary | UQ-004 pass condition met | Execute `S2-R3` then `S2-R4`: wire the full Step 5 quality contract into `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`, then lock the G8/G9 threshold/report policy. Keep the shared `validate-xp` surface aligned with the same contract and do not treat single-XP validation as a substitute for export-path enforcement. | Bundle export and web-skin payload generation reject artifacts that fail the full quality contract, not just G10-G12 | Any closure claim remains contradicted by live service code, or export/web-skin paths still skip G7/G8/G9 | Section 2.4 / `S2-R3` / `S2-R4` |
 | UQ-006 | BLOCKED | Finish the Section 2 source-wrapper implementation on the canonical manifest contract | UQ-004 pass condition met | Execute `S2-R5` then `S2-R6` then `S2-R7`: land sidecar read/write/materialize plumbing, demote `extractedBoxes` / `sourceCutsV` / `sourceCutsH` to derived mirror state, rebuild the source panel around canonical manifest ownership, and expose the same mark/materialize/validate/status contract to headless clients. | Source authoring is no longer JSON-first, and one canonical manifest contract still owns source layout for UI, MCP, and backend paths | Any fix creates a second source-layout model or makes session-local source state authoritative again | Section 2.3 / `S2-R5` / `S2-R6` / `S2-R7` |
-| UQ-007 | BLOCKED | Close the minimum Section 2 semantic runtime parity row set | UQ-004 through UQ-006 pass conditions met | Implement and prove the minimum semantic row set on runtime-facing lanes: preserve the already-mapped on-foot rows and add the missing `item.world_item` and `item.inventory_grid` rows. Keep the proof runtime-facing; do not confuse contract modeling with runtime closure. | The minimum seven-row semantic parity slice is implemented and proven on honest runtime-facing lanes | Any row is still only modeled, not proven, or the proof surface remains action-tab-only while claiming semantic closure | Section 2.3.9 / semantic parity |
-| UQ-008 | BLOCKED | Extend Section 2 to mounted-family authoring and runtime parity | UQ-007 pass condition met | Execute `S2-R9`: on top of the normalized registry and minimum semantic rows, add mounted-family authoring/runtime parity for `wolfie` and `wolack`: mounted presentation-target surface, native builder support, export/runtime proof, and mounted semantic-row closure. Keep `bigbee` explicitly deferred unless canon changes. | `wolfie` and `wolack` are authorable/provable on the live Section 2 contract, and mounted rows are no longer “specified_not_authorable” | Any fix pulls `bigbee` into scope without canon change, or adds mounted support via a proof-only shim instead of the live authoring/runtime path | Section 2.5 / `S2-R9` |
+| UQ-007 | BLOCKED | Land the Section 2 runtime identity layer | UQ-004 through UQ-006 pass conditions met | Execute `S2-R8`: introduce one live pipeline-v3 owner for `skin_definition_id`, `presentation_kind_id`, and `layer_definition_id`; thread that identity through bundle contract helpers, register/compile outputs, and any backend/API proof surfaces that claim Y9-2 bundle parity. Do not pull item/wearable authoring into this row. | Pipeline-v3 no longer relies on string-only scope when claiming generalized-bundle readiness, and one runtime-identity layer exists across helper, backend, and emitted bundle truth | Any fix bolts numeric IDs onto mixed `family` / normalized-registry authority, or substitutes mounted/item surface work for the missing runtime identity layer | Section 2.3.10 / `S2-R8` |
+| UQ-008 | BLOCKED | Extend Section 2 to mounted-family authoring and runtime parity | UQ-007 pass condition met | Execute `S2-R9`: on top of the normalized registry and runtime identity layer, add mounted-family authoring/runtime parity for `wolfie` and `wolack`: mounted presentation-target surface, native builder support, export/runtime proof, and mounted semantic-row closure. Keep `bigbee` explicitly deferred unless canon changes. | `wolfie` and `wolack` are authorable/provable on the live Section 2 contract, and mounted rows are no longer “specified_not_authorable” | Any fix pulls `bigbee` into scope without canon change, or adds mounted support via a proof-only shim instead of the live authoring/runtime path | Section 2.5 / `S2-R9` |
 | UQ-009 | CURRENT / SUPPORT | Keep Section 3 harness and structural-contract runners aligned to what exists | UQ-001 complete; target Section 1/2 source state exists | Update the Section 3 action graph, headed signoff lanes, and backend schema/contract runners only for the surfaces that actually exist after each landed Section 1/2 slice. Keep acceptance UI-only. Keep backend schema/runtime parity runners separate from UI acceptance. Keep legacy repaint/truth-table entrypoints demoted. | Section 3 proof describes current code honestly: no false-green acceptance lane, no stale action graph, no structural-contract runner claiming UI acceptance | Any verifier lane outruns product reality, uses debug/API mutation as acceptance, or implies mounted/item closure from player-only lanes | Section 3 / harness law |
 | UQ-010 | PARKED | Finish Y9-2 gateway follow-through on the shared bundle-authoring contract | UQ-004 through UQ-009 passed, or user explicitly reprioritizes it after backend truth is stable | Execute `S2-R10`: wire launcher / bundle-wizard / MCP front doors to the shared Section 2.10 headless contract (`phase0-status`, `phase0-build`, `validate-skin-intake`, `convert-skin-request`, `register-skin-request`, `compile-skin-request`, `validate-xp`, `status`) and remove any surviving second pipeline owner or local CLI substitution from the execution path. | Y9-2 front doors use the same stable bundle-authoring contract that Section 2 and Section 3 already prove | Any fix creates a second pipeline owner, keeps local subprocess behavior alive as parallel truth, or reclassifies missing contract ownership as launcher-only wiring after Section 2.10 defined the shared owner | Section 2.10 / `S2-R10` / B-13 |
 | UQ-011 | PARKED | Public replacement / cutover lane | UQ-003 through UQ-010 passed; user explicitly starts cutover | Run the direct public-parity audit against `rikiworld.com/xpedit`, freeze the exact replacement SHA and proof artifacts, validate the `/xpedit` deploy path, deploy the frozen candidate, and re-run headed proof on the live URL | Public replacement is backed by the same root-hosted, prefixed, and public evidence chain with no unresolved earlier-layer blocker | Any earlier row is still open, any public parity check fails, or cutover is claimed from code state alone | Replacement lane / public parity |
@@ -3819,7 +3922,7 @@ not a task plan — it is a gate list. Migration is ready when all blocking gate
 | UQ-004 backend authority cleanup passes | §Unified Queue `UQ-004` | OPEN — backend `family` / `ENABLED_FAMILIES` split still live |
 | UQ-005 export/web-skin quality contract fully enforced | §Unified Queue `UQ-005` | OPEN — export/web-skin paths still run only G10-G12 on the current branch |
 | UQ-006 manifest-backed source authoring no longer JSON-first | §Unified Queue `UQ-006` | OPEN |
-| UQ-007 minimum seven-row semantic runtime parity proven | §Unified Queue `UQ-007` | OPEN |
+| UQ-007 runtime identity layer landed | §Unified Queue `UQ-007` | OPEN — pipeline-v3 still lacks live `skin_definition_id` / `presentation_kind_id` / `layer_definition_id` ownership |
 | UQ-008 mounted-family parity for `wolfie` / `wolack` proven | §Unified Queue `UQ-008` | OPEN |
 | UQ-009 current-scope Section 3 signoff + contract runners current | §Unified Queue `UQ-009` | PARTIAL |
 | UQ-010 Y9-2 wizard / launcher gateway wired to shared bundle-authoring contract | §Unified Queue `UQ-010` | OPEN |

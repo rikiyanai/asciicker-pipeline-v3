@@ -8,6 +8,58 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Audit — Section 2 Canon Redesign Specificity Alignment (2026-04-27)
+
+This is a canon/doc-state alignment entry. It does not claim a code fix, proof
+pass, or product closure. It corrects Section 2 specification drift between the
+newer planning notes and the live canonical spec.
+
+### Findings
+
+1. The Section 2 queue still had one live contradiction:
+   - newer planning text treated `UQ-007` as the runtime-identity layer
+   - the canonical spec still treated `UQ-007` as item/world/inventory semantic
+     runtime proof
+2. `UQ-004` still lacked an explicit migration decision for legacy session
+   schema:
+   - `family` -> `filename_prefix` / `skin_family`
+3. `UQ-005` still lacked explicit design resolution for:
+   - export-time `G9` semantics
+   - manual-authoring vs autonomous-flow `G8` threshold policy
+4. Deferred item/wearable rows were still visible in contract helpers, but the
+   spec was not explicit enough that this visibility does **not** make them a
+   current blocking queue row.
+
+### What changed
+
+1. `docs/plans/2026-03-23-workbench-canonical-spec.md` now states:
+   - `UQ-007` = runtime identity layer
+   - `UQ-008` = mounted-family authoring/runtime parity
+   - `S2-FAM-04` = deferred item/wearable surface (`world_item`,
+     `inventory_grid`)
+2. Section 2 now fixes the legacy session migration policy:
+   - accept old `family` on read
+   - normalize to `filename_prefix` / `skin_family`
+   - write back normalized identity on the next successful save
+   - treat `family` as compatibility/mirror data only during migration
+3. Section 2 now fixes the open gate-policy questions:
+   - export-time `G9` counts populated visual-layer cells, not dense array
+     length
+   - `<5%` populated ratio is `FAIL` for autonomous bundle-authoring
+     convert/register/compile flows
+   - the same low ratio is `WARN` for generic hand-edited root-document XP
+     export unless a stricter blueprint contract says otherwise
+4. The migration gate table now tracks `UQ-007` as runtime identity rather than
+   the old seven-row semantic-proof wording.
+5. The older planning decomposition that treated `S2-R8` as item/world/inventory
+   runtime proof is superseded by the current canon row split above.
+
+### Still not claimed
+
+1. No Section 2 code changed in this slice.
+2. No runtime-identity layer exists yet in backend/compiler truth.
+3. No new proof lane passed in this slice.
+
 ## Audit — Wrapper Mutation Paths Now Delegate Through The Root Document Owner (2026-04-27)
 
 This is a code-state correction entry. It does not claim a new Section 1
