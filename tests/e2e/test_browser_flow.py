@@ -83,6 +83,18 @@ def test_browser_workbench_direct_flow_records_video_and_populates_workbench(web
             summary["steps"].append("open_workbench")
             shot("01_open_workbench")
 
+            # Create a blank session so wbRun can read geometry from it.
+            # btnNewXp is enabled in classic mode on page load (updateClassicGeometryControls
+            # fires at init with default 8-angle/9-frame geometry).
+            page.click("#btnNewXp")
+            page.wait_for_function(
+                "() => { const t = document.getElementById('wbStatus').textContent;"
+                " return t.includes('New XP ready') || t.includes('Session active'); }",
+                timeout=15000,
+            )
+            summary["steps"].append("blank_session_created")
+            shot("01b_blank_session_created")
+
             page.set_input_files("#wbFile", str(fixture))
             page.click("#wbUpload")
             page.wait_for_function("() => document.getElementById('wbRun').disabled === false", timeout=15000)

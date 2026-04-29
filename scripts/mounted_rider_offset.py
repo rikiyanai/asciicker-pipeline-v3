@@ -275,6 +275,41 @@ def build_report(
     }
 
 
+# ---------------------------------------------------------------------------
+# Public API — thin wrappers so service.py can import without using private names
+# ---------------------------------------------------------------------------
+
+def parse_layout(xp: dict) -> FrameLayout:
+    """Public wrapper for _parse_layout."""
+    return _parse_layout(xp)
+
+
+def frame_cells(
+    xp: dict,
+    layout: FrameLayout,
+    *,
+    angle: int,
+    anim_index: int,
+    frame_index: int,
+    proj: int,
+    layer_index: int,
+) -> list[tuple[int, int, int, tuple[int, int, int], tuple[int, int, int]]]:
+    """Public wrapper for _frame_cells."""
+    return _frame_cells(
+        xp, layout,
+        angle=angle,
+        anim_index=anim_index,
+        frame_index=frame_index,
+        proj=proj,
+        layer_index=layer_index,
+    )
+
+
+def auto_layer(player_xp: dict, mounted_xp: dict) -> int:
+    """Public wrapper for _auto_layer."""
+    return _auto_layer(player_xp, mounted_xp)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Infer per-angle rider offsets by matching player XP cells against mounted wolfie XP cells."

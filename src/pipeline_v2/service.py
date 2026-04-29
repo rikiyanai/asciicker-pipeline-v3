@@ -47,6 +47,13 @@ from .renderer import render_preview_png
 from .storage import save_json, load_json
 from .xp_codec import write_xp, read_xp
 
+# Ensure the scripts directory is on sys.path so that mounted_rider_offset
+# (and other standalone scripts) can be imported by service functions.
+import sys as _sys
+_SCRIPTS_DIR = str(ROOT / "scripts")
+if _SCRIPTS_DIR not in _sys.path:
+    _sys.path.insert(0, _SCRIPTS_DIR)
+
 MAGENTA_BG = (255, 0, 255)
 
 # Native player skin contract: the WASM engine expects exactly these dimensions.
@@ -4106,17 +4113,13 @@ def compute_mounted_rider_calibration(
     player_path = _resolve_mounted_xp_path(player_xp, "player_xp", req_id)
     mounted_path = _resolve_mounted_xp_path(mounted_xp, "mounted_xp", req_id)
 
-    import sys as _sys
-    _scripts = str(ROOT / "scripts")
-    if _scripts not in _sys.path:
-        _sys.path.insert(0, _scripts)
     try:
         from mounted_rider_offset import build_report  # type: ignore[import]
     except ImportError as e:
         raise ApiError(f"mounted_rider_offset script unavailable: {e}", "script_unavailable", "workbench", req_id, 500)
 
     try:
-        return build_report(
+        report = build_report(
             player_path,
             mounted_path,
             anim_index=anim_index,
@@ -4130,6 +4133,15 @@ def compute_mounted_rider_calibration(
         )
     except (ValueError, AssertionError) as e:
         raise ApiError(str(e), "calibration_error", "workbench", req_id, 400)
+
+    # build_report() stores absolute paths; convert to repo-relative for portability.
+    for key in ("player", "mounted"):
+        if key in report:
+            try:
+                report[key] = str(Path(report[key]).relative_to(ROOT))
+            except ValueError:
+                pass
+    return report
 
 
 def compute_mounted_semantic_proposals(session_id: str, req_id: str) -> dict[str, Any]:
@@ -4169,15 +4181,11 @@ def compute_mounted_semantic_proposals(session_id: str, req_id: str) -> dict[str
     player_path = _resolve_mounted_xp_path(player_xp_str, "player_xp", req_id)
     mounted_path = _resolve_mounted_xp_path(mounted_xp_str, "mounted_xp", req_id)
 
-    import sys as _sys
-    _scripts = str(ROOT / "scripts")
-    if _scripts not in _sys.path:
-        _sys.path.insert(0, _scripts)
     try:
         from mounted_rider_offset import (  # type: ignore[import]
-            _parse_layout,
-            _frame_cells,
-            _auto_layer,
+            parse_layout,
+            frame_cells,
+            auto_layer,
         )
     except ImportError as e:
         raise ApiError(f"mounted_rider_offset script unavailable: {e}", "script_unavailable", "workbench", req_id, 500)
@@ -4187,13 +4195,13 @@ def compute_mounted_semantic_proposals(session_id: str, req_id: str) -> dict[str
         mounted_xp = read_xp(mounted_path)
     except (OSError, ValueError) as e:
         raise ApiError(f"could not read XP file: {e}", "xp_read_error", "workbench", req_id, 422)
-    player_layout = _parse_layout(player_xp)
-    mounted_layout = _parse_layout(mounted_xp)
+    player_layout = parse_layout(player_xp)
+    mounted_layout = parse_layout(mounted_xp)
 
     anim_index = int(calibration.get("anim_index", 0))
     frame_index = int(calibration.get("frame_index", 0))
     proj = int(calibration.get("proj", 0))
-    layer_index = int(calibration.get("layer_used", _auto_layer(player_xp, mounted_xp)))
+    layer_index = int(calibration.get("layer_used", auto_layer(player_xp, mounted_xp)))
 
     per_angle_results: list[dict[str, Any]] = []
     for i, angle_offset in enumerate(per_angle_offsets):
@@ -4202,12 +4210,12 @@ def compute_mounted_semantic_proposals(session_id: str, req_id: str) -> dict[str
         dy = int(angle_offset.get("dy", 0))
 
         try:
-            player_cells = _frame_cells(
+            player_cells = frame_cells(
                 player_xp, player_layout,
                 angle=angle, anim_index=anim_index, frame_index=frame_index,
                 proj=proj, layer_index=min(layer_index, int(player_xp["layers"]) - 1),
             )
-            mounted_cells = _frame_cells(
+            mounted_cells = frame_cells(
                 mounted_xp, mounted_layout,
                 angle=angle, anim_index=anim_index, frame_index=frame_index,
                 proj=proj, layer_index=min(layer_index, int(mounted_xp["layers"]) - 1),
