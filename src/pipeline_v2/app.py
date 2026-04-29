@@ -795,19 +795,21 @@ def create_app() -> Flask:
             if not mounted_xp:
                 raise ApiError("mounted_xp is required", "missing_mounted_xp", "workbench", req_id, 400)
             layer_raw = payload.get("layer", "auto")
-            layer: str | int = int(layer_raw) if isinstance(layer_raw, int) else str(layer_raw)
+            layer: str | int = "auto" if layer_raw is None else (int(layer_raw) if isinstance(layer_raw, int) else str(layer_raw))
+            try:
+                anim_index = int(payload.get("anim_index", 0))
+                frame_index = int(payload.get("frame_index", 0))
+                proj = int(payload.get("proj", 0))
+                min_dx = int(payload.get("min_dx", -4))
+                max_dx = int(payload.get("max_dx", 8))
+                min_dy = int(payload.get("min_dy", -4))
+                max_dy = int(payload.get("max_dy", 8))
+            except (ValueError, TypeError) as e:
+                raise ApiError(f"invalid numeric parameter: {e}", "invalid_parameter", "workbench", req_id, 422)
             return jsonify(compute_mounted_rider_calibration(
-                player_xp,
-                mounted_xp,
-                req_id,
-                anim_index=int(payload.get("anim_index", 0)),
-                frame_index=int(payload.get("frame_index", 0)),
-                proj=int(payload.get("proj", 0)),
-                layer=layer,
-                min_dx=int(payload.get("min_dx", -4)),
-                max_dx=int(payload.get("max_dx", 8)),
-                min_dy=int(payload.get("min_dy", -4)),
-                max_dy=int(payload.get("max_dy", 8)),
+                player_xp, mounted_xp, req_id,
+                anim_index=anim_index, frame_index=frame_index, proj=proj, layer=layer,
+                min_dx=min_dx, max_dx=max_dx, min_dy=min_dy, max_dy=max_dy,
             )), 200
         except ApiError as e:
             return _err(e)
@@ -834,7 +836,7 @@ def create_app() -> Flask:
                 raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
             data = payload.get("data")
             if data is None or not isinstance(data, dict):
-                raise ApiError("data must be a non-null object", "invalid_data", "workbench", req_id, 400)
+                raise ApiError("data must be a non-null object", "invalid_data", "workbench", req_id, 422)
             return jsonify(workbench_save_session(session_id, {"mounted_rider_calibration": data}, req_id)), 200
         except ApiError as e:
             return _err(e)
@@ -849,7 +851,7 @@ def create_app() -> Flask:
                 raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
             data = payload.get("data")
             if data is None or not isinstance(data, dict):
-                raise ApiError("data must be a non-null object", "invalid_data", "workbench", req_id, 400)
+                raise ApiError("data must be a non-null object", "invalid_data", "workbench", req_id, 422)
             return jsonify(workbench_save_session(session_id, {"mounted_semantic_review": data}, req_id)), 200
         except ApiError as e:
             return _err(e)

@@ -4110,7 +4110,10 @@ def compute_mounted_rider_calibration(
     _scripts = str(ROOT / "scripts")
     if _scripts not in _sys.path:
         _sys.path.insert(0, _scripts)
-    from mounted_rider_offset import build_report  # type: ignore[import]
+    try:
+        from mounted_rider_offset import build_report  # type: ignore[import]
+    except ImportError as e:
+        raise ApiError(f"mounted_rider_offset script unavailable: {e}", "script_unavailable", "workbench", req_id, 500)
 
     try:
         return build_report(
@@ -4125,7 +4128,7 @@ def compute_mounted_rider_calibration(
             min_dy=min_dy,
             max_dy=max_dy,
         )
-    except ValueError as e:
+    except (ValueError, AssertionError) as e:
         raise ApiError(str(e), "calibration_error", "workbench", req_id, 400)
 
 
@@ -4170,14 +4173,20 @@ def compute_mounted_semantic_proposals(session_id: str, req_id: str) -> dict[str
     _scripts = str(ROOT / "scripts")
     if _scripts not in _sys.path:
         _sys.path.insert(0, _scripts)
-    from mounted_rider_offset import (  # type: ignore[import]
-        _parse_layout,
-        _frame_cells,
-        _auto_layer,
-    )
+    try:
+        from mounted_rider_offset import (  # type: ignore[import]
+            _parse_layout,
+            _frame_cells,
+            _auto_layer,
+        )
+    except ImportError as e:
+        raise ApiError(f"mounted_rider_offset script unavailable: {e}", "script_unavailable", "workbench", req_id, 500)
 
-    player_xp = read_xp(player_path)
-    mounted_xp = read_xp(mounted_path)
+    try:
+        player_xp = read_xp(player_path)
+        mounted_xp = read_xp(mounted_path)
+    except (OSError, ValueError) as e:
+        raise ApiError(f"could not read XP file: {e}", "xp_read_error", "workbench", req_id, 422)
     player_layout = _parse_layout(player_xp)
     mounted_layout = _parse_layout(mounted_xp)
 

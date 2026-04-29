@@ -12,7 +12,9 @@ import base64
 import json
 import os
 import re
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -548,7 +550,7 @@ def compute_mounted_rider_calibration(
     max_dx: int = 8,
     min_dy: int = -4,
     max_dy: int = 8,
-) -> dict:
+) -> dict[str, Any]:
     """Compute per-angle rider offset candidates for mounted-family calibration.
 
     Runs the cell-matching algorithm over the player and mounted XP sprite
@@ -587,7 +589,48 @@ def compute_mounted_rider_calibration(
 
 
 @mcp.tool()
-def get_mounted_cell_proposals(session_id: str) -> dict:
+def confirm_mounted_calibration(
+    session_id: str,
+    calibration: dict,
+    reviewer_action: str,
+) -> dict[str, Any]:
+    """Persist a confirmed calibration record to session metadata.
+
+    Requires explicit reviewer_action: "accept". Pass the dict returned by
+    compute_mounted_rider_calibration, optionally extended with accepted_dx,
+    accepted_dy, and accepted_angle fields marking the chosen offset.
+
+    Args:
+        session_id: Session to write the calibration record to.
+        calibration: Calibration payload from compute_mounted_rider_calibration.
+        reviewer_action: Must be "accept" to proceed. Any other value is rejected.
+
+    Returns:
+        {ok: true, ...session payload} on success, {ok: false, error, code} on rejection.
+    """
+    if reviewer_action != "accept":
+        return {
+            "ok": False,
+            "error": "reviewer_action must be 'accept'",
+            "code": "reviewer_action_required",
+        }
+    if not calibration or not isinstance(calibration, dict):
+        return {
+            "ok": False,
+            "error": "calibration must be a non-empty object from compute_mounted_rider_calibration",
+            "code": "invalid_calibration",
+        }
+    result = _post_json("/api/workbench/session/mounted-calibration", {
+        "session_id": session_id,
+        "data": calibration,
+    })
+    if "error" in result:
+        return {"ok": False, **result}
+    return {"ok": True, **result}
+
+
+@mcp.tool()
+def get_mounted_cell_proposals(session_id: str) -> dict[str, Any]:
     """Derive per-angle exact-cell proposals from the session's confirmed calibration record.
 
     Uses each angle's own dx/dy from the calibration record (not the single display
@@ -622,7 +665,7 @@ def accept_mounted_cell_proposals(
     Args:
         session_id: Session to write the semantic review record to.
         proposals: Proposal payload from get_mounted_cell_proposals (must include
-                   per_angle, player_xp, mounted_xp, and calibration_ref_confirmed_at).
+                   per_angle, player, mounted, and calibration_ref_confirmed_at).
         reviewer_action: Must be "accept" to proceed. Any other value is rejected.
 
     Returns:
@@ -630,34 +673,39 @@ def accept_mounted_cell_proposals(
     """
     if reviewer_action != "accept":
         return {
+            "ok": False,
             "error": "reviewer_action must be 'accept'",
             "code": "reviewer_action_required",
         }
     if not proposals or not isinstance(proposals, dict):
         return {
+            "ok": False,
             "error": "proposals must be a non-empty object from get_mounted_cell_proposals",
             "code": "invalid_proposals",
         }
     per_angle = proposals.get("per_angle")
     if not per_angle or not isinstance(per_angle, list):
         return {
+            "ok": False,
             "error": "proposals.per_angle must be a non-empty list",
             "code": "invalid_proposals",
         }
-    from datetime import UTC, datetime
     record = {
-        "player_xp": proposals.get("player", proposals.get("player_xp", "")),
-        "mounted_xp": proposals.get("mounted", proposals.get("mounted_xp", "")),
+        "player_xp": proposals.get("player") or proposals.get("player_xp") or "",
+        "mounted_xp": proposals.get("mounted") or proposals.get("mounted_xp") or "",
         "calibration_record_ref": {
             "confirmed_at": proposals.get("calibration_ref_confirmed_at"),
         },
         "per_angle_assignments": per_angle,
         "confirmed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }
-    return _post_json("/api/workbench/session/mounted-semantic-review", {
+    result = _post_json("/api/workbench/session/mounted-semantic-review", {
         "session_id": session_id,
         "data": record,
     })
+    if "error" in result:
+        return {"ok": False, **result}
+    return {"ok": True, **result}
 
 
 # ===================================================================

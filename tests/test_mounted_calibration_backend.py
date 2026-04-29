@@ -302,7 +302,7 @@ def test_calibration_record_overwrite(client):
 
 
 def test_calibration_malformed_data_rejected(client):
-    """Non-dict data body returns 400 and does not mutate the session."""
+    """Non-dict data body returns 422 and does not mutate the session."""
     session_id = _create_blank_session(client)
     # Write a valid record first
     client.post(
@@ -316,7 +316,7 @@ def test_calibration_malformed_data_rejected(client):
         data=json.dumps({"session_id": session_id, "data": "not-an-object"}),
         content_type="application/json",
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
     loaded = _load_session(client, session_id)
     assert loaded["mounted_rider_calibration"] == _SAMPLE_CALIBRATION
