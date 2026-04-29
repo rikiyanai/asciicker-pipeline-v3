@@ -57,6 +57,8 @@ from .service import (
     workbench_update_bundle_action_status,
     workbench_export_bundle,
     workbench_web_skin_bundle_payload,
+    compute_mounted_rider_calibration,
+    compute_mounted_semantic_proposals,
 )
 
 
@@ -778,6 +780,77 @@ def create_app() -> Flask:
             if not session_id:
                 raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
             return jsonify(workbench_save_session(session_id, payload, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @bp.post("/api/workbench/mounted-calibration/compute")
+    def api_wb_mounted_calibration_compute():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            player_xp = str(payload.get("player_xp", "")).strip()
+            mounted_xp = str(payload.get("mounted_xp", "")).strip()
+            if not player_xp:
+                raise ApiError("player_xp is required", "missing_player_xp", "workbench", req_id, 400)
+            if not mounted_xp:
+                raise ApiError("mounted_xp is required", "missing_mounted_xp", "workbench", req_id, 400)
+            layer_raw = payload.get("layer", "auto")
+            layer: str | int = int(layer_raw) if isinstance(layer_raw, int) else str(layer_raw)
+            return jsonify(compute_mounted_rider_calibration(
+                player_xp,
+                mounted_xp,
+                req_id,
+                anim_index=int(payload.get("anim_index", 0)),
+                frame_index=int(payload.get("frame_index", 0)),
+                proj=int(payload.get("proj", 0)),
+                layer=layer,
+                min_dx=int(payload.get("min_dx", -4)),
+                max_dx=int(payload.get("max_dx", 8)),
+                min_dy=int(payload.get("min_dy", -4)),
+                max_dy=int(payload.get("max_dy", 8)),
+            )), 200
+        except ApiError as e:
+            return _err(e)
+
+    @bp.post("/api/workbench/mounted-semantic/proposals")
+    def api_wb_mounted_semantic_proposals():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            session_id = str(payload.get("session_id", "")).strip()
+            if not session_id:
+                raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
+            return jsonify(compute_mounted_semantic_proposals(session_id, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @bp.post("/api/workbench/session/mounted-calibration")
+    def api_wb_session_mounted_calibration():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            session_id = str(payload.get("session_id", "")).strip()
+            if not session_id:
+                raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
+            data = payload.get("data")
+            if data is None or not isinstance(data, dict):
+                raise ApiError("data must be a non-null object", "invalid_data", "workbench", req_id, 400)
+            return jsonify(workbench_save_session(session_id, {"mounted_rider_calibration": data}, req_id)), 200
+        except ApiError as e:
+            return _err(e)
+
+    @bp.post("/api/workbench/session/mounted-semantic-review")
+    def api_wb_session_mounted_semantic_review():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            session_id = str(payload.get("session_id", "")).strip()
+            if not session_id:
+                raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
+            data = payload.get("data")
+            if data is None or not isinstance(data, dict):
+                raise ApiError("data must be a non-null object", "invalid_data", "workbench", req_id, 400)
+            return jsonify(workbench_save_session(session_id, {"mounted_semantic_review": data}, req_id)), 200
         except ApiError as e:
             return _err(e)
 

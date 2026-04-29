@@ -532,6 +532,135 @@ def inspect_payload(
 
 
 # ===================================================================
+# Mounted Authoring Aids
+# ===================================================================
+
+
+@mcp.tool()
+def compute_mounted_rider_calibration(
+    player_xp: str = "sprites/player-0100.xp",
+    mounted_xp: str = "sprites/wolfie-0100.xp",
+    anim_index: int = 0,
+    frame_index: int = 0,
+    proj: int = 0,
+    layer: str = "auto",
+    min_dx: int = -4,
+    max_dx: int = 8,
+    min_dy: int = -4,
+    max_dy: int = 8,
+) -> dict:
+    """Compute per-angle rider offset candidates for mounted-family calibration.
+
+    Runs the cell-matching algorithm over the player and mounted XP sprite
+    sheets and returns per-angle best-offset candidates with coverage scores.
+    This is the compute step for the non-destructive overlay calibration panel.
+
+    Args:
+        player_xp: Repo-relative path to the on-foot player XP (e.g. "sprites/player-0100.xp").
+        mounted_xp: Repo-relative path to the mounted wolfie/wolack XP (e.g. "sprites/wolfie-0100.xp").
+        anim_index: Animation index within the native strip (default 0).
+        frame_index: Frame index within the chosen animation (default 0).
+        proj: Projection index, usually 0 for projected view (default 0).
+        layer: Layer index to match, or "auto" to prefer rider-isolating layer 3 (default "auto").
+        min_dx: Minimum X offset to search (default -4).
+        max_dx: Maximum X offset to search (default 8).
+        min_dy: Minimum Y offset to search (default -4).
+        max_dy: Maximum Y offset to search (default 8).
+
+    Returns:
+        Per-angle offset report with player/mounted paths, layout metadata,
+        offset_x_by_angle, offset_y_by_angle, and per_angle list with dx, dy,
+        matches, overlaps, mismatches, and coverage fields.
+    """
+    return _post_json("/api/workbench/mounted-calibration/compute", {
+        "player_xp": player_xp,
+        "mounted_xp": mounted_xp,
+        "anim_index": anim_index,
+        "frame_index": frame_index,
+        "proj": proj,
+        "layer": layer,
+        "min_dx": min_dx,
+        "max_dx": max_dx,
+        "min_dy": min_dy,
+        "max_dy": max_dy,
+    })
+
+
+@mcp.tool()
+def get_mounted_cell_proposals(session_id: str) -> dict:
+    """Derive per-angle exact-cell proposals from the session's confirmed calibration record.
+
+    Uses each angle's own dx/dy from the calibration record (not the single display
+    accepted_dx/dy). Returns per-angle cell sets classified as rider_only, mount_only,
+    or overlap. No write side effects.
+
+    Args:
+        session_id: Session that has a confirmed mounted_rider_calibration record.
+
+    Returns:
+        player_xp, mounted_xp, calibration_ref_confirmed_at, layer_used, and
+        per_angle list with angle, dx, dy, counts (rider_only/mount_only/overlap/unresolved),
+        and cells (x, y, category, glyph, fg, bg).
+    """
+    return _post_json("/api/workbench/mounted-semantic/proposals", {
+        "session_id": session_id,
+    })
+
+
+@mcp.tool()
+def accept_mounted_cell_proposals(
+    session_id: str,
+    proposals: dict,
+    reviewer_action: str,
+) -> dict:
+    """Write a confirmed semantic review record to a session.
+
+    Requires explicit reviewer_action: "accept" and a non-empty proposals payload
+    derived from a confirmed calibration record. No automatic write path — the
+    reviewer_action declaration is the confirmation gate.
+
+    Args:
+        session_id: Session to write the semantic review record to.
+        proposals: Proposal payload from get_mounted_cell_proposals (must include
+                   per_angle, player_xp, mounted_xp, and calibration_ref_confirmed_at).
+        reviewer_action: Must be "accept" to proceed. Any other value is rejected.
+
+    Returns:
+        Updated session payload confirming mounted_semantic_review was written.
+    """
+    if reviewer_action != "accept":
+        return {
+            "error": "reviewer_action must be 'accept'",
+            "code": "reviewer_action_required",
+        }
+    if not proposals or not isinstance(proposals, dict):
+        return {
+            "error": "proposals must be a non-empty object from get_mounted_cell_proposals",
+            "code": "invalid_proposals",
+        }
+    per_angle = proposals.get("per_angle")
+    if not per_angle or not isinstance(per_angle, list):
+        return {
+            "error": "proposals.per_angle must be a non-empty list",
+            "code": "invalid_proposals",
+        }
+    from datetime import UTC, datetime
+    record = {
+        "player_xp": proposals.get("player", proposals.get("player_xp", "")),
+        "mounted_xp": proposals.get("mounted", proposals.get("mounted_xp", "")),
+        "calibration_record_ref": {
+            "confirmed_at": proposals.get("calibration_ref_confirmed_at"),
+        },
+        "per_angle_assignments": per_angle,
+        "confirmed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    }
+    return _post_json("/api/workbench/session/mounted-semantic-review", {
+        "session_id": session_id,
+        "data": record,
+    })
+
+
+# ===================================================================
 # Entry point
 # ===================================================================
 

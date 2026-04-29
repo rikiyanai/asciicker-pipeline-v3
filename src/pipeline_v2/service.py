@@ -2517,6 +2517,8 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
         "cells": list(sess_dict.get("cells") or []),
         "layers": list(sess_dict.get("layers") or []),
         "family": str(sess_dict.get("family", "player")),
+        "mounted_rider_calibration": sess_dict.get("mounted_rider_calibration"),
+        "mounted_semantic_review": sess_dict.get("mounted_semantic_review"),
     }
 
 
@@ -4028,6 +4030,16 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
         if not isinstance(source_cuts_h, list):
             raise ApiError("source_cuts_h must be list", "invalid_source_cuts_h", "workbench", req_id, 422)
         sess["source_cuts_h"] = source_cuts_h
+    if "mounted_rider_calibration" in payload:
+        mrc = payload.get("mounted_rider_calibration")
+        if mrc is not None and not isinstance(mrc, dict):
+            raise ApiError("mounted_rider_calibration must be object|null", "invalid_mounted_rider_calibration", "workbench", req_id, 422)
+        sess["mounted_rider_calibration"] = mrc
+    if "mounted_semantic_review" in payload:
+        msr = payload.get("mounted_semantic_review")
+        if msr is not None and not isinstance(msr, dict):
+            raise ApiError("mounted_semantic_review must be object|null", "invalid_mounted_semantic_review", "workbench", req_id, 422)
+        sess["mounted_semantic_review"] = msr
 
     sess["session_kind"] = _session_kind(sess)
     sess["metadata_status"] = _metadata_status(sess)
@@ -4037,3 +4049,215 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
     response["cell_count"] = len(sess["cells"])
     response["source_boxes"] = len(sess.get("source_boxes", [])) if isinstance(sess.get("source_boxes"), list) else 0
     return response
+
+
+def _resolve_mounted_xp_path(raw: str, field: str, req_id: str) -> Path:
+    """Resolve a repo-relative XP path. Rejects .. traversal. Returns absolute Path."""
+    if not raw:
+        raise ApiError(f"{field} is required", f"missing_{field}", "workbench", req_id, 400)
+    if ".." in Path(raw).parts:
+        raise ApiError(f"{field} must not contain ..", f"invalid_{field}", "workbench", req_id, 400)
+    candidate = (ROOT / raw).resolve()
+    try:
+        candidate.relative_to(ROOT)
+    except ValueError:
+        raise ApiError(f"{field} escapes repository root", f"invalid_{field}", "workbench", req_id, 400)
+    if not candidate.is_file():
+        raise ApiError(f"{field} not found: {raw}", f"{field}_not_found", "workbench", req_id, 404)
+    return candidate
+
+
+def compute_mounted_rider_calibration(
+    player_xp: str,
+    mounted_xp: str,
+    req_id: str,
+    *,
+    anim_index: int = 0,
+    frame_index: int = 0,
+    proj: int = 0,
+    layer: str | int = "auto",
+    min_dx: int = -4,
+    max_dx: int = 8,
+    min_dy: int = -4,
+    max_dy: int = 8,
+) -> dict[str, Any]:
+    """Expose mounted_rider_offset.build_report() via the service layer.
+
+    Validates path safety and search bounds before dispatching to build_report.
+    Returns the report dict unchanged — callers treat it as the calibration artifact.
+    """
+    if min_dx > max_dx:
+        raise ApiError(
+            f"min_dx ({min_dx}) must be <= max_dx ({max_dx})",
+            "invalid_bounds",
+            "workbench",
+            req_id,
+            422,
+        )
+    if min_dy > max_dy:
+        raise ApiError(
+            f"min_dy ({min_dy}) must be <= max_dy ({max_dy})",
+            "invalid_bounds",
+            "workbench",
+            req_id,
+            422,
+        )
+
+    player_path = _resolve_mounted_xp_path(player_xp, "player_xp", req_id)
+    mounted_path = _resolve_mounted_xp_path(mounted_xp, "mounted_xp", req_id)
+
+    import sys as _sys
+    _scripts = str(ROOT / "scripts")
+    if _scripts not in _sys.path:
+        _sys.path.insert(0, _scripts)
+    from mounted_rider_offset import build_report  # type: ignore[import]
+
+    try:
+        return build_report(
+            player_path,
+            mounted_path,
+            anim_index=anim_index,
+            frame_index=frame_index,
+            proj=proj,
+            layer=layer,
+            min_dx=min_dx,
+            max_dx=max_dx,
+            min_dy=min_dy,
+            max_dy=max_dy,
+        )
+    except ValueError as e:
+        raise ApiError(str(e), "calibration_error", "workbench", req_id, 400)
+
+
+def compute_mounted_semantic_proposals(session_id: str, req_id: str) -> dict[str, Any]:
+    """Derive per-angle cell proposals from a session's confirmed calibration record.
+
+    Uses each angle's own dx/dy from the calibration record (not the single display
+    accepted_dx/accepted_dy). Categories: rider_only, mount_only, overlap.
+    """
+    p = _session_path(session_id)
+    if not p.exists():
+        raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+    sess = load_json(p)
+
+    calibration = sess.get("mounted_rider_calibration")
+    if not calibration or not isinstance(calibration, dict):
+        raise ApiError(
+            "no confirmed calibration record in session",
+            "calibration_absent",
+            "workbench",
+            req_id,
+            422,
+        )
+
+    # build_report() stores paths under "player"/"mounted"; accept both key variants
+    player_xp_str = str(calibration.get("player") or calibration.get("player_xp", "")).strip()
+    mounted_xp_str = str(calibration.get("mounted") or calibration.get("mounted_xp", "")).strip()
+    per_angle_offsets = calibration.get("per_angle") or []
+    if not isinstance(per_angle_offsets, list) or len(per_angle_offsets) == 0:
+        raise ApiError(
+            "calibration record has no per_angle entries",
+            "calibration_invalid",
+            "workbench",
+            req_id,
+            422,
+        )
+
+    player_path = _resolve_mounted_xp_path(player_xp_str, "player_xp", req_id)
+    mounted_path = _resolve_mounted_xp_path(mounted_xp_str, "mounted_xp", req_id)
+
+    import sys as _sys
+    _scripts = str(ROOT / "scripts")
+    if _scripts not in _sys.path:
+        _sys.path.insert(0, _scripts)
+    from mounted_rider_offset import (  # type: ignore[import]
+        _parse_layout,
+        _frame_cells,
+        _auto_layer,
+    )
+
+    player_xp = read_xp(player_path)
+    mounted_xp = read_xp(mounted_path)
+    player_layout = _parse_layout(player_xp)
+    mounted_layout = _parse_layout(mounted_xp)
+
+    anim_index = int(calibration.get("anim_index", 0))
+    frame_index = int(calibration.get("frame_index", 0))
+    proj = int(calibration.get("proj", 0))
+    layer_index = int(calibration.get("layer_used", _auto_layer(player_xp, mounted_xp)))
+
+    per_angle_results: list[dict[str, Any]] = []
+    for i, angle_offset in enumerate(per_angle_offsets):
+        angle = int(angle_offset.get("angle", i))
+        dx = int(angle_offset.get("dx", 0))
+        dy = int(angle_offset.get("dy", 0))
+
+        try:
+            player_cells = _frame_cells(
+                player_xp, player_layout,
+                angle=angle, anim_index=anim_index, frame_index=frame_index,
+                proj=proj, layer_index=min(layer_index, int(player_xp["layers"]) - 1),
+            )
+            mounted_cells = _frame_cells(
+                mounted_xp, mounted_layout,
+                angle=angle, anim_index=anim_index, frame_index=frame_index,
+                proj=proj, layer_index=min(layer_index, int(mounted_xp["layers"]) - 1),
+            )
+        except (IndexError, KeyError) as e:
+            raise ApiError(
+                f"angle {angle}: could not read cells: {e}",
+                "cell_read_error",
+                "workbench",
+                req_id,
+                422,
+            )
+
+        shifted_player: dict[tuple[int, int], tuple[int, Any, Any]] = {
+            (x + dx, y + dy): (glyph, fg, bg)
+            for x, y, glyph, fg, bg in player_cells
+        }
+        mounted_map: dict[tuple[int, int], tuple[int, Any, Any]] = {
+            (x, y): (glyph, fg, bg)
+            for x, y, glyph, fg, bg in mounted_cells
+        }
+
+        cells: list[dict[str, Any]] = []
+        for pos in sorted(set(shifted_player) | set(mounted_map)):
+            px, py = pos
+            in_player = pos in shifted_player
+            in_mounted = pos in mounted_map
+            if in_player and in_mounted:
+                category = "overlap"
+                glyph, fg, bg = shifted_player[pos]
+            elif in_player:
+                category = "rider_only"
+                glyph, fg, bg = shifted_player[pos]
+            else:
+                category = "mount_only"
+                glyph, fg, bg = mounted_map[pos]
+            cells.append({
+                "x": px, "y": py,
+                "category": category,
+                "glyph": int(glyph),
+                "fg": list(fg),
+                "bg": list(bg),
+            })
+
+        counts = {cat: sum(1 for c in cells if c["category"] == cat)
+                  for cat in ("rider_only", "mount_only", "overlap", "unresolved")}
+        per_angle_results.append({
+            "angle": angle,
+            "dx": dx,
+            "dy": dy,
+            "counts": counts,
+            "cells": cells,
+        })
+
+    return {
+        "session_id": session_id,
+        "player": player_xp_str,
+        "mounted": mounted_xp_str,
+        "calibration_ref_confirmed_at": calibration.get("confirmed_at"),
+        "layer_used": layer_index,
+        "per_angle": per_angle_results,
+    }
