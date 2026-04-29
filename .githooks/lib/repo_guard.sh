@@ -2,7 +2,7 @@
 set -euo pipefail
 
 readonly ZERO_OID=0000000000000000000000000000000000000000
-readonly ALLOWED_BRANCHES=("main" "v3-refactor-start" "deployed-prod-baseline")
+readonly ALLOWED_BRANCHES=("main" "deployed-prod-baseline")
 
 _canon_path() {
   python3 - "$1" <<'PY'
