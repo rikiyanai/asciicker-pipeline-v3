@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 
 import { shouldCycleActiveLayerOnWheel } from '../../web/whole-sheet-input-policy.mjs';
 
-test('plain wheel over canvas cycles active layer', () => {
-  assert.equal(shouldCycleActiveLayerOnWheel({ deltaY: 8, altKey: false, ctrlKey: false, metaKey: false }), true);
+test('plain wheel and trackpad scroll do not cycle active layer', () => {
+  assert.equal(shouldCycleActiveLayerOnWheel({ deltaY: 8, altKey: false, ctrlKey: false, metaKey: false }), false);
 });
 
-test('alt+wheel still cycles active layer', () => {
+test('alt+wheel cycles active layer', () => {
   assert.equal(shouldCycleActiveLayerOnWheel({ deltaY: 8, altKey: true, ctrlKey: false, metaKey: false }), true);
 });
 

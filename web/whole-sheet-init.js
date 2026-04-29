@@ -3219,8 +3219,7 @@ function _updateLayersPanelUI() {
   const addBtn = document.createElement('button');
   addBtn.className = 'ws-layer-add-btn';
   addBtn.textContent = '+';
-  addBtn.title = layers.length >= 9 ? 'Maximum 9 layers' : 'Add layer';
-  addBtn.disabled = layers.length >= 9;
+  addBtn.title = 'Add layer';
   addBtn.addEventListener('click', (e) => { e.stopPropagation(); _addLayer(); });
 
   const delBtn = document.createElement('button');
@@ -3346,11 +3345,9 @@ function _toggleLayerLock(index) {
 
 function _addLayer() {
   if (!editorState.layerStack) return;
-  if (editorState.layerStack.layers.length >= 9) return;
   const newIndex = editorState.layerStack.layers.length;
   _beginDocumentTransaction();
-  const added = editorState.layerStack.addLayer(`Layer ${newIndex}`);
-  if (!added) return;
+  editorState.layerStack.addLayer(`Layer ${newIndex}`);
   editorState.layerStack.selectLayer(newIndex);
   _updateLayersPanelUI();
   if (editorState.canvas) { editorState.canvas._fullRenderNeeded = true; editorState.canvas.render(); }
@@ -3674,6 +3671,8 @@ function _onCanvasPointerMove(e) {
 
 function _onCanvasWheel(e) {
   if (!editorState.mounted) return;
+  // Modifier-gated by policy to avoid repeating the plain-scroll layer drift
+  // regression logged in the failure log's 2026-04-26 headed UX findings.
   if (!shouldCycleActiveLayerOnWheel(e)) return;
   if (!editorState.layerStack || !editorState.layerStack.layers.length) return;
   e.preventDefault();

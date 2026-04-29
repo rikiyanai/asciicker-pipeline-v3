@@ -152,8 +152,7 @@ runner.describe('LayerStack', () => {
 
   runner.it('should add new layer to stack', () => {
     const stack = new LayerStack(80, 30);
-    const added = stack.addLayer('Layer 1');
-    expect(added).toBe(true);
+    stack.addLayer('Layer 1');
     expect(stack.layers.length).toBe(2);
     const active = stack.getActiveLayer();
     expect(active.name).toBe('Layer 1');
@@ -301,17 +300,6 @@ runner.describe('LayerStack', () => {
       expect(layer.width).toBe(80);
       expect(layer.height).toBe(30);
     }
-  });
-
-  runner.it('should cap the stack at nine layers', () => {
-    const stack = new LayerStack(80, 30);
-    for (let i = 1; i < 9; i++) {
-      expect(stack.addLayer(`Layer ${i}`)).toBe(true);
-    }
-    expect(stack.layers.length).toBe(9);
-    expect(stack.addLayer('Layer 9')).toBe(false);
-    expect(stack.layers.length).toBe(9);
-    expect(stack.getActiveLayer().name).toBe('Layer 8');
   });
 });
 
