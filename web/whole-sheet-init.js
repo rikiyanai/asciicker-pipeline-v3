@@ -3219,7 +3219,8 @@ function _updateLayersPanelUI() {
   const addBtn = document.createElement('button');
   addBtn.className = 'ws-layer-add-btn';
   addBtn.textContent = '+';
-  addBtn.title = 'Add layer';
+  addBtn.title = layers.length >= 9 ? 'Maximum 9 layers' : 'Add layer';
+  addBtn.disabled = layers.length >= 9;
   addBtn.addEventListener('click', (e) => { e.stopPropagation(); _addLayer(); });
 
   const delBtn = document.createElement('button');
@@ -3345,9 +3346,11 @@ function _toggleLayerLock(index) {
 
 function _addLayer() {
   if (!editorState.layerStack) return;
+  if (editorState.layerStack.layers.length >= 9) return;
   const newIndex = editorState.layerStack.layers.length;
   _beginDocumentTransaction();
-  editorState.layerStack.addLayer(`Layer ${newIndex}`);
+  const added = editorState.layerStack.addLayer(`Layer ${newIndex}`);
+  if (!added) return;
   editorState.layerStack.selectLayer(newIndex);
   _updateLayersPanelUI();
   if (editorState.canvas) { editorState.canvas._fullRenderNeeded = true; editorState.canvas.render(); }

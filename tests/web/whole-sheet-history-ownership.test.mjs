@@ -8,6 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
 const workbenchJs = fs.readFileSync(path.join(repoRoot, 'web', 'workbench.js'), 'utf8');
 const wholeSheetInitJs = fs.readFileSync(path.join(repoRoot, 'web', 'whole-sheet-init.js'), 'utf8');
+const layerStackJs = fs.readFileSync(path.join(repoRoot, 'web', 'rexpaint-editor', 'layer-stack.js'), 'utf8');
 
 test('whole-sheet history is owned by whole-sheet-init, not workbench callbacks', () => {
   assert.equal(
@@ -120,5 +121,23 @@ test('wrapper layer controls delegate to the mounted whole-sheet editor API', ()
     workbenchJs,
     /\$\("layerVisibility"\)\.addEventListener\("change", \(e\) => \{[\s\S]*wsEditor\.setLayerVisibility/,
     'layerVisibility control should delegate visibility changes to whole-sheet editor'
+  );
+});
+
+test('whole-sheet layer owner enforces the REXPaint nine-layer cap', () => {
+  assert.match(
+    layerStackJs,
+    /const MAX_LAYERS = 9;/,
+    'layer-stack.js should define the nine-layer cap'
+  );
+  assert.match(
+    layerStackJs,
+    /if \(this\.layers\.length >= MAX_LAYERS\) \{\s*return false;\s*\}/,
+    'LayerStack.addLayer() should refuse a tenth layer'
+  );
+  assert.match(
+    wholeSheetInitJs,
+    /if \(editorState\.layerStack\.layers\.length >= 9\) return;/,
+    'whole-sheet-init.js should stop add-layer actions at nine layers'
   );
 });

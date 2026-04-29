@@ -5,6 +5,8 @@
  * Each layer has independent cell data, visibility, and ordering.
  */
 
+const MAX_LAYERS = 9;
+
 function _createLayerCanvas(width, height) {
   if (typeof OffscreenCanvas !== 'undefined') {
     return new OffscreenCanvas(width, height);
@@ -144,12 +146,16 @@ export class LayerStack {
    * @param {string} name - Layer name
    */
   addLayer(name) {
+    if (this.layers.length >= MAX_LAYERS) {
+      return false;
+    }
     const layer = new Layer(this.layers.length, name, this.width, this.height);
     if (this.offscreenCellSize > 0) {
       layer.ensureOffscreen(this.offscreenCellSize);
     }
     this.layers.push(layer);
     this.activeIndex = this.layers.length - 1;
+    return true;
   }
 
   /**

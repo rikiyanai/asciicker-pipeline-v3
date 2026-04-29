@@ -1067,7 +1067,7 @@ must be intercepted where necessary.
 | Draw tools | `c` cell, `l` line, `r` rect, `o` oval, `i` fill, `t` text, `d` eyedropper, `e` erase, `s` select |
 | Selection / clipboard | `Ctrl-c`, `Ctrl-x`, `Ctrl-v`, `Delete`, `Backspace`, `Esc`, `[` rotate CCW, `]` rotate CW |
 | History | `Ctrl-z` undo, `Ctrl-y` redo |
-| Layers | `Ctrl-l` add, `1-9` select active, `Ctrl-1-9` toggle visibility, `Shift-1-9` toggle lock, `Ctrl-Shift-m` merge active downward, `Alt` + mouse wheel over canvas cycles active layer |
+| Layers | `Ctrl-l` add, `1-9` select active, `Ctrl-1-9` toggle visibility, `Shift-1-9` toggle lock, `Ctrl-Shift-m` merge active downward, mouse wheel over canvas cycles active layer |
 | Viewport | `Ctrl-g` grid toggle, `<` / `>` and `Ctrl-PgUp` / `Ctrl-PgDn` zoom/font-scale, `Space` + drag pan |
 
 #### 1.8.6 Layer And History Contract
@@ -1398,8 +1398,10 @@ tables. Base families are currently `human` and `green`; on-foot prefixes are
 `attack-green`, while mounted/bee-related prefixes such as `wolfie`, `wolack`,
 and `bigbee` still live on the human side with fallback behavior from green.
 
-Section 2 defines the complete authoring pipeline that produces those files from
-source art and gets them into the runtime for proof. The user-facing workflow
+Section 2 defines the target authoring pipeline contract that is supposed to
+produce those files from source art and get them into the runtime for proof.
+The live implementation is still partial and is audited later in this section.
+The user-facing workflow
 shape stays familiar: upload source art, slice it, drag or adjust mappings,
 materialize the result into the root XP editor, validate it, and then compile
 or inject runtime-facing output. What changes is the authoring paradigm. The
@@ -2091,6 +2093,9 @@ Minimum `UQ-007` deliverables:
 
 Current wrapper-side structural gates are:
 
+- G7 geometry cell count
+- G8 non-empty coverage
+- G9 handoff population
 - G10 dimension match
 - G11 layer count match
 - G12 L0 row-0 metadata glyphs
@@ -2098,24 +2103,25 @@ Current wrapper-side structural gates are:
 Current gate/export code path:
 
 1. `workbench_export_bundle()` exports each ready action XP
-2. `_run_structural_gates()` checks dims, layers, and L0 metadata
+2. `_run_structural_gates()` checks the art-layer quality gates plus dims,
+   layers, and L0 metadata
 3. failing actions hard-stop bundle export or payload generation
 
 Current evidence:
 
-- `src/pipeline_v2/service.py:2829-2864`
-- `src/pipeline_v2/service.py:2867-2918`
-- `src/pipeline_v2/service.py:2921-2934`
+- `src/pipeline_v2/service.py:3668-3716`
+- `src/pipeline_v2/service.py:3720-3783`
+- `src/pipeline_v2/service.py:3786-3840`
 
 These gates are wrapper safeguards. They do not define the editor root contract.
 
-**AUDITOR FOUND (2026-04-15):** Three issues with the current gate and registry implementation:
+Current open issues in the gate and registry implementation:
 
-1. **G7/G8/G9 still do not guard bundle export.** G7 (geometry cell count), G8 (non-empty content ≥5%), and G9 (handoff population) run during `run_pipeline()`, but they are NOT called from `workbench_export_bundle()`. Only G10/G11/G12 are active at bundle export time. These gates are the only programmatic substitute for visual quality inspection, so their absence from the export gate is especially significant for agent-driven workflows.
+1. **The quality contract exists, but the canonical validate-xp surface is still not live.** The spec requires a single-XP `validate-xp` surface for agent loops, but the live backend still does not expose the canonical route/tool shape described later in this section.
 
-2. **The quality contract now exists in Section 2.3.4, but it is not yet exposed and enforced at the export boundary.** The spec requires a single-XP `validate-xp` surface for agent loops, but the live backend still does not expose the canonical route/tool shape described later in this section, and `workbench_export_bundle()` / `workbench_web_skin_bundle_payload()` still do not evaluate the full Step 5 quality report.
+2. **Registry roles are fixed in design, but the current branch still leaks legacy authority in backend execution.** `config/template_registry.json` is still the intended authoring authority and the harness action registry seed is still fidelity test instrumentation only. The browser no longer uses `enabled_families`, but backend bundle/runtime/export code still reads the compat `family` alias and static `ENABLED_FAMILIES` set, so the implementation side of that authority cleanup remains open in `UQ-004`.
 
-3. **Registry roles are fixed in design, but the current branch still leaks legacy authority in backend execution.** `config/template_registry.json` is still the intended authoring authority and the harness action registry seed is still fidelity test instrumentation only. The browser no longer uses `enabled_families`, but backend bundle/runtime/export code still reads the compat `family` alias and static `ENABLED_FAMILIES` set, so the implementation side of that authority cleanup remains open in `UQ-004`.
+3. **G8/G9 export semantics still need explicit policy wording.** Export-time structural gating now runs `G7-G12`, but the canon still needs a locked rule for low-coverage manual sheets and for what `G9` means at export time once the XP is already materialized.
 
 4. **FL-STEP4-04 resolved on `2026-04-16`: dead `force_fallback` and `crop_box` removed from `RunConfig`.** The live `/api/run` and `/pipeline/run` contracts no longer advertise fields the handlers ignore; legacy callers now get an explicit `unsupported_run_fields` error if they still send those keys.
 
