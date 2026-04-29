@@ -2,10 +2,7 @@
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
-cd "$ROOT"
-
 # shellcheck source=.githooks/lib/repo_guard.sh
 source "$ROOT/.githooks/lib/repo_guard.sh"
 
 ensure_primary_worktree
-python3 scripts/self_containment_audit.py

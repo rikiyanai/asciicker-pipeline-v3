@@ -4,4 +4,23 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
+# shellcheck source=.githooks/lib/repo_guard.sh
+source "$ROOT/.githooks/lib/repo_guard.sh"
+
+ensure_primary_worktree
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ -z "${remote_ref:-}" ]] && continue
+  case "$remote_ref" in
+    refs/heads/*)
+      branch_name="${remote_ref#refs/heads/}"
+      if ! is_allowed_branch_name "$branch_name"; then
+        echo "ERROR: pushing to disallowed remote branch '$branch_name' is blocked in this repo." >&2
+        echo "Allowed remote branches: ${ALLOWED_BRANCHES[*]}" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
 python3 scripts/self_containment_audit.py

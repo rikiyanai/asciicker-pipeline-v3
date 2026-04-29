@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=.githooks/lib/repo_guard.sh
+source "$ROOT/.githooks/lib/repo_guard.sh"
+
+STATE="${1:?reference transaction state required}"
+if [[ "$STATE" != "prepared" ]]; then
+  exit 0
+fi
+
+while read -r old_value new_value ref_name; do
+  case "$ref_name" in
+    refs/heads/*)
+      branch_name="${ref_name#refs/heads/}"
+      if [[ "$old_value" == "$ZERO_OID" ]]; then
+        if ! is_allowed_branch_name "$branch_name"; then
+          echo "ERROR: new branch '$branch_name' is forbidden in this repo." >&2
+          echo "Allowed local branches: ${ALLOWED_BRANCHES[*]}" >&2
+          exit 1
+        fi
+      fi
+      ;;
+  esac
+done
+
+exit 0
