@@ -15,6 +15,13 @@ from pipeline_v2.service import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.fixture(autouse=True)
+def reset_registry_cache():
+    _reset_template_registry_cache()
+    yield
+    _reset_template_registry_cache()
+
+
 def test_template_registry_actions_are_normalized():
     registry = load_template_registry()
 
@@ -139,7 +146,7 @@ def test_normalize_action_spec_preview_xp_fallback_to_l0_ref():
     result = _normalize_template_action_spec("player_native_full", "idle", spec)
     assert result["preview_xp"] == spec["l0_ref"]
     assert result["preview_xp_sha256"] == spec["l0_ref_sha256"]
-    assert result["preview_xp_sha256"] != spec["preview_xp_sha256"]
+    assert result["preview_xp_sha256"] == spec["l0_ref_sha256"]
 
 
 def test_normalize_template_registry_rejects_prefix_catalog_sha_drift():

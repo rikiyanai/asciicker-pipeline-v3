@@ -366,6 +366,27 @@ No distinct palette asset files (`.pal`, `palette.json`, etc.) exist in the repo
 - XP-file fidelity is not proven end-to-end. No canonical test exists. The deleted harness was not a valid fidelity test — see `PLAYWRIGHT_FAILURE_LOG.md`.
 - Self-containment is now machine-enforced via `scripts/self_containment_audit.py` and installable git hooks in `.githooks/`. Blocking findings are external symlinks and live/build/runtime/test references to absolute paths outside this repo.
 
+## 2026-04-22 Audit Note: Bundle Coverage, Rollback Contract, Wizard Parity, Migration Gates
+
+Cross-repo audit (asciicker-Y9-2 vs pipeline-v3) surfaced four gaps not previously
+specced. All four have been added to `docs/plans/2026-03-23-workbench-canonical-spec.md`
+as new sections:
+
+- **§2.11 Bundle Coverage Policy** — defines the 74/441 baseline, coverage expansion
+  contract, machine-enforceable coverage gate, and the current SPRITE_COVERAGE_EXCEPTIONS
+  table for proof-only and deferred families
+- **§2.12 Rollback Asset Snapshot Contract** — requires XP binary capture + SHA256
+  manifest alongside JSON metadata; current rollback is JSON-only (OPEN)
+- **§2.13 Y9-2 Wizard Parity Contract** — expands DESIGN OPEN B-13 into a formal
+  parity contract: every `option_tree.py` entry needs a real handler + full lifecycle;
+  string-match-only tests do not satisfy the contract
+- **V3 Migration Readiness Gates** — blocking gate table + non-blocking gap table with
+  current status for each; gate maintenance rule at bottom
+
+These sections do not introduce new authority. They record what the spec was previously
+silent on so agents can treat coverage gaps and rollback failures as regressions, not
+ambiguities.
+
 ## 2026-03-23 Audit Note: Capability Canon, Doc Alignment, and M2 Architecture
 
 > A canonical M2 capability inventory exists at `docs/plans/2026-03-23-m2-capability-canon-inventory.md`. It cross-references every doc in this index against current code wiring and failure-log proof to classify each user-reachable behavior as PROVEN, WIRED, PARTIAL, PLANNED, BLOCKED, or DEFERRED.

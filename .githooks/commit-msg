@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MSG_FILE="${1:?commit message path required}"
+
+if grep -Eiq 'co[ -]authored[ -]by:?[[:space:]]*claude([[:space:]]|<|$)' "$MSG_FILE"; then
+  echo "ERROR: commit message contains a forbidden Claude co-author trailer." >&2
+  echo "Remove any 'Co-authored-by: Claude ...' line before committing." >&2
+  exit 1
+fi
