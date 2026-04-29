@@ -8,6 +8,44 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Audit — Canon Formatting Boundary For Sections 1 And 2 (2026-04-29)
+
+This is a canon/doc-state formatting correction entry. It does not claim a code
+fix, proof pass, or queue-row closure. It records the rule that Section 1 and
+Section 2 are specification sections, while literal task language belongs in
+the robot queue only.
+
+### Findings
+
+1. Section 1 still contained queue-style execution wording inside the spec body:
+   - `1.6.1` was titled as an execution checkpoint
+   - `1.6.2` still included execution-order, proof-step, and stop-rule phrasing
+2. Section 2 still contained a literal execution table and queue-order prose
+   inside the spec body:
+   - `2.5.4` used `Do exactly this` / `Done when`
+   - `2.5.5` restated execution order and queue-law wording that already belongs
+     to `Unified Sequence Of Actions`
+3. Section 0 cardinal rule / architecture-law content remained intact and did
+   not require any change.
+
+### What changed
+
+1. Section 1 checkpoint wording now reads as state/contract language rather
+   than as an embedded execution plan.
+2. Section 2 now records open contract slices and a queue crosswalk rather than
+   duplicating literal execution instructions inside the spec body.
+3. `Unified Sequence Of Actions` remains the only place in the canon that owns
+   row order, exact task wording, and stop/fail protocol.
+4. Section 0 was left untouched.
+
+### Still not claimed
+
+1. No product code changed in this slice.
+2. No queue row state changed in this slice.
+3. This slice does not close any Section 1 or Section 2 implementation gap by
+   itself; it only restores the formatting/authority boundary between spec text
+   and robot-queue text.
+
 ## Audit — Section 2 Canon Redesign Specificity Alignment (2026-04-27)
 
 This is a canon/doc-state alignment entry. It does not claim a code fix, proof

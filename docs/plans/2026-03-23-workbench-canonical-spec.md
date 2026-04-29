@@ -823,9 +823,11 @@ These are architectural failures. They are not just missing buttons.
 | Grid control is only partially implemented | `web/whole-sheet-init.js:1241-1279` provides a sidebar toggle and step selector, but there is no Ctrl-g authority and no zoom/grid persistence contract | Family 3 in Section 1.4 requires grid control as a direct canvas-navigation behavior |
 | Layer control is only partially implemented | `web/whole-sheet-init.js:1757-1850`, `web/workbench.js:3498-3505` | Click-based visibility/lock/reorder UI exists, but Ctrl-l / 1~9 / Ctrl-1~9 / Shift-1~9 / Ctrl-Shift-m / wheel authority is missing and lock state is not part of the root session save contract. |
 
-These gaps must be explicitly designed before implementation begins. Do not implement piecemeal. See Unified Sequence Of Actions for the corrected task sequence.
+These gaps require an explicit behavioral contract before any closure claim is
+valid. The execution sequence for resolving them lives only in Unified Sequence
+Of Actions.
 
-### 1.6.1 Execution Checkpoint — 2026-04-26
+### 1.6.1 State Checkpoint — 2026-04-26
 
 The 2026-04-15 gap table above remains valid as historical audit context, but
 some of those rows are no longer literally current code state.
@@ -851,7 +853,7 @@ What current code now does:
      so color-only/background-only cells survive the merge without letting
      untouched default blanks erase the target layer
 
-Execution evidence:
+Verification evidence:
 
 - `python3 -m pytest tests/test_workbench_flow.py tests/test_base_path.py -q`
   passed on `2026-04-26` (`61 passed`)
@@ -876,7 +878,7 @@ Closure update for `UQ-002` / `UQ-003` on `2026-04-27`:
    history-ownership tests plus same-day headed whole-sheet button, layer,
    clipboard, tools, transform, bulk-edit, and grid runs.
 
-### 1.6.2 Required UQ-002 Hot-Path Refactor Order — 2026-04-26
+### 1.6.2 Current UQ-002 Hot-Path Contract — 2026-04-26
 
 The remaining "super slow" feel is treated as part of `UQ-002`, not as a later
 polish lane.
@@ -898,33 +900,19 @@ Current checkpoint state after the 2026-04-26 UQ-002 hot-path refactor cuts:
    secondary refresh queue instead of running synchronously from ordinary
    whole-sheet edit completion.
 
-Required execution order inside `UQ-002`:
+Current hot-path closure facts recorded against `UQ-002`:
 
-1. completed for code-state: delete wrapper-owned undo/redo from the
-   whole-sheet edit path and move live history ownership into
-   `whole-sheet-init.js`
-2. completed for code-state: stop full `renderFrameGrid()` rebuilds on ordinary
-   root edits; update only the dirty/visible shipped projection surfaces that
-   actually need refresh
-3. completed for code-state: decouple session save/autosave from edit
-   completion so normal drawing does not immediately serialize the full live
-   session payload
-4. completed for code-state: only after the hot-path cut is stable, move any
-   remaining secondary projection or serialization work out of the direct edit
-   completion path
+1. Wrapper-owned undo/redo is deleted from the whole-sheet edit path, and live
+   history ownership now resides in `whole-sheet-init.js`.
+2. Ordinary root edits no longer trigger full `renderFrameGrid()` rebuilds;
+   only the dirty/visible shipped projection surfaces refresh.
+3. Session save/autosave is decoupled from ordinary edit completion, so normal
+   drawing no longer immediately serializes the full live session payload.
+4. Any remaining secondary projection or serialization work belongs outside the
+   direct edit completion path.
 
-Next proof step:
-
-1. completed on `2026-04-27`: rerun the shipped headed Section 1 proof path
-   and log any measured residual before adding worker/off-main-thread
-   machinery
-
-Stop rules:
-
-1. Do not treat wrapper-side suppression flags, throttles, or more mirror logic
-   as closure for this lane.
-2. Do not move this work into `UQ-004` or any later Section 2/3 row.
-3. Do not reopen a second document/root owner while reducing hot-path cost.
+Queue sequencing, proof order, and stop conditions for any remaining `UQ-002`
+work live only in Unified Sequence Of Actions.
 
 ### 1.7 Section-1 Refactor Rule
 
@@ -942,9 +930,9 @@ The deletion-first order for Section 1 was:
 
 ### 1.8 Section-1 Feature Behavioral Contract
 
-This subsection is the required Step 2 design artifact from the Unified Sequence Of Actions. Step 3
-and Step 4 implementation work must follow this contract; they are not allowed
-to invent a second behavior model in code.
+This subsection defines the behavioral contract that Section 1 closure claims
+must satisfy. Queue sequencing and implementation status live in Unified
+Sequence Of Actions, not here.
 
 #### 1.8.1 Root Document And Surface Contract
 
@@ -2245,23 +2233,23 @@ polish; they are the visible shape of the ownership cutover.
 | Whole-sheet panel helper text | Keep Section 1 as primary surface, but explain that Save marks presentation progress while register/compile mutate bundle-level state. | Preserves Section 1 ownership while clarifying Section 2 workflow |
 | Runtime test controls | Keep runtime proof controls, but disable bundle-level runtime actions based on shared bundle-authoring readiness rather than ad hoc local action-tab heuristics. | Runtime gating must reflect the shared contract, not UI-local guesses |
 
-#### 2.5.4 Section 2 Execution Tasks Needed
+#### 2.5.4 Open Section-2 Contract Slices
 
-Section 2 execution is no longer one vague “finish Section 2” task. The needed
-work is the following exact slice stack.
+Section 2 open work is decomposed into the following contract slices. Literal
+row order, state, and stop conditions live only in Unified Sequence Of Actions.
 
-| Slice | Parent row | Files / surfaces | Do exactly this | Done when |
-|-------|------------|------------------|-----------------|-----------|
-| `S2-R1` | `UQ-004` | `src/pipeline_v2/service.py`, session JSON on disk, `tests/test_template_registry_schema.py`, bundle/runtime/export tests | Extract one registry-derived backend helper, remove live `family` / `ENABLED_FAMILIES` authority from bundle create, blank-session create, bundle run, export, and web-skin payload code, and normalize legacy session `family` values in place on load/save | No live Section 2 backend branch takes authority from compat family fields, and newly written sessions no longer depend on legacy `family` as primary identity |
-| `S2-R2` | `UQ-004` | `load_template_registry()`, `web/workbench.js::fetchTemplateRegistry()` | Make malformed/missing registry failures operator-visible and fail-closed for authoring surfaces without silently caching empty truth | Registry errors are explicit in backend responses and visible in the UI |
-| `S2-R3` | `UQ-005` | `src/pipeline_v2/service.py` gate/export paths | Refactor one shared quality evaluator and apply it to export-bundle and web-skin payload generation, not only convert-time checks; export-time G9 must measure populated visual cells rather than dense-array length | Export/web payload reject the same failures the quality contract defines, and export-time G9 is no longer a dead gate |
-| `S2-R4` | `UQ-005` | quality contract docs + gate code | Lock the G8/G9 threshold policy and report shape so browser, MCP, and CI all see the same verdict contract, including the manual-authoring vs autonomous-flow distinction for sparse XP outputs | `validate-xp`, export, and payload paths use the same PASS/WARN/FAIL semantics and the same threshold/report fields |
-| `S2-R5` | `UQ-006` | source-manifest library + session save/load | Introduce real sidecar read/write/materialize plumbing and demote `source_boxes` / `source_cuts_*` to derived mirror state | Session save/load no longer owns combined-sheet slicing |
-| `S2-R6` | `UQ-006` | `web/workbench.html`, `web/workbench.js` source panel | Rebuild the source panel around manifest-first editing, sidecar status, and per-region target assignment while preserving the current direct slicer feel | Browser slicing edits one manifest contract rather than local-only arrays |
-| `S2-R7` | `UQ-006` | shared headless surface | Add shared mark/materialize/validate/status commands over the same manifest contract for agents and CLI | Agent and browser paths hit the same source-authoring contract |
-| `S2-R8` | `UQ-007` | bundle/runtime contract helper, backend register/compile/export surfaces, ID-bearing test fixtures | Introduce one live pipeline-v3 runtime identity layer for `skin_definition_id`, `presentation_kind_id`, and `layer_definition_id`, keyed off normalized registry/blueprint truth rather than string-only scope | Runtime identity is no longer explanatory-doc-only; bundle helper, backend outputs, and proof surfaces share one ID layer |
-| `S2-R9` | `UQ-008` | mounted authoring/runtime proof | Add mounted presentation-target surfaces plus builder/export/runtime proof for `wolfie` and `wolack`. Treat the mounted authoring aids as explicit sub-slices, not vague future UX: `U2` = browser overlay-calibration panel on top of the existing backend/MCP calibration artifact flow; `U4` frontend = browser semantic cell review panel on top of the existing backend/MCP exact-cell proposal flow. Both aids must stay proposal-first and human-confirmed, must remain sibling surfaces to the existing jitter owner, and must not flip `authorable: true` until the full mounted builder/export/runtime row closes. | Mounted rows are authorable and proven on the live contract, mounted semantic/alignment authoring no longer depends on opaque manual notes or destructive jitter edits, and the browser surface matches the already-landed backend/MCP artifact flow |
-| `S2-R10` | `UQ-010` | shared CLI/API surface + clients | Land the shared request-artifact/headless contract (`phase0-status`, `phase0-build`, `validate-skin-intake`, `convert-skin-request`, `register-skin-request`, `compile-skin-request`, `validate-xp`, `status`) | Browser, MCP, Y9-2 launcher/wizard, and manual CLI become thin clients over one owner |
+| Slice | Parent row | Files / surfaces | Required closure | Closure condition |
+|-------|------------|------------------|------------------|-------------------|
+| `S2-R1` | `UQ-004` | `src/pipeline_v2/service.py`, session JSON on disk, `tests/test_template_registry_schema.py`, bundle/runtime/export tests | One registry-derived backend helper owns bundle create, blank-session create, bundle run, export, and web-skin payload identity, and legacy session `family` values normalize on load/save. | No live Section 2 backend branch takes authority from compat family fields, and newly written sessions no longer depend on legacy `family` as primary identity |
+| `S2-R2` | `UQ-004` | `load_template_registry()`, `web/workbench.js::fetchTemplateRegistry()` | Registry load/fetch failures are operator-visible and fail-closed for authoring surfaces instead of silently caching empty truth. | Registry errors are explicit in backend responses and visible in the UI |
+| `S2-R3` | `UQ-005` | `src/pipeline_v2/service.py` gate/export paths | One shared quality evaluator gates export-bundle and web-skin payload generation in addition to convert-time checks, and export-time `G9` measures populated visual cells rather than dense-array length. | Export/web payload reject the same failures the quality contract defines, and export-time `G9` is no longer a dead gate |
+| `S2-R4` | `UQ-005` | quality contract docs + gate code | `G8`/`G9` threshold policy and report shape are fixed across browser, MCP, and CI, including the manual-authoring versus autonomous-flow distinction for sparse XP outputs. | `validate-xp`, export, and payload paths use the same `PASS`/`WARN`/`FAIL` semantics and the same threshold/report fields |
+| `S2-R5` | `UQ-006` | source-manifest library + session save/load | Real sidecar read/write/materialize plumbing exists, and `source_boxes` / `source_cuts_*` are demoted to derived mirror state. | Session save/load no longer owns combined-sheet slicing |
+| `S2-R6` | `UQ-006` | `web/workbench.html`, `web/workbench.js` source panel | The source panel is manifest-first, with sidecar status and per-region target assignment, while preserving the current direct slicer feel. | Browser slicing edits one manifest contract rather than local-only arrays |
+| `S2-R7` | `UQ-006` | shared headless surface | Shared mark/materialize/validate/status commands exist over the same manifest contract for agents and CLI. | Agent and browser paths hit the same source-authoring contract |
+| `S2-R8` | `UQ-007` | bundle/runtime contract helper, backend register/compile/export surfaces, ID-bearing test fixtures | One live pipeline-v3 runtime identity layer exists for `skin_definition_id`, `presentation_kind_id`, and `layer_definition_id`, keyed off normalized registry/blueprint truth rather than string-only scope. | Runtime identity is no longer explanatory-doc-only; bundle helper, backend outputs, and proof surfaces share one ID layer |
+| `S2-R9` | `UQ-008` | mounted authoring/runtime proof | Mounted presentation-target surfaces plus builder/export/runtime proof exist for `wolfie` and `wolack`. The mounted authoring aids stay explicit sub-slices: `U2` = browser overlay-calibration panel on top of the existing backend/MCP calibration artifact flow; `U4` frontend = browser semantic cell review panel on top of the existing backend/MCP exact-cell proposal flow. Both aids remain proposal-first and human-confirmed, stay sibling surfaces to the existing jitter owner, and do not flip `authorable: true` until the full mounted builder/export/runtime row closes. | Mounted rows are authorable and proven on the live contract, mounted semantic/alignment authoring no longer depends on opaque manual notes or destructive jitter edits, and the browser surface matches the already-landed backend/MCP artifact flow |
+| `S2-R10` | `UQ-010` | shared CLI/API surface + clients | A shared request-artifact/headless contract exists for `phase0-status`, `phase0-build`, `validate-skin-intake`, `convert-skin-request`, `register-skin-request`, `compile-skin-request`, `validate-xp`, and `status`. | Browser, MCP, Y9-2 launcher/wizard, and manual CLI become thin clients over one owner |
 
 #### 2.5.4.1 Resolved Design Policy For The Remaining Open Section-2 Rows
 
@@ -2300,16 +2288,17 @@ generic phrases like “semantic review later” or “overlay calibration mode.
 cross-repo baseline and the remaining browser gap are now fixed.
 
 1. Y9-2 audit baseline for mounted artifact shape:
-   - `scripts/pipeline/mounted_wrapper_mask_selector.py` is a queue-oriented
-     wrapper mask authoring tool keyed by exact sprite/layer/angle/anim/frame/
-     proj/wrapper-role tuples. The canonical single-task example is:
+   - `scripts/pipeline/mounted_wrapper_mask_selector.py` is a wrapper mask
+     authoring tool keyed by exact sprite/layer/angle/anim/frame/proj/
+     wrapper-role tuples. The canonical artifact-coordinate example is:
      `python3 scripts/pipeline/mounted_wrapper_mask_selector.py --sprite wolfie-body.xp --layer 2 --angle 1 --anim 0 --frame 0 --proj 0 --wrapper-role mount_rear`
    - `scripts/pipeline/xp_semantic_atlas_reviewer.py` already uses explicit
      mounted wrapper-role vocabulary (`mount_rear`, `mount_front`,
      `empty_slot`) and explicit review/promotion arguments rather than silent
      heuristics.
    - Pipeline-v3 does not need to copy the Y9-2 TTY UI, but it must inherit the
-     same artifact law: exact task coordinates, explicit wrapper-role naming,
+     same artifact law: exact artifact coordinates, explicit wrapper-role
+     naming,
      and explicit review/confirmation before promotion.
 2. Current live pipeline-v3 split:
    - backend + MCP foundations for mounted aids are already present:
@@ -2321,17 +2310,17 @@ cross-repo baseline and the remaining browser gap are now fixed.
      still routes all mounted-position editing through destructive
      `shiftFrameContents()` / `commitWholeSheetDocumentMutation()` jitter paths
 3. `U2` frontend is a required `S2-R9` sub-slice, not optional polish:
-   - add a dedicated workbench panel for non-destructive rider/mount overlay
+   - a dedicated workbench panel exists for non-destructive rider/mount overlay
      calibration
    - the panel renders to its own canvas and writes a calibration artifact only
      on explicit accept
-   - the panel must consume the shared mounted-calibration backend/MCP artifact
+   - the panel consumes the shared mounted-calibration backend/MCP artifact
      shape rather than inventing a browser-only offset format
 4. `U4` frontend is a required `S2-R9` sub-slice, not optional polish:
-   - add a dedicated workbench panel for exact-cell semantic review
+   - a dedicated workbench panel exists for exact-cell semantic review
    - proposals come from the shared backend/MCP exact-cell route and are
      displayed as review data, not auto-applied document mutations
-   - browser writes to `mounted_semantic_review` must only happen through an
+   - browser writes to `mounted_semantic_review` only happen through an
      explicit Confirm path after the user marks the proposals reviewed
 5. These invariants are locked until full `UQ-008` closure:
    - `config/template_registry.json` entries for `wolfie` and `wolack` stay
@@ -2347,45 +2336,25 @@ cross-repo baseline and the remaining browser gap are now fixed.
      `mounted_rider_calibration` and `mounted_semantic_review` exactly; these
      artifacts are durable prerequisites, not transient UI-only guesses
 
-#### 2.5.5 Robot Queue Changes Needed
+#### 2.5.5 Queue Crosswalk
 
-Top-level unified queue order does **not** change. The accepted order remains
-bottom-up:
+Literal execution order, row state, and stop conditions live only in Unified
+Sequence Of Actions. This subsection records the Section 2 contract-to-queue
+mapping only.
 
-1. `UQ-004`
-2. `UQ-005`
-3. `UQ-006`
-4. `UQ-007`
-5. `UQ-008`
-6. `UQ-009`
-7. `UQ-010`
+| Queue row | Section 2 slice coverage |
+|-----------|--------------------------|
+| `UQ-004` | `S2-R1`, `S2-R2` |
+| `UQ-005` | `S2-R3`, `S2-R4` |
+| `UQ-006` | `S2-R5`, `S2-R6`, `S2-R7` |
+| `UQ-007` | `S2-R8` |
+| `UQ-008` | `S2-R9` |
+| `UQ-009` | Section 3 support/proof follow-through for landed Section 2 surfaces |
+| `UQ-010` | `S2-R10` |
 
-What changes is the decomposition inside those rows. Section 2 robot work must
-execute in this exact slice order:
-
-1. `S2-R1` then `S2-R2`
-2. `S2-R3` then `S2-R4`
-3. `S2-R5` then `S2-R6` then `S2-R7`
-4. `S2-R8`
-5. `S2-R9`
-6. `S2-R10`
-
-Queue law for these slices:
-
-1. Do not start `S2-R3` while `S2-R1`/`S2-R2` are still open.
-2. Do not start `S2-R5` UI work until registry authority cleanup has already
-   landed; otherwise the UI is built against mixed backend truth.
-3. Do not start `S2-R8` while backend/session identity is still mixed between
-   compat `family` and normalized registry truth.
-4. Do not start `S2-R9` mounted-family work until the runtime identity layer
-   exists; mounted support may not substitute for missing IDs.
-5. Do not start `S2-R10` client wiring while browser, MCP, and Y9-2 still point
-   at different owners.
-6. `world_item` / `inventory_grid` remain explicit deferred follow-through under
-   `S2-FAM-04`; they do not execute as a current blocking row during this
-   queue.
-7. `UQ-009` remains a support row. It updates proof/harness surfaces after each
-   landed Section 2 slice; it does not pull future product work forward.
+`world_item` / `inventory_grid` remain explicit deferred follow-through under
+`S2-FAM-04`; they are visible in the contract but are not promoted into the
+current blocking Section 2 row set by this crosswalk.
 
 ### 2.6 Section-2 Scope Boundary
 
@@ -2614,8 +2583,7 @@ the skin lane, but pipeline-v3 still exposes older `/api/workbench/*` routes
 and wrapper MCP tooling rather than the shared headless bundle-authoring
 surface defined above. Cross-tracked in Y9-2 canon spec Section 2 [5] as DESIGN
 OPEN B-12 (API contract hardening), B-13 (launcher wiring), and B-14 (agent
-gateway scope). Treat this as an ownership and contract task, not as launcher
-paint.
+gateway scope). This remains an ownership and contract gap, not launcher paint.
 
 ---
 
