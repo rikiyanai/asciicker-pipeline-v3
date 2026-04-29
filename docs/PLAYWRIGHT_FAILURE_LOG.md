@@ -8,6 +8,36 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Audit — Canon Gate Summary Correction For UQ-005 (2026-04-29)
+
+This is a canon/doc-state correction entry. It does not claim a code fix, proof
+pass, or queue-row closure. It fixes one stale blocking-gate summary line that
+still contradicted the current Section 2 contract text.
+
+### Findings
+
+1. The Section 2 blocking-gates summary still said `UQ-005` was open because
+   export/web-skin paths ran only `G10-G12`.
+2. That summary line was stale against the live Section 2 body, which already
+   records shared export/web payload enforcement through `G7-G12`.
+3. The real remaining `UQ-005` gap is policy/contract closure:
+   - canonical `validate-xp` route/tool still not live
+   - `G8`/`G9` policy wording still not fully locked
+
+### What changed
+
+1. The `UQ-005` blocking-gate row in the canon now matches the live Section 2
+   text:
+   - `G7-G12` enforcement is already present
+   - the open gap is the unfinished quality-contract policy and canonical
+     validation surface
+
+### Still not claimed
+
+1. No product code changed in this slice.
+2. `UQ-005` is still OPEN after this correction.
+3. The immediate next implementation priority is still `UQ-004`, not `UQ-005`.
+
 ## Audit — Canon Formatting Boundary For Sections 1 And 2 (2026-04-29)
 
 This is a canon/doc-state formatting correction entry. It does not claim a code

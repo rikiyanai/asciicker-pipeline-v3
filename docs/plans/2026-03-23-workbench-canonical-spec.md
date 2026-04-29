@@ -3954,7 +3954,7 @@ not a task plan — it is a gate list. Migration is ready when all blocking gate
 | UQ-002 Section 1 REXPaint-parity foundation passes | §Unified Queue `UQ-002` | PASS — root-editor parity blockers closed in current worktree; whole-sheet ownership, resize, and hot-path proof are logged with same-day evidence |
 | UQ-003 root-hosted + prefixed Section 1 proof passes | §Unified Queue `UQ-003` | PASS — headed shipped-UI proof exists for root-hosted and prefixed `/xpedit` whole-sheet flows |
 | UQ-004 backend authority cleanup passes | §Unified Queue `UQ-004` | OPEN — backend `family` / `ENABLED_FAMILIES` split still live |
-| UQ-005 export/web-skin quality contract fully enforced | §Unified Queue `UQ-005` | OPEN — export/web-skin paths still run only G10-G12 on the current branch |
+| UQ-005 export/web-skin quality contract fully enforced | §Unified Queue `UQ-005` | OPEN — export/web-skin paths already share live G7-G12 enforcement, but the contract is still incomplete because `validate-xp` is not yet the canonical live route/tool and the G8/G9 policy wording is not yet fully locked |
 | UQ-006 manifest-backed source authoring no longer JSON-first | §Unified Queue `UQ-006` | OPEN |
 | UQ-007 runtime identity layer landed | §Unified Queue `UQ-007` | OPEN — pipeline-v3 still lacks live `skin_definition_id` / `presentation_kind_id` / `layer_definition_id` ownership |
 | UQ-008 mounted-family parity for `wolfie` / `wolack` proven | §Unified Queue `UQ-008` | OPEN |
