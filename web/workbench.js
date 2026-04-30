@@ -7287,10 +7287,24 @@
     if (state.templateRegistry) return state.templateRegistry;
     try {
       const r = await fetch(bp("/api/workbench/templates"));
-      if (r.ok) {
-        state.templateRegistry = await r.json();
+      if (!r.ok) {
+        status(`Template registry fetch failed: HTTP ${r.status}`, "err");
+        return state.templateRegistry;
       }
-    } catch (_e) { /* ignore */ }
+      state.templateRegistry = await r.json();
+      // Surface degraded registry state from registry_status
+      const rs = state.templateRegistry?.registry_status;
+      if (rs) {
+        if (rs.load_error) {
+          status(`Template registry: ${rs.load_error}`, "warn");
+        } else if (rs.l0_errors && Object.keys(rs.l0_errors).length > 0) {
+          const prefixes = Object.keys(rs.l0_errors).join(", ");
+          status(`Template registry: L0 reference issues for ${prefixes}`, "warn");
+        }
+      }
+    } catch (e) {
+      status(`Template registry fetch error: ${e.message || "network error"}`, "err");
+    }
     return state.templateRegistry;
   }
 

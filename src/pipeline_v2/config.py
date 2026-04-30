@@ -35,8 +35,6 @@ BUG_REPORTS_DIR = DATA_DIR / "bug_reports"
 CONFIG_DIR = ROOT / "config"
 SPRITES_DIR = ROOT / "sprites"
 
-ENABLED_FAMILIES: set[str] = {"player", "attack", "plydie"}
-
 # Bug-report delivery configuration
 BUG_REPORT_DELIVERY: str = os.environ.get("BUG_REPORT_DELIVERY", "local").strip().lower()
 BUG_REPORT_GITHUB_REPO: str = os.environ.get("BUG_REPORT_GITHUB_REPO", "").strip()

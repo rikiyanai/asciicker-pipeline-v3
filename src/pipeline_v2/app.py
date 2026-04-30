@@ -46,6 +46,7 @@ from .service import (
     workbench_termpp_stream_frame_path,
     workbench_web_skin_payload,
     load_template_registry,
+    get_registry_status,
     workbench_list_sessions,
     workbench_rename_session,
     workbench_duplicate_session,
@@ -387,7 +388,10 @@ def create_app() -> Flask:
 
     @bp.get("/api/workbench/templates")
     def api_wb_templates():
-        return jsonify(load_template_registry()), 200
+        registry = load_template_registry()
+        result = dict(registry)
+        result["registry_status"] = get_registry_status()
+        return jsonify(result), 200
 
     @bp.post("/api/workbench/bundle/create")
     def api_wb_bundle_create():

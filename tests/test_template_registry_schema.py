@@ -8,6 +8,9 @@ from pipeline_v2.service import (
     _normalize_template_action_spec,
     _normalize_template_registry,
     _reset_template_registry_cache,
+    get_registry_status,
+    is_action_authorized,
+    is_prefix_authorized,
     load_template_registry,
 )
 
@@ -167,5 +170,227 @@ def test_normalize_registry_missing_file_returns_schema_version_2(tmp_path, monk
         registry = svc.load_template_registry()
         assert registry["schema_version"] == 2
         assert registry["template_sets"] == {}
+    finally:
+        _reset_template_registry_cache()
+
+
+# --- Registry-derived authority helper tests (UQ-004 / S2-R1) ---
+
+_AUTHORABLE_REGISTRY = {
+    "skin_family_scope": {
+        "human": {"authorable": True, "proof_only": False},
+        "color_variant": {"authorable": False, "proof_only": True},
+    },
+    "prefix_catalog": {
+        "player": {"filename_prefix": "player", "skin_family": "human", "authorable": True, "mounted": False},
+        "wolfie": {"filename_prefix": "wolfie", "skin_family": "human", "authorable": False, "mounted": True, "status": "specified_not_authorable"},
+        "bigbee": {"filename_prefix": "bigbee", "skin_family": "human", "authorable": False, "mounted": True, "status": "deferred"},
+        "player-cv": {"filename_prefix": "player-cv", "skin_family": "color_variant", "authorable": False},
+    },
+}
+
+
+def test_is_action_authorized_happy_path():
+    spec = {"filename_prefix": "player", "skin_family": "human"}
+    ok, reason = is_action_authorized(spec, _AUTHORABLE_REGISTRY)
+    assert ok is True
+    assert reason == ""
+
+
+def test_is_action_authorized_proof_only_scope():
+    spec = {"filename_prefix": "player-cv", "skin_family": "color_variant"}
+    ok, reason = is_action_authorized(spec, _AUTHORABLE_REGISTRY)
+    assert ok is False
+    assert "proof_only" in reason
+
+
+def test_is_action_authorized_mounted_not_authorable():
+    spec = {"filename_prefix": "wolfie", "skin_family": "human"}
+    ok, reason = is_action_authorized(spec, _AUTHORABLE_REGISTRY)
+    assert ok is False
+    assert "not authorable" in reason
+
+
+def test_is_action_authorized_deferred_not_authorable():
+    spec = {"filename_prefix": "bigbee", "skin_family": "human"}
+    ok, reason = is_action_authorized(spec, _AUTHORABLE_REGISTRY)
+    assert ok is False
+    assert "not authorable" in reason
+
+
+def test_is_action_authorized_missing_prefix():
+    spec = {"skin_family": "human"}
+    ok, reason = is_action_authorized(spec, _AUTHORABLE_REGISTRY)
+    assert ok is False
+    assert "missing filename_prefix" in reason
+
+
+def test_is_action_authorized_unknown_skin_family():
+    spec = {"filename_prefix": "player", "skin_family": "alien"}
+    ok, reason = is_action_authorized(spec, _AUTHORABLE_REGISTRY)
+    assert ok is False
+    assert "skin_family" in reason
+
+
+def test_is_action_authorized_none_spec():
+    ok, reason = is_action_authorized(None, _AUTHORABLE_REGISTRY)
+    assert ok is False
+    assert "None" in reason
+
+
+def test_is_action_authorized_empty_registry():
+    spec = {"filename_prefix": "player", "skin_family": "human"}
+    ok, reason = is_action_authorized(spec, {})
+    assert ok is False
+
+
+def test_is_action_authorized_family_fallback():
+    """Spec using legacy 'family' field instead of 'filename_prefix' still works."""
+    spec = {"family": "player", "skin_family": "human"}
+    ok, reason = is_action_authorized(spec, _AUTHORABLE_REGISTRY)
+    assert ok is True
+
+
+def test_is_prefix_authorized_happy_path():
+    ok, reason = is_prefix_authorized("player", _AUTHORABLE_REGISTRY)
+    assert ok is True
+    assert reason == ""
+
+
+def test_is_prefix_authorized_mounted():
+    ok, reason = is_prefix_authorized("wolfie", _AUTHORABLE_REGISTRY)
+    assert ok is False
+    assert "not authorable" in reason
+
+
+def test_is_prefix_authorized_empty_prefix():
+    ok, reason = is_prefix_authorized("", _AUTHORABLE_REGISTRY)
+    assert ok is False
+    assert "empty" in reason
+
+
+def test_is_prefix_authorized_unknown_prefix():
+    ok, reason = is_prefix_authorized("nonexistent", _AUTHORABLE_REGISTRY)
+    assert ok is False
+    assert "not in prefix_catalog" in reason
+
+
+# --- Session normalization tests (UQ-004 / S2-R1 / R3) ---
+
+
+def test_new_blank_session_has_normalized_fields(client):
+    """Newly created blank session includes filename_prefix and skin_family."""
+    resp = client.post("/api/workbench/create-blank-session", json={
+        "template_set_key": "player_native_idle_only",
+        "action_key": "idle",
+    })
+    assert resp.status_code == 201
+    data = resp.get_json()
+    assert data["filename_prefix"] == "player"
+    assert data["skin_family"] == "human"
+    assert data["family"] == "player"
+
+
+def test_session_payload_emits_normalized_fields(client):
+    """Session payload includes filename_prefix and skin_family alongside family."""
+    resp = client.post("/api/workbench/create-blank-session", json={
+        "template_set_key": "player_native_idle_only",
+        "action_key": "idle",
+    })
+    data = resp.get_json()
+    session_id = data["session_id"]
+    # Load session via POST
+    load_resp = client.post("/api/workbench/load-session", json={"session_id": session_id})
+    assert load_resp.status_code == 200
+    load_data = load_resp.get_json()
+    assert load_data["filename_prefix"] == "player"
+    assert load_data["skin_family"] == "human"
+    assert load_data["family"] == "player"
+
+
+# --- Registry error surfacing tests (UQ-004 / S2-R2 / R4) ---
+
+
+def test_templates_api_includes_registry_status(client):
+    """API response includes registry_status field."""
+    response = client.get("/api/workbench/templates")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert "registry_status" in payload
+
+
+def test_templates_api_clean_registry_has_empty_status(client):
+    """Clean registry load produces empty registry_status."""
+    response = client.get("/api/workbench/templates")
+    payload = response.get_json()
+    status = payload["registry_status"]
+    # No load_error, no l0_errors for the valid registry
+    assert "load_error" not in status
+
+
+def test_templates_api_missing_registry_shows_load_error(tmp_path, monkeypatch, client):
+    """Missing registry file produces registry_status with load_error."""
+    import pipeline_v2.service as svc
+    monkeypatch.setattr(svc, "CONFIG_DIR", tmp_path)
+    _reset_template_registry_cache()
+    try:
+        response = client.get("/api/workbench/templates")
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["template_sets"] == {}
+        assert "load_error" in payload["registry_status"]
+        assert "not found" in payload["registry_status"]["load_error"]
+    finally:
+        _reset_template_registry_cache()
+
+
+def test_save_session_normalizes_legacy_family(client):
+    """Saving a legacy session (no filename_prefix) enriches it with normalized fields."""
+    # Create a template-owned session (has filename_prefix from creation)
+    create_resp = client.post("/api/workbench/create-blank-session", json={
+        "template_set_key": "player_native_idle_only",
+        "action_key": "idle",
+    })
+    data = create_resp.get_json()
+    session_id = data["session_id"]
+
+    # Simulate a legacy session by removing filename_prefix from disk
+    import pipeline_v2.service as svc
+    sess_path = svc._session_path(session_id)
+    sess = svc.load_json(sess_path)
+    del sess["filename_prefix"]
+    del sess["skin_family"]
+    svc.save_json(sess_path, sess)
+
+    # Save the session (triggers lazy normalization)
+    save_resp = client.post("/api/workbench/save-session", json={
+        "session_id": session_id,
+    })
+    assert save_resp.status_code == 200
+    save_data = save_resp.get_json()
+    assert save_data["filename_prefix"] == "player"
+    assert save_data["skin_family"] == "human"
+    assert save_data["family"] == "player"
+
+    # Verify it persisted to disk
+    load_resp = client.post("/api/workbench/load-session", json={"session_id": session_id})
+    load_data = load_resp.get_json()
+    assert load_data["filename_prefix"] == "player"
+    assert load_data["skin_family"] == "human"
+
+
+def test_templates_api_malformed_registry_shows_load_error(tmp_path, monkeypatch, client):
+    """Malformed JSON in registry produces registry_status with load_error."""
+    import pipeline_v2.service as svc
+    (tmp_path / "template_registry.json").write_text("{ not valid json }", encoding="utf-8")
+    monkeypatch.setattr(svc, "CONFIG_DIR", tmp_path)
+    _reset_template_registry_cache()
+    try:
+        response = client.get("/api/workbench/templates")
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["template_sets"] == {}
+        assert "load_error" in payload["registry_status"]
+        assert "malformed" in payload["registry_status"]["load_error"]
     finally:
         _reset_template_registry_cache()
