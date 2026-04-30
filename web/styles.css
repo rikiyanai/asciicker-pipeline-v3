@@ -1183,3 +1183,21 @@ label.inline {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Mobile: canvas-primary layout (U4 — UQ-013 §1.9.3) ── */
+@media (max-width: 768px) {
+  /* Hide the sidebar — panels will be accessible via drawers (U5) */
+  .ws-sidebar { display: none; }
+
+  /* Canvas takes full width */
+  .ws-canvas-area { flex: 1; width: 100%; }
+
+  /* Override desktop height constraints on the layout container */
+  .ws-layout { min-height: 0; max-height: none; }
+
+  /* Scroll wrap uses dynamic viewport height */
+  .ws-scroll-wrap { max-height: 80dvh; }
+
+  /* Allow content to fill narrow screens */
+  .wrap { max-width: 100%; padding: 0 8px; }
+}
