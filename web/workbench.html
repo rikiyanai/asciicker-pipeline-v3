@@ -550,6 +550,30 @@
     <div id="cellInspectorInfo" class="small"></div>
   </div>
 </div>
+<!-- U3: Floating touch selection toolbar (hidden by default; shown via JS on touch) -->
+<div id="wsTouchToolbar" class="ws-touch-toolbar">
+  <button data-action="copy" title="Copy">Copy</button>
+  <button data-action="cut" title="Cut">Cut</button>
+  <button data-action="paste" title="Paste">Paste</button>
+  <button data-action="delete" title="Delete">Del</button>
+  <button data-action="inspect" title="Inspect cell">Inspect</button>
+</div>
+
+<!-- U3: Tap-hold cell inspection popup (hidden by default) -->
+<div id="wsTouchInspectPopup" class="ws-touch-inspect-popup">
+  <div class="ws-touch-inspect-header">Cell Inspect</div>
+  <div class="ws-touch-inspect-body">
+    <span class="ws-touch-inspect-label">Glyph</span>
+    <span id="wsTouchInspectGlyph" class="ws-touch-inspect-value">--</span>
+    <span class="ws-touch-inspect-label">FG</span>
+    <span id="wsTouchInspectFg" class="ws-info-swatch ws-info-swatch-empty"></span>
+    <span class="ws-touch-inspect-label">BG</span>
+    <span id="wsTouchInspectBg" class="ws-info-swatch ws-info-swatch-empty"></span>
+    <span class="ws-touch-inspect-label">Pos</span>
+    <span id="wsTouchInspectPos" class="ws-touch-inspect-value">--</span>
+  </div>
+</div>
+
 <!-- U6: Mobile bottom chrome bar — status strip (hidden on desktop) -->
 <div class="ws-mobile-bottom-bar">
   <span class="ws-mobile-tool-indicator" id="mobileToolName">--</span>

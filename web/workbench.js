@@ -9109,6 +9109,177 @@
   }
   window._updateMobileStatus = updateMobileStatus;
 
+  // ── U3: Floating touch selection toolbar ────────────────────────────────────
+  // Shows a compact pill toolbar near the selection on touch devices.
+  // Wired to existing clipboard/edit handlers from both whole-sheet and inspector.
+  (function initTouchToolbar() {
+    var toolbar = document.getElementById('wsTouchToolbar');
+    if (!toolbar) return;
+
+    var _touchToolbarLastPointerType = '';
+    var _touchToolbarVisible = false;
+
+    // Track the last pointer type globally
+    document.addEventListener('pointerdown', function(e) {
+      _touchToolbarLastPointerType = e.pointerType || '';
+    }, true);
+
+    // Wire toolbar button actions
+    toolbar.addEventListener('click', function(e) {
+      var btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      var action = btn.dataset.action;
+      var wsEditor = window.__wholeSheetEditor;
+      var wsState = wsEditor && typeof wsEditor.getState === 'function' ? wsEditor.getState() : null;
+
+      // Whole-sheet editor clipboard operations (if mounted and has selection)
+      if (wsState && wsState.mounted && wsState.selectionBounds) {
+        switch (action) {
+          case 'copy':
+            // Fire keyboard shortcut equivalent
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
+            break;
+          case 'cut':
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', ctrlKey: true, bubbles: true }));
+            break;
+          case 'paste':
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }));
+            break;
+          case 'delete':
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+            break;
+          case 'inspect':
+            // Inspect is handled by tap-hold on the whole-sheet canvas (U3).
+            // From toolbar: switch tool to dropper/inspect for next tap.
+            if (wsEditor && typeof wsEditor.getState === 'function') {
+              // Toggle to cell tool for inspect-like behavior
+              var toolBtn = document.querySelector('.ws-tool-btn[data-tool="cell"]');
+              if (toolBtn) toolBtn.click();
+            }
+            break;
+        }
+        hideTouchToolbar();
+        return;
+      }
+
+      // Inspector clipboard operations (if inspector is open)
+      if (state.inspectorOpen) {
+        switch (action) {
+          case 'copy':
+            if (state.inspectorSelection) {
+              $("inspectorCopySelBtn") && $("inspectorCopySelBtn").click();
+            } else {
+              $("inspectorCopyFrameBtn") && $("inspectorCopyFrameBtn").click();
+            }
+            break;
+          case 'cut':
+            $("inspectorCutSelBtn") && $("inspectorCutSelBtn").click();
+            break;
+          case 'paste':
+            if (state.inspectorSelectionClipboard) {
+              $("inspectorPasteSelBtn") && $("inspectorPasteSelBtn").click();
+            } else if (state.inspectorFrameClipboard) {
+              $("inspectorPasteFrameBtn") && $("inspectorPasteFrameBtn").click();
+            }
+            break;
+          case 'delete':
+            if (state.inspectorSelection) {
+              $("inspectorClearSelBtn") && $("inspectorClearSelBtn").click();
+            } else {
+              $("inspectorClearFrameBtn") && $("inspectorClearFrameBtn").click();
+            }
+            break;
+          case 'inspect':
+            $("inspectorToolInspectBtn") && $("inspectorToolInspectBtn").click();
+            break;
+        }
+        hideTouchToolbar();
+        return;
+      }
+    });
+
+    function showTouchToolbar(clientX, clientY) {
+      if (_touchToolbarVisible) return;
+      var toolbarW = 260;
+      var toolbarH = 36;
+      var left = clientX - toolbarW / 2;
+      var top = clientY - toolbarH - 20;
+      if (top < 8) top = clientY + 24;
+      if (left < 8) left = 8;
+      if (left + toolbarW > window.innerWidth - 8) left = window.innerWidth - toolbarW - 8;
+      toolbar.style.left = left + 'px';
+      toolbar.style.top = top + 'px';
+      toolbar.classList.add('visible');
+      _touchToolbarVisible = true;
+    }
+
+    function hideTouchToolbar() {
+      toolbar.classList.remove('visible');
+      _touchToolbarVisible = false;
+    }
+
+    // Show toolbar on pointerup when touch + selection exists
+    document.addEventListener('pointerup', function(e) {
+      if (e.pointerType !== 'touch') {
+        hideTouchToolbar();
+        return;
+      }
+
+      // Small delay to let selection state settle after the event
+      setTimeout(function() {
+        var wsEditor = window.__wholeSheetEditor;
+        var wsState = wsEditor && typeof wsEditor.getState === 'function' ? wsEditor.getState() : null;
+
+        // Check whole-sheet editor selection
+        if (wsState && wsState.mounted && wsState.selectionBounds) {
+          showTouchToolbar(e.clientX, e.clientY);
+          return;
+        }
+
+        // Check inspector selection
+        if (state.inspectorOpen && state.inspectorSelection) {
+          showTouchToolbar(e.clientX, e.clientY);
+          return;
+        }
+
+        // No selection: hide
+        hideTouchToolbar();
+      }, 100);
+    });
+
+    // Dismiss on tap outside toolbar
+    document.addEventListener('pointerdown', function(e) {
+      if (!_touchToolbarVisible) return;
+      if (toolbar.contains(e.target)) return;
+      hideTouchToolbar();
+    });
+
+    // Dismiss on tool change (listen for whole-sheet state changes)
+    var _prevTool = '';
+    setInterval(function() {
+      if (!_touchToolbarVisible) return;
+      var wsEditor = window.__wholeSheetEditor;
+      var wsState = wsEditor && typeof wsEditor.getState === 'function' ? wsEditor.getState() : null;
+      var currentTool = (wsState && wsState.activeTool) || '';
+      if (_prevTool && currentTool !== _prevTool) {
+        hideTouchToolbar();
+      }
+      _prevTool = currentTool;
+    }, 300);
+
+    // Dismiss inspect popup on any touch outside canvas
+    document.addEventListener('pointerdown', function(e) {
+      var popup = document.getElementById('wsTouchInspectPopup');
+      if (!popup || !popup.classList.contains('visible')) return;
+      if (popup.contains(e.target)) return;
+      popup.classList.remove('visible');
+    });
+
+    // Expose for external use
+    window._showTouchToolbar = showTouchToolbar;
+    window._hideTouchToolbar = hideTouchToolbar;
+  })();
+
   bindUI();
   fetchRuntimePreflight().catch((_e) => {});
   updateSourceCanvasZoomUI();

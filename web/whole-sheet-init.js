@@ -280,6 +280,12 @@ let editorState = {
   onBrowseDelete: null,
   onDocumentStateChange: null,
   onHistoryStateChange: null,
+  // U3: tap-hold inspect state
+  _tapHoldTimer: null,
+  _tapHoldStartX: 0,
+  _tapHoldStartY: 0,
+  _tapHoldFired: false,
+  _lastTouchPointerType: '',
   _strokeDirty: false,
   _pendingHistorySnapshot: null,
   history: [],
@@ -845,6 +851,11 @@ async function mount({
   // Stroke-complete detection
   canvasEl.addEventListener('pointerup', _onStrokeEnd);
   canvasEl.addEventListener('pointercancel', _onStrokeEnd);
+
+  // U3: tap-hold inspect for touch devices
+  canvasEl.addEventListener('pointerdown', _onTapHoldStart);
+  canvasEl.addEventListener('pointerup', _onTapHoldEnd);
+  canvasEl.addEventListener('pointercancel', _onTapHoldEnd);
 
   // Mouse tracking (mouseleave handles both stroke-end and hover clear)
   canvasEl.addEventListener('pointermove', _onCanvasPointerMove);
@@ -3616,6 +3627,8 @@ function _updateInfoApplyModes() {
 }
 
 function _onCanvasPointerLeave() {
+  _cancelTapHold();
+  _dismissTapHoldInspect();
   if (editorState.activeTool !== 'text') _onStrokeEnd();
   const posEl = document.getElementById('wsPos');
   if (posEl) posEl.textContent = '-,-';
@@ -3689,7 +3702,126 @@ function _onPaletteClick(e, channel) {
   }
 }
 
+// ── U3: Tap-hold inspect for touch devices ──
+
+const TAP_HOLD_DELAY_MS = 500;
+const TAP_HOLD_MOVE_THRESHOLD = 5;
+
+function _cancelTapHold() {
+  if (editorState._tapHoldTimer) {
+    clearTimeout(editorState._tapHoldTimer);
+    editorState._tapHoldTimer = null;
+  }
+}
+
+function _onTapHoldStart(e) {
+  // Only start tap-hold on touch input
+  if (e.pointerType !== 'touch') return;
+  editorState._lastTouchPointerType = 'touch';
+  editorState._tapHoldFired = false;
+  _cancelTapHold();
+
+  editorState._tapHoldStartX = e.clientX;
+  editorState._tapHoldStartY = e.clientY;
+
+  const canvasEl = e.currentTarget;
+  editorState._tapHoldTimer = setTimeout(() => {
+    editorState._tapHoldTimer = null;
+    editorState._tapHoldFired = true;
+    _showTapHoldInspect(canvasEl, e.clientX, e.clientY);
+  }, TAP_HOLD_DELAY_MS);
+}
+
+function _onTapHoldEnd() {
+  _cancelTapHold();
+}
+
+function _onTapHoldMove(e) {
+  if (!editorState._tapHoldTimer) return;
+  const dx = Math.abs(e.clientX - editorState._tapHoldStartX);
+  const dy = Math.abs(e.clientY - editorState._tapHoldStartY);
+  if (dx > TAP_HOLD_MOVE_THRESHOLD || dy > TAP_HOLD_MOVE_THRESHOLD) {
+    _cancelTapHold();
+  }
+}
+
+function _showTapHoldInspect(canvasEl, clientX, clientY) {
+  const rect = canvasEl.getBoundingClientRect();
+  const scaleX = canvasEl.width / rect.width;
+  const scaleY = canvasEl.height / rect.height;
+  const px = (clientX - rect.left) * scaleX;
+  const py = (clientY - rect.top) * scaleY;
+  const cx = Math.floor(px / CELL_SIZE);
+  const cy = Math.floor(py / CELL_SIZE);
+
+  const { canvas, layerStack, gridCols, gridRows } = editorState;
+  if (!canvas || cx < 0 || cx >= gridCols || cy < 0 || cy >= gridRows) return;
+
+  let cell = null;
+  if (layerStack) {
+    const activeLayer = layerStack.getActiveLayer();
+    if (activeLayer) cell = activeLayer.getCell(cx, cy);
+  }
+  if (!cell) {
+    try { cell = canvas.getCell(cx, cy); } catch (_) {}
+  }
+  if (!cell) return;
+
+  const popup = document.getElementById('wsTouchInspectPopup');
+  if (!popup) return;
+
+  const ch = (cell.glyph > 31 && cell.glyph < 127) ? String.fromCharCode(cell.glyph) : '\u00b7';
+  const glyphEl = document.getElementById('wsTouchInspectGlyph');
+  if (glyphEl) glyphEl.textContent = cell.glyph + ' (' + ch + ')';
+
+  const fg = cell.fg || [255, 255, 255];
+  const bg = cell.bg || [0, 0, 0];
+  const fgEl = document.getElementById('wsTouchInspectFg');
+  if (fgEl) {
+    fgEl.style.background = _rgbToHex(fg);
+    fgEl.classList.remove('ws-info-swatch-empty');
+  }
+  const bgEl = document.getElementById('wsTouchInspectBg');
+  if (bgEl) {
+    bgEl.style.background = _rgbToHex(bg);
+    bgEl.classList.remove('ws-info-swatch-empty');
+  }
+  const posEl = document.getElementById('wsTouchInspectPos');
+  if (posEl) posEl.textContent = cx + ',' + cy;
+
+  // Position popup above the tap point, flip if near top edge
+  const popupW = 160;
+  const popupH = 100;
+  let left = clientX - popupW / 2;
+  let top = clientY - popupH - 16;
+  if (top < 8) top = clientY + 24;
+  if (left < 8) left = 8;
+  if (left + popupW > window.innerWidth - 8) left = window.innerWidth - popupW - 8;
+
+  popup.style.left = left + 'px';
+  popup.style.top = top + 'px';
+  popup.classList.add('visible');
+
+  // Auto-dismiss after 3 seconds
+  if (editorState._tapHoldInspectDismiss) clearTimeout(editorState._tapHoldInspectDismiss);
+  editorState._tapHoldInspectDismiss = setTimeout(() => {
+    popup.classList.remove('visible');
+    editorState._tapHoldInspectDismiss = null;
+  }, 3000);
+}
+
+function _dismissTapHoldInspect() {
+  const popup = document.getElementById('wsTouchInspectPopup');
+  if (popup) popup.classList.remove('visible');
+  if (editorState._tapHoldInspectDismiss) {
+    clearTimeout(editorState._tapHoldInspectDismiss);
+    editorState._tapHoldInspectDismiss = null;
+  }
+}
+
 function _onCanvasPointerMove(e) {
+  // U3: check tap-hold movement threshold
+  _onTapHoldMove(e);
   // Suppress hover/pan tracking during two-pointer gesture
   if (editorState._gestureActive) return;
   const scrollWrap = document.getElementById('wholeSheetScroll');
@@ -3766,10 +3898,15 @@ function unmount() {
 
   _commitTextEdit();
   _cancelPasteMode();
+  _cancelTapHold();
+  _dismissTapHoldInspect();
   if (editorState.canvas) {
     const canvasEl = editorState.canvas.canvasElement;
     if (canvasEl) {
       detachGestures(canvasEl);
+      canvasEl.removeEventListener('pointerdown', _onTapHoldStart);
+      canvasEl.removeEventListener('pointerup', _onTapHoldEnd);
+      canvasEl.removeEventListener('pointercancel', _onTapHoldEnd);
       canvasEl.removeEventListener('pointermove', _onCanvasPointerMove);
       canvasEl.removeEventListener('pointerleave', _onCanvasPointerLeave);
       canvasEl.removeEventListener('pointerup', _onStrokeEnd);
