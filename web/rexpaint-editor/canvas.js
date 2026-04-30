@@ -288,6 +288,8 @@ export class Canvas {
   }
 
   _onPointerDown(event) {
+    // Suppress drawing while a two-pointer gesture (pinch/pan) is active
+    if (this._gestureActive) return;
     return this._onMouseDown(event);
   }
 
@@ -339,6 +341,7 @@ export class Canvas {
   }
 
   _onPointerMove(event) {
+    if (this._gestureActive) return;
     return this._onMouseMove(event);
   }
 
@@ -366,6 +369,7 @@ export class Canvas {
   }
 
   _onPointerUp(event) {
+    if (this._gestureActive) return;
     return this._onMouseUp(event);
   }
 

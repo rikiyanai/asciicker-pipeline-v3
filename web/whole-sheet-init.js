@@ -33,6 +33,7 @@ import {
   shouldCopyCellOnLayerMerge,
 } from './whole-sheet-cell-ops.mjs';
 import { shouldCycleActiveLayerOnWheel } from './whole-sheet-input-policy.mjs';
+import { attach as attachGestures, detach as detachGestures, isGestureActive, snapToLevel } from './touch-gestures.mjs';
 
 const _BP = String(window.__WB_BASE_PATH || '');
 const FONT_URL = _BP + '/termpp-web-flat/fonts/cp437_12x12.png';
@@ -316,6 +317,7 @@ let editorState = {
     scrollLeft: 0,
     scrollTop: 0,
   },
+  _gestureActive: false,
 };
 
 function _normalizeCanvasZoomValue(v) {
@@ -859,6 +861,38 @@ async function mount({
     _pasteAt(cx, cy);
   };
   canvasEl.addEventListener('pointerdown', editorState._pasteInterceptor, true);
+
+  // Two-pointer pinch-zoom / pan gesture tracking
+  attachGestures(canvasEl, {
+    onGestureStart() {
+      editorState._gestureActive = true;
+      if (editorState.canvas) editorState.canvas._gestureActive = true;
+    },
+    onPinch(zoomDelta) {
+      const sw = document.getElementById('wholeSheetScroll');
+      if (!sw) return;
+      // zoomDelta is a multiplicative ratio (>1 = zoom in, <1 = zoom out)
+      const next = Math.max(CANVAS_ZOOM_MIN, Math.min(CANVAS_ZOOM_MAX, (editorState.appliedCanvasZoom || 1) * zoomDelta));
+      editorState.canvasZoom = next;
+      _applyCanvasZoom({ preserveCenter: true });
+    },
+    onPan(dx, dy) {
+      const sw = document.getElementById('wholeSheetScroll');
+      if (!sw) return;
+      sw.scrollLeft -= dx;
+      sw.scrollTop -= dy;
+    },
+    onGestureEnd(snapFn) {
+      editorState._gestureActive = false;
+      if (editorState.canvas) editorState.canvas._gestureActive = false;
+      // Snap to nearest discrete zoom level
+      const current = editorState.appliedCanvasZoom || 1;
+      const snapped = snapFn(current);
+      editorState.canvasZoom = snapped;
+      _applyCanvasZoom({ preserveCenter: true });
+      _emitDocumentStateChange('zoom');
+    },
+  });
 
   editorState.mounted = true;
   canvas.setGridVisible(editorState.gridVisible);
@@ -3619,6 +3653,8 @@ function _onPaletteClick(e, channel) {
 }
 
 function _onCanvasPointerMove(e) {
+  // Suppress hover/pan tracking during two-pointer gesture
+  if (editorState._gestureActive) return;
   const scrollWrap = document.getElementById('wholeSheetScroll');
   if (editorState.spacePan.armed && (e.buttons & 1) && scrollWrap) {
     if (!editorState.spacePan.dragging || editorState.spacePan.pointerId !== e.pointerId) {
@@ -3693,6 +3729,7 @@ function unmount() {
   if (editorState.canvas) {
     const canvasEl = editorState.canvas.canvasElement;
     if (canvasEl) {
+      detachGestures(canvasEl);
       canvasEl.removeEventListener('pointermove', _onCanvasPointerMove);
       canvasEl.removeEventListener('pointerleave', _onCanvasPointerLeave);
       canvasEl.removeEventListener('pointerup', _onStrokeEnd);
@@ -3776,6 +3813,7 @@ function unmount() {
       scrollLeft: 0,
       scrollTop: 0,
     },
+    _gestureActive: false,
     _pasteInterceptor: null,
   };
 }
