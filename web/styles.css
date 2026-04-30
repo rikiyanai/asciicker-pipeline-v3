@@ -87,6 +87,32 @@ body {
   color: #ffd2d2;
 }
 
+.draft-restore-banner {
+  border-color: #1f5a7a;
+  background: linear-gradient(180deg, rgba(31, 90, 122, 0.28), rgba(21, 25, 34, 0.95));
+}
+
+.draft-restore-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.draft-restore-title {
+  color: #8fcfff;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.draft-restore-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .alpha-inline-banner {
   display: inline-block;
   margin-bottom: 8px;

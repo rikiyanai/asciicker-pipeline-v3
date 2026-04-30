@@ -649,6 +649,9 @@
     state.sessionLastSaveOkAt = Date.now();
     if (reason) state.sessionLastSaveReason = String(reason);
     updateSessionDirtyBadge();
+    // Tier A: clear dirty flag after successful server save
+    const p = window.__wbPersistence;
+    if (p && typeof p.clearDirtyFlag === "function") p.clearDirtyFlag();
   }
 
   function setXpToolHint(text) {
@@ -7825,6 +7828,144 @@
     await loadFromJob();
   }
 
+  // ── Tier A: Draft restore banner ──
+
+  let _draftBannerDismissTimer = null;
+  let _draftBannerCanvasListener = null;
+
+  function _checkDraftRestore() {
+    const p = window.__wbPersistence;
+    if (!p || !p.isAvailable()) {
+      // Check dirty flag even if IDB unavailable
+      _checkOrphanDirtyFlag();
+      return;
+    }
+    p.loadLatestDraft().then((draft) => {
+      if (!draft || !draft.payload) {
+        _checkOrphanDirtyFlag();
+        return;
+      }
+      // Check if draft is newer than the last server session save
+      const draftTs = draft.timestamp || 0;
+      const serverTs = state.sessionLastSaveOkAt || 0;
+      if (draftTs <= serverTs) {
+        p.clearDirtyFlag();
+        return;
+      }
+      _showDraftRestoreBanner(draft);
+    }).catch(() => {
+      _checkOrphanDirtyFlag();
+    });
+  }
+
+  function _checkOrphanDirtyFlag() {
+    const p = window.__wbPersistence;
+    if (!p) return;
+    const dirtyTs = p.getDirtyFlag();
+    if (dirtyTs) {
+      p.clearDirtyFlag();
+      status("Last save may be incomplete (page exited before save finished)", "warn");
+    }
+  }
+
+  function _showDraftRestoreBanner(draft) {
+    const banner = $("draftRestoreBanner");
+    const info = $("draftRestoreInfo");
+    const restoreBtn = $("draftRestoreBtn");
+    const dismissBtn = $("draftDismissBtn");
+    if (!banner) return;
+
+    // Format age
+    const ageMs = Date.now() - (draft.timestamp || 0);
+    const ageMins = Math.floor(ageMs / 60000);
+    const ageText = ageMins < 1 ? "just now"
+      : ageMins < 60 ? `${ageMins} minute${ageMins !== 1 ? "s" : ""} ago`
+      : `${Math.floor(ageMins / 60)} hour${Math.floor(ageMins / 60) !== 1 ? "s" : ""} ago`;
+    if (info) info.textContent = `A browser draft from ${ageText} is available.`;
+
+    banner.classList.remove("hidden");
+
+    if (restoreBtn) {
+      restoreBtn.onclick = () => {
+        _dismissDraftBanner();
+        _restoreDraft(draft);
+      };
+    }
+    if (dismissBtn) {
+      dismissBtn.onclick = () => {
+        _dismissDraftBanner();
+        // Optionally delete the stale draft
+        const p = window.__wbPersistence;
+        if (p && draft.id != null) p.deleteDraft(draft.id).catch(() => {});
+      };
+    }
+
+    // Auto-dismiss after 30 seconds
+    _draftBannerDismissTimer = setTimeout(() => _dismissDraftBanner(), 30000);
+
+    // Dismiss on first canvas interaction
+    const wholeSheetPanel = $("wholeSheetPanel");
+    if (wholeSheetPanel) {
+      _draftBannerCanvasListener = () => _dismissDraftBanner();
+      wholeSheetPanel.addEventListener("pointerdown", _draftBannerCanvasListener, { once: true });
+    }
+  }
+
+  function _dismissDraftBanner() {
+    const banner = $("draftRestoreBanner");
+    if (banner) banner.classList.add("hidden");
+    if (_draftBannerDismissTimer) {
+      clearTimeout(_draftBannerDismissTimer);
+      _draftBannerDismissTimer = null;
+    }
+    if (_draftBannerCanvasListener) {
+      const wholeSheetPanel = $("wholeSheetPanel");
+      if (wholeSheetPanel) wholeSheetPanel.removeEventListener("pointerdown", _draftBannerCanvasListener);
+      _draftBannerCanvasListener = null;
+    }
+    const p = window.__wbPersistence;
+    if (p) p.clearDirtyFlag();
+  }
+
+  function _restoreDraft(draft) {
+    const payload = draft.payload;
+    if (!payload) {
+      status("Draft restore failed: empty payload", "warn");
+      return;
+    }
+    try {
+      // Apply draft data into workbench state
+      // Ensure sessionId is set so hydrateWholeSheetEditor proceeds
+      if (!state.sessionId && payload.sessionId) state.sessionId = payload.sessionId;
+      if (Array.isArray(payload.layers)) state.layers = payload.layers;
+      if (Array.isArray(payload.layerNames)) state.layerNames = [...payload.layerNames];
+      if (typeof payload.activeLayer === "number") state.activeLayer = payload.activeLayer;
+      if (Array.isArray(payload.visibleLayers)) state.visibleLayers = new Set(payload.visibleLayers);
+      if (Array.isArray(payload.lockedLayers)) state.lockedLayers = new Set(payload.lockedLayers);
+      if (typeof payload.gridCols === "number") state.gridCols = payload.gridCols;
+      if (typeof payload.gridRows === "number") state.gridRows = payload.gridRows;
+      if (typeof payload.frameW === "number") { state.frameWChars = payload.frameW; state.cellWChars = payload.frameW; }
+      if (typeof payload.frameH === "number") { state.frameHChars = payload.frameH; state.cellHChars = payload.frameH; }
+      if (typeof payload.canvasZoom === "number") state.wholeSheetCanvasZoom = payload.canvasZoom;
+      if (typeof payload.gridVisible === "boolean") state.wholeSheetGridVisible = payload.gridVisible;
+      if (typeof payload.gridStep === "string") state.wholeSheetGridStep = payload.gridStep;
+      if (typeof payload.gridCustomW === "number") state.wholeSheetGridCustomW = payload.gridCustomW;
+      if (typeof payload.gridCustomH === "number") state.wholeSheetGridCustomH = payload.gridCustomH;
+
+      // Refresh cells from the visual layer (layer 2)
+      if (Array.isArray(payload.layers) && payload.layers[2]) {
+        state.cells = payload.layers[2];
+      }
+
+      // Re-mount the whole-sheet editor with restored state
+      hydrateWholeSheetEditor();
+      markSessionDirty("draft-restore");
+      status("Draft restored from browser storage", "ok");
+    } catch (e) {
+      status("Draft restore failed: " + String(e), "warn");
+    }
+  }
+
   function bindUI() {
     moveWebbuildDockToBottom();
     movePanelsToBottom();
@@ -8574,6 +8715,37 @@
     installViewportResizeObserver();
     window.addEventListener("beforeunload", () => stopTermppStreamPolling());
     window.addEventListener("beforeunload", () => stopWebbuildReadyPoll());
+    // Tier A: best-effort draft save on page teardown
+    window.addEventListener("beforeunload", () => {
+      const p = window.__wbPersistence;
+      if (!p || !p.isAvailable()) return;
+      try {
+        const wsSnapshot = getWholeSheetDocumentSnapshot() || buildWholeSheetDocumentSnapshotFromState();
+        if (!wsSnapshot) return;
+        const payload = {
+          timestamp: Date.now(),
+          sessionId: state.sessionId || "",
+          layers: wsSnapshot.layers,
+          layerNames: wsSnapshot.layerNames,
+          activeLayer: wsSnapshot.activeLayer,
+          visibleLayers: wsSnapshot.visibleLayers,
+          lockedLayers: wsSnapshot.lockedLayers,
+          gridCols: wsSnapshot.gridCols,
+          gridRows: wsSnapshot.gridRows,
+          frameW: wsSnapshot.frameW,
+          frameH: wsSnapshot.frameH,
+          canvasZoom: wsSnapshot.canvasZoom,
+          gridVisible: wsSnapshot.gridVisible,
+          gridStep: wsSnapshot.gridStep,
+          gridCustomW: wsSnapshot.gridCustomW,
+          gridCustomH: wsSnapshot.gridCustomH,
+        };
+        p.saveDraftSync(payload);
+        p.setDirtyFlag();
+      } catch (_) { /* best-effort */ }
+    });
+    // Tier A: deferred draft restore banner check (runs after module scripts)
+    setTimeout(_checkDraftRestore, 0);
   }
 
   // Audit hooks for deterministic browser checks.

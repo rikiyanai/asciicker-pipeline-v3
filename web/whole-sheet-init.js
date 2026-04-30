@@ -34,12 +34,83 @@ import {
 } from './whole-sheet-cell-ops.mjs';
 import { shouldCycleActiveLayerOnWheel } from './whole-sheet-input-policy.mjs';
 import { attach as attachGestures, detach as detachGestures, isGestureActive, snapToLevel } from './touch-gestures.mjs';
+import {
+  saveDraft as _persistSaveDraft,
+  cleanupStaleDrafts as _persistCleanup,
+  isAvailable as _persistIsAvailable,
+} from './persistence.mjs';
 
 const _BP = String(window.__WB_BASE_PATH || '');
 const FONT_URL = _BP + '/termpp-web-flat/fonts/cp437_12x12.png';
 const CELL_SIZE = 12;
 const PALETTE_CELL = 11;
 const HISTORY_LIMIT = 50;
+const DRAFT_SAVE_DEBOUNCE_MS = 2000;
+const DRAFT_UNDO_BOUND = 5;
+
+/** Debounce timer for draft auto-save. */
+let _draftSaveTimer = null;
+
+/**
+ * Build a draft payload from current editor state.
+ * Mirrors the session save payload structure from workbench.js.
+ * Undo history is bounded to last DRAFT_UNDO_BOUND entries.
+ */
+function _buildDraftPayload() {
+  if (!editorState.mounted) return null;
+  const snapshot = _buildDocumentSnapshot();
+  if (!snapshot) return null;
+  const boundedHistory = editorState.history.slice(-DRAFT_UNDO_BOUND);
+  return {
+    timestamp: Date.now(),
+    sessionId: editorState.currentSessionId || '',
+    // Document state (mirrors saveSessionState payload)
+    layers: snapshot.layers,
+    layerNames: snapshot.layerNames,
+    activeLayer: snapshot.activeLayer,
+    visibleLayers: snapshot.visibleLayers,
+    lockedLayers: snapshot.lockedLayers,
+    gridCols: snapshot.gridCols,
+    gridRows: snapshot.gridRows,
+    frameW: snapshot.frameW,
+    frameH: snapshot.frameH,
+    canvasZoom: snapshot.canvasZoom,
+    gridVisible: snapshot.gridVisible,
+    gridStep: snapshot.gridStep,
+    gridCustomW: snapshot.gridCustomW,
+    gridCustomH: snapshot.gridCustomH,
+    // Editor state
+    activeTool: editorState.activeTool,
+    mode: editorState.mode,
+    drawGlyph: editorState.drawGlyph,
+    drawFg: editorState.drawFg,
+    drawBg: editorState.drawBg,
+    applyGlyph: editorState.applyGlyph,
+    applyFg: editorState.applyFg,
+    applyBg: editorState.applyBg,
+    // Bounded undo history (last N snapshots only)
+    history: boundedHistory,
+  };
+}
+
+/**
+ * Schedule a debounced draft save.
+ * Resets the timer on each call — only fires once activity settles.
+ */
+function _scheduleDraftSave() {
+  if (!_persistIsAvailable()) return;
+  if (_draftSaveTimer !== null) {
+    clearTimeout(_draftSaveTimer);
+  }
+  _draftSaveTimer = setTimeout(() => {
+    _draftSaveTimer = null;
+    const payload = _buildDraftPayload();
+    if (payload) {
+      _persistSaveDraft(payload).catch(() => { /* silent */ });
+    }
+  }, DRAFT_SAVE_DEBOUNCE_MS);
+}
+
 const DEFAULT_PALETTE = [
   // Grayscale
   [0,0,0],[17,17,17],[34,34,34],[51,51,51],[68,68,68],[85,85,85],[102,102,102],[119,119,119],
@@ -928,6 +999,9 @@ async function mount({
   _updateHistoryButtons();
   void _refreshBrowseItems({ preserveSelection: false });
 
+  // Tier A: clean up stale drafts on mount
+  _persistCleanup(7).catch(() => { /* silent */ });
+
 }
 
 // ── Stroke tracking ──
@@ -969,6 +1043,7 @@ function _commitLayerMutation() {
   _pushPendingHistorySnapshot();
   if (editorState.onStrokeComplete) editorState.onStrokeComplete();
   if (editorState.canvas) editorState.canvas.render();
+  _scheduleDraftSave();
   return true;
 }
 
@@ -3390,6 +3465,7 @@ function _switchActiveLayer(index) {
   }
   if (editorState.onActiveLayerChanged) editorState.onActiveLayerChanged(index);
   _emitDocumentStateChange('active-layer');
+  _scheduleDraftSave();
 }
 
 function _toggleLayerVisibility(index) {

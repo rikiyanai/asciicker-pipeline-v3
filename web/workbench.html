@@ -51,6 +51,19 @@
     <div id="runtimePreflightBannerText" class="small warn">Checking runtime bundle...</div>
   </div>
 
+  <div id="draftRestoreBanner" class="panel draft-restore-banner hidden" data-panel-number="3b draft-restore">
+    <div class="draft-restore-row">
+      <div>
+        <div class="draft-restore-title">Unsaved draft found</div>
+        <div id="draftRestoreInfo" class="small">A browser draft from a previous session is available.</div>
+      </div>
+      <div class="draft-restore-actions">
+        <button id="draftRestoreBtn" class="primary">Restore draft</button>
+        <button id="draftDismissBtn">Start fresh</button>
+      </div>
+    </div>
+  </div>
+
   <div class="panel" id="templatePanel" data-panel-number="4 template">
     <h3>Template</h3>
     <div class="row">
@@ -584,6 +597,7 @@
 
 <script src="/workbench-template-gating.js"></script>
 <script src="/workbench.js"></script>
+<script type="module" src="/persistence.mjs"></script>
 <script type="module" src="/whole-sheet-init.js"></script>
 </body>
 </html>
