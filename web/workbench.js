@@ -26,15 +26,15 @@
     [128, 64, 0],
   ];
   const OVERRIDE_MODE = String(params.get("overridemode") || "mounted").trim().toLowerCase();
-  // Per-family weapon-digit range matching product contract (all_16 vs weapon_gte_1).
-  const FAMILY_W_RANGE = {
-    player: [0, 1, 2], attack: [1, 2], plydie: [0, 1, 2],
-    wolfie: [0, 1, 2], wolack: [1, 2],
-  };
-  function _ahswNamesForFamilies(families) {
-    const out = ["player-nude.xp"];
-    for (const prefix of families) {
-      const wRange = FAMILY_W_RANGE[prefix] || [0, 1, 2];
+  // Override-name generation: derives per-prefix W range from registry prefix_catalog.ahsw_range.
+  // ahsw_range "all_16" → W∈{0,1,2}, "weapon_gte_1" → W∈{1,2}.
+  function _ahswNamesFromRegistry(prefixCatalog, prefixes) {
+    const out = [];
+    for (const prefix of prefixes) {
+      const spec = prefixCatalog[prefix];
+      const range = spec && spec.ahsw_range;
+      const wRange = range === "weapon_gte_1" ? [1, 2] : [0, 1, 2];
+      if (range === "all_16" && prefix === "player") out.push("player-nude.xp");
       for (let a = 0; a < 2; a++)
         for (let h = 0; h < 2; h++)
           for (let s = 0; s < 2; s++)
@@ -43,18 +43,27 @@
     }
     return out;
   }
-  const WEBBUILD_DEFAULT_OVERRIDE_NAMES = (() => {
-    if (OVERRIDE_MODE === "full_parity") {
-      // Full ASCIIID parity: player-nude + all 5 families with per-family W range.
-      // WARNING: FS-global — NPCs sharing these filenames inherit the custom skin (B1).
-      // Use only for explicit debug via ?overridemode=full_parity.
-      return _ahswNamesForFamilies(["player", "attack", "plydie", "wolfie", "wolack"]);
+  async function getWebbuildDefaultOverrideNames() {
+    const reg = await fetchTemplateRegistry();
+    if (!reg || !reg.prefix_catalog) {
+      status("Override names unavailable: template registry not loaded", "warn");
+      return [];
     }
-    // Default "mounted": player + wolfie + wolack.
-    // Mounted player spawn loads all three families at startup.
-    // Excludes attack/plydie to avoid destabilizing NPCs that share those.
-    return _ahswNamesForFamilies(["player", "wolfie", "wolack"]);
-  })();
+    const pc = reg.prefix_catalog;
+    // Collect prefixes with ahsw_range, filtered by override mode.
+    const prefixes = [];
+    for (const [key, spec] of Object.entries(pc)) {
+      if (!spec.ahsw_range) continue;
+      if (OVERRIDE_MODE === "full_parity") {
+        prefixes.push(key);
+      } else {
+        // Default "mounted": player + mounted prefixes only.
+        // Excludes attack/plydie to avoid destabilizing NPCs that share those.
+        if (key === "player" || spec.mounted) prefixes.push(key);
+      }
+    }
+    return _ahswNamesFromRegistry(pc, prefixes);
+  }
   const WEBBUILD_READY_TIMEOUT_MS = 180000;
   const WHOLE_SHEET_AUTOSAVE_DEBOUNCE_MS = 1500;
   const WHOLE_SHEET_AUTOSAVE_IDLE_TIMEOUT_MS = 3000;
@@ -1235,7 +1244,7 @@
     return true;
   }
 
-  function normalizeWebbuildOverrideNames(names) {
+  async function normalizeWebbuildOverrideNames(names) {
     const out = [];
     const seen = new Set();
     const isSafePlayerOverride = (name) => {
@@ -1259,7 +1268,8 @@
     if (Array.isArray(names)) {
       for (const name of names) add(name);
     }
-    for (const name of WEBBUILD_DEFAULT_OVERRIDE_NAMES) add(name);
+    const defaultNames = await getWebbuildDefaultOverrideNames();
+    for (const name of defaultNames) add(name);
     return out;
   }
 
@@ -1297,7 +1307,7 @@
     if (typeof M.FS_createPath === "function") {
       try { M.FS_createPath("/", "sprites", true, true); } catch (_e) {}
     }
-    const names = normalizeWebbuildOverrideNames(opts.override_names);
+    const names = await normalizeWebbuildOverrideNames(opts.override_names);
     const playerName = String(opts.reload_player_name || "player");
     // Solo-only load contract: StartGame is never used in skin test automation.
     // The iframe uses Load() + Resize() and auto-newgame pulses from the bootstrap.
@@ -1342,7 +1352,7 @@
     const results = {};
     for (const [actionKey, actionData] of Object.entries(bundlePayload.actions || {})) {
       const xpBytes = b64ToUint8Array(actionData.xp_b64 || "");
-      const names = normalizeWebbuildOverrideNames(actionData.override_names);
+      const names = await normalizeWebbuildOverrideNames(actionData.override_names);
       for (const name of names) {
         emfsReplaceFile(M, `/sprites/${name}`, xpBytes);
       }
@@ -1489,7 +1499,7 @@
         timings.total_ms = Date.now() - t0;
         const payloadSummary = useBundlePayload
           ? { actions: Object.fromEntries(Object.entries(j.actions || {}).map(([k, v]) => [k, { files: (v.override_names || []).length, bytes: v.xp_size_bytes }])), unmapped: j.unmapped_families }
-          : { override_names: normalizeWebbuildOverrideNames(j.override_names), xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` };
+          : { override_names: await normalizeWebbuildOverrideNames(j.override_names), xp_b64: `(<${(j.xp_b64 || "").length} base64 chars>)` };
         $("webbuildOut").textContent = JSON.stringify({
           timings,
           prep,
@@ -1559,7 +1569,7 @@
   async function applyUploadedXpBytesToWebbuild(fileName, xpBytes) {
     await runWebbuildSkinAction("upload skin", async () => {
       if (!(await ensureRuntimePreflight({ refresh: true }))) return;
-      const override_names = WEBBUILD_DEFAULT_OVERRIDE_NAMES;
+      const override_names = await getWebbuildDefaultOverrideNames();
       let inject, prep = null;
       if (OVERRIDE_MODE === "preboot") {
         // Preboot: reset iframe, wait for fresh WASM (calledRun=true), then inject
