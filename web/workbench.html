@@ -8,6 +8,21 @@
   <link rel="stylesheet" href="/rexpaint-editor/styles.css">
 </head>
 <body>
+<!-- U6: Mobile top chrome bar — file ops + drawer toggles (hidden on desktop) -->
+<div class="ws-mobile-top-bar">
+  <div class="ws-mobile-top-actions">
+    <button data-action="new" title="New">New</button>
+    <button data-action="save" title="Save">Save</button>
+    <button data-action="export" title="Export">Export</button>
+  </div>
+  <div class="ws-mobile-top-drawers">
+    <button data-drawer-toggle="tools" title="Tools">Tools</button>
+    <button data-drawer-toggle="layers" title="Layers">Layers</button>
+    <button data-drawer-toggle="browse" title="Browse">Browse</button>
+    <button data-drawer-toggle="info" title="Info">Info</button>
+  </div>
+</div>
+
 <div class="wrap">
   <div class="panel alpha-banner" data-panel-number="1 banner">
     <div class="row" style="justify-content:space-between; align-items:flex-start; gap:12px;">
@@ -535,6 +550,14 @@
     <div id="cellInspectorInfo" class="small"></div>
   </div>
 </div>
+<!-- U6: Mobile bottom chrome bar — status strip (hidden on desktop) -->
+<div class="ws-mobile-bottom-bar">
+  <span class="ws-mobile-tool-indicator" id="mobileToolName">--</span>
+  <span class="ws-mobile-layer-name" id="mobileLayerName">--</span>
+  <span class="ws-mobile-frame-info" id="mobileFrameInfo">--</span>
+  <span class="ws-mobile-cursor-pos" id="mobileCursorPos">--</span>
+</div>
+
 <script src="/workbench-template-gating.js"></script>
 <script src="/workbench.js"></script>
 <script type="module" src="/whole-sheet-init.js"></script>

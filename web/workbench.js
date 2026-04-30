@@ -2714,6 +2714,7 @@
     state.selectionAnchor = opts.anchor ? { ...opts.anchor } : null;
     state.selectionFocus = opts.focus ? { ...opts.focus } : null;
     syncDerivedGridSelectionState();
+    if (typeof window._updateMobileStatus === 'function') window._updateMobileStatus();
   }
 
   function clearGridSelection() {
@@ -9021,6 +9022,85 @@
     }
   }
   window.toggleDrawer = toggleDrawer;
+
+  // ── U6: Mobile chrome bars wiring ─────────────────────────────────────────
+  // Top bar: drawer toggle buttons delegate to toggleDrawer (U5)
+  document.querySelectorAll('[data-drawer-toggle]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      toggleDrawer(btn.dataset.drawerToggle);
+    });
+  });
+
+  // Top bar: action buttons delegate to existing handlers
+  document.querySelectorAll('[data-action]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      switch (btn.dataset.action) {
+        case 'new':
+          newXp();
+          break;
+        case 'save':
+          saveCurrentActionProgress({ reason: 'mobile-top-bar-save', auto_advance: true });
+          break;
+        case 'export':
+          exportXp();
+          break;
+      }
+    });
+  });
+
+  // Bottom bar: status strip — reads from whole-sheet editor state + workbench state
+  function updateMobileStatus() {
+    var toolEl  = document.getElementById('mobileToolName');
+    var layerEl = document.getElementById('mobileLayerName');
+    var frameEl = document.getElementById('mobileFrameInfo');
+    var posEl   = document.getElementById('mobileCursorPos');
+    if (!toolEl) return;  // elements not in DOM (shouldn't happen, but guard)
+
+    var wsEditor = window.__wholeSheetEditor;
+    var wsState  = wsEditor && typeof wsEditor.getState === 'function' ? wsEditor.getState() : null;
+
+    // Tool indicator
+    if (wsState && wsState.activeTool) {
+      var toolNames = {
+        cell: 'Cell', eyedropper: 'Dropper', erase: 'Erase', line: 'Line',
+        rect: 'Rect', oval: 'Oval', fill: 'Fill', text: 'Text', select: 'Select'
+      };
+      toolEl.textContent = toolNames[wsState.activeTool] || wsState.activeTool;
+    } else {
+      toolEl.textContent = '--';
+    }
+
+    // Layer name
+    if (wsEditor && typeof wsEditor.getLayerInfo === 'function') {
+      var layers = wsEditor.getLayerInfo();
+      var active = layers.find(function(l) { return l.active; });
+      if (active) {
+        layerEl.textContent = 'L' + active.index + (active.name ? ' ' + active.name : '');
+      } else {
+        layerEl.textContent = '--';
+      }
+    } else {
+      layerEl.textContent = '--';
+    }
+
+    // Frame info from workbench state
+    if (state.selectedRow !== null) {
+      var cols = selectedFrameColsSorted();
+      var colStr = cols.length > 0 ? cols[0] : '-';
+      frameEl.textContent = 'R' + state.selectedRow + ':F' + colStr;
+    } else {
+      frameEl.textContent = '--';
+    }
+
+    // Cursor position — read from the wsPos element that whole-sheet-init updates
+    var wsPosEl = document.getElementById('wsPos');
+    if (wsPosEl && wsPosEl.textContent && wsPosEl.textContent !== '-,-') {
+      posEl.textContent = wsPosEl.textContent;
+    } else {
+      posEl.textContent = '--';
+    }
+  }
+  window._updateMobileStatus = updateMobileStatus;
 
   bindUI();
   fetchRuntimePreflight().catch((_e) => {});

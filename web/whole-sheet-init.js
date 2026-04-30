@@ -1795,6 +1795,8 @@ function _updateToolUI() {
     const toolName = id.replace('wsTool', '').toLowerCase();
     btn.classList.toggle('ws-tool-active', toolName === editorState.activeTool);
   }
+  // U6: update mobile status strip on tool change
+  if (typeof window._updateMobileStatus === 'function') window._updateMobileStatus();
 }
 
 // ── Keyboard shortcuts ──
@@ -3361,6 +3363,8 @@ function _updateLayersPanelUI() {
     const layer = editorState.layerStack.layers[activeIdx];
     infoEl.textContent = `${activeIdx}${layer ? ' (' + (layer.name || '') + ')' : ''}`;
   }
+  // U6: update mobile status strip on layer change
+  if (typeof window._updateMobileStatus === 'function') window._updateMobileStatus();
 }
 
 function _switchActiveLayer(index) {
@@ -3615,6 +3619,9 @@ function _onCanvasPointerLeave() {
   if (editorState.activeTool !== 'text') _onStrokeEnd();
   const posEl = document.getElementById('wsPos');
   if (posEl) posEl.textContent = '-,-';
+  // U6: reset mobile cursor position
+  const mobilePosEl = document.getElementById('mobileCursorPos');
+  if (mobilePosEl) mobilePosEl.textContent = '--';
   const glyphEl = document.getElementById('wsHoverGlyph');
   if (glyphEl) glyphEl.textContent = '--';
   const fgEl = document.getElementById('wsHoverFg');
@@ -3710,6 +3717,9 @@ function _onCanvasPointerMove(e) {
 
   const posEl = document.getElementById('wsPos');
   if (posEl) posEl.textContent = cx + ',' + cy;
+  // U6: update mobile cursor position
+  const mobilePosEl = document.getElementById('mobileCursorPos');
+  if (mobilePosEl) mobilePosEl.textContent = cx + ',' + cy;
 
   const { canvas, layerStack, gridCols, gridRows } = editorState;
   if (canvas && cx >= 0 && cx < gridCols && cy >= 0 && cy < gridRows) {
