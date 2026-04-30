@@ -6881,7 +6881,11 @@
 
   function attachGridHandlers() {
     const panel = $("gridPanel");
-    panel.addEventListener("mousedown", (e) => {
+    const _useGridPointerEvents = typeof PointerEvent !== 'undefined';
+    const _gridDownEvt = _useGridPointerEvents ? "pointerdown" : "mousedown";
+    const _gridMoveEvt = _useGridPointerEvents ? "pointermove" : "mousemove";
+    const _gridUpEvt = _useGridPointerEvents ? "pointerup" : "mouseup";
+    panel.addEventListener(_gridDownEvt, (e) => {
       if (e.button !== 0) return;
       const header = e.target.closest(".frame-row-header");
       if (header) return;
@@ -6909,7 +6913,7 @@
       state.gridFrameDragSelect = { row, startCol: col, lastCol: col };
       $("gridContextMenu").classList.add("hidden");
     });
-    panel.addEventListener("mousemove", (e) => {
+    panel.addEventListener(_gridMoveEvt, (e) => {
       const cellDrag = state.gridCellDrag;
       if (cellDrag) {
         const dx = Number(e.clientX || 0) - Number(cellDrag.startX || 0);
@@ -6927,7 +6931,7 @@
           }
         }
         if (!state.gridCellDrag) {
-          // fall through into row drag-select handling below on the same mousemove tick
+          // fall through into row drag-select handling below on the same pointermove tick
         } else if (!cellDrag.dragging) {
           return;
         } else {
@@ -6964,7 +6968,7 @@
       drag.lastCol = col;
       selectFrame(Number(drag.row), col, true);
     });
-    window.addEventListener("mouseup", () => {
+    const _gridWindowUp = () => {
       if (state.gridCellDrag) {
         const drag = state.gridCellDrag;
         const hadHover = !!drag.hover;
@@ -6978,7 +6982,12 @@
         }
       }
       state.gridFrameDragSelect = null;
-    });
+    };
+    window.addEventListener(_gridUpEvt, _gridWindowUp);
+    if (_useGridPointerEvents) {
+      window.addEventListener("pointercancel", _gridWindowUp);
+      if (panel.style) panel.style.touchAction = 'none';
+    }
     panel.addEventListener("click", (e) => {
       if (state.gridCellDragSuppressClick) {
         state.gridCellDragSuppressClick = false;
@@ -7340,11 +7349,15 @@
 
   // Canonical action order for bundle tabs and initial selection.
   // Pure logic lives in workbench-template-gating.js (loaded before this script).
-  if (!window.__workbenchTemplateGating) {
-    throw new Error('[workbench] workbench-template-gating.js must be loaded before workbench.js');
+  // Null-guard: if the gating script failed to load (e.g. cache staleness, 404),
+  // provide safe no-op fallbacks so the IIFE doesn't crash.
+  const _gating = window.__workbenchTemplateGating || null;
+  if (!_gating) {
+    console.error('[workbench] workbench-template-gating.js not loaded — template gating features will be unavailable');
   }
-  const { BUNDLE_ACTION_ORDER, isTemplateActionAuthorable: _isTemplateActionAuthorable, getEnabledActions: _getEnabledActions } =
-    window.__workbenchTemplateGating;
+  const BUNDLE_ACTION_ORDER = _gating ? _gating.BUNDLE_ACTION_ORDER : [];
+  const _isTemplateActionAuthorable = _gating ? _gating.isTemplateActionAuthorable : () => false;
+  const _getEnabledActions = _gating ? _gating.getEnabledActions : () => [];
 
   function isTemplateActionAuthorable(ts, actionKey, spec) {
     return _isTemplateActionAuthorable(ts, actionKey, spec, state.templateRegistry, state.templateSetKey);
@@ -7958,10 +7971,31 @@
         showSourceContextMenu(e.clientX, e.clientY, { type: "cut_v", id: Number(cut.id) });
       }
     });
-    $("sourceCanvas").addEventListener("mousedown", onSourceMouseDown);
-    $("sourceCanvas").addEventListener("mousemove", onSourceMouseMove);
-    $("sourceCanvas").addEventListener("mouseup", onSourceMouseUp);
-    window.addEventListener("mouseup", onSourceMouseUp);
+    if (typeof PointerEvent !== 'undefined') {
+      $("sourceCanvas").addEventListener("pointerdown", (e) => {
+        onSourceMouseDown(e);
+        if (state.sourceDrag) $("sourceCanvas").setPointerCapture(e.pointerId);
+      });
+      $("sourceCanvas").addEventListener("pointermove", onSourceMouseMove);
+      $("sourceCanvas").addEventListener("pointerup", (e) => {
+        onSourceMouseUp(e);
+        if ($("sourceCanvas").hasPointerCapture(e.pointerId)) {
+          $("sourceCanvas").releasePointerCapture(e.pointerId);
+        }
+      });
+      $("sourceCanvas").addEventListener("pointercancel", (e) => {
+        onSourceMouseUp(e);
+        if ($("sourceCanvas").hasPointerCapture(e.pointerId)) {
+          $("sourceCanvas").releasePointerCapture(e.pointerId);
+        }
+      });
+      if ($("sourceCanvas").style) $("sourceCanvas").style.touchAction = 'none';
+    } else {
+      $("sourceCanvas").addEventListener("mousedown", onSourceMouseDown);
+      $("sourceCanvas").addEventListener("mousemove", onSourceMouseMove);
+      $("sourceCanvas").addEventListener("mouseup", onSourceMouseUp);
+      window.addEventListener("mouseup", onSourceMouseUp);
+    }
     $("srcCtxAddSprite").addEventListener("click", () => {
       const box = state.sourceContextTarget?.type === "draft"
         ? commitDraftToSource("manual")
@@ -8190,7 +8224,9 @@
     $("cellInspectorCanvas").addEventListener("contextmenu", (e) => {
       e.preventDefault();
     });
-    $("cellInspectorCanvas").addEventListener("mousedown", (e) => {
+    const _useInspectorPointerEvents = typeof PointerEvent !== 'undefined';
+    const _inspCanvas = $("cellInspectorCanvas");
+    const _inspDown = (e) => {
       if (!state.inspectorOpen) return;
       if (e.button === 2) {
         const hit = inspectorHalfCellAtEvent(e);
@@ -8207,6 +8243,7 @@
         state.inspectorSelectAnchor = { x: hitCell.cx, y: hitCell.cy };
         state.inspectorSelection = normalizeInspectorSelection({ x1: hitCell.cx, y1: hitCell.cy, x2: hitCell.cx, y2: hitCell.cy });
         renderInspector();
+        if (_useInspectorPointerEvents) _inspCanvas.setPointerCapture(e.pointerId);
         return;
       }
       const hit = inspectorHalfCellAtEvent(e);
@@ -8217,6 +8254,7 @@
         state.inspectorStrokeChanged = false;
         state.inspectorStrokeHadHistory = false;
         state.inspectorStrokeWasDirty = !!state.sessionDirty;
+        if (_useInspectorPointerEvents) _inspCanvas.setPointerCapture(e.pointerId);
       }
       let changed = false;
       if (state.inspectorTool === "glyph") {
@@ -8232,8 +8270,8 @@
       if (state.inspectorTool === "dropper" || state.inspectorTool === "inspect") {
         state.inspectorPainting = false;
       }
-    });
-    $("cellInspectorCanvas").addEventListener("mousemove", (e) => {
+    };
+    const _inspMove = (e) => {
       const hoverHit = inspectorHalfCellAtEvent(e);
       setInspectorHoverFromHit(hoverHit);
       if (state.inspectorSelecting) {
@@ -8258,18 +8296,47 @@
         renderInspector();
         queueDirtyFrameGridRefresh({ updatePreview: true });
       }
-    });
-    $("cellInspectorCanvas").addEventListener("mouseleave", () => {
-      setInspectorHoverFromHit(null);
-    });
-    window.addEventListener("mouseup", () => {
+    };
+    const _inspUp = (e) => {
       if (state.inspectorPainting) commitInspectorStrokeIfNeeded();
       if (state.inspectorSelecting) {
         state.inspectorSelecting = false;
         state.inspectorSelectAnchor = null;
         renderInspector();
       }
-    });
+      setInspectorHoverFromHit(null);
+      if (_useInspectorPointerEvents && _inspCanvas.hasPointerCapture(e.pointerId)) {
+        _inspCanvas.releasePointerCapture(e.pointerId);
+      }
+    };
+    if (_useInspectorPointerEvents) {
+      _inspCanvas.addEventListener("pointerdown", _inspDown);
+      _inspCanvas.addEventListener("pointermove", _inspMove);
+      _inspCanvas.addEventListener("pointerup", _inspUp);
+      _inspCanvas.addEventListener("pointercancel", _inspUp);
+      _inspCanvas.addEventListener("pointerleave", () => {
+        // Only clear hover when not in a captured drag -- during capture,
+        // hover is cleared on pointerup/pointercancel instead.
+        if (!state.inspectorPainting && !state.inspectorSelecting) {
+          setInspectorHoverFromHit(null);
+        }
+      });
+      if (_inspCanvas.style) _inspCanvas.style.touchAction = 'none';
+    } else {
+      _inspCanvas.addEventListener("mousedown", _inspDown);
+      _inspCanvas.addEventListener("mousemove", _inspMove);
+      _inspCanvas.addEventListener("mouseleave", () => {
+        setInspectorHoverFromHit(null);
+      });
+      window.addEventListener("mouseup", () => {
+        if (state.inspectorPainting) commitInspectorStrokeIfNeeded();
+        if (state.inspectorSelecting) {
+          state.inspectorSelecting = false;
+          state.inspectorSelectAnchor = null;
+          renderInspector();
+        }
+      });
+    }
 
     window.addEventListener("keydown", (e) => {
       const t = e.target;
