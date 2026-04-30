@@ -8,6 +8,49 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Audit — UQ-004 Deletion-First Restatement After Y9-2 Synchrony Review (2026-04-29)
+
+This is a canon/doc-state correction entry. It does not claim a new product
+fix. It tightens `UQ-004` after the same-day Y9-2 synchrony audit so the row
+names the exact old owners that still must be deleted.
+
+### Findings
+
+1. The current `UQ-004` row was still too soft. It said to remove the last
+   hardcoded `ahsw_range` duplicates, but it did not explicitly list every live
+   duplicate owner.
+2. Source truth shows four surviving hardcoded `ahsw_range` owners, not two:
+   - `web/workbench.js:FAMILY_W_RANGE`
+   - `src/pipeline_v2/service.py:_FAMILY_W_RANGE`
+   - `web/termpp_skin_lab.js:FAMILY_W_RANGE`
+   - `runtime/termpp-skin-lab-static/termpp_skin_lab.js:FAMILY_W_RANGE`
+3. The row also did not state the deletion-first sequencing explicitly enough:
+   delete or hard-disable those hardcoded maps in the same slice before any new
+   shared helper or client claim becomes authoritative.
+4. The Y9-2 synchrony audit sharpened mounted/tooling truth, but that does not
+   move queue order:
+   - `UQ-004` = local duplicate-authority deletion
+   - `UQ-008` = mounted-family authoring/runtime parity
+   - `UQ-010` = Y9-2 thin-client synchrony over one shared owner
+
+### What changed
+
+1. The canonical spec now names all four hardcoded `ahsw_range` deletion
+   targets explicitly in `UQ-004`.
+2. The canonical spec now states the delete-first sequence directly:
+   old hardcoded owners must be deleted or hard-disabled before replacement
+   registry-derived override naming is allowed to claim authority.
+3. The Y9-2 parity/synchrony notes now state that `UQ-010` stays blocked on
+   this local owner cleanup rather than treating client synchrony as an
+   independent lane.
+4. The active `UQ-004` plan doc now lists the same explicit deletion targets.
+
+### Still not claimed
+
+1. No `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` owner was deleted in this slice.
+2. No mounted browser surface shipped.
+3. No Y9-2 thin-client synchrony work shipped.
+
 ## Audit — UQ-004 Execution Review Corrections (2026-04-29)
 
 This is a code/doc-state correction entry after the `e40adda` backend-authority

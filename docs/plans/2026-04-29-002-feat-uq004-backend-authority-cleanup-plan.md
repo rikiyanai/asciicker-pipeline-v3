@@ -25,9 +25,18 @@ slice:
 
 Both are now fixed in the live code/tests covered by this plan. The remaining
 open `UQ-004` work after this review is the hardcoded classic/runtime AHSW
-range maps (`web/workbench.js:FAMILY_W_RANGE`,
-`src/pipeline_v2/service.py:_FAMILY_W_RANGE`), which still duplicate registry
-`ahsw_range`. This plan therefore remains `active`.
+range maps, and the deletion list is broader than the first review note:
+
+- `web/workbench.js:FAMILY_W_RANGE`
+- `src/pipeline_v2/service.py:_FAMILY_W_RANGE`
+- `web/termpp_skin_lab.js:FAMILY_W_RANGE`
+- `runtime/termpp-skin-lab-static/termpp_skin_lab.js:FAMILY_W_RANGE`
+
+All four still duplicate registry `ahsw_range`. This plan therefore remains
+`active`, and the remaining closeout must be deletion-first: delete or
+hard-disable those old owners in the same slice before any shared replacement
+helper becomes authoritative. This is also a Y9-2 synchrony precondition:
+`UQ-010` thin clients must not be wired onto split local override truth.
 
 ---
 
@@ -51,7 +60,7 @@ The backend's five key bundle/session/export/runtime functions all gate on `ENAB
 
 - Browser-side gating logic (`isTemplateActionAuthorable()` / `getEnabledActions()`) already consumes registry correctly — no changes
 - `family` compat alias in `_normalize_template_action_spec()` survives as mirror data; full removal is downstream work
-- `ahsw_range` authority source (`prefix_catalog` / action spec) is read-only context for this plan — not restructured
+- Remaining `ahsw_range` closeout is still in scope: delete the surviving hardcoded mirror maps and replace them with one shared registry-derived override-name path
 - Export-quality contract wiring is UQ-005 scope (S2-R3 / S2-R4)
 - Source-wrapper manifest work is UQ-006 scope
 - Runtime identity layer is UQ-007 scope
@@ -61,6 +70,7 @@ The backend's five key bundle/session/export/runtime functions all gate on `ENAB
 
 - Full removal of the `family` alias from the normalizer and all remaining readers (future after all callers migrate to `filename_prefix`)
 - Session batch migration for historical session files on disk (in-place migration on next save is sufficient per §2.5.4.1)
+- Y9-2 thin-client wiring (`UQ-010`) after the local duplicate `ahsw_range` owners are gone
 
 ---
 
