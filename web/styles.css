@@ -1308,4 +1308,61 @@ label.inline {
   .ws-drawer-backdrop.visible {
     display: block;
   }
+
+  /* ── U7: Compact frame filmstrip ── */
+  .frame-grid {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 4px;
+    padding: 4px;
+    min-height: auto;
+    -webkit-overflow-scrolling: touch;
+    /* override desktop grid-template-columns set inline by JS */
+    grid-template-columns: none !important;
+  }
+  .frame-grid {
+    --wb-grid-cell-size: 48px;
+    --wb-grid-label-canvas-size: 44px;
+  }
+
+  /* Row headers become compact inline items in filmstrip */
+  .frame-row-header {
+    flex: 0 0 auto;
+    min-width: 48px;
+    width: auto;
+    min-height: var(--wb-grid-cell-size);
+  }
+
+  /* Hide drag handle on mobile — filmstrip is selection-only */
+  .row-drag-handle {
+    display: none;
+  }
+
+  /* Frame cells become inline flex items */
+  .frame-cell {
+    flex: 0 0 auto;
+    width: var(--wb-grid-cell-size);
+    height: var(--wb-grid-cell-size);
+  }
+
+  /* Ensure active/selected frame stands out in the filmstrip */
+  .frame-cell.selected {
+    outline: 2px solid #4ea1ff;
+    outline-offset: -2px;
+  }
+
+  /* Frame nav container adapts for filmstrip */
+  .ws-frame-nav {
+    min-height: auto;
+    height: auto;
+    max-height: none;
+    resize: none;
+    overflow: visible;
+  }
+  .ws-frame-nav .frame-grid {
+    min-height: auto;
+  }
 }

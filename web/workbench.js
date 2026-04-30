@@ -6541,6 +6541,13 @@
       setGridSelection(coords, { anchor, focus: next });
     }
     renderFrameGrid();
+    // U7: auto-scroll active frame into view in mobile filmstrip
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      const activeCell = $("gridPanel")?.querySelector('.frame-cell[data-row="' + next.row + '"][data-col="' + next.col + '"]');
+      if (activeCell) {
+        try { activeCell.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' }); } catch (_e) {}
+      }
+    }
     renderJitterInfo();
     const semanticFrames = semanticFrameCount();
     renderPreviewFrame(next.row, Math.max(0, Math.min(semanticFrames - 1, next.col % semanticFrames)));
