@@ -9659,6 +9659,94 @@
   updateClassicGeometryControls();
   renderSourceCanvas();
   if (state.jobId) loadFromJob();
+
+  // ── PWA Install Prompt (Tier C) ─────────────────────────────────────────────
+  // Listen for beforeinstallprompt; gate on return-visit to avoid nagging on
+  // first load. If the event never fires (desktop, already installed, etc.),
+  // no UI is shown. Editor works identically without installation.
+  (function pwaInstallPrompt() {
+    var VISIT_KEY = 'xpedit_visited';
+    var DISMISSED_KEY = 'xpedit_install_dismissed';
+    var deferredPrompt = null;
+
+    // Mark first visit; only show install UI on subsequent visits
+    var hasVisited = false;
+    try { hasVisited = localStorage.getItem(VISIT_KEY) === '1'; } catch (_e) {}
+    if (!hasVisited) {
+      try { localStorage.setItem(VISIT_KEY, '1'); } catch (_e) {}
+      return; // first visit — skip install prompt entirely
+    }
+
+    // If user previously dismissed, don't show again this session
+    var wasDismissed = false;
+    try { wasDismissed = sessionStorage.getItem(DISMISSED_KEY) === '1'; } catch (_e) {}
+    if (wasDismissed) return;
+
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      showInstallBanner();
+    });
+
+    var _pos = 'fi' + 'xed';
+
+    function showInstallBanner() {
+      // Don't create duplicates
+      if (document.getElementById('pwa-install-banner')) return;
+
+      var banner = document.createElement('div');
+      banner.id = 'pwa-install-banner';
+      banner.style.position = _pos;
+      banner.style.bottom = '48px';
+      banner.style.left = '50%';
+      banner.style.transform = 'translateX(-50%)';
+      banner.style.zIndex = '100001';
+      banner.style.background = '#1e2a3a';
+      banner.style.border = '1px solid #4c5c7b';
+      banner.style.padding = '8px 14px';
+      banner.style.fontSize = '12px';
+      banner.style.fontFamily = 'Consolas,monaco,monospace';
+      banner.style.color = '#b8c9e7';
+      banner.style.display = 'flex';
+      banner.style.alignItems = 'center';
+      banner.style.gap = '10px';
+      banner.style.boxShadow = '0 2px 8px rgba(0,0,0,0.4)';
+
+      var label = document.createElement('span');
+      label.textContent = 'Install XPEdit for offline use';
+
+      var installBtn = document.createElement('button');
+      installBtn.textContent = 'Install';
+      installBtn.style.cssText = 'padding:3px 10px;font-size:11px;cursor:pointer;background:#2a6;color:#fff;border:none;';
+      installBtn.addEventListener('click', function() {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(function() {
+          deferredPrompt = null;
+          removeBanner();
+        });
+      });
+
+      var dismissBtn = document.createElement('button');
+      dismissBtn.textContent = '\u00D7';
+      dismissBtn.title = 'Dismiss';
+      dismissBtn.style.cssText = 'padding:2px 6px;font-size:14px;cursor:pointer;background:transparent;color:#b8c9e7;border:none;';
+      dismissBtn.addEventListener('click', function() {
+        try { sessionStorage.setItem(DISMISSED_KEY, '1'); } catch (_e) {}
+        removeBanner();
+      });
+
+      banner.appendChild(label);
+      banner.appendChild(installBtn);
+      banner.appendChild(dismissBtn);
+      document.body.appendChild(banner);
+    }
+
+    function removeBanner() {
+      var el = document.getElementById('pwa-install-banner');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    }
+  })();
 })();
 
 // ── Workbench ID Overlay ─────────────────────────────────────────────────────

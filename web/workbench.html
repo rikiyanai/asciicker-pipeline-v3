@@ -6,6 +6,7 @@
   <title>ASCIICKER XPEdit</title>
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/rexpaint-editor/styles.css">
+  <link rel="manifest" href="/manifest.json">
 </head>
 <body>
 <!-- U6: Mobile top chrome bar — file ops + drawer toggles (hidden on desktop) -->
@@ -606,5 +607,10 @@
 <script src="/workbench.js"></script>
 <script type="module" src="/persistence.mjs"></script>
 <script type="module" src="/whole-sheet-init.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(function() {});
+  }
+</script>
 </body>
 </html>
