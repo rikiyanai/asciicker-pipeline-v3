@@ -11229,3 +11229,63 @@ dispatch through symbolic tool names instead of hardcoded tool-slot properties.
 
 **State:** PASS — tool lookup is map-based and new tools register without adding
 another named property to `EditorApp`.
+
+## Code Review Findings: UQ-013 Mobile/Touch/Persistence (2026-04-30)
+
+Code review of 11 UQ-013 commits (2343 lines, 9 files) surfaced 6 findings
+requiring manual judgment. 5 safe_auto items were already committed in `747b8f1`.
+The 6 below are logged here before correction.
+
+### CR-1. setInterval(300ms) for touch toolbar never cleared (P1)
+
+**File:** `web/workbench.js:9632`
+**Problem:** The toolbar's tool-change detection polls via `setInterval(300ms)` that
+runs for the entire page lifetime — even on desktop, even when toolbar is hidden. No
+corresponding `clearInterval`. Leaks on remount. Wastes CPU wake-ups.
+**Reviewers:** julik-frontend-races (P1, 100), reliability (P3, 50), correctness (P3, 75), adversarial (P3, 100)
+**State:** OPEN — will replace with event-driven tool-change listener
+
+### CR-2. Draft restore lacks session/dimension validation (P1)
+
+**File:** `web/workbench.js:7931`
+**Problem:** `_restoreDraft` applies draft payload without checking sessionId or grid
+dimensions. A 10x10 draft can overwrite a 20x20 session, corrupting grid state. No
+guard against cross-session restore.
+**Reviewers:** adversarial (P1, 75), reliability (P2, 75)
+**State:** OPEN — will add sessionId + dimension validation
+
+### CR-3. Gesture/stroke race — orphaned stroke on second finger (P1)
+
+**File:** `web/touch-gestures.mjs:178`, `web/whole-sheet-init.js` onGestureStart
+**Problem:** If finger 1 is drawing (stroke started) and finger 2 joins, the gesture
+module sets `_gestureActive=true` and suppresses further pointermove. But the stroke
+from finger 1 was already started and is now orphaned — never ended, never committed.
+**Reviewers:** adversarial (P1, 75)
+**State:** OPEN — will flush in-progress stroke in onGestureStart callback
+
+### CR-4. Static CACHE_NAME prevents deploy updates (P2)
+
+**File:** `web/sw.js:4`
+**Problem:** `CACHE_NAME = 'xpedit-v1'` is hardcoded. Without a build system to bump
+it, old cached assets are never evicted after deployment. Users with the old SW serve
+stale JS indefinitely.
+**Reviewers:** correctness (P2, 75), adversarial (P2, 75)
+**State:** OPEN — will add file-hash-based cache key or deploy instruction
+
+### CR-5. Synthetic KeyboardEvent clipboard fails on mobile (P2)
+
+**File:** `web/workbench.js:9511-9523`
+**Problem:** Touch toolbar dispatches `new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })` for copy/cut/paste. Synthetic events have `isTrusted === false` and cannot access `navigator.clipboard`. System clipboard copy/paste is silently broken on touch devices.
+**Reviewers:** adversarial (P2, 75)
+**State:** OPEN — will call copy/cut/paste/delete functions directly
+
+### CR-6. Draft restore banner races with loadFromJob (P2)
+
+**File:** `web/workbench.js:8940,9662`
+**Problem:** `_checkDraftRestore` fires via `setTimeout(0)` at the same time as
+`loadFromJob()`. The IDB read can resolve before loadFromJob populates
+`sessionLastSaveOkAt`, causing the banner to show with stale timestamp comparison.
+Worse: if user opens a file (openXpFileLocal), the banner can offer a draft from an
+unrelated session.
+**Reviewers:** correctness (P2, 75), adversarial (P2, 50)
+**State:** OPEN — will defer check until after loadFromJob settles
