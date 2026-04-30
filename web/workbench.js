@@ -8060,7 +8060,7 @@
     const xpData = await _getExportedXpBytes();
     if (!xpData) return;
     const suggestedName = _currentFileHandle
-      ? ((_currentFileHandle.name || "export") + "")
+      ? ((_currentFileHandle.name || "export.xp") + "")
       : "export.xp";
     status("Saving file as...", "warn");
     const result = await p.saveXpFileAs(xpData, suggestedName);
@@ -8644,7 +8644,8 @@
         state.inspectorSelectAnchor = null;
         renderInspector();
       }
-      setInspectorHoverFromHit(null);
+      // Only clear hover on touch — desktop mouse should keep hover until pointerleave
+      if (e.pointerType === 'touch') setInspectorHoverFromHit(null);
       if (_useInspectorPointerEvents && _inspCanvas.hasPointerCapture(e.pointerId)) {
         _inspCanvas.releasePointerCapture(e.pointerId);
       }

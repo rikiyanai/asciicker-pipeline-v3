@@ -3976,6 +3976,7 @@ function unmount() {
   _cancelPasteMode();
   _cancelTapHold();
   _dismissTapHoldInspect();
+  if (_draftSaveTimer !== null) { clearTimeout(_draftSaveTimer); _draftSaveTimer = null; }
   if (editorState.canvas) {
     const canvasEl = editorState.canvas.canvasElement;
     if (canvasEl) {

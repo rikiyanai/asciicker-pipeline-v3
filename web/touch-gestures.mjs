@@ -119,7 +119,7 @@ function _onPointerMove(e) {
   if (Math.abs(state.accumDist) >= MIN_PINCH_DELTA) {
     // Positive accumDist = fingers moving apart = zoom in
     // Produce a multiplicative zoom delta: > 1 means zoom in, < 1 means zoom out
-    const zoomDelta = dist / state.lastDist;
+    const zoomDelta = state.lastDist > 0 ? (dist / state.lastDist) : 1;
     if (state.callbacks.onPinch) {
       state.callbacks.onPinch(zoomDelta);
     }

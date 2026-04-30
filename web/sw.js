@@ -27,6 +27,7 @@ var STATIC_ASSETS = [
 
 // Install: pre-cache core static assets
 self.addEventListener('install', function(event) {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
       return cache.addAll(STATIC_ASSETS);
@@ -34,7 +35,7 @@ self.addEventListener('install', function(event) {
   );
 });
 
-// Activate: clean up old caches
+// Activate: clean up old caches and take control of open tabs
 self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
@@ -45,6 +46,8 @@ self.addEventListener('activate', function(event) {
           return caches.delete(name);
         })
       );
+    }).then(function() {
+      return self.clients.claim();
     })
   );
 });
