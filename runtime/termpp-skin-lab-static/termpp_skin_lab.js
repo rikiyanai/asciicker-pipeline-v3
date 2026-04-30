@@ -1,6 +1,23 @@
 (() => {
   "use strict";
 
+  function _resolveWorkbenchBasePath(pathname, injectedBasePath) {
+    const injected = String(injectedBasePath || "").trim();
+    if (injected) return injected;
+    const path = String(pathname || "");
+    const markers = ["/termpp-web-flat", "/termpp-web", "/termpp-skin-lab", "/workbench", "/wizard"];
+    for (const marker of markers) {
+      const idx = path.indexOf(marker);
+      if (idx >= 0) return path.slice(0, idx);
+    }
+    return "";
+  }
+
+  const BASE_PATH = _resolveWorkbenchBasePath(window.location?.pathname, window.__WB_BASE_PATH);
+  function bp(path) {
+    return `${BASE_PATH}${path}`;
+  }
+
   // Override-name generation: derives per-prefix W range from registry prefix_catalog.ahsw_range.
   function _ahswNamesFromPrefixCatalog(prefixCatalog, prefixes) {
     const out = [];
@@ -18,15 +35,8 @@
     return out;
   }
 
-  // Fallback ahsw_range data when the server is unavailable (all_16 for all 5 known prefixes).
-  const _FALLBACK_PREFIX_CATALOG = {
-    player: { ahsw_range: "all_16" }, attack: { ahsw_range: "all_16" },
-    plydie: { ahsw_range: "all_16" }, wolfie: { ahsw_range: "all_16" },
-    wolack: { ahsw_range: "all_16" },
-  };
-
   const DEFAULT_OVERRIDE_SETS = {
-    player_common: null, // populated async from registry; fallback used until then
+    player_common: [], // populated from registry during init; empty if unavailable
     single_player_nude: ["player-nude.xp"],
     all_visible_test: [
       "player-nude.xp",
@@ -37,26 +47,28 @@
       "wolack-0000.xp",
     ],
   };
+  let _playerCommonLoadError = "";
 
   async function _initPlayerCommonOverrides() {
     const allPrefixes = ["player", "attack", "plydie", "wolfie", "wolack"];
+    _playerCommonLoadError = "";
     try {
-      const r = await fetch("/api/workbench/templates");
-      if (r.ok) {
-        const reg = await r.json();
-        const pc = reg && reg.prefix_catalog;
-        if (pc) {
-          const prefixes = allPrefixes.filter(p => pc[p] && pc[p].ahsw_range);
-          DEFAULT_OVERRIDE_SETS.player_common = _ahswNamesFromPrefixCatalog(pc, prefixes);
-          return;
-        }
+      const r = await fetch(bp("/api/workbench/templates"));
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}`);
       }
-    } catch (_e) { /* fetch failed — use fallback */ }
-    // Fallback: all_16 for all 5 known prefixes (safe overshoot).
-    DEFAULT_OVERRIDE_SETS.player_common = _ahswNamesFromPrefixCatalog(_FALLBACK_PREFIX_CATALOG, allPrefixes);
+      const reg = await r.json();
+      const pc = reg && reg.prefix_catalog;
+      if (!pc || typeof pc !== "object") {
+        throw new Error("missing prefix_catalog");
+      }
+      const prefixes = allPrefixes.filter((p) => pc[p] && pc[p].ahsw_range);
+      DEFAULT_OVERRIDE_SETS.player_common = _ahswNamesFromPrefixCatalog(pc, prefixes);
+    } catch (e) {
+      DEFAULT_OVERRIDE_SETS.player_common = [];
+      _playerCommonLoadError = `Template registry unavailable: ${e?.message || "network error"}`;
+    }
   }
-
-  _initPlayerCommonOverrides();
 
   const state = {
     webbuildLoaded: false,
@@ -96,8 +108,8 @@
 
   function selectedOverrideNames() {
     const mode = String($("overrideMode")?.value || "player_common");
-    const names = DEFAULT_OVERRIDE_SETS[mode] || DEFAULT_OVERRIDE_SETS.player_common;
-    return names ? [...names] : ["player-nude.xp"];
+    const names = DEFAULT_OVERRIDE_SETS[mode];
+    return Array.isArray(names) ? [...names] : [];
   }
 
   function renderOverrideNames() {
@@ -121,8 +133,9 @@
 
   function updateButtons() {
     const hasXp = !!(state.lastXpBytes && state.lastXpBytes.length);
-    $("applyBtn").disabled = !(hasXp && state.webbuildReady);
-    $("reapplyBtn").disabled = !(hasXp && state.webbuildReady);
+    const hasOverrides = selectedOverrideNames().length > 0;
+    $("applyBtn").disabled = !(hasXp && state.webbuildReady && hasOverrides);
+    $("reapplyBtn").disabled = !(hasXp && state.webbuildReady && hasOverrides);
     $("startBtn").disabled = !state.webbuildReady;
   }
 
@@ -261,6 +274,9 @@
     }
     ensureSpritesDir(M);
     const names = selectedOverrideNames();
+    if (!names.length) {
+      throw new Error(_playerCommonLoadError || "Override names unavailable");
+    }
     let fsWriteMode = "";
     for (const name of names) {
       const res = emfsReplaceFile(M, `/sprites/${name}`, xpBytes);
@@ -367,10 +383,14 @@
     }
   }
 
-  function init() {
+  async function init() {
+    await _initPlayerCommonOverrides();
     renderOverrideNames();
     attachDnD();
     updateButtons();
+    if (_playerCommonLoadError) {
+      setStatus(_playerCommonLoadError, "warn");
+    }
     out({ ready: true, note: "Open the webbuild, then upload an .xp and click Apply Uploaded XP." });
 
     $("overrideMode")?.addEventListener("change", () => {

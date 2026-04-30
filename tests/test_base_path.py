@@ -139,6 +139,11 @@ class TestHtmlInjectionRootHosted:
         html = r.data.decode()
         assert 'src="/workbench.js?' in html
 
+    def test_termpp_skin_lab_contains_base_path_var(self, client):
+        r = client.get("/termpp-skin-lab")
+        html = r.data.decode()
+        assert 'window.__WB_BASE_PATH = ""' in html
+
     def test_workbench_whole_sheet_init_root_relative(self, client):
         r = client.get("/workbench")
         html = r.data.decode()
@@ -197,6 +202,11 @@ class TestHtmlInjectionPrefixed:
         r = self.client.get("/xpedit/workbench")
         html = r.data.decode()
         assert 'src="/xpedit/workbench.js?' in html
+
+    def test_termpp_skin_lab_base_path_var(self):
+        r = self.client.get("/xpedit/termpp-skin-lab")
+        html = r.data.decode()
+        assert 'window.__WB_BASE_PATH = "/xpedit"' in html
 
     def test_workbench_template_gating_js_prefixed(self):
         r = self.client.get("/xpedit/workbench")

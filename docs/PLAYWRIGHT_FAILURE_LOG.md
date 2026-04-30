@@ -8,6 +8,46 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Audit — UQ-004 Review-Finding Fixes For Termpp Skin Lab Registry Paths (2026-04-29)
+
+This is a code/doc-state correction entry for the post-closeout review findings.
+It does not claim a new queue-row advance beyond the existing `UQ-004` state.
+
+### Findings
+
+1. The two termpp skin lab copies fetched the registry from hardcoded
+   `/api/workbench/templates`, which bypassed `BASE_PATH` on the prefixed
+   `/xpedit` surface.
+2. On fetch failure, both copies regenerated `player_common` from a hardcoded
+   fallback catalog that treated all five prefixes as `all_16`, which
+   reintroduced a second authority and changed `attack` / `wolack` behavior.
+3. Both copies also initialized `player_common` asynchronously after the UI was
+   already live, so early actions could operate on a stale or one-file override
+   set.
+
+### What changed
+
+1. Both termpp skin lab copies now resolve the registry URL through
+   `window.__WB_BASE_PATH` first and path inference second, so prefixed routes
+   fetch `/xpedit/api/workbench/templates` instead of `/api/workbench/templates`.
+2. The hardcoded all-`all_16` fallback catalog was deleted. `player_common` now
+   fails closed to an empty set when the registry is unavailable.
+3. Initialization now awaits the registry lookup before rendering the override
+   pills and enabling apply actions, removing the startup race.
+
+### Verification evidence
+
+1. `python3 -m pytest tests/test_base_path.py -q`
+2. `node tests/web/termpp-skin-lab-registry.test.js`
+3. `node tests/web/workbench-override-names.test.js`
+
+### Still not claimed
+
+1. `preview_xp` still falls back to `l0_ref`; that is the remaining open
+   `UQ-004` gap.
+2. No mounted browser authoring surface shipped.
+3. No `UQ-010` Y9-2 thin-client synchrony work shipped.
+
 ## Audit — UQ-004 Deletion-First Closeout: FAMILY_W_RANGE Maps Deleted (2026-04-29)
 
 This is a code/doc-state entry. All four hardcoded `FAMILY_W_RANGE` /
