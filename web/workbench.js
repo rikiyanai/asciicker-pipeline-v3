@@ -8947,8 +8947,7 @@
         p.setDirtyFlag();
       } catch (_) { /* best-effort */ }
     });
-    // Tier A: deferred draft restore banner check (runs after module scripts)
-    setTimeout(_checkDraftRestore, 0);
+    // Tier A: draft restore check is deferred — see loadFromJob path below.
   }
 
   // Audit hooks for deterministic browser checks.
@@ -9659,7 +9658,12 @@
   updateGridPanelZoomUI();
   updateClassicGeometryControls();
   renderSourceCanvas();
-  if (state.jobId) loadFromJob();
+  // CR-6: defer draft restore check until after loadFromJob settles
+  if (state.jobId) {
+    loadFromJob().then(() => _checkDraftRestore()).catch(() => _checkDraftRestore());
+  } else {
+    setTimeout(_checkDraftRestore, 0);
+  }
 
   // ── PWA Install Prompt (Tier C) ─────────────────────────────────────────────
   // Listen for beforeinstallprompt; gate on return-visit to avoid nagging on
