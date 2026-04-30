@@ -955,6 +955,8 @@ async function mount({
   // Two-pointer pinch-zoom / pan gesture tracking
   attachGestures(canvasEl, {
     onGestureStart() {
+      // Flush any in-progress stroke to prevent orphaned stroke state
+      _onStrokeEnd();
       editorState._gestureActive = true;
       if (editorState.canvas) editorState.canvas._gestureActive = true;
     },
