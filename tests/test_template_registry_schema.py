@@ -5,9 +5,11 @@ import pytest
 from pathlib import Path
 
 from pipeline_v2.service import (
+    _action_override_names,
     _normalize_template_action_spec,
     _normalize_template_registry,
     _reset_template_registry_cache,
+    _termpp_skin_override_names,
     get_registry_status,
     is_action_authorized,
     is_prefix_authorized,
@@ -470,3 +472,98 @@ def test_templates_api_malformed_registry_shows_load_error(tmp_path, monkeypatch
         assert "malformed" in payload["registry_status"]["load_error"]
     finally:
         _reset_template_registry_cache()
+
+
+# ── Override-name registry derivation tests ──────────────────────────────────
+
+
+def test_termpp_skin_override_names_count_matches_expected():
+    """Override names from registry produce exactly 105 names with correct per-prefix counts."""
+    registry = load_template_registry()
+    names = _termpp_skin_override_names(registry)
+    assert len(names) == 105
+    assert "player-nude.xp" in names
+    assert names.count("player-nude.xp") == 1
+    # Per-prefix counts: player=25 (24+nude), attack=16, plydie=24, wolfie=24, wolack=16
+    player_names = [n for n in names if n.startswith("player-")]
+    attack_names = [n for n in names if n.startswith("attack-")]
+    plydie_names = [n for n in names if n.startswith("plydie-")]
+    wolfie_names = [n for n in names if n.startswith("wolfie-")]
+    wolack_names = [n for n in names if n.startswith("wolack-")]
+    assert len(player_names) == 25
+    assert len(attack_names) == 16
+    assert len(plydie_names) == 24
+    assert len(wolfie_names) == 24
+    assert len(wolack_names) == 16
+
+
+def test_termpp_skin_override_names_matches_action_override_names():
+    """Every name from _termpp_skin_override_names equals the union of
+    _action_override_names applied to each prefix_catalog entry with ahsw_range."""
+    registry = load_template_registry()
+    names = _termpp_skin_override_names(registry)
+    expected: list[str] = []
+    for prefix_key, prefix_spec in registry["prefix_catalog"].items():
+        ahsw_range = (prefix_spec.get("ahsw_range") or "").strip()
+        if not ahsw_range:
+            continue
+        expected.extend(_action_override_names(prefix_key, ahsw_range))
+    assert sorted(names) == sorted(expected)
+
+
+def test_termpp_skin_override_names_mutation_proves_registry_derivation():
+    """Changing ahsw_range in prefix_catalog changes the override name output —
+    proves the function derives from registry, not from hardcoded values."""
+    registry = copy.deepcopy(load_template_registry())
+    original = _termpp_skin_override_names(registry)
+    original_attack_count = len([n for n in original if n.startswith("attack-")])
+    assert original_attack_count == 16  # weapon_gte_1
+
+    # Mutate attack to all_16
+    registry["prefix_catalog"]["attack"]["ahsw_range"] = "all_16"
+    mutated = _termpp_skin_override_names(registry)
+    mutated_attack_count = len([n for n in mutated if n.startswith("attack-")])
+    assert mutated_attack_count == 24  # all_16
+    assert len(mutated) == 113  # 105 - 16 + 24
+
+
+def test_termpp_skin_override_names_removal_excludes_prefix():
+    """Removing ahsw_range from a prefix_catalog entry excludes that prefix
+    from override name generation."""
+    registry = copy.deepcopy(load_template_registry())
+    del registry["prefix_catalog"]["wolfie"]["ahsw_range"]
+    names = _termpp_skin_override_names(registry)
+    wolfie_names = [n for n in names if n.startswith("wolfie-")]
+    assert len(wolfie_names) == 0
+    assert len(names) == 81  # 105 - 24
+
+
+def test_termpp_skin_override_names_empty_registry():
+    """Empty registry produces no names."""
+    names = _termpp_skin_override_names({})
+    assert names == []
+
+
+def test_normalizer_catches_ahsw_range_drift():
+    """Normalizer raises ValueError when prefix_catalog ahsw_range disagrees
+    with the linked action spec ahsw_range."""
+    import json
+    reg_path = REPO_ROOT / "config" / "template_registry.json"
+    raw = json.loads(reg_path.read_text(encoding="utf-8"))
+    # Introduce drift: player prefix says weapon_gte_1, action says all_16
+    raw["prefix_catalog"]["player"]["ahsw_range"] = "weapon_gte_1"
+    with pytest.raises(ValueError, match="ahsw_range.*drifted"):
+        _normalize_template_registry(raw)
+
+
+def test_normalizer_skips_ahsw_range_check_for_empty_template_actions():
+    """Prefixes with empty template_actions (wolfie/wolack) are not drift-checked
+    for ahsw_range — they are sole-source. Verify no error is raised."""
+    import json
+    reg_path = REPO_ROOT / "config" / "template_registry.json"
+    raw = json.loads(reg_path.read_text(encoding="utf-8"))
+    # Even if wolfie has a different ahsw_range, no error because no linked actions
+    raw["prefix_catalog"]["wolfie"]["ahsw_range"] = "weapon_gte_1"
+    # Should not raise — wolfie has template_actions: []
+    result = _normalize_template_registry(raw)
+    assert result["prefix_catalog"]["wolfie"]["ahsw_range"] == "weapon_gte_1"
