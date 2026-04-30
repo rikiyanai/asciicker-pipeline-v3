@@ -1,15 +1,14 @@
 (() => {
   "use strict";
 
-  // Per-family weapon-digit range matching product contract (all_16 vs weapon_gte_1).
-  const FAMILY_W_RANGE = {
-    player: [0, 1, 2], attack: [1, 2], plydie: [0, 1, 2],
-    wolfie: [0, 1, 2], wolack: [1, 2],
-  };
-  function _ahswNames(families) {
-    const out = ["player-nude.xp"];
-    for (const prefix of families) {
-      const wRange = FAMILY_W_RANGE[prefix] || [0, 1, 2];
+  // Override-name generation: derives per-prefix W range from registry prefix_catalog.ahsw_range.
+  function _ahswNamesFromPrefixCatalog(prefixCatalog, prefixes) {
+    const out = [];
+    for (const prefix of prefixes) {
+      const spec = prefixCatalog[prefix];
+      const range = spec && spec.ahsw_range;
+      const wRange = range === "weapon_gte_1" ? [1, 2] : [0, 1, 2];
+      if (range === "all_16" && prefix === "player") out.push("player-nude.xp");
       for (let a = 0; a < 2; a++)
         for (let h = 0; h < 2; h++)
           for (let s = 0; s < 2; s++)
@@ -19,8 +18,15 @@
     return out;
   }
 
+  // Fallback ahsw_range data when the server is unavailable (all_16 for all 5 known prefixes).
+  const _FALLBACK_PREFIX_CATALOG = {
+    player: { ahsw_range: "all_16" }, attack: { ahsw_range: "all_16" },
+    plydie: { ahsw_range: "all_16" }, wolfie: { ahsw_range: "all_16" },
+    wolack: { ahsw_range: "all_16" },
+  };
+
   const DEFAULT_OVERRIDE_SETS = {
-    player_common: _ahswNames(["player", "attack", "plydie", "wolfie", "wolack"]),
+    player_common: null, // populated async from registry; fallback used until then
     single_player_nude: ["player-nude.xp"],
     all_visible_test: [
       "player-nude.xp",
@@ -31,6 +37,26 @@
       "wolack-0000.xp",
     ],
   };
+
+  async function _initPlayerCommonOverrides() {
+    const allPrefixes = ["player", "attack", "plydie", "wolfie", "wolack"];
+    try {
+      const r = await fetch("/api/workbench/templates");
+      if (r.ok) {
+        const reg = await r.json();
+        const pc = reg && reg.prefix_catalog;
+        if (pc) {
+          const prefixes = allPrefixes.filter(p => pc[p] && pc[p].ahsw_range);
+          DEFAULT_OVERRIDE_SETS.player_common = _ahswNamesFromPrefixCatalog(pc, prefixes);
+          return;
+        }
+      }
+    } catch (_e) { /* fetch failed — use fallback */ }
+    // Fallback: all_16 for all 5 known prefixes (safe overshoot).
+    DEFAULT_OVERRIDE_SETS.player_common = _ahswNamesFromPrefixCatalog(_FALLBACK_PREFIX_CATALOG, allPrefixes);
+  }
+
+  _initPlayerCommonOverrides();
 
   const state = {
     webbuildLoaded: false,
@@ -70,7 +96,8 @@
 
   function selectedOverrideNames() {
     const mode = String($("overrideMode")?.value || "player_common");
-    return [...(DEFAULT_OVERRIDE_SETS[mode] || DEFAULT_OVERRIDE_SETS.player_common)];
+    const names = DEFAULT_OVERRIDE_SETS[mode] || DEFAULT_OVERRIDE_SETS.player_common;
+    return names ? [...names] : ["player-nude.xp"];
   }
 
   function renderOverrideNames() {
