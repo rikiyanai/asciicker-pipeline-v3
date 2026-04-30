@@ -1105,12 +1105,16 @@ def _normalize_template_registry(raw_registry: dict[str, Any] | None) -> dict[st
 def is_action_authorized(
     action_spec: dict[str, Any] | None,
     registry: dict[str, Any],
+    *,
+    template_set: dict[str, Any] | None = None,
+    template_set_key: str | None = None,
+    action_key: str | None = None,
 ) -> tuple[bool, str]:
     """Check whether an action spec is authorized for authoring via the normalized registry.
 
     Mirrors the authority chain of isTemplateActionAuthorable() in
-    workbench-template-gating.js, omitting template_actions linkage
-    (backend callers already have the action spec from the template set).
+    workbench-template-gating.js, including template-set scope and
+    template_actions linkage when template context is supplied.
 
     Returns (authorized, reason) — reason is empty on success, descriptive on denial.
     """
@@ -1122,7 +1126,41 @@ def is_action_authorized(
         return False, "missing filename_prefix"
     if not skin_family:
         return False, f"prefix '{prefix}' missing skin_family"
-    return _is_prefix_authorized_core(prefix, skin_family, registry)
+    template_scope = template_set.get("skin_family_scope") if isinstance(template_set, dict) else None
+    if isinstance(template_scope, list):
+        allowed = {
+            str(value or "").strip()
+            for value in template_scope
+            if str(value or "").strip()
+        }
+        if not allowed or skin_family not in allowed:
+            return False, f"skin_family '{skin_family}' not allowed by template set scope"
+    authorized, reason = _is_prefix_authorized_core(
+        prefix,
+        skin_family,
+        registry,
+    )
+    if not authorized:
+        return authorized, reason
+    prefix_spec = registry.get("prefix_catalog", {}).get(prefix, {})
+    template_actions = prefix_spec.get("template_actions")
+    if isinstance(template_actions, list) and template_actions:
+        resolved_set_key = str(template_set_key or "").strip()
+        resolved_action_key = str(action_key or "").strip()
+        if not resolved_set_key or not resolved_action_key:
+            return False, f"prefix '{prefix}' missing template action context"
+        linked = any(
+            str(entry.get("template_set_key") or "").strip() == resolved_set_key
+            and str(entry.get("action_key") or "").strip() == resolved_action_key
+            for entry in template_actions
+            if isinstance(entry, dict)
+        )
+        if not linked:
+            return False, (
+                f"prefix '{prefix}' not linked to template action "
+                f"'{resolved_set_key}:{resolved_action_key}'"
+            )
+    return True, ""
 
 
 def is_prefix_authorized(
@@ -1480,7 +1518,13 @@ def create_bundle(template_set_key: str, req_id: str) -> dict[str, Any]:
     now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     actions: dict[str, BundleActionState] = {}
     for act_key, act_spec in ts["actions"].items():
-        authorized, auth_reason = is_action_authorized(act_spec, reg)
+        authorized, auth_reason = is_action_authorized(
+            act_spec,
+            reg,
+            template_set=ts,
+            template_set_key=template_set_key,
+            action_key=act_key,
+        )
         if authorized:
             blank = workbench_create_blank_session(template_set_key, act_key, None, req_id)
             actions[act_key] = BundleActionState(
@@ -2580,6 +2624,7 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
     frame_rows = angles
     session_kind = _session_kind(sess_dict)
     metadata_status = _metadata_status(sess_dict)
+    family, filename_prefix, skin_family = _resolve_session_identity_fields(sess_dict)
     return {
         "session_id": str(sess_dict["session_id"]),
         "job_id": str(sess_dict.get("job_id") or ""),
@@ -2620,12 +2665,27 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
         "source_cuts_h": list(sess_dict.get("source_cuts_h") or []),
         "cells": list(sess_dict.get("cells") or []),
         "layers": list(sess_dict.get("layers") or []),
-        "family": str(sess_dict.get("family", "player")),
-        "filename_prefix": str(sess_dict.get("filename_prefix") or sess_dict.get("family") or "player"),
-        "skin_family": str(sess_dict.get("skin_family") or ""),
+        "family": family,
+        "filename_prefix": filename_prefix,
+        "skin_family": skin_family,
         "mounted_rider_calibration": sess_dict.get("mounted_rider_calibration"),
         "mounted_semantic_review": sess_dict.get("mounted_semantic_review"),
     }
+
+
+def _resolve_session_identity_fields(sess_dict: dict[str, Any]) -> tuple[str, str, str]:
+    family = str(sess_dict.get("family") or "").strip()
+    filename_prefix = str(sess_dict.get("filename_prefix") or family or "player").strip()
+    if not family:
+        family = filename_prefix or "player"
+    if not filename_prefix:
+        filename_prefix = family or "player"
+    skin_family = str(sess_dict.get("skin_family") or "").strip()
+    if not skin_family and filename_prefix:
+        reg = load_template_registry()
+        prefix_spec = reg.get("prefix_catalog", {}).get(filename_prefix, {})
+        skin_family = str(prefix_spec.get("skin_family") or "").strip()
+    return family, filename_prefix, skin_family
 
 
 def _wire_layers(layers: list[list[Cell]]) -> list[list[dict[str, Any]]]:
@@ -3058,7 +3118,13 @@ def workbench_create_blank_session(
             "invalid_action_key", "workbench", req_id, 422,
         )
     family = str(action_spec.get("family", "")).strip()
-    authorized, auth_reason = is_action_authorized(action_spec, reg)
+    authorized, auth_reason = is_action_authorized(
+        action_spec,
+        reg,
+        template_set=ts,
+        template_set_key=template_set_key,
+        action_key=action_key,
+    )
     if not authorized:
         raise ApiError(
             f"Family '{family}' is not authorized: {auth_reason}",
@@ -3123,7 +3189,13 @@ def bundle_action_run(bundle_id: str, action_key: str, source_path: str, req_id:
     if action_spec is None:
         raise ApiError(f"action '{action_key}' not in template set", "invalid_action_key", "workbench", req_id, 422)
     family = action_spec["family"]
-    authorized, auth_reason = is_action_authorized(action_spec, reg)
+    authorized, auth_reason = is_action_authorized(
+        action_spec,
+        reg,
+        template_set=ts,
+        template_set_key=bundle.template_set_key,
+        action_key=action_key,
+    )
     if not authorized:
         raise ApiError(
             f"Family '{family}' is not authorized: {auth_reason}",
@@ -3862,7 +3934,13 @@ def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
             )
         action_spec = ts.get("actions", {}).get(act_key, {})
         family = action_spec.get("family", "player")
-        authorized, auth_reason = is_action_authorized(action_spec, reg)
+        authorized, auth_reason = is_action_authorized(
+            action_spec,
+            reg,
+            template_set=ts,
+            template_set_key=bundle.template_set_key,
+            action_key=act_key,
+        )
         if not authorized:
             _log.info("export_bundle: skipping action '%s' — %s", act_key, auth_reason)
             continue
@@ -3916,7 +3994,13 @@ def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, 
 
     for act_key, action_spec in ts.get("actions", {}).items():
         family = action_spec.get("family", "")
-        authorized, auth_reason = is_action_authorized(action_spec, reg)
+        authorized, auth_reason = is_action_authorized(
+            action_spec,
+            reg,
+            template_set=ts,
+            template_set_key=bundle.template_set_key,
+            action_key=act_key,
+        )
         if not authorized:
             _log.info("web_skin_payload: skipping action '%s' — %s", act_key, auth_reason)
             unmapped_families.append(family)
@@ -4173,17 +4257,17 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
     sess["session_kind"] = _session_kind(sess)
     sess["metadata_status"] = _metadata_status(sess)
 
-    # Lazy normalization: enrich legacy sessions missing filename_prefix / skin_family
-    if not sess.get("filename_prefix"):
-        family_val = str(sess.get("family") or "player")
-        sess["filename_prefix"] = family_val
-        reg = load_template_registry()
-        pcat = reg.get("prefix_catalog", {}).get(family_val, {})
-        skin_fam = str(pcat.get("skin_family") or "")
-        sess["skin_family"] = skin_fam
-        sess["family"] = family_val  # ensure compat mirror
-        if not skin_fam:
-            _log.warning("session '%s': could not resolve skin_family for family '%s' from registry", session_id, family_val)
+    # Lazy normalization: enrich legacy sessions missing normalized identity fields.
+    family_val, filename_prefix, skin_fam = _resolve_session_identity_fields(sess)
+    sess["family"] = family_val
+    sess["filename_prefix"] = filename_prefix
+    sess["skin_family"] = skin_fam
+    if not skin_fam:
+        _log.warning(
+            "session '%s': could not resolve skin_family for filename_prefix '%s' from registry",
+            session_id,
+            filename_prefix,
+        )
 
     save_json(p, sess)
     response = _session_payload(sess)

@@ -251,6 +251,36 @@ def test_is_action_authorized_family_fallback():
     assert ok is True
 
 
+def test_is_action_authorized_respects_template_set_scope():
+    spec = {"filename_prefix": "player", "skin_family": "human"}
+    ok, reason = is_action_authorized(
+        spec,
+        _AUTHORABLE_REGISTRY,
+        template_set={"skin_family_scope": ["beast"]},
+        template_set_key="player_native_full",
+        action_key="idle",
+    )
+    assert ok is False
+    assert "template set scope" in reason
+
+
+def test_is_action_authorized_respects_template_action_linkage():
+    registry = copy.deepcopy(_AUTHORABLE_REGISTRY)
+    registry["prefix_catalog"]["player"]["template_actions"] = [
+        {"template_set_key": "player_native_full", "action_key": "idle"},
+    ]
+    spec = {"filename_prefix": "player", "skin_family": "human"}
+    ok, reason = is_action_authorized(
+        spec,
+        registry,
+        template_set={"skin_family_scope": ["human"]},
+        template_set_key="player_native_full",
+        action_key="attack",
+    )
+    assert ok is False
+    assert "not linked" in reason
+
+
 def test_is_prefix_authorized_happy_path():
     ok, reason = is_prefix_authorized("player", _AUTHORABLE_REGISTRY)
     assert ok is True
@@ -377,6 +407,52 @@ def test_save_session_normalizes_legacy_family(client):
     load_data = load_resp.get_json()
     assert load_data["filename_prefix"] == "player"
     assert load_data["skin_family"] == "human"
+
+
+def test_load_session_normalizes_legacy_family_without_save(client):
+    """Loading a legacy session resolves normalized identity fields on read."""
+    create_resp = client.post("/api/workbench/create-blank-session", json={
+        "template_set_key": "player_native_idle_only",
+        "action_key": "idle",
+    })
+    data = create_resp.get_json()
+    session_id = data["session_id"]
+
+    import pipeline_v2.service as svc
+    sess_path = svc._session_path(session_id)
+    sess = svc.load_json(sess_path)
+    del sess["filename_prefix"]
+    del sess["skin_family"]
+    svc.save_json(sess_path, sess)
+
+    load_resp = client.post("/api/workbench/load-session", json={"session_id": session_id})
+    assert load_resp.status_code == 200
+    load_data = load_resp.get_json()
+    assert load_data["filename_prefix"] == "player"
+    assert load_data["skin_family"] == "human"
+    assert load_data["family"] == "player"
+
+
+def test_save_session_normalizes_missing_skin_family_when_prefix_exists(client):
+    """Saving resolves skin_family even if filename_prefix was already present."""
+    create_resp = client.post("/api/workbench/create-blank-session", json={
+        "template_set_key": "player_native_idle_only",
+        "action_key": "idle",
+    })
+    data = create_resp.get_json()
+    session_id = data["session_id"]
+
+    import pipeline_v2.service as svc
+    sess_path = svc._session_path(session_id)
+    sess = svc.load_json(sess_path)
+    del sess["skin_family"]
+    svc.save_json(sess_path, sess)
+
+    save_resp = client.post("/api/workbench/save-session", json={"session_id": session_id})
+    assert save_resp.status_code == 200
+    save_data = save_resp.get_json()
+    assert save_data["filename_prefix"] == "player"
+    assert save_data["skin_family"] == "human"
 
 
 def test_templates_api_malformed_registry_shows_load_error(tmp_path, monkeypatch, client):

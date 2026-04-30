@@ -13,6 +13,24 @@ Replace the hardcoded `ENABLED_FAMILIES` gate in `service.py` with one registry-
 
 ---
 
+## Review Correction — 2026-04-29
+
+Post-landing execution review found two parity bugs in the first `e40adda`
+slice:
+
+- backend template-driven authorization initially skipped template-set
+  `skin_family_scope` and `prefix_catalog.template_actions` linkage
+- legacy family-only sessions still loaded with empty `skin_family` until a
+  save path rewrote them
+
+Both are now fixed in the live code/tests covered by this plan. The remaining
+open `UQ-004` work after this review is the hardcoded classic/runtime AHSW
+range maps (`web/workbench.js:FAMILY_W_RANGE`,
+`src/pipeline_v2/service.py:_FAMILY_W_RANGE`), which still duplicate registry
+`ahsw_range`. This plan therefore remains `active`.
+
+---
+
 ## Problem Frame
 
 The backend's five key bundle/session/export/runtime functions all gate on `ENABLED_FAMILIES`, a hardcoded static set (`{"player", "attack", "plydie"}`) in `config.py`. Meanwhile, the browser already gates correctly through `isTemplateActionAuthorable()` in `workbench-template-gating.js`, which checks the registry's `authorable`, `proof_only`, `mounted`, and `skin_family_scope` fields. This split means the backend bypasses the registry's rich metadata — it cannot distinguish proof-only families from deferred ones, cannot gate mounted families structurally, and cannot support staged enablement. Additionally, registry load/fetch errors are silently swallowed in both the backend (logs only) and the browser (`catch (_e) { /* ignore */ }`), leaving operators unable to diagnose why template operations fail.
@@ -63,11 +81,11 @@ The backend's five key bundle/session/export/runtime functions all gate on `ENAB
 
 ## Key Technical Decisions
 
-- **Registry-derived helper mirrors browser gating logic**: The new backend helper follows the same authority chain as `isTemplateActionAuthorable()` — `filename_prefix`, `skin_family`, `skin_family_scope` (`authorable`, `proof_only`), and `prefix_catalog` (`authorable`). The backend intentionally omits `template_actions` linkage checking (browser uses this for UI filtering, but backend callers already have the action spec looked up from the template set). This ensures browser and backend consume the same normalized contract without maintaining two authority models, while the linkage omission is a deliberate backend simplification, not a parity gap.
+- **Registry-derived helper mirrors browser gating logic**: The backend helper follows the same authority chain as `isTemplateActionAuthorable()` — `filename_prefix`, `skin_family`, template-set `skin_family_scope`, registry `skin_family_scope` (`authorable`, `proof_only`), `prefix_catalog` (`authorable`), and `template_actions` linkage when template context exists. This keeps browser and backend on one normalized contract instead of letting template-driven backend paths drift from the browser gate.
 - **Helper takes action spec and full registry as inputs**: The helper does not access global state or re-load the registry. Callers pass the already-loaded registry, keeping the function pure and testable.
 - **Silent skip in export/web-skin replaced with explicit logging**: `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()` currently silently skip non-enabled families. The new helper makes the skip explicit by returning a reason string alongside the boolean, and callers log skipped actions with the reason.
 - **Registry validation status exposed as a top-level field in the API response**: The `/api/workbench/templates` endpoint includes a `registry_status` field summarizing load-time validation results (L0 checksum mismatches, missing files). This lets operators and the browser detect degraded state without waiting for a downstream operation to fail.
-- **Session normalization is lazy (on next save), not eager**: Per §2.5.4.1, existing sessions migrate in-place when next saved. No batch migration script is needed.
+- **Session normalization resolves on read and persists on save**: Per §2.5.4.1, legacy sessions must read as normalized `filename_prefix` / `skin_family` immediately, then write the normalized identity back on the next successful save. No batch migration script is needed.
 
 ---
 
@@ -100,9 +118,9 @@ The backend's five key bundle/session/export/runtime functions all gate on `ENAB
 - Test: `tests/test_template_registry_schema.py`
 
 **Approach:**
-- Add a function (e.g., `is_action_authorized(action_spec, registry)`) that checks: `filename_prefix` present, `skin_family` present, `skin_family_scope[skin_family]` exists with `authorable == True` and `proof_only != True`, `prefix_catalog[filename_prefix]` exists with `authorable == True`. Return a `(bool, str)` tuple — authorized yes/no plus a reason string for logging/error messages.
+- Add a function (e.g., `is_action_authorized(action_spec, registry)`) that checks: `filename_prefix` present, `skin_family` present, template-set `skin_family_scope` admits that family when template context exists, registry `skin_family_scope[skin_family]` exists with `authorable == True` and `proof_only != True`, `prefix_catalog[filename_prefix]` exists with `authorable == True`, and `template_actions` linkage matches when the prefix declares it. Return a `(bool, str)` tuple — authorized yes/no plus a reason string for logging/error messages.
 - Also support a bare-prefix entry point (e.g., `is_prefix_authorized(prefix, registry)`) for call sites like `_blank_session_spec()` that have a user-supplied `family` string but no action spec. This entry point looks up the prefix in `prefix_catalog` and applies the same authority checks. Both entry points share the core authorization logic.
-- Mirror the authority chain from `isTemplateActionAuthorable()` in `workbench-template-gating.js`, omitting `template_actions` linkage (browser uses this for UI filtering, but backend callers already have the action spec looked up from the template set).
+- Mirror the authority chain from `isTemplateActionAuthorable()` in `workbench-template-gating.js`, including template-set scope and `template_actions` linkage when the caller already has template context.
 
 **Patterns to follow:**
 - `isTemplateActionAuthorable()` in `web/workbench-template-gating.js:34-58` — the reference authority chain

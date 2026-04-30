@@ -8,6 +8,135 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Audit — UQ-004 Execution Review Corrections (2026-04-29)
+
+This is a code/doc-state correction entry after the `e40adda` backend-authority
+landing. It does not claim `UQ-004` closure by itself. It records the two
+missed parity bugs found during execution review, the exact code corrections,
+and the narrower remaining open scope.
+
+### Findings
+
+1. `e40adda` removed `ENABLED_FAMILIES` from live backend bundle/session/export
+   gates, but the first landing still missed two browser/backend parity checks:
+   - `is_action_authorized()` did not enforce template-set
+     `skin_family_scope`
+   - `is_action_authorized()` did not enforce
+     `prefix_catalog.template_actions` linkage
+2. Legacy sessions missing normalized identity fields still loaded with empty
+   `skin_family`; the first landing only normalized on save, and only when
+   `filename_prefix` was also missing.
+3. The active canon still described the pre-`e40adda` backend split as if
+   `family` / `ENABLED_FAMILIES` were still the live backend gate.
+4. After source review, the remaining open `UQ-004` second-authority drift is
+   now narrower:
+   - hardcoded `FAMILY_W_RANGE` in `web/workbench.js`
+   - hardcoded `_FAMILY_W_RANGE` in `src/pipeline_v2/service.py`
+   - both still duplicate registry `ahsw_range`
+
+### What changed
+
+1. Template-driven backend authorization now matches the browser gate:
+   - template-set `skin_family_scope` enforced
+   - `prefix_catalog.template_actions` linkage enforced
+2. Session identity normalization now resolves on read and persists on save:
+   - `_session_payload()` resolves `filename_prefix` / `skin_family` for
+     family-only legacy sessions
+   - `workbench_save_session()` persists normalized identity whenever either
+     normalized field is missing
+3. The canon/plan text now records post-`e40adda` truth instead of repeating
+   the stale backend `ENABLED_FAMILIES` split claim.
+
+### Verification evidence
+
+1. `python3 -m pytest tests/test_template_registry_schema.py -q` — PASS
+2. `python3 -m pytest tests/test_workbench_flow.py -q` — PASS
+3. `python3 -m pytest -q` — PASS in the unsandboxed rerun required for
+   `tests/e2e/test_browser_flow.py` localhost bind
+
+### Still not claimed
+
+1. `UQ-004` is not closed in this entry.
+2. `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` still keep classic/runtime override
+   naming as a second authority instead of consuming registry `ahsw_range`.
+3. No `UQ-005`+ progress is claimed here.
+
+## Audit — Cross-Repo Mounted Tooling Gap Against Y9-2 (2026-04-29)
+
+Cross-repo audit of Y9-2 `scripts/pipeline/` mounted toolchain (FL-2345 through
+FL-2500, culminating in mask selector v2 commit `42d7b744`) against pipeline-v3
+backend, CLI scripts, and canon spec §2.5.4.2. This is an audit/doc-correction
+entry. It does not claim UQ-008 progress.
+
+### Findings
+
+1. **Y9-2 has 9 mounted pipeline scripts. Pipeline-v3 has 3.** HIGH.
+   - Shared: `mounted_rider_offset.py`, `mounted_rider_residual_compare.py`,
+     `mounted_rider_terminal_compare.py` (standalone in PV3, integrated in Y9-2)
+   - Missing from PV3:
+     - `mounted_wrapper_mask_selector.py` (1535 lines, v2) — core wrapper role
+       authoring tool with WASD cursor, box select, flood fill, glyph panel,
+       paint mode, undo ring, 5 comparison modes, queue mode for multi-angle
+       batch authoring
+     - `mounted_semantic_proposals.py` — evidence-tagged exact-cell proposal
+       engine (co-occurrence tags, angle persistence, AHSW stability, anatomy
+       disambiguation). PV3 `compute_mounted_semantic_proposals()` is a simpler
+       classification without evidence tags
+     - `xp_semantic_atlas_reviewer.py` — TTY semantic atlas reviewer with
+       owned cell classifications and wrapper-role assignment
+     - `generate_mounted_wrapper_assets.py` — generates wrapper XP files from
+       human-authored masks
+     - `promote_mounted_wrapper_offsets.py` — promotes offset solves to sidecar
+     - `promote_mounted_wrapper_reviews.py` — promotes semantic reviews to
+       checked-in sidecar
+     - `mounted_wrapper_unresolved.py` — fail-closed unresolved reporter for
+       blocked family/presentation rows
+
+2. **No native builder for wolfie/wolack in PV3.** HIGH.
+   - `_build_native_layers()` raises `ApiError("no native builder")` for any
+     family outside player/attack/plydie
+   - Y9-2 solves this via `generate_mounted_wrapper_assets.py` which composes
+     wrapper layers from masks into final XP files
+   - This is the hard blocker for mounted family export
+
+3. **Wrapper role vocabulary not codified in PV3 code.** MEDIUM.
+   - Y9-2 uses `mount_front` / `mount_rear` consistently across all scripts
+   - Y9-2 uses `rider` / `mount` / `empty` / `mixed` / `unclear` for semantic
+     cell owners
+   - PV3 referenced these only in canon spec prose, not in code constants
+
+4. **Canon spec §2.5.4.2 was stale on two points.** MEDIUM.
+   - Listed `empty_slot` as a wrapper-role vocabulary term — Y9-2 does not use
+     `empty_slot` in any script; the actual vocabulary is `mount_front` /
+     `mount_rear` for wrapper roles and `rider` / `mount` / `empty` / `mixed` /
+     `unclear` for semantic owners
+   - Referenced only the v1 mask selector CLI interface — Y9-2 has shipped v2
+     with box select, flood fill, glyph panel, comparison modes
+     (single/front+rear/angle-mirror/diff/mount+rider), queue mode, and paint
+     mode (commit `42d7b744`)
+
+5. **Canon spec §2.9.1 understated Y9-2 maturity.** MEDIUM.
+   - §2.9.1 described mounted work as "next reconciliation" — Y9-2 has already
+     landed mounted wrapper baseline (commit `09ae3fc3`), wolf idle wrapper
+     assets (commit `d4b236d9`), and ref-aligned wrapper composition
+     (commit `ff7fb970`)
+
+### What changed in this slice
+
+1. Canon spec §2.5.4.2 corrected: vocabulary fixed, Y9-2 v2 toolchain
+   capabilities documented, full pipeline script inventory added.
+2. Canon spec §2.9.1 updated with Y9-2 baseline completion evidence.
+3. Wrapper role and semantic owner constants added to `service.py`.
+4. This failure log entry.
+
+### Still not claimed
+
+1. No mounted browser panels shipped (U2/U4 still missing).
+2. No mounted native builder shipped.
+3. No Y9-2 scripts ported to PV3.
+4. wolfie/wolack remain `authorable: false`.
+5. UQ-008 is still OPEN.
+
 ## Audit — Canon Gate Summary Correction For UQ-005 (2026-04-29)
 
 This is a canon/doc-state correction entry. It does not claim a code fix, proof
