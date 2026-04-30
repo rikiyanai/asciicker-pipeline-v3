@@ -4309,4 +4309,8 @@ window.__wholeSheetEditor = {
   addLayer,
   deleteLayer,
   moveLayer,
+  copySelection: _copySelection,
+  cutSelection: _cutSelection,
+  pasteClipboard: _enterPasteMode,
+  deleteSelection: _deleteSelection,
 };

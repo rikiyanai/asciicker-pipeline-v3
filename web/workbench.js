@@ -9520,17 +9520,16 @@
       if (wsState && wsState.mounted && wsState.selectionBounds) {
         switch (action) {
           case 'copy':
-            // Fire keyboard shortcut equivalent
-            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
+            if (wsEditor.copySelection) wsEditor.copySelection();
             break;
           case 'cut':
-            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', ctrlKey: true, bubbles: true }));
+            if (wsEditor.cutSelection) wsEditor.cutSelection();
             break;
           case 'paste':
-            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }));
+            if (wsEditor.pasteClipboard) wsEditor.pasteClipboard();
             break;
           case 'delete':
-            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+            if (wsEditor.deleteSelection) wsEditor.deleteSelection();
             break;
           case 'inspect':
             // Inspect is handled by tap-hold on the whole-sheet canvas (U3).
