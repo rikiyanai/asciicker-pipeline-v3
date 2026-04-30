@@ -718,6 +718,14 @@ async function mount({
   layout.appendChild(canvasArea);
   container.appendChild(layout);
 
+  // U5: Shared drawer backdrop — visible when any drawer is open on mobile
+  const drawerBackdrop = document.createElement('div');
+  drawerBackdrop.className = 'ws-drawer-backdrop';
+  drawerBackdrop.addEventListener('click', () => {
+    if (typeof window.toggleDrawer === 'function') window.toggleDrawer(null);
+  });
+  container.appendChild(drawerBackdrop);
+
   // Create Canvas renderer
   const canvas = new Canvas(canvasEl, gridCols, gridRows, CELL_SIZE);
   editorState.canvas = canvas;
@@ -2154,7 +2162,13 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   modeGroup.appendChild(paintBtn);
   modeGroup.appendChild(browseBtn);
   modeSection.appendChild(modeGroup);
-  sidebar.appendChild(modeSection);
+
+  // U5: Drawer wrappers — transparent on desktop (display:contents), bottom-sheet on mobile
+  const toolsDrawer = document.createElement('div');
+  toolsDrawer.className = 'ws-drawer';
+  toolsDrawer.dataset.drawer = 'tools';
+  toolsDrawer.appendChild(modeSection);
+  // (remaining tools-drawer sections appended below)
 
   const browseSection = _buildSection('Browse');
   browseSection.id = 'wsBrowseSection';
@@ -2228,7 +2242,12 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   browseList.id = 'wsBrowseList';
   browseList.className = 'ws-browse-list';
   browseSection.appendChild(browseList);
-  sidebar.appendChild(browseSection);
+
+  const browseDrawer = document.createElement('div');
+  browseDrawer.className = 'ws-drawer';
+  browseDrawer.dataset.drawer = 'browse';
+  browseDrawer.appendChild(browseSection);
+  sidebar.appendChild(browseDrawer);
 
   // 3.2 Glyph — 16x16 CP437 picker (spec §3.2)
   const glyphSection = _buildSection('Glyph');
@@ -2286,7 +2305,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   glyphRow.appendChild(glyphInput);
   glyphRow.appendChild(glyphChar);
   glyphSection.appendChild(glyphRow);
-  sidebar.appendChild(glyphSection);
+  toolsDrawer.appendChild(glyphSection);
 
   // 3.3 Palette (spec §3.3: color grid + fg/bg swatches)
   const paletteSection = _buildSection('Palette');
@@ -2347,7 +2366,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   swatchRow.appendChild(bgLabel);
   swatchRow.appendChild(bgInput);
   paletteSection.appendChild(swatchRow);
-  sidebar.appendChild(paletteSection);
+  toolsDrawer.appendChild(paletteSection);
 
   // 3.4 Tools / Apply (spec §3.4: two-column layout)
   const toolsSection = _buildSection('Tools / Apply');
@@ -2490,7 +2509,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   taCols.appendChild(toolsCol);
   taCols.appendChild(applyCol);
   toolsSection.appendChild(taCols);
-  sidebar.appendChild(toolsSection);
+  toolsDrawer.appendChild(toolsSection);
 
   // 3.5 Image / Draw (spec §3.5: two-column layout)
   const imageDrawSection = _buildSection('Image / Draw');
@@ -2720,7 +2739,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   idCols.appendChild(imageCol);
   idCols.appendChild(drawCol);
   imageDrawSection.appendChild(idCols);
-  sidebar.appendChild(imageDrawSection);
+  toolsDrawer.appendChild(imageDrawSection);
 
   // W31: Find & Replace sidebar section (collapsible)
   const frSection = document.createElement('div');
@@ -2836,7 +2855,8 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
 
   frDetails.appendChild(frWrap);
   frSection.appendChild(frDetails);
-  sidebar.appendChild(frSection);
+  toolsDrawer.appendChild(frSection);
+  sidebar.appendChild(toolsDrawer);
 
   // 3.6 Layers
   const layersSection = _buildSection('Layers');
@@ -2844,7 +2864,12 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   layersPanel.id = 'wsLayersPanel';
   layersPanel.className = 'ws-layers-panel';
   layersSection.appendChild(layersPanel);
-  sidebar.appendChild(layersSection);
+
+  const layersDrawer = document.createElement('div');
+  layersDrawer.className = 'ws-drawer';
+  layersDrawer.dataset.drawer = 'layers';
+  layersDrawer.appendChild(layersSection);
+  sidebar.appendChild(layersDrawer);
 
   // 3.9 Info (spec §3.9: cursor pos, dims, active layer, glyph/fg/bg under cursor)
   const statusSection = document.createElement('div');
@@ -2980,7 +3005,12 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   statsGrp.appendChild(dimsRow);
 
   statusSection.appendChild(statsGrp);
-  sidebar.appendChild(statusSection);
+
+  const infoDrawer = document.createElement('div');
+  infoDrawer.className = 'ws-drawer';
+  infoDrawer.dataset.drawer = 'info';
+  infoDrawer.appendChild(statusSection);
+  sidebar.appendChild(infoDrawer);
 
   return sidebar;
 }

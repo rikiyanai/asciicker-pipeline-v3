@@ -8995,6 +8995,33 @@
   refreshUiRecorderUi();
   if (UI_RECORDER_AUTO_START) startUiRecorder();
 
+  // ── U5: Drawer toggle for mobile auxiliary panels ──────────────────────────
+  // Opens/closes bottom-sheet drawers on mobile. Only one drawer open at a time.
+  // Passing the name of the already-open drawer (or null) closes all drawers.
+  function toggleDrawer(drawerName) {
+    const drawers = document.querySelectorAll('.ws-drawer');
+    const backdrop = document.querySelector('.ws-drawer-backdrop');
+    let opened = false;
+
+    drawers.forEach((el) => {
+      if (drawerName && el.dataset.drawer === drawerName && !el.classList.contains('open')) {
+        el.classList.add('open');
+        opened = true;
+      } else {
+        el.classList.remove('open');
+      }
+    });
+
+    if (backdrop) {
+      if (opened) {
+        backdrop.classList.add('visible');
+      } else {
+        backdrop.classList.remove('visible');
+      }
+    }
+  }
+  window.toggleDrawer = toggleDrawer;
+
   bindUI();
   fetchRuntimePreflight().catch((_e) => {});
   updateSourceCanvasZoomUI();
