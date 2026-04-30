@@ -4294,6 +4294,7 @@
       $("btnSave").disabled = false;
       $("btnExport").disabled = false;
       $("btnNewXp").disabled = false;
+      _updateFileButtonStates();
       // Use real layers from backend when available (B3: persisted layers are
       // the source of truth for uploaded XP sessions).
       if (Array.isArray(j.layers) && j.layers.length > 0) {
@@ -7966,6 +7967,190 @@
     }
   }
 
+  // ── Tier B: explicit file I/O ──
+
+  /** File System Access API handle for save-back-to-same-file. */
+  let _currentFileHandle = null;
+
+  /**
+   * Open an .xp file from local disk via File System Access API or file input fallback.
+   * Loads the file contents into the editor via the existing upload-xp server endpoint,
+   * then stores the file handle for subsequent save-back.
+   */
+  async function openXpFileLocal() {
+    const p = window.__wbPersistence;
+    if (!p || typeof p.openXpFile !== "function") {
+      status("File I/O not available", "warn");
+      return;
+    }
+    status("Opening file...", "warn");
+    const result = await p.openXpFile();
+    if (!result || !result.data) {
+      // User cancelled or error — silent
+      status("Open cancelled", "warn");
+      return;
+    }
+    // Store the handle for save-back
+    _currentFileHandle = result.handle || null;
+
+    // Upload the file contents to the server endpoint (mirrors importXp flow)
+    const blob = new Blob([result.data], { type: "application/octet-stream" });
+    const file = new File([blob], result.name || "import.xp", { type: "application/octet-stream" });
+    const fd = new FormData();
+    fd.append("file", file);
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 30000);
+    try {
+      const r = await fetch(bp("/api/workbench/upload-xp"), {
+        method: "POST",
+        body: fd,
+        signal: ctl.signal,
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        status("Open failed: " + (j.error || "unknown"), "err");
+        $("sessionOut").textContent = JSON.stringify(j, null, 2);
+        return;
+      }
+      state.jobId = j.job_id;
+      await loadSession(j.session_id, { reason: "Opened XP file from disk..." });
+      status("Opened: " + (result.name || "file"), "ok");
+      _updateFileButtonStates();
+    } catch (e) {
+      status("Open failed: " + String(e), "err");
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  /**
+   * Save the current session to a local .xp file.
+   * If a file handle is held from a prior open/save-as, writes back to the same file.
+   * Otherwise prompts with save-as.
+   */
+  async function saveXpFileLocal() {
+    const p = window.__wbPersistence;
+    if (!p || typeof p.saveXpFile !== "function") {
+      status("File I/O not available", "warn");
+      return;
+    }
+    const xpData = await _getExportedXpBytes();
+    if (!xpData) return; // _getExportedXpBytes already showed error status
+    status("Saving to file...", "warn");
+    const result = await p.saveXpFile(xpData, _currentFileHandle);
+    if (result && result.saved) {
+      if (result.handle) _currentFileHandle = result.handle;
+      p.clearDraftAfterFileSave();
+      status("Saved to file", "ok");
+      _updateFileButtonStates();
+    } else {
+      status("Save cancelled or failed", "warn");
+    }
+  }
+
+  /**
+   * Save the current session to a new local .xp file (always shows picker/download).
+   */
+  async function saveXpFileAsLocal() {
+    const p = window.__wbPersistence;
+    if (!p || typeof p.saveXpFileAs !== "function") {
+      status("File I/O not available", "warn");
+      return;
+    }
+    const xpData = await _getExportedXpBytes();
+    if (!xpData) return;
+    const suggestedName = _currentFileHandle
+      ? ((_currentFileHandle.name || "export") + "")
+      : "export.xp";
+    status("Saving file as...", "warn");
+    const result = await p.saveXpFileAs(xpData, suggestedName);
+    if (result && result.saved) {
+      if (result.handle) _currentFileHandle = result.handle;
+      p.clearDraftAfterFileSave();
+      status("Saved to new file", "ok");
+      _updateFileButtonStates();
+    } else {
+      status("Save As cancelled or failed", "warn");
+    }
+  }
+
+  /**
+   * Share or download the current session as an .xp file (mobile-oriented).
+   */
+  async function shareXpFileLocal() {
+    const p = window.__wbPersistence;
+    if (!p || typeof p.shareXpFile !== "function") {
+      status("File I/O not available", "warn");
+      return;
+    }
+    const xpData = await _getExportedXpBytes();
+    if (!xpData) return;
+    const filename = _currentFileHandle
+      ? (_currentFileHandle.name || "export.xp")
+      : "export.xp";
+    status("Sharing file...", "warn");
+    const shared = await p.shareXpFile(xpData, filename);
+    if (shared) {
+      p.clearDraftAfterFileSave();
+      status("File shared/downloaded", "ok");
+    } else {
+      status("Share cancelled", "warn");
+    }
+  }
+
+  /**
+   * Get the exported XP binary data for the current session.
+   * Uses the server export-xp + download-xp endpoints to get the binary.
+   * @returns {Promise<ArrayBuffer|null>}
+   */
+  async function _getExportedXpBytes() {
+    if (!state.sessionId) {
+      status("No active session to save", "warn");
+      return null;
+    }
+    await flushPendingWholeSheetDrawSaveTimer();
+    const saveRes = await saveSessionState("pre-file-save", { wait_for_idle: true, timeout_ms: 15000 });
+    if (!saveRes || !saveRes.ok) {
+      status("File save blocked: session save failed/timed out", "err");
+      return null;
+    }
+    try {
+      const exportRes = await fetch(bp("/api/workbench/export-xp"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: state.sessionId }),
+      });
+      const exportJson = await exportRes.json();
+      if (!exportRes.ok || !exportJson.xp_path) {
+        status("Export failed: " + (exportJson.error || "unknown"), "err");
+        return null;
+      }
+      // Download the binary XP data
+      const dlRes = await fetch(bp("/api/workbench/download-xp?xp_path=" + encodeURIComponent(exportJson.xp_path)));
+      if (!dlRes.ok) {
+        status("Download failed", "err");
+        return null;
+      }
+      return await dlRes.arrayBuffer();
+    } catch (e) {
+      status("File export failed: " + String(e), "err");
+      return null;
+    }
+  }
+
+  /**
+   * Update enabled/disabled state of Tier B file buttons based on session state.
+   */
+  function _updateFileButtonStates() {
+    const hasSession = !!state.sessionId;
+    const openBtn = $("btnOpenFile");
+    const saveBtn = $("btnSaveFile");
+    const saveAsBtn = $("btnSaveFileAs");
+    if (openBtn) openBtn.disabled = false; // Open is always available
+    if (saveBtn) saveBtn.disabled = !hasSession;
+    if (saveAsBtn) saveAsBtn.disabled = !hasSession;
+  }
+
   function bindUI() {
     moveWebbuildDockToBottom();
     movePanelsToBottom();
@@ -7977,6 +8162,12 @@
     $("btnSave").addEventListener("click", () => saveCurrentActionProgress({ reason: "top-level-save", auto_advance: true }));
     $("btnExport").addEventListener("click", exportXp);
     $("btnNewXp").addEventListener("click", newXp);
+    // Tier B: local file I/O buttons
+    $("btnOpenFile").addEventListener("click", openXpFileLocal);
+    $("btnSaveFile").addEventListener("click", saveXpFileLocal);
+    $("btnSaveFileAs").addEventListener("click", saveXpFileAsLocal);
+    // Open File is always available (doesn't require active session)
+    if ($("btnOpenFile")) $("btnOpenFile").disabled = false;
     $("openXpToolBtn").addEventListener("click", openInXpTool);
     $("webbuildOpenBtn").addEventListener("click", openWebbuild);
     $("webbuildReloadBtn").addEventListener("click", reloadWebbuild);
@@ -9222,6 +9413,15 @@
           break;
         case 'export':
           exportXp();
+          break;
+        case 'open-file':
+          openXpFileLocal();
+          break;
+        case 'save-file':
+          saveXpFileLocal();
+          break;
+        case 'share-file':
+          shareXpFileLocal();
           break;
       }
     });

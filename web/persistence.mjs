@@ -299,6 +299,220 @@ export function isAvailable() {
   return _idbAvailable;
 }
 
+// ── Tier B — explicit file I/O ──────────────────────────────────────────────
+//
+// Provides open/save/export using the File System Access API where available,
+// with fallback to file input and Blob download. Mobile export via Web Share API.
+// All methods are wrapped in try/catch — failures return null/false, never throw.
+
+/** True if the File System Access API picker is available (Chrome/Edge). */
+const _hasFileSystemAccess = typeof window.showOpenFilePicker === 'function';
+
+/** XP file type descriptor for File System Access API pickers. */
+const _xpFileType = {
+  description: 'REXPaint XP file',
+  accept: { 'application/octet-stream': ['.xp'] },
+};
+
+/**
+ * Open an .xp file via File System Access API picker, or fallback to <input type="file">.
+ * Returns { data: ArrayBuffer, handle: FileSystemFileHandle|null, name: string } or null on cancel/error.
+ */
+export async function openXpFile() {
+  try {
+    if (_hasFileSystemAccess) {
+      // File System Access API path
+      let handles;
+      try {
+        handles = await window.showOpenFilePicker({
+          types: [_xpFileType],
+          multiple: false,
+        });
+      } catch (e) {
+        // User cancelled the picker — not an error
+        if (e && e.name === 'AbortError') return null;
+        throw e;
+      }
+      if (!handles || handles.length === 0) return null;
+      const handle = handles[0];
+      const file = await handle.getFile();
+      const data = await file.arrayBuffer();
+      return { data, handle, name: file.name || 'untitled.xp' };
+    }
+
+    // Fallback: hidden file input
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.xp';
+      input.style.display = 'none';
+      input.addEventListener('change', async () => {
+        try {
+          const file = input.files && input.files[0];
+          if (!file) { resolve(null); return; }
+          if (!file.name.toLowerCase().endsWith('.xp')) { resolve(null); return; }
+          const data = await file.arrayBuffer();
+          resolve({ data, handle: null, name: file.name || 'untitled.xp' });
+        } catch (_) {
+          resolve(null);
+        } finally {
+          input.remove();
+        }
+      });
+      // Handle cancel — input fires no change event on cancel, so resolve after a delay
+      // if the element is removed from DOM without a change event.
+      input.addEventListener('cancel', () => { resolve(null); input.remove(); });
+      document.body.appendChild(input);
+      input.click();
+    });
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Save XP data back to an existing file handle, or fall through to saveXpFileAs.
+ * @param {ArrayBuffer|Uint8Array} data - Binary XP data
+ * @param {FileSystemFileHandle|null} handle - Existing file handle (from prior open/save-as)
+ * @returns {Promise<{handle: FileSystemFileHandle|null, saved: boolean}>}
+ */
+export async function saveXpFile(data, handle) {
+  try {
+    if (handle && typeof handle.createWritable === 'function') {
+      // Attempt to write back to the same handle
+      try {
+        // Verify/request permission (may prompt user)
+        const perm = await handle.queryPermission({ mode: 'readwrite' });
+        if (perm !== 'granted') {
+          const req = await handle.requestPermission({ mode: 'readwrite' });
+          if (req !== 'granted') {
+            // Permission denied — fall through to save-as
+            return saveXpFileAs(data);
+          }
+        }
+        const writable = await handle.createWritable();
+        await writable.write(data);
+        await writable.close();
+        return { handle, saved: true };
+      } catch (e) {
+        // Permission revoked or handle stale — fall through to save-as
+        if (e && e.name === 'AbortError') return { handle: null, saved: false };
+        return saveXpFileAs(data);
+      }
+    }
+    // No handle — prompt with save-as
+    return saveXpFileAs(data);
+  } catch (_) {
+    return { handle: null, saved: false };
+  }
+}
+
+/**
+ * Save XP data via File System Access save picker, or fallback to Blob download.
+ * @param {ArrayBuffer|Uint8Array} data - Binary XP data
+ * @param {string} [suggestedName] - Suggested file name for the picker
+ * @returns {Promise<{handle: FileSystemFileHandle|null, saved: boolean}>}
+ */
+export async function saveXpFileAs(data, suggestedName) {
+  try {
+    if (_hasFileSystemAccess) {
+      let handle;
+      try {
+        handle = await window.showSaveFilePicker({
+          suggestedName: suggestedName || 'export.xp',
+          types: [_xpFileType],
+        });
+      } catch (e) {
+        if (e && e.name === 'AbortError') return { handle: null, saved: false };
+        throw e;
+      }
+      if (!handle) return { handle: null, saved: false };
+      const writable = await handle.createWritable();
+      await writable.write(data);
+      await writable.close();
+      return { handle, saved: true };
+    }
+
+    // Fallback: Blob download via temporary <a> element
+    _downloadBlob(data, suggestedName || 'export.xp');
+    return { handle: null, saved: true };
+  } catch (_) {
+    return { handle: null, saved: false };
+  }
+}
+
+/**
+ * Share an XP file via Web Share API (mobile), or fall back to download.
+ * @param {ArrayBuffer|Uint8Array} data - Binary XP data
+ * @param {string} [filename] - File name for sharing/download
+ * @returns {Promise<boolean>} true if shared or downloaded successfully
+ */
+export async function shareXpFile(data, filename) {
+  try {
+    const name = filename || 'export.xp';
+    const blob = new Blob([data], { type: 'application/octet-stream' });
+    const file = new File([blob], name, { type: 'application/octet-stream' });
+
+    // Check if Web Share API supports files
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: name });
+        return true;
+      } catch (e) {
+        // User cancelled share — fall through to download
+        if (e && e.name === 'AbortError') return false;
+        // Share failed — fall through to download
+      }
+    }
+
+    // Fallback: Blob download
+    _downloadBlob(data, name);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Clear the Tier A draft "unsaved" state after a successful Tier B save.
+ * Removes the dirty flag and optionally clears the latest draft record.
+ */
+export function clearDraftAfterFileSave() {
+  try {
+    clearDirtyFlag();
+    // Also clear the latest draft from IDB so the restore banner
+    // does not offer stale content that has been saved to a file.
+    if (_idbAvailable) {
+      loadLatestDraft().then((draft) => {
+        if (draft && draft.id != null) {
+          deleteDraft(draft.id).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  } catch (_) { /* silent */ }
+}
+
+/**
+ * Internal helper: trigger a Blob download via a temporary <a> element.
+ * @param {ArrayBuffer|Uint8Array} data
+ * @param {string} filename
+ */
+function _downloadBlob(data, filename) {
+  const blob = new Blob([data], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  // Clean up after a short delay to allow the download to start
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
+
 // ── Window export for classic-script consumers (workbench.js IIFE) ──
 window.__wbPersistence = {
   saveDraft,
@@ -311,4 +525,10 @@ window.__wbPersistence = {
   clearDirtyFlag,
   getDirtyFlag,
   isAvailable,
+  // Tier B: file I/O
+  openXpFile,
+  saveXpFile,
+  saveXpFileAs,
+  shareXpFile,
+  clearDraftAfterFileSave,
 };
