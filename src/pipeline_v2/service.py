@@ -1091,6 +1091,16 @@ def _normalize_template_registry(raw_registry: dict[str, Any] | None) -> dict[st
                         "template_registry.json prefix_catalog "
                         f"'{prefix_key}' field '{field}' drifted from {template_set_key}:{action_key}"
                     )
+            # ahsw_range drift-check: prefix_catalog is the authority.
+            # Only check when both prefix and action declare the field.
+            prefix_ahsw = str(ps.get("ahsw_range") or "").strip()
+            action_ahsw = str(action_spec.get("ahsw_range") or "").strip()
+            if prefix_ahsw and action_ahsw and prefix_ahsw != action_ahsw:
+                raise ValueError(
+                    "template_registry.json prefix_catalog "
+                    f"'{prefix_key}' field 'ahsw_range' drifted from {template_set_key}:{action_key}"
+                    f" (prefix={prefix_ahsw!r}, action={action_ahsw!r})"
+                )
 
     schema_version = registry.get("schema_version")
     if schema_version is None:
