@@ -7934,6 +7934,17 @@
       status("Draft restore failed: empty payload", "warn");
       return;
     }
+    // Validate draft matches current session
+    if (payload.sessionId && state.sessionId && payload.sessionId !== state.sessionId) {
+      status("Draft is from a different session — skipping restore", "warn");
+      return;
+    }
+    if (payload.gridCols && payload.gridRows && state.gridCols && state.gridRows) {
+      if (payload.gridCols !== state.gridCols || payload.gridRows !== state.gridRows) {
+        status("Draft grid dimensions mismatch — skipping restore", "warn");
+        return;
+      }
+    }
     try {
       // Apply draft data into workbench state
       // Ensure sessionId is set so hydrateWholeSheetEditor proceeds
