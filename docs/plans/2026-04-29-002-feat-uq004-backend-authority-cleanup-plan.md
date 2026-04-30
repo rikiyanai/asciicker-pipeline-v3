@@ -32,11 +32,11 @@ range maps, and the deletion list is broader than the first review note:
 - `web/termpp_skin_lab.js:FAMILY_W_RANGE`
 - `runtime/termpp-skin-lab-static/termpp_skin_lab.js:FAMILY_W_RANGE`
 
-All four still duplicate registry `ahsw_range`. This plan therefore remains
-`active`, and the remaining closeout must be deletion-first: delete or
-hard-disable those old owners in the same slice before any shared replacement
-helper becomes authoritative. This is also a Y9-2 synchrony precondition:
-`UQ-010` thin clients must not be wired onto split local override truth.
+All four were deleted in `a58eda6`..`e23fd3f` (see closeout plan
+`docs/plans/2026-04-29-003-feat-uq004-deletion-first-closeout-plan.md`).
+`ahsw_range` was added to `prefix_catalog` entries, normalizer drift-check
+wired, and all override-name paths now derive from registry. Remaining
+`UQ-004` gap: `preview_xp` still silently falls back to `l0_ref`.
 
 ---
 

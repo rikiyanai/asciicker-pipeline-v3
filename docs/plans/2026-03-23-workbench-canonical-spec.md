@@ -2158,9 +2158,9 @@ queued without hand-waving.
 | Conversion API | `src/pipeline_v2/app.py::api_wb_action_grid_apply()`, `src/pipeline_v2/service.py::bundle_action_run()` | Still accepts only `{bundle_id, action_key, source_path}`. There is no request artifact, no manifest path owner, and no separate intake / convert / register / compile phases | `UQ-006`, `UQ-010` |
 | Session persistence / schema migration | `src/pipeline_v2/service.py::_session_payload()`, `src/pipeline_v2/service.py::workbench_save_session()`, session JSON on disk | New sessions now write normalized identity and legacy sessions now resolve `filename_prefix` / `skin_family` on read plus next-save persistence. Remaining `UQ-004` work is no longer session-read normalization; it is eliminating the last hardcoded `ahsw_range` maps and any downstream compat-family authority. | `UQ-004` |
 | Session persistence / source layout | `src/pipeline_v2/service.py::workbench_save_session()` | Still persists `source_boxes`, `source_cuts_v`, and `source_cuts_h` as saved authority | `UQ-006` |
-| Registry authority | `src/pipeline_v2/service.py::create_bundle()`, `workbench_create_blank_session()`, `bundle_action_run()`, `workbench_export_bundle()`, `workbench_web_skin_bundle_payload()`, `web/workbench.js`, `src/pipeline_v2/service.py`, `web/termpp_skin_lab.js`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js` | Template-driven backend bundle/session/export/runtime gates now derive from the normalized registry, but classic/runtime override-name generation still duplicates registry `ahsw_range` through four hardcoded maps that must be deleted or hard-disabled before replacement helper truth can claim authority | `UQ-004` |
+| Registry authority | `src/pipeline_v2/service.py::create_bundle()`, `workbench_create_blank_session()`, `bundle_action_run()`, `workbench_export_bundle()`, `workbench_web_skin_bundle_payload()`, `web/workbench.js`, `src/pipeline_v2/service.py`, `web/termpp_skin_lab.js`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js` | Template-driven backend gates and classic/runtime override-name generation all derive from the normalized registry. `ENABLED_FAMILIES` and `FAMILY_W_RANGE` hardcoded maps are deleted. Remaining `UQ-004` gap: `preview_xp` fallback to `l0_ref` and registry operator visibility polish. | `UQ-004` |
 | Registry operator visibility | `src/pipeline_v2/service.py::load_template_registry()`, `src/pipeline_v2/app.py::api_wb_templates()`, `web/workbench.js::fetchTemplateRegistry()` | API/UI error surfacing now exists via `registry_status`, but missing/malformed registry still serves an empty fallback snapshot and `preview_xp` still silently falls back to `l0_ref` | `UQ-004` |
-| Classic/runtime AHSW range truth | `web/workbench.js`, `src/pipeline_v2/service.py`, `web/termpp_skin_lab.js`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js` | `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` still exist in four places. `UQ-004` is not done until those old owners are deleted or hard-disabled and every override-name path consumes registry `ahsw_range` from one shared owner. | `UQ-004` |
+| Classic/runtime AHSW range truth | `config/template_registry.json`, `src/pipeline_v2/service.py`, `web/workbench.js`, `web/termpp_skin_lab.js`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js` | `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` deleted in `a58eda6`..`e23fd3f`. All override-name paths now derive from `prefix_catalog.ahsw_range`. Normalizer drift-checks action-level mirror. Regression tests prove derivation via mutation. | `UQ-004` |
 | Export-quality contract | `src/pipeline_v2/service.py::_run_structural_gates()`, `workbench_export_bundle()`, `workbench_web_skin_bundle_payload()` | Export/web payload paths now share live G7-G12 enforcement, but the canon still owes locked policy wording for export-time G9 populated-count semantics and for how low-coverage G8 should differ between manual authoring and autonomous flows | `UQ-005` |
 | Headless validation surface | `scripts/workbench_mcp_server.py`, `src/pipeline_v2/app.py` | Live MCP/API surface is still the older workbench wrapper. There is no shared `validate-xp`, `status`, `register-skin-request`, or `compile-skin-request` owner | `UQ-005`, `UQ-010` |
 | Browser bundle UI | `web/workbench.html`, `web/workbench.js` | User-facing controls still speak in template/bundle-action terms and do not expose request-artifact lifecycle, manifest ownership, or explicit register/compile phases | `UQ-006`, `UQ-010` |
@@ -2205,10 +2205,11 @@ mechanics, but it may not reopen these decisions without a canon change.
    may be accepted on read, but the next successful write must normalize to
    `filename_prefix` / `skin_family`; a one-time offline migration script is
    not part of the current queue.
-10. Classic/runtime AHSW/range truth must come from registry `ahsw_range`.
-    Hard-coded compatibility maps such as `FAMILY_W_RANGE` /
-    `_FAMILY_W_RANGE` may exist temporarily during migration, but they may not
-    remain second authorities after `UQ-004`.
+10. Classic/runtime AHSW/range truth comes from registry
+    `prefix_catalog[prefix].ahsw_range`. The former `FAMILY_W_RANGE` /
+    `_FAMILY_W_RANGE` hardcoded maps were deleted in `a58eda6`..`e23fd3f`.
+    Action-level `ahsw_range` in `template_sets` is mirror-only data,
+    verified by the normalizer drift-check.
 11. `UQ-007` is the runtime-identity row in this repo. It owns
     `skin_definition_id` / `presentation_kind_id` / `layer_definition_id`
     integration on the pipeline-v3 side; it is not the item/wearable authoring
@@ -3992,7 +3993,7 @@ not a task plan — it is a gate list. Migration is ready when all blocking gate
 |------|---------|--------|
 | UQ-002 Section 1 REXPaint-parity foundation passes | §Unified Queue `UQ-002` | PASS — root-editor parity blockers closed in current worktree; whole-sheet ownership, resize, and hot-path proof are logged with same-day evidence |
 | UQ-003 root-hosted + prefixed Section 1 proof passes | §Unified Queue `UQ-003` | PASS — headed shipped-UI proof exists for root-hosted and prefixed `/xpedit` whole-sheet flows |
-| UQ-004 backend authority cleanup passes | §Unified Queue `UQ-004` | OPEN — backend `ENABLED_FAMILIES` split is fixed, but classic/runtime override-name generation still duplicates registry `ahsw_range` |
+| UQ-004 backend authority cleanup passes | §Unified Queue `UQ-004` | OPEN — `ENABLED_FAMILIES` and `FAMILY_W_RANGE` hardcoded maps deleted (`a58eda6`..`e23fd3f`); all override-name paths derive from registry `prefix_catalog.ahsw_range`. Remaining gap: `preview_xp` still silently falls back to `l0_ref` |
 | UQ-005 export/web-skin quality contract fully enforced | §Unified Queue `UQ-005` | OPEN — export/web-skin paths already share live G7-G12 enforcement, but the contract is still incomplete because `validate-xp` is not yet the canonical live route/tool and the G8/G9 policy wording is not yet fully locked |
 | UQ-006 manifest-backed source authoring no longer JSON-first | §Unified Queue `UQ-006` | OPEN |
 | UQ-007 runtime identity layer landed | §Unified Queue `UQ-007` | OPEN — pipeline-v3 still lacks live `skin_definition_id` / `presentation_kind_id` / `layer_definition_id` ownership |

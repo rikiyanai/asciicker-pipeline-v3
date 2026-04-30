@@ -8,6 +8,55 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Audit — UQ-004 Deletion-First Closeout: FAMILY_W_RANGE Maps Deleted (2026-04-29)
+
+This is a code/doc-state entry. All four hardcoded `FAMILY_W_RANGE` /
+`_FAMILY_W_RANGE` duplicate-authority maps have been deleted and replaced
+with one registry-derived override-name path.
+
+### Findings
+
+1. All four deletion targets from the prior restatement entry have been removed:
+   - `web/workbench.js:FAMILY_W_RANGE` — deleted in `2a07c58`
+   - `src/pipeline_v2/service.py:_FAMILY_W_RANGE` — deleted in `821c4c3`
+   - `web/termpp_skin_lab.js:FAMILY_W_RANGE` — deleted in `7a6fbec`
+   - `runtime/termpp-skin-lab-static/termpp_skin_lab.js:FAMILY_W_RANGE` — deleted in `7a6fbec`
+2. `ahsw_range` added to `prefix_catalog` entries for 5 live override prefixes
+   in `a58eda6`. Normalizer drift-check wired for action-level mirror data.
+3. Regression tests added in `e23fd3f`: 7 backend pytest tests + 9 browser node
+   tests prove derivation from registry (mutation tests change output when
+   registry changes).
+
+### What changed
+
+1. `prefix_catalog` in `config/template_registry.json` now declares `ahsw_range`
+   for player, attack, plydie, wolfie, and wolack.
+2. `_termpp_skin_override_names(registry)` in `service.py` iterates
+   `prefix_catalog` entries with `ahsw_range`, delegates to
+   `_action_override_names()`.
+3. `workbench.js` uses `getWebbuildDefaultOverrideNames()` which calls
+   `await fetchTemplateRegistry()` on demand and derives from `prefix_catalog`.
+4. Both `termpp_skin_lab.js` copies fetch the registry at page load and derive
+   `DEFAULT_OVERRIDE_SETS.player_common` from `prefix_catalog`.
+5. Normalizer drift-checks `ahsw_range` between `prefix_catalog` and linked
+   action specs (ValueError on mismatch). Wolfie/wolack have empty
+   `template_actions` so their `ahsw_range` is sole-source.
+
+### Claimed
+
+1. `UQ-004` classic/runtime AHSW range second-authority is closed: no
+   `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` owner exists in live code
+   (evidence: `a58eda6`..`e23fd3f`).
+2. All override-name paths now derive from registry `prefix_catalog.ahsw_range`.
+3. `UQ-010` is unblocked by this work but remains its own queue row.
+
+### Still not claimed
+
+1. `UQ-004` registry operator visibility: `preview_xp` still silently falls
+   back to `l0_ref` — that is a separate remaining gap.
+2. No mounted browser surface shipped.
+3. No Y9-2 thin-client synchrony work shipped (`UQ-010`).
+
 ## Audit — UQ-004 Deletion-First Restatement After Y9-2 Synchrony Review (2026-04-29)
 
 This is a canon/doc-state correction entry. It does not claim a new product
