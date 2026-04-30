@@ -11243,7 +11243,7 @@ The 6 below are logged here before correction.
 runs for the entire page lifetime — even on desktop, even when toolbar is hidden. No
 corresponding `clearInterval`. Leaks on remount. Wastes CPU wake-ups.
 **Reviewers:** julik-frontend-races (P1, 100), reliability (P3, 50), correctness (P3, 75), adversarial (P3, 100)
-**State:** OPEN — will replace with event-driven tool-change listener
+**State:** PASS — replaced with event-driven dismiss via _hideTouchToolbar in _updateToolUI (2026-04-30)
 
 ### CR-2. Draft restore lacks session/dimension validation (P1)
 
@@ -11252,7 +11252,7 @@ corresponding `clearInterval`. Leaks on remount. Wastes CPU wake-ups.
 dimensions. A 10x10 draft can overwrite a 20x20 session, corrupting grid state. No
 guard against cross-session restore.
 **Reviewers:** adversarial (P1, 75), reliability (P2, 75)
-**State:** OPEN — will add sessionId + dimension validation
+**State:** PASS — added sessionId and grid dimension validation in _restoreDraft (2026-04-30)
 
 ### CR-3. Gesture/stroke race — orphaned stroke on second finger (P1)
 
@@ -11261,7 +11261,7 @@ guard against cross-session restore.
 module sets `_gestureActive=true` and suppresses further pointermove. But the stroke
 from finger 1 was already started and is now orphaned — never ended, never committed.
 **Reviewers:** adversarial (P1, 75)
-**State:** OPEN — will flush in-progress stroke in onGestureStart callback
+**State:** PASS — added _onStrokeEnd() call at top of onGestureStart (2026-04-30)
 
 ### CR-4. Static CACHE_NAME prevents deploy updates (P2)
 
@@ -11270,14 +11270,14 @@ from finger 1 was already started and is now orphaned — never ended, never com
 it, old cached assets are never evicted after deployment. Users with the old SW serve
 stale JS indefinitely.
 **Reviewers:** correctness (P2, 75), adversarial (P2, 75)
-**State:** OPEN — will add file-hash-based cache key or deploy instruction
+**State:** PASS — added deploy-versioned CACHE_NAME with date suffix and comments (2026-04-30)
 
 ### CR-5. Synthetic KeyboardEvent clipboard fails on mobile (P2)
 
 **File:** `web/workbench.js:9511-9523`
 **Problem:** Touch toolbar dispatches `new KeyboardEvent('keydown', { key: 'c', ctrlKey: true })` for copy/cut/paste. Synthetic events have `isTrusted === false` and cannot access `navigator.clipboard`. System clipboard copy/paste is silently broken on touch devices.
 **Reviewers:** adversarial (P2, 75)
-**State:** OPEN — will call copy/cut/paste/delete functions directly
+**State:** PASS — exported clipboard functions and called directly from touch toolbar (2026-04-30)
 
 ### CR-6. Draft restore banner races with loadFromJob (P2)
 
@@ -11288,4 +11288,4 @@ stale JS indefinitely.
 Worse: if user opens a file (openXpFileLocal), the banner can offer a draft from an
 unrelated session.
 **Reviewers:** correctness (P2, 75), adversarial (P2, 50)
-**State:** OPEN — will defer check until after loadFromJob settles
+**State:** PASS — _checkDraftRestore now runs after loadFromJob().then/.catch (2026-04-30)
