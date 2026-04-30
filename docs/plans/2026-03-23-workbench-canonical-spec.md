@@ -2288,19 +2288,42 @@ fixed so `UQ-004` and `UQ-005` can execute without reopening design.
 generic phrases like “semantic review later” or “overlay calibration mode.” The
 cross-repo baseline and the remaining browser gap are now fixed.
 
-1. Y9-2 audit baseline for mounted artifact shape:
-   - `scripts/pipeline/mounted_wrapper_mask_selector.py` is a wrapper mask
-     authoring tool keyed by exact sprite/layer/angle/anim/frame/proj/
-     wrapper-role tuples. The canonical artifact-coordinate example is:
+1. Y9-2 audit baseline for mounted artifact shape (updated 2026-04-29 after
+   cross-repo audit against FL-2345 through FL-2500):
+   - `scripts/pipeline/mounted_wrapper_mask_selector.py` (v2, 1535 lines) is a
+     wrapper mask authoring tool keyed by exact sprite/layer/angle/anim/frame/
+     proj/wrapper-role tuples. v2 capabilities: WASD cursor, X toggle, box
+     select, flood fill, flood-by-glyph, select-all-glyph, select-non-
+     transparent, invert, paint mode, undo ring (20-item), 5 comparison modes
+     (single, front+rear, angle-mirror, diff, mount+rider), queue mode for
+     multi-angle batch authoring, semantic overlay, glyph panel. The canonical
+     artifact-coordinate example is:
      `python3 scripts/pipeline/mounted_wrapper_mask_selector.py --sprite wolfie-body.xp --layer 2 --angle 1 --anim 0 --frame 0 --proj 0 --wrapper-role mount_rear`
-   - `scripts/pipeline/xp_semantic_atlas_reviewer.py` already uses explicit
-     mounted wrapper-role vocabulary (`mount_rear`, `mount_front`,
-     `empty_slot`) and explicit review/promotion arguments rather than silent
-     heuristics.
+   - `scripts/pipeline/xp_semantic_atlas_reviewer.py` uses explicit mounted
+     wrapper-role vocabulary (`mount_rear`, `mount_front`) and semantic owner
+     vocabulary (`rider`, `mount`, `empty`, `mixed`, `unclear`) with explicit
+     review/promotion arguments rather than silent heuristics.
+   - `scripts/pipeline/mounted_semantic_proposals.py` builds evidence-tagged
+     exact-cell proposals from residual compare. Cell buckets:
+     `mount_rear_surface`, `mount_front_surface`, `rider_visible_match`,
+     `unresolved_shared_exact`, `unresolved_mount_delta`. Evidence tags:
+     `sibling_cooccurrence_confirmed/absent`, `angle_persistent_N`,
+     `ahsw_stable/variant_only`, `rider_offset_solved`, `translated_overlap`.
+   - Full Y9-2 mounted pipeline script inventory:
+     - `mounted_wrapper_mask_selector.py` — interactive wrapper role authoring
+     - `xp_semantic_atlas_reviewer.py` — TTY semantic atlas review
+     - `mounted_semantic_proposals.py` — evidence-tagged cell proposals
+     - `generate_mounted_wrapper_assets.py` — wrapper XP generation from masks
+     - `promote_mounted_wrapper_offsets.py` — offset promotion to sidecar
+     - `promote_mounted_wrapper_reviews.py` — review promotion to sidecar
+     - `mounted_wrapper_unresolved.py` — fail-closed unresolved reporter
+     - `mounted_rider_offset.py` — core offset computation (shared with PV3)
+     - `mounted_rider_residual_compare.py` — residual subtraction (shared)
    - Pipeline-v3 does not need to copy the Y9-2 TTY UI, but it must inherit the
      same artifact law: exact artifact coordinates, explicit wrapper-role
-     naming,
-     and explicit review/confirmation before promotion.
+     naming (`mount_front` / `mount_rear`), explicit semantic owner vocabulary
+     (`rider` / `mount` / `empty` / `mixed` / `unclear`), and explicit
+     review/confirmation before promotion.
 2. Current live pipeline-v3 split:
    - backend + MCP foundations for mounted aids are already present:
      calibration compute route/tool, exact-cell proposal route/tool, and session
@@ -2438,18 +2461,30 @@ Evidence:
   `plydie`, `wolfie`, and `wolack`:
   `src/pipeline_v2/service.py`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js`,
   and `web/workbench.js`.
-- Active workbench phase gating still only enables `player`, `attack`, and
-  `plydie` via `src/pipeline_v2/config.py`.
+- (updated 2026-04-29) Active workbench phase gating now derives authority from
+  the normalized registry via `is_action_authorized()` / `is_prefix_authorized()`
+  (commit `e40adda`). The hardcoded `ENABLED_FAMILIES` gate no longer exists.
+  wolfie/wolack remain `authorable: false` in the registry, so the gate
+  correctly excludes them without a hardcoded set.
 - `web/workbench.js` documents that mounted default preview uses
   `player + wolfie + wolack`, while `full_parity` is debug-only because the
   override path is FS-global and can bleed into NPCs.
 - Current verification profiles still separate local structural sanity from
   runtime proof in `src/pipeline_v2/service.py`.
+- (added 2026-04-29) Y9-2 has completed mounted wrapper baseline authoring
+  toolchain: mask selector v2 landed (commit `42d7b744`), wolf idle wrapper
+  assets landed (commit `d4b236d9`), baseline completion for all mount targets
+  landed (commit `09ae3fc3`), ref-aligned mounted wrapper composition fixed
+  (commit `ff7fb970`). The Y9-2 toolchain now covers mask authoring, semantic
+  proposals, semantic review, wrapper asset generation, offset/review promotion,
+  and unresolved reporting across 9 pipeline scripts.
 
 Decision (inference from sources):
 
 1. Do not treat mounted-family runtime coverage and workbench authoring coverage
-   as already aligned. They are not.
+   as already aligned. They are not — but the gap is now narrower than when this
+   section was first written. Y9-2 has closed the TTY-side authoring toolchain;
+   the remaining gap is pipeline-v3 native builder support and browser UI.
 2. Shipping authoring scope stays narrower than raw runtime filename truth until
    create/export/apply/verify all cover the same family set.
 3. Runtime proof must be two-stage:
@@ -2460,18 +2495,21 @@ Decision (inference from sources):
 5. The default proof path for user-facing work should prefer the smallest
    unambiguous override set possible, then expand only when mounted-family
    authoring and verification are reconciled.
-6. The next reconciliation work is backend-first:
-   - normalize the blueprint/presentation schema
-   - add mounted-family scope there
+6. The remaining reconciliation work for pipeline-v3 is:
+   - add mounted native builder to `_build_native_layers()` (wolfie/wolack)
+   - inherit Y9-2 wrapper role vocabulary (`mount_front` / `mount_rear`) and
+     semantic owner vocabulary (`rider` / `mount` / `empty` / `mixed` /
+     `unclear`) as codified constants
+   - build browser U2 (calibration overlay) and U4 (semantic review) panels
    - add structural-contract runners for family/prefix/fallback/wearable parity
-   - only then expand broader UI/runtime acceptance claims
+   - only then flip `authorable: true` and expand runtime acceptance claims
 
 Sources:
 
-- `src/pipeline_v2/config.py`
 - `src/pipeline_v2/service.py`
 - `runtime/termpp-skin-lab-static/termpp_skin_lab.js`
 - `web/workbench.js`
+- Y9-2 `scripts/pipeline/` mounted toolchain (9 scripts, FL-2345 through FL-2500)
 
 ### 2.10 Y9-2 Bundle-Authoring Integration Contract
 

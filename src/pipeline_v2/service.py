@@ -1102,6 +1102,13 @@ def _normalize_template_registry(raw_registry: dict[str, Any] | None) -> dict[st
     return registry
 
 
+# Mounted vocabulary constants — inherited from Y9-2 pipeline toolchain.
+# Wrapper roles identify which plane a mounted wrapper surface belongs to.
+MOUNTED_WRAPPER_ROLES: frozenset[str] = frozenset({"mount_front", "mount_rear"})
+# Semantic owners classify which entity owns a cell in mounted composite art.
+MOUNTED_SEMANTIC_OWNERS: frozenset[str] = frozenset({"rider", "mount", "empty", "mixed", "unclear"})
+
+
 def is_action_authorized(
     action_spec: dict[str, Any] | None,
     registry: dict[str, Any],
