@@ -1883,6 +1883,8 @@ function _updateToolUI() {
   }
   // U6: update mobile status strip on tool change
   if (typeof window._updateMobileStatus === 'function') window._updateMobileStatus();
+  // CR-1: dismiss touch toolbar on tool change (event-driven, replaces setInterval)
+  if (typeof window._hideTouchToolbar === 'function') window._hideTouchToolbar();
 }
 
 // ── Keyboard shortcuts ──

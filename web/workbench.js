@@ -9627,18 +9627,8 @@
       hideTouchToolbar();
     });
 
-    // Dismiss on tool change (listen for whole-sheet state changes)
-    var _prevTool = '';
-    setInterval(function() {
-      if (!_touchToolbarVisible) return;
-      var wsEditor = window.__wholeSheetEditor;
-      var wsState = wsEditor && typeof wsEditor.getState === 'function' ? wsEditor.getState() : null;
-      var currentTool = (wsState && wsState.activeTool) || '';
-      if (_prevTool && currentTool !== _prevTool) {
-        hideTouchToolbar();
-      }
-      _prevTool = currentTool;
-    }, 300);
+    // Dismiss on tool change — event-driven via _hideTouchToolbar called from
+    // whole-sheet-init.js _updateToolUI() instead of polling with setInterval.
 
     // Dismiss inspect popup on any touch outside canvas
     document.addEventListener('pointerdown', function(e) {
