@@ -76,25 +76,21 @@ _TERM_STREAM_LOCK = threading.Lock()
 _TERM_STREAMS: dict[str, dict[str, Any]] = {}
 
 
-_FAMILY_W_RANGE: dict[str, tuple[int, ...]] = {
-    "player": (0, 1, 2),
-    "attack": (1, 2),
-    "plydie": (0, 1, 2),
-    "wolfie": (0, 1, 2),
-    "wolack": (1, 2),
-}
-"""Per-family weapon-digit range matching product contract (all_16 vs weapon_gte_1)."""
+def _termpp_skin_override_names(registry: dict[str, Any]) -> list[str]:
+    """Override names derived from registry prefix_catalog ahsw_range.
 
-
-def _termpp_skin_override_names() -> list[str]:
-    """Override names using per-family AHSW semantics."""
-    out = ["player-nude.xp"]
-    for prefix, w_range in _FAMILY_W_RANGE.items():
-        for a in range(2):
-            for h in range(2):
-                for s in range(2):
-                    for w in w_range:
-                        out.append(f"{prefix}-{a}{h}{s}{w}.xp")
+    Iterates prefix_catalog entries that declare ahsw_range and generates
+    AHSW override filenames via _action_override_names().  player-nude.xp
+    is included by _action_override_names when family=="player" and
+    ahsw_range=="all_16".
+    """
+    out: list[str] = []
+    prefix_catalog = registry.get("prefix_catalog", {})
+    for prefix_key, prefix_spec in prefix_catalog.items():
+        ahsw_range = (prefix_spec.get("ahsw_range") or "").strip()
+        if not ahsw_range:
+            continue
+        out.extend(_action_override_names(prefix_key, ahsw_range))
     return out
 
 
@@ -287,7 +283,7 @@ def _stage_termpp_skin_sandbox(legacy_root: Path, xp_path: Path, run_id: str, bi
             pass
 
     # Disk-level approximation of editor quick-skin: override the most common player-facing filenames.
-    override_names = _termpp_skin_override_names()
+    override_names = _termpp_skin_override_names(load_template_registry())
     written: list[str] = []
     for name in override_names:
         dst = sprites_dst / name
@@ -3826,7 +3822,7 @@ def workbench_web_skin_payload(session_id: str, req_id: str) -> dict[str, Any]:
     except Exception as e:
         raise ApiError(f"failed reading exported xp: {e}", "xp_read_failed", "workbench", req_id, 500)
     # Mirrors the disk-based TERM++ sandbox override set; web build skin reload can use same names.
-    override_names = _termpp_skin_override_names()
+    override_names = _termpp_skin_override_names(load_template_registry())
     return {
         "session_id": session_id,
         "xp_path": str(xp_path),
