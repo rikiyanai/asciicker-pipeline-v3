@@ -3138,7 +3138,13 @@ Local follow-up on the `8b103b6`–`712735f` heavy contract slice. This pass add
    - Evidence: dead `force_fallback` and `crop_box` fields were removed from `RunConfig`, and `/api/run` plus `/pipeline/run` now reject those legacy keys with `unsupported_run_fields` instead of ignoring them.
 
 4. **FL-STEP4-05 is resolved by compatibility contract.**
-   - Evidence: `validate-xp` is now treated as a non-exporting checksum/quality endpoint that returns a predicted `xp_path` with `exported=false`, so callers keep the path shape without triggering a write. Callers that need a filesystem artifact must still use `export-xp`.
+   - Evidence: `validate-xp` was treated as a non-exporting checksum/quality endpoint that returned a predicted `xp_path` with `exported=false`, so callers kept the path shape without triggering a write.
+   - **2026-05-03 correction:** The `/api/workbench/validate-xp` route and its
+     associated tests (`test_validate_xp_contract_returns_predictable_path_without_exporting`,
+     `test_validate_xp_does_not_create_export_artifact`) no longer exist in
+     the current worktree. The FL-STEP4-05 resolution described above was
+     correct at the time (2026-04-16) but the route was removed in a later
+     refactor. No standalone single-XP validation endpoint is currently live.
    - Focused verification: `python3 -m pytest tests/test_workbench_flow.py -k validate_xp_contract_returns_predictable_path_without_exporting -q` — PASS.
 
 5. **Agent-native text parity is fixed on the MCP/HTTP path.**
@@ -3290,8 +3296,17 @@ The canon Step 5 design output now exists in `docs/plans/2026-03-23-workbench-ca
 - Residual gap: the agent surface is operational but still low-ergonomics; region mapping is JSON-first rather than a richer slicer workflow.
 
 **S2-IMPL-04: Quality contract is enforced at the export boundary. RESOLVED on 2026-04-16.**
-- Evidence: `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()` now call `_build_quality_report()` and raise `quality_gate_failed` on `FAIL`, while `/api/workbench/validate-xp` provides the lightweight single-XP PASS/WARN/FAIL endpoint.
+- Evidence: `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()` now call `_build_quality_report()` and raise `quality_gate_failed` on `FAIL`.
 - Residual gap: the validator remains intentionally non-exporting (`exported=false`); callers that need a real artifact must still use `export-xp`.
+
+> **2026-05-03 correction:** The `/api/workbench/validate-xp` route mentioned
+> in the original S2-IMPL-04 evidence no longer exists in current code
+> (`src/pipeline_v2/app.py` has no `validate-xp` handler). The quality-gate
+> enforcement described here (calling `_build_quality_report()` on bundle
+> export and web-skin payload) is still live. The standalone single-XP
+> validation endpoint that this entry claimed was a lightweight alternative
+> was removed in a later refactor and is not present in the current worktree.
+> See §2.10 status: `validate-xp` is `planned_only`.
 
 ### Superseded statements
 
@@ -9852,8 +9867,14 @@ Evidence: tracked coverage in `tests/test_workbench_validation.py::test_api_run_
 
 **FL-STEP4-05 (resolved by compatibility contract on 2026-04-16): `/api/workbench/validate-xp` response shape changed.**
 Historical issue: the response shape changed from export-oriented output to checksum/quality output.
-Resolution: `validate-xp` remains non-exporting, but now returns a predicted `xp_path` together with `checksum`, `xp_size_bytes`, and `exported=false` so existing callers can keep reading the path shape without causing a write.
-Evidence: tracked coverage in `tests/test_workbench_flow.py::test_validate_xp_contract_returns_predictable_path_without_exporting` and `tests/test_workbench_validation.py::test_validate_xp_does_not_create_export_artifact`.
+Resolution: `validate-xp` remained non-exporting, returning a predicted `xp_path` together with `checksum`, `xp_size_bytes`, and `exported=false` so existing callers could keep reading the path shape without causing a write.
+Evidence (historical): tracked coverage in `tests/test_workbench_flow.py::test_validate_xp_contract_returns_predictable_path_without_exporting` and `tests/test_workbench_validation.py::test_validate_xp_does_not_create_export_artifact`.
+
+> **2026-05-03 correction:** The `/api/workbench/validate-xp` route and its
+> associated tests no longer exist in the current worktree. This historical
+> entry describes a route that existed on 2026-04-16 but was removed in a
+> later refactor. The current codebase has no standalone single-XP validation
+> endpoint. See §2.10 status: `validate-xp` is `planned_only`.
 
 **FL-STEP4-06 (resolved 2026-04-16): Mid-load `documentChanged` fired the removed mirror-sync path during session load.**
 Historical issue: `loadSessionPayload` → `loadDocument` → `resize` → `_emitDocumentChanged` triggered `onWholeSheetDocumentChanged` synchronously before `applyLoadedSessionSideState` had run, so mirrors were written twice per load.
@@ -11586,8 +11607,11 @@ exists in either repo's code" is false at the repo level because pipeline-v3 has
 this live backend API surface. The narrower truth is: the specific
 Section 2.10 / S2-R10 shared bundle-authoring contract is not implemented.
 
-Y9-2 currently routes through `scripts.pipeline` CLI subprocess
-and `launcher_lib/pipeline_server.py` (local process launcher), NOT HTTP/API.
+Y9-2 also does not implement the Section 2.10 shared contract. Y9-2 does have
+HTTP wizard paths (`testing/launcher.py`, `testing/launcher_lib/wizard.py`,
+`docs/agent/mcp/wizard_mcp_server.py`), but those target Y9-2's own local
+routes — not pipeline-v3's live backend. The honest problem is route mismatch:
+Y9-2 HTTP clients and pipeline-v3 workbench routes speak different contracts.
 
 Neither repo implements the Section 2.10 shared contract. Both specs reference
 it as a requirement. This is the primary blocker for UQ-010.
