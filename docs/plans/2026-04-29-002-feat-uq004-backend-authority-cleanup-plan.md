@@ -23,20 +23,22 @@ slice:
 - legacy family-only sessions still loaded with empty `skin_family` until a
   save path rewrote them
 
-Both are now fixed in the live code/tests covered by this plan. The remaining
-open `UQ-004` work after this review is the hardcoded classic/runtime AHSW
-range maps, and the deletion list is broader than the first review note:
+Both are now fixed in the live code/tests covered by this plan. The
+hardcoded classic/runtime AHSW range maps were then closed out:
 
-- `web/workbench.js:FAMILY_W_RANGE`
-- `src/pipeline_v2/service.py:_FAMILY_W_RANGE`
-- `web/termpp_skin_lab.js:FAMILY_W_RANGE`
-- `runtime/termpp-skin-lab-static/termpp_skin_lab.js:FAMILY_W_RANGE`
+- `web/workbench.js:FAMILY_W_RANGE` — deleted
+- `src/pipeline_v2/service.py:_FAMILY_W_RANGE` — deleted
+- `web/termpp_skin_lab.js:FAMILY_W_RANGE` — deleted
+- `runtime/termpp-skin-lab-static/termpp_skin_lab.js:FAMILY_W_RANGE` — deleted
 
 All four were deleted in `a58eda6`..`e23fd3f` (see closeout plan
 `docs/plans/2026-04-29-003-feat-uq004-deletion-first-closeout-plan.md`).
 `ahsw_range` was added to `prefix_catalog` entries, normalizer drift-check
-wired, and all override-name paths now derive from registry. Remaining
-`UQ-004` gap: `preview_xp` still silently falls back to `l0_ref`.
+wired, and all override-name paths now derive from registry. The
+`preview_xp -> l0_ref` fallback was fail-closed in a later session
+(normalizer raises ValueError on missing `preview_xp`). Registry load/fetch
+errors return 503 and surface as browser warnings; empty registry truth is
+not cached. `UQ-004` is closed.
 
 ---
 

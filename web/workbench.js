@@ -7319,7 +7319,16 @@
     try {
       const r = await fetch(bp("/api/workbench/templates"));
       if (!r.ok) {
-        status(`Template registry fetch failed: HTTP ${r.status}`, "err");
+        let msg = `HTTP ${r.status}`;
+        try {
+          const errBody = await r.json();
+          if (errBody?.registry_status?.load_error) {
+            msg = errBody.registry_status.load_error;
+          } else if (errBody?.error) {
+            msg = errBody.error;
+          }
+        } catch {}
+        status(`Template registry fetch failed: ${msg}`, "err");
         return state.templateRegistry;
       }
       state.templateRegistry = await r.json();

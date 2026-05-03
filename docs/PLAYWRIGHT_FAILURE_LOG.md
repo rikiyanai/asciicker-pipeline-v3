@@ -43,8 +43,8 @@ It does not claim a new queue-row advance beyond the existing `UQ-004` state.
 
 ### Still not claimed
 
-1. `preview_xp` still falls back to `l0_ref`; that is the remaining open
-   `UQ-004` gap.
+1. `preview_xp -> l0_ref` fallback was fail-closed in this session; no
+   remaining `UQ-004` gap.
 2. No mounted browser authoring surface shipped.
 3. No `UQ-010` Y9-2 thin-client synchrony work shipped.
 
@@ -92,8 +92,8 @@ with one registry-derived override-name path.
 
 ### Still not claimed
 
-1. `UQ-004` registry operator visibility: `preview_xp` still silently falls
-   back to `l0_ref` — that is a separate remaining gap.
+1. `UQ-004` registry operator visibility: `preview_xp -> l0_ref` fallback was
+   fail-closed in this session; no remaining `UQ-004` gap.
 2. No mounted browser surface shipped.
 3. No Y9-2 thin-client synchrony work shipped (`UQ-010`).
 
@@ -189,8 +189,10 @@ and the narrower remaining open scope.
 ### Still not claimed
 
 1. `UQ-004` is not closed in this entry.
-2. `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` still keep classic/runtime override
-   naming as a second authority instead of consuming registry `ahsw_range`.
+2. `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` hardcoded maps were deleted in
+   `a58eda6`..`e23fd3f`; all override-name paths now derive from registry
+   `prefix_catalog.ahsw_range`. (Not claimed by this entry, but noted for
+   readers who see stale references.)
 3. No `UQ-005`+ progress is claimed here.
 
 ## Audit — Cross-Repo Mounted Tooling Gap Against Y9-2 (2026-04-29)
@@ -298,6 +300,42 @@ still contradicted the current Section 2 contract text.
 1. No product code changed in this slice.
 2. `UQ-005` is still OPEN after this correction.
 3. The immediate next implementation priority is still `UQ-004`, not `UQ-005`.
+
+## Audit — UQ-004 + UQ-005 Closure In Current Session (2026-05-03)
+
+### UQ-004 / S2-R2 residual closeout
+
+- `preview_xp -> l0_ref` fallback in `_resolve_preview_xp_fields()` fail-closed:
+  removed the silent l0_ref fallback; `_normalize_template_action_spec()` now
+  raises ValueError on missing preview_xp.
+- Test updated: `test_normalize_action_spec_preview_xp_fallback_to_l0_ref` →
+  `test_normalize_action_spec_preview_xp_fail_closed`.
+- Registry fail-closed tightened: `load_template_registry()` no longer caches
+  empty truth on missing/malformed config — `_template_registry` stays `None`
+  so errors re-surface on each call.
+- API operator visibility: `/api/workbench/templates` returns 503 when registry
+  has a `load_error` (instead of 200 with error embedded).
+- Browser operator visibility: `fetchTemplateRegistry()` extracts error message
+  from 503 response body; degraded-state `registry_status` surfaces via existing
+  `status()` warn calls.
+- Canon stale claims about `FAMILY_W_RANGE` maps still pending were updated
+  across `canonical-spec.md` (12 stale references fixed).
+
+### UQ-005 / S2-R3 + S2-R4
+
+- Export-bundle and web-skin payload already on shared structural-gate owner
+  (G7-G12) — verified no change needed.
+- Canonical `/api/workbench/validate-xp` route added in `app.py:645-660`.
+- `validate_xp_single()` service function added in `service.py:3920-3965`.
+- MCP `validate_xp` tool added in `workbench_mcp_server.py:435-452`.
+- G8/G9 threshold policy locked in `gates.py` with named constant
+  `_G8_MIN_RATIO=0.05` and policy documentation.
+- Canon spec updated for UQ-005 closure.
+
+### Still not claimed
+
+1. No mounted browser surface shipped.
+2. No UQ-010 Y9-2 thin-client synchrony work shipped.
 
 ## Audit — Canon Formatting Boundary For Sections 1 And 2 (2026-04-29)
 

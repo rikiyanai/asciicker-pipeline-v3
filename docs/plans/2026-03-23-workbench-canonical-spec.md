@@ -6,7 +6,7 @@
 **Checkpoint baseline:** `v3-refactor-start @ a536b81`
 **Audit scope:** current branch after the 2026-04-14 through 2026-04-17 failed refactor narrative, the manual-assembly runtime proof, the Y9-2 generalized-bundle porting audit, the semantic-runtime contract coverage slice, and the surviving local/browser/runtime assets in this repo
 
-## Section 0 — Behavior Rule, Scope, And Authority
+## Section 0 - Behavior Rule, Scope, And Authority
 
 ### Cardinal Behavior Rule
 
@@ -26,8 +26,8 @@ correct architectural action. Verify the frame first.
 
 Only two application sections own product behavior in this canon:
 
-1. Section 1 — the root editor contract
-2. Section 2 — the Asciicker wrapper/runtime contract layered on top of it
+1. Section 1 - the root editor contract
+2. Section 2 - the Asciicker wrapper/runtime contract layered on top of it
 
 Section 3 is the harness/proof section that observes and proves Sections 1 and
 2. It is not a third product owner.
@@ -271,7 +271,7 @@ The following replacement-sequence facts are now directly verified:
    `/workbench-template-gating.js` and pinning it with a focused prefixed-route
    regression test.
 
-## Section 1 — Fundamental REXPaint-Parity Spec
+## Section 1 - Fundamental REXPaint-Parity Spec
 
 This section is the root editor canon.
 
@@ -814,11 +814,11 @@ These are architectural failures. They are not just missing buttons.
 | Finding | Evidence | Why this violates the parity contract |
 |---------|----------|---------------------------------------|
 | Resize action completely missing | No Ctrl-r handler, no resize UI, no logic in `web/workbench.js` or `web/whole-sheet-init.js` | Parity item 2: resize is a first-class image action |
-| Browse mode non-functional — Tab toggle not wired | `web/whole-sheet-init.js:1086-1091` renders a `BROWSE` button, but there is no mode state, no click binding, and no `Tab` handler in `web/whole-sheet-init.js:885-992` | Parity item 3: paint and browse are peer modes, Tab toggles them |
+| Browse mode non-functional - Tab toggle not wired | `web/whole-sheet-init.js:1086-1091` renders a `BROWSE` button, but there is no mode state, no click binding, and no `Tab` handler in `web/whole-sheet-init.js:885-992` | Parity item 3: paint and browse are peer modes, Tab toggles them |
 | Undo/redo surface is broken after the deletion pass | `web/whole-sheet-init.js:219-238`, `web/whole-sheet-init.js:896-901`, `web/workbench.js:5410-5509` | The whole-sheet UI still renders Undo/Redo controls and shortcuts, but `workbench.js` no longer supplies `onUndo`/`onRedo`, so Family 9 history has no live owner. |
 | Apply mode keyboard shortcuts not bound | `applyGlyph`/`applyFg`/`applyBg` state exists; g/f/b handlers do not | Parity item 5: apply modes split glyph/fg/bg behavior |
 | Draw tool set is still incomplete | `web/whole-sheet-init.js:16-20`, `web/whole-sheet-init.js:905-916`, `web/whole-sheet-init.js:965-992` | Cell/erase/eyedropper/line/rect/fill/select and clipboard shortcuts now exist, but Oval and Text are still absent, so the Family 5 draw-tool set and full keyboard map are incomplete. |
-| Mouse-only input — touch and pen events absent | `web/whole-sheet-init.js` uses mousedown/mousemove/mouseup only | Parity item 9: pointer-device-agnostic interaction |
+| Mouse-only input - touch and pen events absent | `web/whole-sheet-init.js` uses mousedown/mousemove/mouseup only | Parity item 9: pointer-device-agnostic interaction |
 | Zoom / font-scale not implemented | No zoom control or font-scale handler in `web/whole-sheet-init.js` | Family 3 in Section 1.4: canvas navigation includes zoom |
 | Grid control is only partially implemented | `web/whole-sheet-init.js:1241-1279` provides a sidebar toggle and step selector, but there is no Ctrl-g authority and no zoom/grid persistence contract | Family 3 in Section 1.4 requires grid control as a direct canvas-navigation behavior |
 | Layer control is only partially implemented | `web/whole-sheet-init.js:1757-1850`, `web/workbench.js:3498-3505` | Click-based visibility/lock/reorder UI exists, but Ctrl-l / 1~9 / Ctrl-1~9 / Shift-1~9 / Ctrl-Shift-m / wheel authority is missing and lock state is not part of the root session save contract. |
@@ -827,7 +827,7 @@ These gaps require an explicit behavioral contract before any closure claim is
 valid. The execution sequence for resolving them lives only in Unified Sequence
 Of Actions.
 
-### 1.6.1 State Checkpoint — 2026-04-26
+### 1.6.1 State Checkpoint - 2026-04-26
 
 The 2026-04-15 gap table above remains valid as historical audit context, but
 some of those rows are no longer literally current code state.
@@ -878,7 +878,7 @@ Closure update for `UQ-002` / `UQ-003` on `2026-04-27`:
    history-ownership tests plus same-day headed whole-sheet button, layer,
    clipboard, tools, transform, bulk-edit, and grid runs.
 
-### 1.6.2 Current UQ-002 Hot-Path Contract — 2026-04-26
+### 1.6.2 Current UQ-002 Hot-Path Contract - 2026-04-26
 
 The remaining "super slow" feel is treated as part of `UQ-002`, not as a later
 polish lane.
@@ -1346,7 +1346,7 @@ Sources:
 
 ---
 
-### 1.x — Section 1 Performance And Architecture Audit Status (2026-04-27)
+### 1.x - Section 1 Performance And Architecture Audit Status (2026-04-27)
 
 All six perf/architecture audit items (S1-PERF-001 through S1-PERF-004,
 S1-ARCH-001, S1-ARCH-002) are PASS with commit SHAs and timed evidence.
@@ -1357,7 +1357,7 @@ blockers in `1.6.1` and `1.6.2` for the current worktree state.
 
 ---
 
-## Section 2 — Asciicker Engine Sprite Wrapper Spec
+## Section 2 - Asciicker Engine Sprite Wrapper Spec
 
 The Asciicker runtime now resolves character sprites through a canonical
 `skin_family` axis plus presentation state and appearance bits. The final asset
@@ -1386,15 +1386,15 @@ bundle-sprite authoring terms derived from the Y9-2 appearance bundle system:
 - `compile bundle`
 
 The goal is a repeatable, validated path from raw source art to a
-runtime-proven bundle contribution — but Section 2 is only ever a set of tools
+runtime-proven bundle contribution - but Section 2 is only ever a set of tools
 layered on top of the root XP editor (Section 1). It helps; it does not own.
 
 This section defines the bundle-blueprint, source-manifest, presentation-target,
 and runtime-wrapper behavior layered on top of Section 1.
 
-The asset pipeline is the part of the project responsible for taking raw sprite artwork — character animations like "wolfie" and "wolack" — and converting them into the engine's runtime format. The intended flow is: an artist authors an XP (experience pack) by feeding it source sprite sheets, the pipeline slices and maps those sheets into per-action, per-angle frames, runs them through a series of structural quality gates (geometry density, non-empty content checks, ap handoff population), and exports a final bundle the game engine can load. A local web-based workbench server is the primary UI for this authoring loop.
+The asset pipeline is the part of the project responsible for taking raw sprite artwork - character animations like "wolfie" and "wolack" - and converting them into the engine's runtime format. The intended flow is: an artist authors an XP (experience pack) by feeding it source sprite sheets, the pipeline slices and maps those sheets into per-action, per-angle frames, runs them through a series of structural quality gates (geometry density, non-empty content checks, ap handoff population), and exports a final bundle the game engine can load. A local web-based workbench server is the primary UI for this authoring loop.
 
-From the launcher's perspective, this would have appeared as a top-level menu option — [3] ASSET PIPELINE — giving you three choices: launch the workbench server and open its URL in a browser, check pipeline server health and reachability, and configure the server path and port. The idea is that a content creator could sit down, run the launcher, start the workbench, drag in new sprites, see them validated, and export them into the game without touching code. The workbench also connects back into the game's Skin Dock and TERM++ sandbox for runtime observation of the converted result.
+From the launcher's perspective, this would have appeared as a top-level menu option - [3] ASSET PIPELINE - giving you three choices: launch the workbench server and open its URL in a browser, check pipeline server health and reachability, and configure the server path and port. The idea is that a content creator could sit down, run the launcher, start the workbench, drag in new sprites, see them validated, and export them into the game without touching code. The workbench also connects back into the game's Skin Dock and TERM++ sandbox for runtime observation of the converted result.
 
 In practice, the pipeline is still gated from claiming more than it can prove.
 The node slot `[3]` remains reserved until the launcher path, export gates, and
@@ -1505,10 +1505,10 @@ The current base-family mapping in the main game is:
 
 Two engine loading paths now matter for every family:
 
-1. **Legacy combo-sheet path** — `LoadSpriteGridFiles()`
+1. **Legacy combo-sheet path** - `LoadSpriteGridFiles()`
    - loads `{prefix}-AHSW.xp` matrices for supported equipment-state
      combinations
-2. **Direct overlay path** — `LoadDirectPresentationAssetsForFamily()`
+2. **Direct overlay path** - `LoadDirectPresentationAssetsForFamily()`
    - loads `*-body.xp`
    - loads slot overlays such as `*-armor-regular.xp`, `*-armor-gold.xp`,
      `*-helmet-dark.xp`, and `*-weapon-sword.xp`
@@ -1574,7 +1574,13 @@ Current mismatch:
 3. The remaining split is now narrower than the original backend gate problem:
    runners, the browser, and template-driven backend bundle/runtime/export
    paths consume the normalized contract, but classic/runtime override-name
-   generation still duplicates registry `ahsw_range` through hardcoded maps.
+   generation now derives from registry `prefix_catalog.ahsw_range`; the former hardcoded
+   `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` maps were deleted in `a58eda6`..`e23fd3f`.
+   The `preview_xp -> l0_ref` fallback in `_resolve_preview_xp_fields()` was
+   fail-closed: the normalizer raises ValueError on missing `preview_xp` instead
+   of silently falling back to `l0_ref`. Registry load/fetch errors are now
+   operator-visible (503 status in API, degraded-state warning in browser UI)
+   rather than silently caching empty truth.
 4. There is still no wearable/item template surface in pipeline-v2, so the
    current workbench can only author full character strips, not standalone
    wearable or item sprites.
@@ -1817,8 +1823,11 @@ mutation.
 4. The current branch still does not fully meet that normalized template
    contract. Template-driven backend execution and operator-visible
    `registry_status` handling now consume the normalized action schema, but
-   `UQ-004` remains open until classic/runtime override-name generation also
-   derives from registry `ahsw_range` instead of hardcoded maps.
+   `UQ-004` was narrowed to its final residual: `preview_xp` silently falling back
+   to `l0_ref`. The four hardcoded `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` maps were
+   deleted in `a58eda6`..`e23fd3f`, and all override-name paths now derive from
+   registry `prefix_catalog.ahsw_range`. The `preview_xp -> l0_ref` fallback was
+   fail-closed in this session.
 5. `preview_xp` is the canonical representative-preview authority. `l0_ref`
    remains the structural metadata authority. G12 or its direct replacement
    must derive expected L0 row-0 metadata from the referenced XP contract, not
@@ -1900,7 +1909,7 @@ The normalized family/wearable model is now too broad to leave in one ambiguous
 If those three layers drift, the canon must treat that as a backend/schema
 regression before it is treated as a UI problem.
 
-#### 2.3.8 Porting Precondition — Semantic Runtime Parity, Not Just Action Tabs
+#### 2.3.8 Porting Precondition - Semantic Runtime Parity, Not Just Action Tabs
 
 The active Y9-2 runtime contract is no longer narrow "three action tabs"
 truth. The current game repo (`/Users/r/Downloads/asciicker-Y9-2` on
@@ -2089,11 +2098,11 @@ These gates are wrapper safeguards. They do not define the editor root contract.
 
 Current open issues in the gate and registry implementation:
 
-1. **The quality contract exists, but the canonical validate-xp surface is still not live.** The spec requires a single-XP `validate-xp` surface for agent loops, but the live backend still does not expose the canonical route/tool shape described later in this section.
+1. **The quality contract exists and the canonical validate-xp surface is now live.** The `/api/workbench/validate-xp` route and MCP `validate_xp` tool run G7-G12 validation on a single XP against its template spec without requiring bundle/session context. G8/G9 threshold policy is locked in `gates.py`.
 
-2. **Registry roles are mostly wired in live backend execution, but `UQ-004` is still not fully closed.** `config/template_registry.json` is now the live authority for template-driven backend bundle/session/export gates, `/api/workbench/templates` now surfaces `registry_status`, and legacy session identity now resolves `filename_prefix` / `skin_family` on read plus next-save persistence. The remaining open second-authority drift is the four hardcoded classic/runtime AHSW range maps (`web/workbench.js:FAMILY_W_RANGE`, `src/pipeline_v2/service.py:_FAMILY_W_RANGE`, `web/termpp_skin_lab.js:FAMILY_W_RANGE`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js:FAMILY_W_RANGE`), which still duplicate registry `ahsw_range`.
+2. **`UQ-004` registry authority is closed.** `config/template_registry.json` is the live authority for template-driven backend bundle/session/export gates, `/api/workbench/templates` surfaces `registry_status`, and legacy session identity resolves `filename_prefix` / `skin_family` on read plus next-save persistence. The four hardcoded `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` maps were deleted in `a58eda6`..`e23fd3f`; all override-name paths derive from registry `prefix_catalog.ahsw_range`. The `preview_xp -> l0_ref` fallback was fail-closed (normalizer raises ValueError on missing `preview_xp`). Registry load/fetch errors return 503 from the API and surface as a degraded-state warning in the browser UI rather than silently caching empty truth.
 
-3. **G8/G9 export semantics still need explicit policy wording.** Export-time structural gating now runs `G7-G12`, but the canon still needs a locked rule for low-coverage manual sheets and for what `G9` means at export time once the XP is already materialized.
+3. **G8/G9 export semantics policy is locked in code.** Export-time structural gating runs `G7-G12`. `_G8_MIN_RATIO=0.05` is a named constant in `gates.py` with policy documentation. The canon queue table marks `UQ-005` CLOSED as of `2026-04-29`. The G8/G9 threshold/report semantics now match across validate-xp, export, and payload paths.
 
 4. **FL-STEP4-04 resolved on `2026-04-16`: dead `force_fallback` and `crop_box` removed from `RunConfig`.** The live `/api/run` and `/pipeline/run` contracts no longer advertise fields the handlers ignore; legacy callers now get an explicit `unsupported_run_fields` error if they still send those keys.
 
@@ -2106,18 +2115,18 @@ The live wrapper architecture is still misaligned in these exact ways after the
 |---------|------------------|------------------------|
 | Canonical source-manifest authoring is defined, but live code still keeps session-local source-layout authority | `web/workbench.html:133-145`, `web/workbench.js:2196-2377`, `web/workbench.js:3278-3367`, `src/pipeline_v2/service.py:4004-4048` | The spec now requires `<source>.asciicker-source.json` to be the only authoritative source-layout owner, but the live workbench still persists `source_boxes`, `source_cuts_v`, and `source_cuts_h` in session save/load state. Combined-sheet slicing therefore still lacks one canonical manifest owner. |
 | Source panel workflow exists, but it is not yet canonical-manifest-first | `web/workbench.js:2242-2305`, `web/workbench.js:3278-3367`, `web/workbench.js:4310-4332`, `src/pipeline_v2/app.py:496-525` | The source canvas is interactive and useful, but the live code path still centers on session state rather than a sidecar-first manifest lifecycle shared by browser, CLI, and MCP. |
-| Template registry is normalized and mounted-aware in data, and template-driven backend gates now consume it, but classic/runtime override naming still duplicates registry truth | `config/template_registry.json`, `src/pipeline_v2/service.py:1105-1232`, `src/pipeline_v2/service.py:1417-1460`, `src/pipeline_v2/service.py:3018-3178`, `src/pipeline_v2/service.py:3895-3982`, `web/workbench.js:24-40`, `src/pipeline_v2/service.py:79-96`, `web/termpp_skin_lab.js:4-23`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js:4-23` | `ENABLED_FAMILIES` is gone from live backend gates, backend template authorization now enforces the same template-set scope/linkage checks as the browser, and legacy session identity resolves normalized fields on read/save. The remaining `UQ-004` drift is the four hardcoded `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` maps, which still duplicate registry `ahsw_range` instead of deriving override naming from the normalized registry. |
+| Template registry is normalized and mounted-aware in data; `FAMILY_W_RANGE` hardcoded maps deleted; `preview_xp` fail-closed; registry errors operator-visible | `config/template_registry.json`, `src/pipeline_v2/service.py:1105-1232`, `src/pipeline_v2/service.py:1417-1460`, `src/pipeline_v2/service.py:3018-3178`, `src/pipeline_v2/service.py:3895-3982`, `web/workbench.js`, `web/termpp_skin_lab.js`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js` | `ENABLED_FAMILIES` is gone from live backend gates and the four `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` maps were deleted in `a58eda6`..`e23fd3f`. All override-name paths derive from `prefix_catalog.ahsw_range`. The `preview_xp -> l0_ref` fallback was fail-closed (normalizer raises ValueError). Registry load/fetch errors return 503 and surface as browser warnings. CLOSED. |
 | MCP override-name validation now accepts engine-valid hyphenated prefixes | `scripts/workbench_mcp_server.py` | `_AHSW_RE` now accepts `player-green-0001.xp`-style names. RESOLVED. |
 | Mounted-family contract now exists, but the mounted authoring aids are still backend/MCP-only and runtime parity is still absent | `config/template_registry.json`, `src/pipeline_v2/app.py:817-855`, `src/pipeline_v2/service.py:2527-2528`, `src/pipeline_v2/service.py:4040-4049`, `src/pipeline_v2/service.py:4077-4178`, `scripts/workbench_mcp_server.py:542-708`, `tests/test_mounted_calibration_backend.py`, `tests/test_mounted_semantic_review.py`, `web/workbench.html:298-326`, `web/workbench.js:5760-5854`, `asciicker-Y9-2/scripts/pipeline/mounted_wrapper_mask_selector.py`, `asciicker-Y9-2/scripts/pipeline/xp_semantic_atlas_reviewer.py` | `wolfie` and `wolack` are now represented explicitly in `prefix_catalog` with `runtime_role`, `mounted=true`, and blocker metadata. Pipeline-v3 already has backend/MCP calibration compute, session persistence, and exact-cell proposal routes, but the workbench still has only the destructive jitter controls and no browser `U2` overlay-calibration panel or `U4` semantic review panel. The remaining gap is therefore narrower and more exact than the older row claimed: frontend mounted authoring surfaces are absent, the native builder/export/runtime proof lane is absent, and the mounted aids must land without mutating the existing jitter owner or prematurely flipping `authorable: true`. |
 | Green proof coverage now exists, but green authoring remains deliberately proof-only until green reference assets exist | `src/pipeline_v2/service.py`, `config/template_registry.json`, `scripts/workbench_png_to_skin_test_playwright.mjs`, `web/workbench.js` | Runtime/proof helpers now preserve and inject `player-green` / `attack-green` / `plydie-green`, but the green bundle-authoring surface stays human-only by explicit boundary. This is a product-scope limitation, not a missing proof-path owner. |
 | Skin Dock proof is now explicit, but it is still wrapper proof rather than editor proof | `src/pipeline_v2/service.py:2898-2921`, `web/workbench.js:1453-1558`, `web/workbench.html:320-404` | Single-session runtime scope and structural-vs-runtime verification are now explicit, but runtime proof still does not establish Section 1 editor correctness. |
 | Wrapper run paths still do not use one canonical manifest owner end-to-end | `src/pipeline_v2/app.py:438-446`, `src/pipeline_v2/service.py:1437-1660`, `src/pipeline_v2/service.py:2558-2710`, `tests/test_workbench_validation.py` | Live conversion/run behavior still mixes source-path/session-local state with partial normalized registry logic. The spec's sidecar-first manifest contract is not yet the sole live execution owner. |
-| Export/web payload paths now call the shared structural-gate owner, but quality-policy closure is still incomplete | `src/pipeline_v2/service.py:3668-3716`, `src/pipeline_v2/service.py:3720-3783`, `src/pipeline_v2/service.py:3786-3840` | The live export and web-skin payload paths now run `_run_structural_gates()` with G7-G12, so the older “only G10-G12” claim is stale. The remaining open gap is policy/contract closure: `validate-xp` is still not the canonical live route/tool, and the canon still needs a locked rule for manual low-coverage G8 and export-time G9 semantics. |
-| Agent quality contract is specified, but the canonical validate-xp route/tool is not live | `src/pipeline_v2/app.py`, `src/pipeline_v2/service.py`, `scripts/workbench_mcp_server.py` | The spec requires a machine-readable `validate-xp` surface for both XP-only and session-centric validation, but the live backend/MCP layer still does not expose the canonical route/tool set this spec previously over-claimed. |
+| Export/web payload paths use the shared structural-gate owner, validate-xp is live, G8/G9 policy locked | `src/pipeline_v2/service.py:3917-3970`, `src/pipeline_v2/service.py:3992-4070`, `src/pipeline_v2/gates.py`, `src/pipeline_v2/app.py:645-660`, `scripts/workbench_mcp_server.py:435-452` | Export and web-skin payload paths run `_run_structural_gates()` with G7-G12. Canonical `/api/workbench/validate-xp` route + MCP `validate_xp` tool added. G8 threshold `_G8_MIN_RATIO=0.05` and G9 policy are locked with named constants and documentation in `gates.py`. |
+| Agent quality contract — validate-xp route/tool is live | `src/pipeline_v2/app.py:645-660`, `src/pipeline_v2/service.py:3920-3965`, `scripts/workbench_mcp_server.py:435-452` | The canonical `/api/workbench/validate-xp` route and MCP `validate_xp` tool are now live. They run G7-G12 on a single XP against its template spec without requiring bundle/session context. |
 | Agent session inspection remains limited to the older workbench wrapper surface | `scripts/workbench_mcp_server.py`, `scripts/xp_mcp_server.py` | The repo has MCP tooling, but not the canonical Section 2 manifest/presentation/bundle inspection surface. Browser, MCP, and CLI parity is therefore still incomplete. |
 | Classic conversion no longer reintroduces geometry-first wrapper ownership | `web/workbench.html`, `web/workbench.js`, `src/pipeline_v2/app.py`, `src/pipeline_v2/service.py`, `tests/test_workbench_flow.py` | The upload panel remains source-only, while classic root geometry now enters through `Session Ops` / `New XP` and the active session. `Use Auto-Plan` is advisory only. `wbRun()` now requires an active session and posts explicit target geometry (`target_cols` / `target_rows`) into `/api/run`, and the backend honors that exact non-native target grid. RESOLVED for the browser-owned geometry path; richer frame-nav row/cell editing is still a separate product gap. |
-| Browser bundle scope and backend template-driven authority now consume the same registry contract, but queue closure still waits on the last second-authority cleanup | `src/pipeline_v2/app.py:389-393`, `web/workbench-template-gating.js`, `web/workbench.js:7286-7307`, `src/pipeline_v2/service.py:1105-1232`, `tests/test_template_registry_schema.py`, `tests/web/workbench-template-gating.test.js` | Browser action gating and backend template-driven gating now both honor `skin_family_scope`, `proof_only`, `authorable`, and `template_actions` linkage. `UQ-004` remains open because classic/runtime override-name generation still keeps hardcoded `ahsw_range` truth outside the registry, and those old owners have not yet been deleted. |
-| `UQ-004` registry stabilization backlog is now narrowed to load-path residuals and hardcoded override-name maps | `web/workbench.js:24-40`, `web/termpp_skin_lab.js:4-23`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js:4-23`, `web/workbench.js:7286-7307`, `src/pipeline_v2/app.py:389-393`, `src/pipeline_v2/service.py:79-96`, `src/pipeline_v2/service.py:1174-1232`, `tests/test_template_registry_schema.py` | Registry load/fetch failures are now operator-visible in both API and browser UI, and legacy session identity resolves normalized fields on read/save. Remaining residuals are: empty-registry fallback caching still exists for missing/malformed config, `preview_xp` still falls back to `l0_ref`, and four hardcoded override-name owners still duplicate registry `ahsw_range` (`web/workbench.js`, `src/pipeline_v2/service.py`, `web/termpp_skin_lab.js`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js`). |
+| Browser bundle scope and backend template-driven authority now consume the same registry contract; `FAMILY_W_RANGE` maps deleted; `preview_xp` fail-closed | `src/pipeline_v2/app.py:389-393`, `web/workbench-template-gating.js`, `web/workbench.js:7286-7307`, `src/pipeline_v2/service.py:1105-1232`, `tests/test_template_registry_schema.py`, `tests/web/workbench-template-gating.test.js` | Browser action gating and backend template-driven gating now both honor `skin_family_scope`, `proof_only`, `authorable`, and `template_actions` linkage. The four `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` hardcoded maps were deleted in `a58eda6`..`e23fd3f`. All override-name paths derive from `prefix_catalog.ahsw_range`. The `preview_xp -> l0_ref` fallback was fail-closed. CLOSED. |
+| `UQ-004` registry stabilization - `FAMILY_W_RANGE` maps deleted, `preview_xp` fail-closed, registry errors operator-visible | `web/workbench.js`, `web/termpp_skin_lab.js`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js`, `src/pipeline_v2/service.py`, `src/pipeline_v2/app.py:389-393`, `tests/test_template_registry_schema.py`, `tests/web/workbench-override-names.test.js`, `tests/web/termpp-skin-lab-registry.test.js` | Registry load/fetch failures are operator-visible (503 API, browser warn). The four `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` maps were deleted in `a58eda6`..`e23fd3f`. All override-name paths derive from `prefix_catalog.ahsw_range`. The `preview_xp -> l0_ref` fallback was fail-closed. Empty registry is not cached — errors re-surface on each call. CLOSED. |
 | Y9-2 stable bundle-authoring API contract does not yet exist in live pipeline-v3 routes | `src/pipeline_v2/app.py`, `scripts/workbench_mcp_server.py` | Live routes are still the older `/api/workbench/*` family plus `/healthz`, and the MCP server is still a workbench wrapper. Y9-2 has a useful local CLI wizard, but there is still no single truthful bundle-authoring API/CLI surface shared across repos. |
 | Y9-2 bundle wizard not wired as launcher sub-action | `Y9-2 scripts/launcher.py`, `Y9-2 scripts/pipeline/bundle_wizard/main.py` | The current bundle-wizard client exists, but `[3] ASSET PIPELINE` is still absent from the launcher rather than wired to the shared owner contract. Tracked as Y9-2 DESIGN OPEN B-13. |
 | **GAP: No wearable or item templates, and no backend parity runner for wearable slot/style contracts** | `config/template_registry.json`, `scripts/xp_fidelity_test/`, `tests/` | Pipeline-v2 has no wearable/item authoring surface, and there is no structural-contract runner that proves the local schema matches Y9-2 slot/style truth. That means gold/dark/default wearable semantics are still only partially covered by ad hoc runtime or engine-side knowledge. Tracked as S2-FAM-04. |
@@ -2133,19 +2142,19 @@ queued without hand-waving.
 |---------|---------------|-----------|----------------|
 | Bundle creation API | `src/pipeline_v2/app.py::api_wb_bundle_create()`, `src/pipeline_v2/service.py::create_bundle()` | Still takes `template_set_key` and seeds bundle state through legacy template-family language instead of a bundle blueprint / presentation-target contract | `UQ-004`, `UQ-010` |
 | Conversion API | `src/pipeline_v2/app.py::api_wb_action_grid_apply()`, `src/pipeline_v2/service.py::bundle_action_run()` | Still accepts only `{bundle_id, action_key, source_path}`. There is no request artifact, no manifest path owner, and no separate intake / convert / register / compile phases | `UQ-006`, `UQ-010` |
-| Session persistence / schema migration | `src/pipeline_v2/service.py::_session_payload()`, `src/pipeline_v2/service.py::workbench_save_session()`, session JSON on disk | New sessions now write normalized identity and legacy sessions now resolve `filename_prefix` / `skin_family` on read plus next-save persistence. Remaining `UQ-004` work is no longer session-read normalization; it is eliminating the last hardcoded `ahsw_range` maps and any downstream compat-family authority. | `UQ-004` |
+| Session persistence / schema migration | `src/pipeline_v2/service.py::_session_payload()`, `src/pipeline_v2/service.py::workbench_save_session()`, session JSON on disk | New sessions now write normalized identity and legacy sessions now resolve `filename_prefix` / `skin_family` on read plus next-save persistence. Hardcoded `ahsw_range` maps deleted in `a58eda6`..`e23fd3f`. No remaining session-read normalization gaps. | `UQ-004` |
 | Session persistence / source layout | `src/pipeline_v2/service.py::workbench_save_session()` | Still persists `source_boxes`, `source_cuts_v`, and `source_cuts_h` as saved authority | `UQ-006` |
-| Registry authority | `src/pipeline_v2/service.py::create_bundle()`, `workbench_create_blank_session()`, `bundle_action_run()`, `workbench_export_bundle()`, `workbench_web_skin_bundle_payload()`, `web/workbench.js`, `src/pipeline_v2/service.py`, `web/termpp_skin_lab.js`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js` | Template-driven backend gates and classic/runtime override-name generation all derive from the normalized registry. `ENABLED_FAMILIES` and `FAMILY_W_RANGE` hardcoded maps are deleted. Remaining `UQ-004` gap: `preview_xp` fallback to `l0_ref` and registry operator visibility polish. | `UQ-004` |
-| Registry operator visibility | `src/pipeline_v2/service.py::load_template_registry()`, `src/pipeline_v2/app.py::api_wb_templates()`, `web/workbench.js::fetchTemplateRegistry()` | API/UI error surfacing now exists via `registry_status`, but missing/malformed registry still serves an empty fallback snapshot and `preview_xp` still silently falls back to `l0_ref` | `UQ-004` |
+| Registry authority | `src/pipeline_v2/service.py::create_bundle()`, `workbench_create_blank_session()`, `bundle_action_run()`, `workbench_export_bundle()`, `workbench_web_skin_bundle_payload()`, `web/workbench.js`, `src/pipeline_v2/service.py`, `web/termpp_skin_lab.js`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js` | Template-driven backend gates and override-name generation all derive from the normalized registry. `ENABLED_FAMILIES` and the four `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` hardcoded maps are deleted. `preview_xp -> l0_ref` fallback fail-closed in this session. Remaining gaps: none for `UQ-004` registry authority scope. | `UQ-004` |
+| Registry operator visibility | `src/pipeline_v2/service.py::load_template_registry()`, `src/pipeline_v2/app.py::api_wb_templates()`, `web/workbench.js::fetchTemplateRegistry()` | API/UI error surfacing exists via `registry_status`. Missing/malformed registry returns 503 with error details, browser surfaces a degraded-state warning. Empty truth is not cached — errors re-surface on each call. `preview_xp -> l0_ref` fallback was fail-closed. CLOSED. | `UQ-004` |
 | Classic/runtime AHSW range truth | `config/template_registry.json`, `src/pipeline_v2/service.py`, `web/workbench.js`, `web/termpp_skin_lab.js`, `runtime/termpp-skin-lab-static/termpp_skin_lab.js` | `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` deleted in `a58eda6`..`e23fd3f`. All override-name paths now derive from `prefix_catalog.ahsw_range`. Normalizer drift-checks action-level mirror. Regression tests prove derivation via mutation. | `UQ-004` |
 | Export-quality contract | `src/pipeline_v2/service.py::_run_structural_gates()`, `workbench_export_bundle()`, `workbench_web_skin_bundle_payload()` | Export/web payload paths now share live G7-G12 enforcement, but the canon still owes locked policy wording for export-time G9 populated-count semantics and for how low-coverage G8 should differ between manual authoring and autonomous flows | `UQ-005` |
-| Headless validation surface | `scripts/workbench_mcp_server.py`, `src/pipeline_v2/app.py` | Live MCP/API surface is still the older workbench wrapper. There is no shared `validate-xp`, `status`, `register-skin-request`, or `compile-skin-request` owner | `UQ-005`, `UQ-010` |
+| Headless validation surface | `scripts/workbench_mcp_server.py:435-452`, `src/pipeline_v2/app.py:645-660` | Canonical `validate-xp` route and MCP tool are live. `status`, `register-skin-request`, and `compile-skin-request` remain planned. | `UQ-005` (closed), `UQ-010` |
 | Browser bundle UI | `web/workbench.html`, `web/workbench.js` | User-facing controls still speak in template/bundle-action terms and do not expose request-artifact lifecycle, manifest ownership, or explicit register/compile phases | `UQ-006`, `UQ-010` |
 | Source panel UI | `web/workbench.html#source`, `web/workbench.js` source-box/cut handlers | Source slicing is interactive but not manifest-first; there is no explicit sidecar path, save/load status, or per-region presentation assignment workflow | `UQ-006` |
 | Runtime identity layer | `bundle_contract.mjs`, backend register/compile/export contract, any future ID registry or emitted bundle metadata | Pipeline-v3 still lacks one live owner for `skin_definition_id`, `presentation_kind_id`, and `layer_definition_id`; string-only scope does not satisfy generalized-bundle parity | `UQ-007` |
 | Mounted-family parity | `config/template_registry.json`, mounted calibration/proposal service + MCP surfaces, `web/workbench.html`, `web/workbench.js`, runtime scope helpers, Y9-2 bundle truth | `wolfie` / `wolack` exist as declared runtime prefixes, backend/MCP mounted-calibration and semantic-review artifacts now exist, but there is still no browser mounted authoring surface, no native builder, and no mounted export/runtime proof lane | `UQ-008` |
 | Deferred item/wearable surface | `bundle_contract.mjs`, `config/template_registry.json`, future template/runner surfaces | `world_item` and `inventory_grid` remain explicit blocker rows with no live authoring surface in pipeline-v3; they stay deferred rather than masquerading as a current blocking queue lane | `S2-FAM-04` |
-| Y9-2 client parity | `scripts/pipeline/bundle_wizard/main.py` in Y9-2 vs `pipeline-v3` workbench routes | Y9-2 has a useful local request-artifact flow, but it is still a separate owner rather than a thin client over shared commands. `UQ-010` stays blocked until `UQ-004` deletes the surviving local hardcoded override-name owners; thin-client synchrony cannot target split local `ahsw_range` truth. | `UQ-010` |
+| Y9-2 client parity | `scripts/pipeline/bundle_wizard/main.py` in Y9-2 vs `pipeline-v3` workbench routes | Y9-2 has a useful local request-artifact flow, but it is still a separate owner rather than a thin client over shared commands. The `FAMILY_W_RANGE` hardcoded maps that blocked `UQ-010` were deleted in `a58eda6`..`e23fd3f`. `UQ-010` is now unblocked by `UQ-004` but stays parked until `UQ-004` through `UQ-009` are green. | `UQ-010` |
 
 #### 2.5.2 Locked Design Decisions For Section 2
 
@@ -2205,7 +2214,7 @@ polish; they are the visible shape of the ownership cutover.
 |--------------------|-----------------|-----|
 | `templateSelect` + `Apply Template` | Keep the basic entry control but rename/reframe it as blueprint selection and bundle-authoring start. The action must create or load a bundle-authoring request context, not sell itself as template application. | Removes false template-first product language while preserving a familiar top-of-workflow action |
 | `bundleActionTabs` | Rename and restyle as presentation-target coverage tabs/status chips. Status must show coverage and workflow state, not only converted/saved action state. | The user is authoring bundle contributions, not isolated template actions |
-| `templateGuide`, `templateStatus`, `uploadPanelLabel` copy | Rewrite around `Single XP` vs `Bundle Authoring` modes, and around intake / convert / register / compile phases. Remove “Bundle mode” and “Classic workflow” copy that still assumes template-first semantics. | Product language must match the new owner model |
+| `templateGuide`, `templateStatus`, `uploadPanelLabel` copy | Rewrite around `Single XP` vs `Bundle Authoring` modes, and around intake / convert / register / compile phases. Remove "Bundle mode" and "Classic workflow" copy that still assumes template-first semantics. | Product language must match the new owner model |
 | Upload + Convert panel | Split one overloaded panel into explicit staged actions: `Validate Intake`, `Convert`, `Register Dry-Run`, `Register`, `Compile Bundle`, and `Validate XP`. | The current single `Convert to XP` button hides the real lifecycle and cannot represent Y9-2 parity |
 | Source Panel | Add explicit manifest status/path, save/load sidecar affordances, per-region target assignment, and clear derived-vs-authoritative guide labeling. | Source slicing must become canonical-manifest-first rather than session-box-first |
 | Bundle status area | Add request-artifact summary: current blueprint, coverage completeness, blockers, next steps, copied assets, and compile result/provenance. | Browser users need the same state model headless clients use |
@@ -2222,7 +2231,7 @@ row order, state, and stop conditions live only in Unified Sequence Of Actions.
 | `S2-R1` | `UQ-004` | `src/pipeline_v2/service.py`, session JSON on disk, `tests/test_template_registry_schema.py`, bundle/runtime/export tests | One registry-derived backend helper owns bundle create, blank-session create, bundle run, export, and web-skin payload identity, and legacy session `family` values normalize on load/save. | No live Section 2 backend branch takes authority from compat family fields, and newly written sessions no longer depend on legacy `family` as primary identity |
 | `S2-R2` | `UQ-004` | `load_template_registry()`, `web/workbench.js::fetchTemplateRegistry()` | Registry load/fetch failures are operator-visible and fail-closed for authoring surfaces instead of silently caching empty truth. | Registry errors are explicit in backend responses and visible in the UI |
 | `S2-R3` | `UQ-005` | `src/pipeline_v2/service.py` gate/export paths | One shared quality evaluator gates export-bundle and web-skin payload generation in addition to convert-time checks, and export-time `G9` measures populated visual cells rather than dense-array length. | Export/web payload reject the same failures the quality contract defines, and export-time `G9` is no longer a dead gate |
-| `S2-R4` | `UQ-005` | quality contract docs + gate code | `G8`/`G9` threshold policy and report shape are fixed across browser, MCP, and CI, including the manual-authoring versus autonomous-flow distinction for sparse XP outputs. | `validate-xp`, export, and payload paths use the same `PASS`/`WARN`/`FAIL` semantics and the same threshold/report fields |
+| `S2-R4` | `UQ-005` | quality contract docs + gate code | `G8`/`G9` threshold policy and report shape are fixed across browser, MCP, and CI. G8 threshold `_G8_MIN_RATIO=0.05` locked. G9 safety-net gate documented. | `validate-xp`, export, and payload paths use the same `PASS`/`FAIL` semantics and the same threshold/report fields |
 | `S2-R5` | `UQ-006` | source-manifest library + session save/load | Real sidecar read/write/materialize plumbing exists, and `source_boxes` / `source_cuts_*` are demoted to derived mirror state. | Session save/load no longer owns combined-sheet slicing |
 | `S2-R6` | `UQ-006` | `web/workbench.html`, `web/workbench.js` source panel | The source panel is manifest-first, with sidecar status and per-region target assignment, while preserving the current direct slicer feel. | Browser slicing edits one manifest contract rather than local-only arrays |
 | `S2-R7` | `UQ-006` | shared headless surface | Shared mark/materialize/validate/status commands exist over the same manifest contract for agents and CLI. | Agent and browser paths hit the same source-authoring contract |
@@ -2244,7 +2253,8 @@ fixed so `UQ-004` and `UQ-005` can execute without reopening design.
 2. Classic/runtime range truth is not a second owner:
    - `ahsw_range` in the normalized registry is the authority
    - any `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` style compatibility map must be
-     temporary scaffolding only
+     temporary scaffolding only; all four such maps were deleted in
+     `a58eda6`..`e23fd3f` and must not be reintroduced
 3. Export-time `G9` uses populated visual-layer cell count:
    - do **not** use dense `cols * rows` array length at export time
    - use populated non-space cells from the authoritative visual layer for the
@@ -2263,7 +2273,7 @@ fixed so `UQ-004` and `UQ-005` can execute without reopening design.
 #### 2.5.4.2 Mounted Authoring Aids Baseline, Frontend Sub-Slices, And Invariants
 
 `UQ-008` / `S2-R9` is not allowed to hide the mounted authoring aids behind
-generic phrases like “semantic review later” or “overlay calibration mode.” The
+generic phrases like "semantic review later" or "overlay calibration mode." The
 cross-repo baseline and the remaining browser gap are now fixed.
 
 1. Y9-2 audit baseline for mounted artifact shape (updated 2026-04-29 after
@@ -2288,15 +2298,15 @@ cross-repo baseline and the remaining browser gap are now fixed.
      `sibling_cooccurrence_confirmed/absent`, `angle_persistent_N`,
      `ahsw_stable/variant_only`, `rider_offset_solved`, `translated_overlap`.
    - Full Y9-2 mounted pipeline script inventory:
-     - `mounted_wrapper_mask_selector.py` — interactive wrapper role authoring
-     - `xp_semantic_atlas_reviewer.py` — TTY semantic atlas review
-     - `mounted_semantic_proposals.py` — evidence-tagged cell proposals
-     - `generate_mounted_wrapper_assets.py` — wrapper XP generation from masks
-     - `promote_mounted_wrapper_offsets.py` — offset promotion to sidecar
-     - `promote_mounted_wrapper_reviews.py` — review promotion to sidecar
-     - `mounted_wrapper_unresolved.py` — fail-closed unresolved reporter
-     - `mounted_rider_offset.py` — core offset computation (shared with PV3)
-     - `mounted_rider_residual_compare.py` — residual subtraction (shared)
+     - `mounted_wrapper_mask_selector.py` - interactive wrapper role authoring
+     - `xp_semantic_atlas_reviewer.py` - TTY semantic atlas review
+     - `mounted_semantic_proposals.py` - evidence-tagged cell proposals
+     - `generate_mounted_wrapper_assets.py` - wrapper XP generation from masks
+     - `promote_mounted_wrapper_offsets.py` - offset promotion to sidecar
+     - `promote_mounted_wrapper_reviews.py` - review promotion to sidecar
+     - `mounted_wrapper_unresolved.py` - fail-closed unresolved reporter
+     - `mounted_rider_offset.py` - core offset computation (shared with PV3)
+     - `mounted_rider_residual_compare.py` - residual subtraction (shared)
    - Pipeline-v3 does not need to copy the Y9-2 TTY UI, but it must inherit the
      same artifact law: exact artifact coordinates, explicit wrapper-role
      naming (`mount_front` / `mount_rear`), explicit semantic owner vocabulary
@@ -2394,7 +2404,7 @@ The canonical Section 2 wrapper behavior tree is:
 **Y9-2 dual-path note:** There are now two partial client paths, but they do not yet converge on one truthful backend owner:
 - **Human TUI path today:** Y9-2 launcher-adjacent/local CLI wizard → Y9-2 bundle-wizard code → local request artifact / bundle compile flow.
 - **Workbench path today:** browser or MCP → pipeline-v3 `/api/workbench/*` surfaces.
-The required end state is different: both human and agent clients must share the same manifest/materialize/validate/register/compile commands. Step 2 (source region marking) remains the human-only bottleneck until the Step 5 design contract in Section 2.3.1-2.3.4 is implemented and a shared headless mark/materialize surface is added under `UQ-006` / `UQ-010`. Before that synchrony work, `UQ-004` must delete the surviving local hardcoded `ahsw_range` owners so the future thin clients are not wired onto split local override truth.
+The required end state is different: both human and agent clients must share the same manifest/materialize/validate/register/compile commands. Step 2 (source region marking) remains the human-only bottleneck until the Step 5 design contract in Section 2.3.1-2.3.4 is implemented and a shared headless mark/materialize surface is added under `UQ-006` / `UQ-010`. Before that synchrony work, `UQ-004` had to delete the surviving local hardcoded `ahsw_range` owners so the future thin clients are not wired onto split local override truth. The four `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` maps were deleted in `a58eda6`..`e23fd3f`; `UQ-010` is now unblocked by `UQ-004`.
 
 ### 2.8 Section-2 Rebuild Update (2026-04-15)
 
@@ -2460,7 +2470,7 @@ Evidence:
 Decision (inference from sources):
 
 1. Do not treat mounted-family runtime coverage and workbench authoring coverage
-   as already aligned. They are not — but the gap is now narrower than when this
+   as already aligned. They are not - but the gap is now narrower than when this
    section was first written. Y9-2 has closed the TTY-side authoring toolchain;
    the remaining gap is pipeline-v3 native builder support and browser UI.
 2. Shipping authoring scope stays narrower than raw runtime filename truth until
@@ -2522,14 +2532,14 @@ authoritative CLI/API contract with at least these command semantics:
 
 | Command | Purpose | Mutation | Status |
 |---------|---------|----------|--------|
-| `phase0-status` | inspect semantic-dict/reference state | no | `planned_only` — no route exists |
-| `phase0-build` | refresh semantic-dict/reference state | yes | `planned_only` — no route exists |
-| `validate-skin-intake` | validate source PNG geometry/coverage for the skin lane | no | `planned_only` — no route exists |
-| `convert-skin-request` | convert walk/attack/death PNG inputs into staged XP and update the request artifact | yes | `planned_only` — no route exists |
-| `register-skin-request` | dry-run or perform canonical registration into bundle source + sprite destinations | yes | `planned_only` — no route exists |
-| `compile-skin-request` | compile canonical bundle outputs from a registered request | yes | `planned_only` — no route exists |
-| `validate-xp` | run XP-only G7-G12 validation without requiring bundle/session context | no | `planned_only` — no route exists |
-| `status` | inspect request artifact state, blockers, next steps, and provenance | no | `planned_only` — no route exists |
+| `phase0-status` | inspect semantic-dict/reference state | no | `planned_only` - no route exists |
+| `phase0-build` | refresh semantic-dict/reference state | yes | `planned_only` - no route exists |
+| `validate-skin-intake` | validate source PNG geometry/coverage for the skin lane | no | `planned_only` - no route exists |
+| `convert-skin-request` | convert walk/attack/death PNG inputs into staged XP and update the request artifact | yes | `planned_only` - no route exists |
+| `register-skin-request` | dry-run or perform canonical registration into bundle source + sprite destinations | yes | `planned_only` - no route exists |
+| `compile-skin-request` | compile canonical bundle outputs from a registered request | yes | `planned_only` - no route exists |
+| `validate-xp` | run XP-only G7-G12 validation without requiring bundle/session context | no | `planned_only` - no route exists |
+| `status` | inspect request artifact state, blockers, next steps, and provenance | no | `planned_only` - no route exists |
 
 The API naming may differ from the CLI verb spelling, but the semantics and
 validation rules must be identical. There must not be a browser-only, MCP-only,
@@ -2606,17 +2616,17 @@ legacy family strings.
 in `src/pipeline_v2/app.py` are organized around the workbench UI, not the
 shared headless gateway:
 
-- `/healthz` — health check
-- `/api/run`, `/api/status/<job_id>`, `/api/upload`, `/api/analyze` — legacy
+- `/healthz` - health check
+- `/api/run`, `/api/status/<job_id>`, `/api/upload`, `/api/analyze` - legacy
   pipeline run/status flow
-- `/api/workbench/templates` — template registry
-- `/api/workbench/bundle/create` — bundle creation
-- `/api/workbench/action-grid/apply` — action-grid source apply
-- `/api/workbench/export-bundle` — bundle export
-- `/api/workbench/web-skin-bundle-payload` — bundle web-skin payload
-- `/api/workbench/run-verification` — session verification
-- `/api/workbench/*/browse/*` — session CRUD
-- `/api/workbench/*/session/*` — session lifecycle (save, load, create-blank,
+- `/api/workbench/templates` - template registry
+- `/api/workbench/bundle/create` - bundle creation
+- `/api/workbench/action-grid/apply` - action-grid source apply
+- `/api/workbench/export-bundle` - bundle export
+- `/api/workbench/web-skin-bundle-payload` - bundle web-skin payload
+- `/api/workbench/run-verification` - session verification
+- `/api/workbench/*/browse/*` - session CRUD
+- `/api/workbench/*/session/*` - session lifecycle (save, load, create-blank,
   export-xp, upload-xp, termpp-stream, mounted-calibration,
   mounted-semantic/review)
 
@@ -2642,7 +2652,7 @@ future shared gateway.
 
 ---
 
-## Section 3 — User-Reachable Action Harness Spec
+## Section 3 - User-Reachable Action Harness Spec
 
 This section defines the acceptance harness for the shipped workbench UI. It
 exists because the product surface is a many-action editor and UI regressions
@@ -2676,12 +2686,12 @@ The correct model is:
    - the executor that performs those actions through real browser gestures and
      records checkpoints, artifacts, and failure evidence
 
-This replaces the older “truth table -> repaint recipe” framing. The old
+This replaces the older "truth table -> repaint recipe" framing. The old
 truth-table lane described XP cells directly and then generated layer-2-centric
 repaint steps. That model is not authoritative for a modern whole-sheet-root
-editor because the acceptance problem is not “can we repaint these cells?” The
-acceptance problem is “can a real user, through the shipped UI, reach the
-required artifact state without cheating?”
+editor because the acceptance problem is not "can we repaint these cells?" The
+acceptance problem is "can a real user, through the shipped UI, reach the
+required artifact state without cheating?"
 
 ### 3.2 Authoritative Inputs
 
@@ -2853,7 +2863,7 @@ Cartesian enumerator and not a machine-learning authority.
 The current repo maps onto this harness model as follows:
 
 1. `action_registry_schema.json` (the harness action registry seed)
-   - keep — this is the sole current source of the User-Reachable Action Graph
+   - keep - this is the sole current source of the User-Reachable Action Graph
    - no live `action_registry.json` instance file exists in this checkout; the
      schema file is both the seed definition and the current authority
    - adapt by expanding conditional reachability, gesture coverage, checkpoint
@@ -2936,23 +2946,23 @@ The current repo maps onto this harness model as follows:
 This section is the literal bottom-up workflow for this repo. The ordering law
 is:
 
-1. **Section 1 first** — finish the REXPaint-parity root editor and owner graph.
-2. **Section 2 second** — add wrapper/runtime/bundle behavior only on top of
+1. **Section 1 first** - finish the REXPaint-parity root editor and owner graph.
+2. **Section 2 second** - add wrapper/runtime/bundle behavior only on top of
    the proven Section 1 owner.
-3. **Section 3 third** — build acceptance and structural-contract proof that is
+3. **Section 3 third** - build acceptance and structural-contract proof that is
    carefully decoupled and only describes behavior that actually exists.
-4. **Y9-2 gateway and public replacement last** — launcher/wizard follow-through
+4. **Y9-2 gateway and public replacement last** - launcher/wizard follow-through
    and `/xpedit` cutover happen only after the first three layers are current.
 
 Already-landed foundation slices on this branch:
 
-1. `b8df3af` — blank root image path (`New XP`)
-2. `790b63f` — whole-sheet root session ownership
-3. `359c508` — root image actions routed through whole-sheet
-4. `8da9c16` — source panel as root overlay
-5. `c0d387f` — single frame-nav owner
-6. `5014671` — research-backed editor/runtime decisions captured in Section 1.9 and Section 2.9
-7. `5d5af15` — explicit Section 2 runtime-proof scope and full root save shape
+1. `b8df3af` - blank root image path (`New XP`)
+2. `790b63f` - whole-sheet root session ownership
+3. `359c508` - root image actions routed through whole-sheet
+4. `8da9c16` - source panel as root overlay
+5. `c0d387f` - single frame-nav owner
+6. `5014671` - research-backed editor/runtime decisions captured in Section 1.9 and Section 2.9
+7. `5d5af15` - explicit Section 2 runtime-proof scope and full root save shape
 
 Legacy-step normalization for older references:
 
@@ -2970,7 +2980,7 @@ Legacy-step normalization for older references:
 1. Start at the first row whose state is `CURRENT` or `READY`.
 2. Before changing files, check `PLAYWRIGHT_FAILURE_LOG.md`, isolate unrelated
    dirt, and do not stage or revert user/unrelated changes.
-3. Do exactly the row’s task. Do not pull future-layer work forward because it
+3. Do exactly the row's task. Do not pull future-layer work forward because it
    feels related.
 4. A Section 2 row may adapt to Section 1 behavior, but it may not reopen
    Section 1 ownership or invent a second editor/root.
@@ -2979,14 +2989,14 @@ Legacy-step normalization for older references:
    from structural/diagnostic paths.
 6. When a row lands or its state changes materially, update this canon and
    `PLAYWRIGHT_FAILURE_LOG.md` in the same commit.
-7. `PARKED` rows are backlog, not “maybe next.” They do not execute until the
+7. `PARKED` rows are backlog, not "maybe next." They do not execute until the
    earlier `CURRENT` / `READY` rows pass or the user explicitly reprioritizes
    them.
 8. `CURRENT / SUPPORT` means the row runs continuously alongside other queue
    rows as maintenance. It depends on `UQ-001` and whichever Section 1/2 source
    state currently exists. Its work is triggered by each landed Section 1/2
    slice, not by its own independent milestone. It has no positive completion
-   condition — its fail condition (`Any verifier lane outruns product reality`)
+   condition - its fail condition (`Any verifier lane outruns product reality`)
    is a boundary guard, not a stop signal.
 
 | Seq | State | Robot Task | Preconditions | Do Exactly This | Pass Condition | Stop / Fail Condition | FL / Owner |
@@ -2994,15 +3004,15 @@ Legacy-step normalization for older references:
 | UQ-001 | ALWAYS | Establish repo truth before work | none | Run the repo entry checks, check the failure log first, inspect branch/head/dirty files, and identify unrelated dirt that must be left alone | Current authority docs, branch/head, dirty files, and relevant blockers are known before edits begin | Any unknown dirty change intersects the target files and cannot be safely isolated | Repo rule / `PLAYWRIGHT_FAILURE_LOG.md` |
 | UQ-002 | PASS | Close Section 1 REXPaint parity and root-owner law | UQ-001 complete | Use Section 1.6 and Section 1.8 as the exact scope. Land only root-editor work: resize, browse parity, undo/redo ownership, apply toggles, oval/text tools, pointer events, zoom/grid completeness, and layer keyboard/persistence parity. Keep `whole-sheet-init.js` the sole document owner. Within this row, cut the hot path in this order: move live history out of `workbench.js`, stop full frame-grid rebuilds on ordinary root edits, decouple save/autosave from edit completion, then offload any still-heavy secondary projection/serialization work. | Section 1 no longer has unresolved root-editor parity blockers, the shipped edit path no longer depends on wrapper-owned history or broad wrapper projection churn for ordinary edits, or any residuals are explicitly logged as open with proof state and no mixed ownership survives | Any patch reintroduces a second editor/root owner, leaves the old owner alive while adding a new authoritative path, or treats wrapper-side throttles/suppression flags as closure while wrapper-owned hot-path authority still survives | Section 1 / `FL-STEP4` family / §1.6 |
 | UQ-003 | PASS | Prove the Section 1 foundation on shipped surfaces | UQ-002 pass condition met | Run UI-only headed proof for the root-hosted and prefixed `/xpedit` Section 1 surface using shipped controls only; record evidence and update the ledger honestly | Root-hosted and prefixed Section 1 flows are proven on the shipped UI with no acceptance-boundary violation | Any proof relies on `fetch()`, `page.evaluate()` mutation, hidden hooks, or diagnostic-only paths and is labeled acceptance | Section 3 acceptance law / Section 1 proof |
-| UQ-004 | ACTIVE | Finish normalized-registry authority closeout | UQ-002 pass condition met | Deletion-first closeout. Preserve the landed backend helper/tests/operator-visibility work, then explicitly delete or hard-disable every surviving hardcoded `ahsw_range` owner in the same slice before any replacement helper claims authority: `web/workbench.js:FAMILY_W_RANGE`, `src/pipeline_v2/service.py:_FAMILY_W_RANGE`, `web/termpp_skin_lab.js:FAMILY_W_RANGE`, and `runtime/termpp-skin-lab-static/termpp_skin_lab.js:FAMILY_W_RANGE`. After those old owners are gone, replace them with one shared registry-derived override-name path so browser, runtime helper, and service export all consume registry `ahsw_range` truth. Keep the compat `family` alias mirror-only and do not reopen browser/backend split authority while closing the remaining residuals. | No live backend bundle/session/export/runtime path still takes authority from `family` or `ENABLED_FAMILIES`; browser, runtime helper, and backend all consume the same normalized contract; classic/runtime override naming also derives from registry `ahsw_range` instead of hardcoded maps | Any fix restores browser-side fail-close logic, creates a second registry authority, leaves any of the four hardcoded `ahsw_range` owners alive as authoritative paths, reintroduces live compat-family gating, or claims `UQ-004` closure while local override truth is still split | Section 2.5 / `S2-R1` / `S2-R2` |
-| UQ-005 | BLOCKED | Close the Section 2 export-quality contract at the wrapper boundary | UQ-004 pass condition met | Execute `S2-R3` then `S2-R4`: wire the full Step 5 quality contract into `workbench_export_bundle()` and `workbench_web_skin_bundle_payload()`, then lock the G8/G9 threshold/report policy. Keep the shared `validate-xp` surface aligned with the same contract and do not treat single-XP validation as a substitute for export-path enforcement. | Bundle export and web-skin payload generation reject artifacts that fail the full quality contract, not just G10-G12 | Any closure claim remains contradicted by live service code, or export/web-skin paths still skip G7/G8/G9 | Section 2.4 / `S2-R3` / `S2-R4` |
+| UQ-004 | CLOSED | Finish normalized-registry authority closeout | UQ-002 pass condition met | The four hardcoded `FAMILY_W_RANGE` / `_FAMILY_W_RANGE` maps were deleted in `a58eda6`..`e23fd3f`. All override-name paths now derive from registry `prefix_catalog.ahsw_range`. The `preview_xp -> l0_ref` fallback was fail-closed (normalizer raises ValueError on missing `preview_xp`). Registry load/fetch errors return 503 and surface as a degraded-state warning in the browser — empty truth is not cached, errors re-surface on each call. | No live backend bundle/session/export/runtime path still takes authority from `family` or `ENABLED_FAMILIES`; browser, runtime helper, and backend all consume the same normalized contract; classic/runtime override naming derives from registry `ahsw_range` instead of hardcoded maps; registry errors are operator-visible without silent empty caching | Any fix restores browser-side fail-close logic, creates a second registry authority, reintroduces hardcoded `ahsw_range` maps as authoritative paths, reintroduces live compat-family gating, or claims `UQ-004` closure while local override truth is still split | Section 2.5 / `S2-R1` / `S2-R2` |
+| UQ-005 | CLOSED | Close the Section 2 export-quality contract at the wrapper boundary | UQ-004 pass condition met | Executed `S2-R3` then `S2-R4`: export-bundle and web-skin payload both call `_run_structural_gates()` (G7-G12). Canonical `validate-xp` surface added as `/api/workbench/validate-xp` + MCP tool `validate_xp`. G8/G9 threshold policy locked in `src/pipeline_v2/gates.py` with explicit named constants and documentation. | Bundle export and web-skin payload generation reject artifacts that fail the full quality contract, not just G10-G12; validate-xp endpoint exists and uses same gate suite | Any closure claim remains contradicted by live service code, or export/web-skin paths still skip G7/G8/G9 | Section 2.4 / `S2-R3` / `S2-R4` |
 | UQ-006 | BLOCKED | Finish the Section 2 source-wrapper implementation on the canonical manifest contract | UQ-004 pass condition met | Execute `S2-R5` then `S2-R6` then `S2-R7`: land sidecar read/write/materialize plumbing, demote `extractedBoxes` / `sourceCutsV` / `sourceCutsH` to derived mirror state, rebuild the source panel around canonical manifest ownership, and expose the same mark/materialize/validate/status contract to headless clients. | Source authoring is no longer JSON-first, and one canonical manifest contract still owns source layout for UI, MCP, and backend paths | Any fix creates a second source-layout model or makes session-local source state authoritative again | Section 2.3 / `S2-R5` / `S2-R6` / `S2-R7` |
 | UQ-007 | BLOCKED | Land the Section 2 runtime identity layer | UQ-004 through UQ-006 pass conditions met | Execute `S2-R8`: introduce one live pipeline-v3 owner for `skin_definition_id`, `presentation_kind_id`, and `layer_definition_id`; thread that identity through bundle contract helpers, register/compile outputs, and any backend/API proof surfaces that claim Y9-2 bundle parity. Do not pull item/wearable authoring into this row. | Pipeline-v3 no longer relies on string-only scope when claiming generalized-bundle readiness, and one runtime-identity layer exists across helper, backend, and emitted bundle truth | Any fix bolts numeric IDs onto mixed `family` / normalized-registry authority, or substitutes mounted/item surface work for the missing runtime identity layer | Section 2.3.10 / `S2-R8` |
-| UQ-008 | BLOCKED | Extend Section 2 to mounted-family authoring and runtime parity | UQ-007 pass condition met | Execute `S2-R9`: on top of the normalized registry and runtime identity layer, add mounted-family authoring/runtime parity for `wolfie` and `wolack`: mounted presentation-target surface, native builder support, export/runtime proof, mounted semantic-row closure, `U2` browser overlay calibration on top of the existing backend/MCP calibration artifact flow, and `U4` browser semantic review on top of the existing backend/MCP exact-cell proposal flow. The calibration surface must be non-destructive and artifact-producing: it records candidate/accepted `(dx,dy)` solves and overlay evidence without mutating stored XP art. Keep `bigbee` explicitly deferred unless canon changes. | `wolfie` and `wolack` are authorable/provable on the live Section 2 contract, mounted semantic/alignment truth is reviewable rather than implied, the browser surface matches the already-landed backend/MCP artifact flow, and mounted rows are no longer “specified_not_authorable” | Any fix pulls `bigbee` into scope without canon change, treats the current in-place jitter editor as mounted-calibration closure, modifies the existing jitter owner instead of adding a sibling mounted surface, writes mounted semantics directly from heuristics without human confirmation, flips `authorable: true` before full mounted builder/export/runtime closure, or adds mounted support via a proof-only shim instead of the live authoring/runtime path | Section 2.5 / `S2-R9` |
+| UQ-008 | BLOCKED | Extend Section 2 to mounted-family authoring and runtime parity | UQ-007 pass condition met | Execute `S2-R9`: on top of the normalized registry and runtime identity layer, add mounted-family authoring/runtime parity for `wolfie` and `wolack`: mounted presentation-target surface, native builder support, export/runtime proof, mounted semantic-row closure, `U2` browser overlay calibration on top of the existing backend/MCP calibration artifact flow, and `U4` browser semantic review on top of the existing backend/MCP exact-cell proposal flow. The calibration surface must be non-destructive and artifact-producing: it records candidate/accepted `(dx,dy)` solves and overlay evidence without mutating stored XP art. Keep `bigbee` explicitly deferred unless canon changes. | `wolfie` and `wolack` are authorable/provable on the live Section 2 contract, mounted semantic/alignment truth is reviewable rather than implied, the browser surface matches the already-landed backend/MCP artifact flow, and mounted rows are no longer "specified_not_authorable" | Any fix pulls `bigbee` into scope without canon change, treats the current in-place jitter editor as mounted-calibration closure, modifies the existing jitter owner instead of adding a sibling mounted surface, writes mounted semantics directly from heuristics without human confirmation, flips `authorable: true` before full mounted builder/export/runtime closure, or adds mounted support via a proof-only shim instead of the live authoring/runtime path | Section 2.5 / `S2-R9` |
 | UQ-009 | CURRENT / SUPPORT | Keep Section 3 harness and structural-contract runners aligned to what exists | UQ-001 complete; target Section 1/2 source state exists | Update the Section 3 action graph, headed signoff lanes, and backend schema/contract runners only for the surfaces that actually exist after each landed Section 1/2 slice. Keep acceptance UI-only. Keep backend schema/runtime parity runners separate from UI acceptance. Keep legacy repaint/truth-table entrypoints demoted. | Section 3 proof describes current code honestly: no false-green acceptance lane, no stale action graph, no structural-contract runner claiming UI acceptance | Any verifier lane outruns product reality, uses debug/API mutation as acceptance, or implies mounted/item closure from player-only lanes | Section 3 / harness law |
 | UQ-010 | PARKED | Finish Y9-2 gateway follow-through on the shared bundle-authoring contract | UQ-004 through UQ-009 passed, or user explicitly reprioritizes it after backend truth is stable | Execute `S2-R10`: wire launcher / bundle-wizard / MCP front doors to the shared Section 2.10 headless contract (`phase0-status`, `phase0-build`, `validate-skin-intake`, `convert-skin-request`, `register-skin-request`, `compile-skin-request`, `validate-xp`, `status`) and remove any surviving second pipeline owner or local CLI substitution from the execution path. | Y9-2 front doors use the same stable bundle-authoring contract that Section 2 and Section 3 already prove | Any fix creates a second pipeline owner, keeps local subprocess behavior alive as parallel truth, or reclassifies missing contract ownership as launcher-only wiring after Section 2.10 defined the shared owner | Section 2.10 / `S2-R10` / B-13 |
 | UQ-011 | PARKED | Public replacement / cutover lane | UQ-003 through UQ-010 passed; user explicitly starts cutover | Run the direct public-parity audit against `rikiworld.com/xpedit`, freeze the exact replacement SHA and proof artifacts, validate the `/xpedit` deploy path, deploy the frozen candidate, and re-run headed proof on the live URL | Public replacement is backed by the same root-hosted, prefixed, and public evidence chain with no unresolved earlier-layer blocker | Any earlier row is still open, any public parity check fails, or cutover is claimed from code state alone | Replacement lane / public parity |
-| UQ-012 | ALWAYS | Canon hygiene and anti-overclaiming | Every non-trivial source/doc/proof change | Keep `PLAYWRIGHT_FAILURE_LOG.md`, this canon spec, and any directly-adjacent proof-summary text aligned. Separate code state, proof state, and doc state explicitly. Reopen rows when live code falsifies an earlier closeout. | Authority docs and live source agree, and no stale completion claim survives a contradiction | A lower-priority note, stale sequence summary, or old “COMPLETE” wording contradicts the current failure log or source | Canon authority / process |
+| UQ-012 | ALWAYS | Canon hygiene and anti-overclaiming | Every non-trivial source/doc/proof change | Keep `PLAYWRIGHT_FAILURE_LOG.md`, this canon spec, and any directly-adjacent proof-summary text aligned. Separate code state, proof state, and doc state explicitly. Reopen rows when live code falsifies an earlier closeout. | Authority docs and live source agree, and no stale completion claim survives a contradiction | A lower-priority note, stale sequence summary, or old "COMPLETE" wording contradicts the current failure log or source | Canon authority / process |
 | UQ-013 | PARKED | Small-screen layout and browser persistence follow-through | Core Section 1-3 queue rows passed, or user explicitly reprioritizes | Finish the Section 1.9.1 pointer/touch migration, three-tier persistence model, and narrow-screen layout contract without reopening the Section 1 owner graph | Small-screen/persistence work lands on the proven root editor rather than competing with it | Any fix reopens owner boundaries or is used to dodge unfinished Section 1 parity work | Section 1.9.1 / legacy Step 14 |
 
 Future after current skin-authoring closure:
@@ -3021,7 +3031,7 @@ in Y9-2.**
 
 The active bundle (driven by `appearance_bundle.json` and `ids.lock.json`) currently
 references approximately 74 of 441 XP sprite files in the Y9-2 `assets/sprites/`
-directory — roughly 17% coverage. This is not an error; it reflects deliberate phase-2
+directory - roughly 17% coverage. This is not an error; it reflects deliberate phase-2
 scope. However, the spec does not currently define coverage policy, so there is no
 machine-enforceable contract between the sprite library and the active bundle.
 
@@ -3035,14 +3045,14 @@ Current phase-2 baseline intentionally includes:
 
 Current phase-2 intentionally excludes:
 
-- color-variant families (`attack-green-*`, `player-green-*`, `plydie-green-*`) —
+- color-variant families (`attack-green-*`, `player-green-*`, `plydie-green-*`) -
   proof-only, not authorable; see §2.3.4 and §2.5 misalignment ledger
   (`src/pipeline_v2/service.py`, `config/template_registry.json`,
   `scripts/workbench_png_to_skin_test_playwright.mjs`, `web/workbench.js`)
-- mounted families (`wolfie-*`, `wolack-*`) — deferred pending schema normalization;
+- mounted families (`wolfie-*`, `wolack-*`) - deferred pending schema normalization;
   see §2.9.1
-- `bigbee-*` — deferred explicitly; see Step 10 scope note
-- world-item and inventory-grid item families — no item authoring surface exists yet
+- `bigbee-*` - deferred explicitly; see Step 10 scope note
+- world-item and inventory-grid item families - no item authoring surface exists yet
 
 ### 2.11.2 Coverage Expansion Contract
 
@@ -3054,10 +3064,10 @@ coverage contract must expand simultaneously. The rule is:
    - listed in `config/SPRITE_COVERAGE_EXCEPTIONS.txt` with an explicit reason
 
 2. Accepted reasons for exclusion:
-   - `deprecated` — asset is historical; not in active use
-   - `proof-only` — runtime/proof helpers use it but the authoring surface does not
-   - `future-scope` — planned for a future phase; include target milestone if known
-   - `test-fixture` — test-only asset not in production bundles
+   - `deprecated` - asset is historical; not in active use
+   - `proof-only` - runtime/proof helpers use it but the authoring surface does not
+   - `future-scope` - planned for a future phase; include target milestone if known
+   - `test-fixture` - test-only asset not in production bundles
 
 3. If a new sprite file is added to `assets/sprites/` without a corresponding bundle
    reference or SPRITE_COVERAGE_EXCEPTIONS.txt entry, that is a coverage regression,
@@ -3108,7 +3118,7 @@ asset state.
 
 A sound rollback snapshot must capture:
 
-1. All JSON metadata (current behavior — retain as-is)
+1. All JSON metadata (current behavior - retain as-is)
 2. All XP sprite binaries referenced by the bundle at snapshot time
 3. The expected SHA256 hash of each referenced sprite binary, stored in a
    `bundle_sha256_manifest.json` alongside the snapshot
@@ -3174,7 +3184,7 @@ backend.
 
 4. The `option_tree` must reflect the current backend capability. If an endpoint is
    not implemented, the corresponding launcher option must be either absent or
-   explicitly labeled `[DEFERRED]` — never silently present with a broken or stub
+   explicitly labeled `[DEFERRED]` - never silently present with a broken or stub
    handler.
 
 ### 2.13.2 Priority Client Paths
@@ -3205,7 +3215,7 @@ When a user enters the bundle authoring wizard from the Y9-2 launcher:
 6. **Register**: run `register-skin-request --dry-run`, then real register only
    if dry-run passes and full walk/attack/death coverage exists
 7. **Compile + validate**: run `compile-skin-request` and `validate-xp`;
-   display gate outcomes (G7–G12), provenance, and compile results
+   display gate outcomes (G7-G12), provenance, and compile results
 8. **Accept or retry**: user reviews; if rejected, return to step 3 or 5
 
 Status display rule: the wizard must always show which blueprint is active and
@@ -3235,29 +3245,29 @@ pipeline does must be captured in this spec, not in wizard code.
 
 This section is the canonical reference for understanding the Y9-2 appearance bundle
 system that Section 2 of this pipeline must author toward. Every authoring contract,
-export gate, and semantic parity requirement in §2.3–§2.13 exists to produce output
+export gate, and semantic parity requirement in §2.3-§2.13 exists to produce output
 compatible with this system. Source code cited below lives in the main game repo
 (`asciicker-Y9-2`), not in this repo.
 
 ---
 
-### 2.14.1 End-to-End Walkthrough — Header Block
+### 2.14.1 End-to-End Walkthrough - Header Block
 
 The following 17-step sequence is the full path from a raw XP file on disk to a
 pixel drawn on screen. Each step is labeled **STEP N** so that inline commentary
 elsewhere in this spec and in source files can reference it by number.
 
 ```
-STEP 0  — XP exists on disk
+STEP 0  - XP exists on disk
           The XP file is authored art. The game does not use it automatically.
           No callgraph. Source: appearance_bundle.py:4 (module docstring)
 
-STEP 1  — Manifest declares what the XP is
+STEP 1  - Manifest declares what the XP is
           Source: positive.bundle.json → layer_definition entry
           Fields: slug, contract, path, presentation_kind_slug, slot_kind_slug,
                   visual_style_slug, variant_signature, owner (skin/item/mount)
 
-STEP 2  — Compiler validates XP against SPRITE_CONTRACTS
+STEP 2  - Compiler validates XP against SPRITE_CONTRACTS
           Callgraph:
           compile()
             └─ _inspect_sprite_asset(path, contract_key)       [py:224]
@@ -3270,13 +3280,13 @@ STEP 2  — Compiler validates XP against SPRITE_CONTRACTS
                  └─ validate angles/projs/anims/row1/row2 vs SPRITE_CONTRACTS[key]
           Contract table: SPRITE_CONTRACTS                      [py:72]
 
-STEP 3  — Compiler stores geometry metadata
+STEP 3  - Compiler stores geometry metadata
           _inspect_sprite_asset() returns asset record:
             {path, contract, sha256, sheet_size, frame_size,
              angles, projs, anims, row1_refs, row2_refs, layer_count}
           → written into layer_definition.asset in compiled bundle [py:304]
 
-STEP 4  — Bundle stores owner/presentation/slot/variant binding
+STEP 4  - Bundle stores owner/presentation/slot/variant binding
           Callgraph:
           compile()
             └─ _resolve_and_emit_layer_definitions()            [py:987]
@@ -3287,7 +3297,7 @@ STEP 4  — Bundle stores owner/presentation/slot/variant binding
                  │    silhouette_class}                          [py:237]
                  └─ emit row into bundle.catalog.layer_definitions
 
-STEP 5  — Server selects authoritative appearance at player join
+STEP 5  - Server selects authoritative appearance at player join
           Callgraph:
           SvrHandleClientJoin()                       [server_tick.cpp:4587]
             └─ SvrSelectJoinAppearanceProfile()       [server_tick.cpp:4595]
@@ -3301,7 +3311,7 @@ STEP 5  — Server selects authoritative appearance at player join
                       ├─ SvrUpsertAppearanceEntry() × starter_count
                       └─ SvrBumpAppearanceRevision()
 
-STEP 6  — Server sends two packets to every client
+STEP 6  - Server sends two packets to every client
           Callgraph:
           SvrHandleClientJoin()
             ├─ fill STRUCT_BRC_JOIN              [network.h:284]
@@ -3320,7 +3330,7 @@ STEP 6  — Server sends two packets to every client
                            entries[].{slot_kind_id, item_definition_id,
                                       visual_style_id, state_flags}
 
-STEP 7  — Client stores authoritative appearance state
+STEP 7  - Client stores authoritative appearance state
           Callgraph:
           BroadcastHandler.handle_packet()
             └─ case 'a':                         [game.cpp:6337]
@@ -3328,7 +3338,7 @@ STEP 7  — Client stores authoritative appearance state
                  └─ copy into sn->appearance_v2
           No rendering yet. Client now has authoritative appearance truth.
 
-STEP 8  — Render-time: selector picks presentation family
+STEP 8  - Render-time: selector picks presentation family
           Callgraph:
           RenderActor(sn)
             └─ FindActorBundleSelectorForRuntime(
@@ -3339,14 +3349,14 @@ STEP 8  — Render-time: selector picks presentation family
                  ├─ walk g_actor_appearance_bundle.selectors[]
                  └─ return ActorBundleSelectorDef* where all masks match
 
-STEP 9  — Selector picks desired geometry signature
+STEP 9  - Selector picks desired geometry signature
           Callgraph:
           ResolveActorBundleLayersForState(sn)
             └─ ResolveActorDesiredVariantSignature(selector) [game.cpp:3532]
                  └─ return selector->fallback_chain[0]
                           (usually base/full/base)
 
-STEP 10 — Renderer looks up the body layer
+STEP 10 - Renderer looks up the body layer
           Callgraph:
           ResolveActorBundleLayersForState()
             └─ ResolveActorBundleLayerWithFallback(
@@ -3357,11 +3367,11 @@ STEP 10 — Renderer looks up the body layer
                    APPEARANCE_VISUAL_STYLE_DEFAULT,
                    desired_signature,
                    &fallback_mask)               [game.cpp:3606]
-                 ├─ FindActorBundleLayerExact() — try exact signature
+                 ├─ FindActorBundleLayerExact() - try exact signature
                  └─ if miss: walk fallback_chain[], try each candidate;
                              record miss in fallback_mask bit
 
-STEP 11 — Renderer looks up gear layers in attachment order
+STEP 11 - Renderer looks up gear layers in attachment order
           Callgraph:
           ResolveActorBundleLayersForState()
             ├─ ResolveActorBundleAttachmentSlotOrder(
@@ -3380,18 +3390,18 @@ STEP 11 — Renderer looks up gear layers in attachment order
                         desired_signature,
                         &fallback_mask)          [game.cpp:3641]
 
-STEP 12 — Fallback substitutes a nearby geometry variant if exact is missing
+STEP 12 - Fallback substitutes a nearby geometry variant if exact is missing
           (Embedded in STEP 10 and STEP 11 via ResolveActorBundleLayerWithFallback)
           Callgraph:
           ResolveActorBundleLayerWithFallback()   [game.cpp:3503]
-            ├─ FindActorBundleLayerExact() — exact pass
+            ├─ FindActorBundleLayerExact() - exact pass
             ├─ if miss: mark fallback_mask bit
             └─ for i in selector->fallback_count:
                  └─ FindActorBundleLayerExact(
                         ..., fallback_chain[i])
-                    — use first match found
+                    - use first match found
 
-STEP 13 — Ordered layer stack assembled
+STEP 13 - Ordered layer stack assembled
           After STEP 11, ResolveActorBundleLayersForState returns
           a struct (ActorBundleResolvedLayers) containing:
             body_layer_definition_id
@@ -3399,7 +3409,7 @@ STEP 13 — Ordered layer stack assembled
             mount_layer_definition_id (if mounted)
           FillActorBundleRenderArrays() emits flat render arrays [game.cpp:3673]
 
-STEP 14 — Layers composited into final sprite
+STEP 14 - Layers composited into final sprite
           Callgraph:
           LookupActorBundleComposedSprite(layers, clr)  [game.cpp:3822]
             ├─ BuildActorBundleRenderKey(layers, &key)
@@ -3410,7 +3420,7 @@ STEP 14 — Layers composited into final sprite
             │    └─ composite each item layer in render order
             └─ return cached composed Sprite*
 
-STEP 15 — Animation frame selected
+STEP 15 - Animation frame selected
           Callgraph:
           ResolvePresentationFrame(
               presentation_kind_id, tick,
@@ -3421,7 +3431,7 @@ STEP 15 — Animation frame selected
             └─ plydie → ActorBundleDeathPlaybackMetadataAllows()
                          → playback frame index
 
-STEP 16 — Sprite drawn on screen
+STEP 16 - Sprite drawn on screen
           DrawActorSprite(composed_sprite, frame, x, y)
           The composed sprite from STEP 14 at the frame index from STEP 15
           produces the final on-screen pixel output.
@@ -3431,7 +3441,7 @@ STEP 16 — Sprite drawn on screen
 
 ### 2.14.2 Abstraction Hierarchy
 
-In the same way that ℂ ⊃ ℝ ⊃ ℚ ⊃ ℤ nests number systems, the bundle system layers
+In the same way that C ⊃ R ⊃ Q ⊃ Z nests number systems, the bundle system layers
 identity concepts. Each row below answers a strictly narrower question than the one
 above it.
 
@@ -3508,7 +3518,7 @@ packets. See §2.14.6 for model clarifications.
 
 ### 2.14.3 Glossary
 
-All terms used in §2.3–§2.14 are defined here in alphabetical order.
+All terms used in §2.3-§2.14 are defined here in alphabetical order.
 
 | Term | Definition |
 |------|-----------|
@@ -3519,9 +3529,9 @@ All terms used in §2.3–§2.14 are defined here in alphabetical order.
 | `appearance_v2` | The authoritative appearance packet/state on the client, populated from `STRUCT_BRC_APPEARANCE_STATE_V2` (token `'a'`). Contains `appearance_profile_id`, `skin_definition_id`, `mount_definition_id`, entry count, and per-slot entries. Source: `game.cpp:6337`. |
 | `asset layout contract` | The rules an XP sheet must satisfy: `angles`, `projs`, `anims`, `anchor_mode`. Identified by a contract key such as `idle_walk_character` or `attack_mount`. Defined in `SPRITE_CONTRACTS`. Source: `appearance_bundle.py:72`. |
 | `attachment order` | The bundle-defined slot compositing order for a given presentation family. For `idle_walk`: body → armor → shield → weapon → head. Source: `appearance_bundle.json:1`. |
-| `body owner` | The skin family (identified by `skin_definition_id`) that supplies the body layer. Not a body part — the word "body" in `slot_kind_id=body` refers to the torso slot, while "body owner" refers to the whole skin identity. |
+| `body owner` | The skin family (identified by `skin_definition_id`) that supplies the body layer. Not a body part - the word "body" in `slot_kind_id=body` refers to the torso slot, while "body owner" refers to the whole skin identity. |
 | `compiled bundle` | The output of `appearance_bundle.py compile`: `appearance_bundle.json`, `ids.lock.json`, `compile_report.json`. The runtime reads this at join. |
-| `contract` | A data agreement at one layer of the system. There are five distinct contracts in this system; see §2.14.4. The word "contract" is overloaded in this codebase — always qualify which of the five you mean. |
+| `contract` | A data agreement at one layer of the system. There are five distinct contracts in this system; see §2.14.4. The word "contract" is overloaded in this codebase - always qualify which of the five you mean. |
 | `fallback_chain` | The ordered list of `variant_signature` values a selector will try when the exact signature has no layer. Declared in the bundle; compiler-validated. Source: `appearance_bundle.py:533`, `game.cpp:3503`. |
 | `frame_size` | Width and height in cells of one frame rectangle inside an XP sheet. Derived by the compiler as `layer0.width / (projs × sum(anims))` × `layer0.height / angles`. Source: `appearance_bundle.py:165`. |
 | `height_class` | One of the three axes inside `variant_signature`. Examples: `base`, `tall`. |
@@ -3541,10 +3551,10 @@ All terms used in §2.3–§2.14 are defined here in alphabetical order.
 | `selector input contract` | The allowed runtime-state combinations for a selector, including `life_states`, `locomotion_states`, `combat_states`, `mount_states`, and the `fallback_chain` of variant signatures. Source: `appearance_bundle.py:272`. |
 | `sheet-layout family` | Alternative name for `asset layout contract`, e.g. `idle_walk_character`. |
 | `silhouette_class` | One of the three axes inside `variant_signature`. Examples: `full`. Describes the silhouette category, not width or height alone. `variant_signature` is the whole tuple; `silhouette_class` is one coordinate within it. |
-| `skin_definition_id` | Authoritative integer ID for the **body-owner family** — which skin family supplies the body layer. This is an appearance identity token, not a body part. `cyan_suit = 100`, `normal_player = 101`. Does **not** mean head/body/arm section; the section is `slot_kind_id`. See §2.14.6. Source: `network.h:307`, `appearance_bundle.json:1728`. |
+| `skin_definition_id` | Authoritative integer ID for the **body-owner family** - which skin family supplies the body layer. This is an appearance identity token, not a body part. `cyan_suit = 100`, `normal_player = 101`. Does **not** mean head/body/arm section; the section is `slot_kind_id`. See §2.14.6. Source: `network.h:307`, `appearance_bundle.json:1728`. |
 | `slot_kind_id` | The attachment channel ID. Values: `body=300`, `head=301`, `shield=302`, `weapon=303`, `consumable=304`, `loot=305`, `armor=306`, `mount=307`. Determines where in the attachment order a layer is painted. Source: `appearance_bundle.json:1`. |
 | `subject_kind` | What kind of entity a selector or appearance applies to: `actor`, `world_item`, or `inventory_grid`. World items and inventory items use different selector/input contracts from actors. |
-| `variant_signature` | The full geometry tuple `{height_class, width_class, silhouette_class}` used for exact and fallback layer lookup. **This is geometry class, not style/color.** Style/color is `visual_style_id`. The three axes are independent; `tall+wide` is a valid combination. The count of usable combinations is not hardcoded — it is bounded by the token sets declared in the compiler and bundle. Source: `VARIANT_SIGNATURE_KEYS`, `appearance_bundle.py:59`, `appearance_bundle.py:237`. |
+| `variant_signature` | The full geometry tuple `{height_class, width_class, silhouette_class}` used for exact and fallback layer lookup. **This is geometry class, not style/color.** Style/color is `visual_style_id`. The three axes are independent; `tall+wide` is a valid combination. The count of usable combinations is not hardcoded - it is bounded by the token sets declared in the compiler and bundle. Source: `VARIANT_SIGNATURE_KEYS`, `appearance_bundle.py:59`, `appearance_bundle.py:237`. |
 | `visual_style_id` | Style/color lane ID. Values: `default=500`, `gold`, `dark`. This is **not** geometry. Wide/tall geometry lives in `variant_signature`, not here. Source: `appearance_bundle.json:1728`. |
 | `width_class` | One of the three axes inside `variant_signature`. Examples: `base`, `wide`. |
 | `xp asset` | A raw `.xp` sprite sheet file. The game does not use it automatically; it must be declared in the bundle source manifest and pass contract validation. |
@@ -3556,7 +3566,7 @@ All terms used in §2.3–§2.14 are defined here in alphabetical order.
 There is no single "bundle contract." There are five distinct contracts at different
 layers of the system. Each is enforced by a different part of the toolchain.
 
-**CONTRACT 1 — Asset Layout Contract**
+**CONTRACT 1 - Asset Layout Contract**
 > "The XP sheet must match the declared layout family."
 
 - Defines allowed sheet shape: `angles`, `projs`, `anims`, `anchor_mode`
@@ -3567,7 +3577,7 @@ layers of the system. Each is enforced by a different part of the toolchain.
 - Named families: `idle_walk_character`, `attack_character`, `idle_walk_mount`,
   `attack_mount`, `plydie_character`, `world_item`, `inventory_grid`
 
-**CONTRACT 2 — Selector Input Contract**
+**CONTRACT 2 - Selector Input Contract**
 > "Given this runtime state combination, use this presentation family and this fallback chain."
 
 - Defines which `life_state × locomotion_state × combat_state × mount_state` masks
@@ -3578,7 +3588,7 @@ layers of the system. Each is enforced by a different part of the toolchain.
 - Bundle storage: `appearance_bundle.json:4305` (idle_walk selector tables)
 - Violation → wrong presentation family selected for current gameplay state
 
-**CONTRACT 3 — Layer Ownership Contract**
+**CONTRACT 3 - Layer Ownership Contract**
 > "This layer belongs to this owner, slot, presentation family, style, and geometry variant."
 
 - Each `layer_definition` row in the compiled bundle is a unique binding of:
@@ -3590,7 +3600,7 @@ layers of the system. Each is enforced by a different part of the toolchain.
 - Bundle storage: `appearance_bundle.json:1728` (cyan_suit_body_idle example)
 - Violation → wrong or missing layer found at render time
 
-**CONTRACT 4 — Attachment Order Contract**
+**CONTRACT 4 - Attachment Order Contract**
 > "For this presentation family, paint layers in this slot order."
 
 - Per-presentation slot compositing order: body → armor → shield → weapon → head
@@ -3599,7 +3609,7 @@ layers of the system. Each is enforced by a different part of the toolchain.
 - Bundle storage: `appearance_bundle.json:1`
 - Violation → layers painted in wrong Z-order (e.g. hat under body)
 
-**CONTRACT 5 — Network Appearance Contract**
+**CONTRACT 5 - Network Appearance Contract**
 > "Server and client agree on bundle identity and authoritative appearance state."
 
 - Server and client both load the same compiled bundle (hashes verified at join)
@@ -3631,13 +3641,13 @@ header block in §2.14.1 and the contract list in §2.14.4.
 
 ---
 
-**→ STEP 0** — You create `CYAN_SUIT_BODY_4TEST.xp`. At this point it is just art.
+**→ STEP 0** - You create `CYAN_SUIT_BODY_4TEST.xp`. At this point it is just art.
 The game ignores it entirely.
 *(Rule stated in `appearance_bundle.py:4` module docstring.)*
 
 ---
 
-**→ STEP 1, CONTRACT 3** — In the bundle source manifest (`positive.bundle.json`),
+**→ STEP 1, CONTRACT 3** - In the bundle source manifest (`positive.bundle.json`),
 a `layer_definition` entry declares:
 
 ```json
@@ -3657,14 +3667,14 @@ a `layer_definition` entry declares:
 This is the ownership declaration layer of **CONTRACT 3**. The XP is claimed but not
 yet validated.
 
-Note: `CYAN_SUIT_BODY_4TEST.xp` gives you **one slice** of the skin family — idle body,
+Note: `CYAN_SUIT_BODY_4TEST.xp` gives you **one slice** of the skin family - idle body,
 base variant. To fully support `cyan_suit` in gameplay you need attack and plydie sheets,
 and typically tall/wide variant sheets. Each is its own STEP 1 entry. `idle_walk_character`
 is one of the seven available contract families (→ CONTRACT 1 table).
 
 ---
 
-**→ STEP 2, CONTRACT 1** — The compiler calls
+**→ STEP 2, CONTRACT 1** - The compiler calls
 `_inspect_sprite_asset("assets/sprites/CYAN_SUIT_BODY_4TEST.xp", "idle_walk_character")`
 (`appearance_bundle.py:224`).
 
@@ -3682,20 +3692,20 @@ SPRITE_CONTRACTS["idle_walk_character"] = {
 The compiler opens `layer0 = xp.layers[0]` and reads:
 - `metadata` = `{angles, projs, anims}` from the layer-0 metadata encoding.
   *(Metadata lives in layer 0 rows. Visual art may use XP layers 1+, but contract
-  metadata comes exclusively from layer 0. Layer 0 carries both art and metadata —
+  metadata comes exclusively from layer 0. Layer 0 carries both art and metadata -
   the metadata encoding uses the first three rows of layer 0.)*
 - `row1_refs = [decode(layer0.data[1][0]), decode(layer0.data[1][1])]`
-  *(Row 1 of layer 0 — Y-anchor offsets within the frame, used for per-frame
+  *(Row 1 of layer 0 - Y-anchor offsets within the frame, used for per-frame
   alignment in the compositor; see `engine/sprite.cpp:489`.)*
 - `row2_refs = [decode(layer0.data[2][0]), decode(layer0.data[2][1])]`
-  *(Row 2 of layer 0 — depth values, bounded 0..15 for character sheets.)*
+  *(Row 2 of layer 0 - depth values, bounded 0..15 for character sheets.)*
 
 If any value mismatches the contract, the XP is rejected and cannot enter the bundle.
 This is **CONTRACT 1** enforcement.
 
 ---
 
-**→ STEP 3** — If validation passes, `_inspect_sprite_asset()` returns
+**→ STEP 3** - If validation passes, `_inspect_sprite_asset()` returns
 (`appearance_bundle.py:215`):
 
 ```json
@@ -3718,7 +3728,7 @@ wide, and base bodies with different frame sizes without needing a second code p
 
 ---
 
-**→ STEP 4, CONTRACT 3** — The compiler looks up IDs and emits the row into
+**→ STEP 4, CONTRACT 3** - The compiler looks up IDs and emits the row into
 `bundle.catalog.layer_definitions` (`appearance_bundle.py:987`):
 
 ```json
@@ -3740,11 +3750,11 @@ wide, and base bodies with different frame sizes without needing a second code p
 See this exact row in the compiled bundle at `appearance_bundle.json:1728`. This is
 **CONTRACT 3** fully bound. The full `cyan_suit` family across all presentations and
 variants spans:
-- `appearance_bundle.json:1728` — `cyan_suit_body_idle` (idle, base)
-- `appearance_bundle.json:1741` — `cyan_suit_body_idle_tall` (idle, tall)
-- `appearance_bundle.json:1760` — `cyan_suit_body_idle_wide` (idle, wide)
-- `appearance_bundle.json:1910` — `cyan_suit_attack` (attack, base)
-- `appearance_bundle.json:~2110` — `cyan_suit_plydie` (plydie, base)
+- `appearance_bundle.json:1728` - `cyan_suit_body_idle` (idle, base)
+- `appearance_bundle.json:1741` - `cyan_suit_body_idle_tall` (idle, tall)
+- `appearance_bundle.json:1760` - `cyan_suit_body_idle_wide` (idle, wide)
+- `appearance_bundle.json:1910` - `cyan_suit_attack` (attack, base)
+- `appearance_bundle.json:~2110` - `cyan_suit_plydie` (plydie, base)
 
 `skin_definition_id = 100` does **not** point to one sheet. It points to a family of
 layer definitions across presentations and variants. The presentation + variant together
@@ -3752,20 +3762,20 @@ pick the exact row inside that family.
 
 ---
 
-**→ STEP 5, CONTRACT 5** — When the player joins, the server calls
+**→ STEP 5, CONTRACT 5** - When the player joins, the server calls
 `SvrSelectJoinAppearanceProfile()` (`server_tick.cpp:4587`) which calls
 `SvrApplyProfileToAppearance()` (`server_tick.cpp:2505`). The authoritative appearance
 state is populated with:
 - `appearance_profile_id` (the chosen starter profile)
 - `skin_definition_id = 100` (cyan_suit body owner)
-- `entries[]` — starter loadout entries (e.g. gold_hat in head slot)
+- `entries[]` - starter loadout entries (e.g. gold_hat in head slot)
 
 **CONTRACT 5 boundary:** the server owns appearance identity. The client does not
 invent skins or gear.
 
 ---
 
-**→ STEP 6, CONTRACT 5** — The server sends two packets.
+**→ STEP 6, CONTRACT 5** - The server sends two packets.
 
 `STRUCT_BRC_JOIN` (`network.h:284`) carries current runtime state:
 ```c
@@ -3793,13 +3803,13 @@ Glossary: presentation_kind_id, skin_definition_id)*
 
 ---
 
-**→ STEP 7** — The client receives token `'a'` and copies the V2 packet into
+**→ STEP 7** - The client receives token `'a'` and copies the V2 packet into
 `sn->appearance_v2` (`game.cpp:6337`). No rendering happens yet. The client now holds
 authoritative appearance truth.
 
 ---
 
-**→ STEP 8, CONTRACT 2** — At render time the engine calls
+**→ STEP 8, CONTRACT 2** - At render time the engine calls
 `FindActorBundleSelectorForRuntime()` (`game.cpp:3435`) with current state masks.
 For an idle on-foot player:
 - `presentation_kind_id = 600`
@@ -3808,19 +3818,19 @@ For an idle on-foot player:
 - `combat_mask` matches unarmed
 
 The selector table for `idle_walk` is at `appearance_bundle.json:4305`. This is
-**CONTRACT 2** — the selector input contract. The matching selector also carries the
+**CONTRACT 2** - the selector input contract. The matching selector also carries the
 variant fallback chain.
 
 ---
 
-**→ STEP 9** — `ResolveActorDesiredVariantSignature(selector)` (`game.cpp:3532`)
+**→ STEP 9** - `ResolveActorDesiredVariantSignature(selector)` (`game.cpp:3532`)
 returns `selector->fallback_chain[0]` = `base/full/base` for a standard-size actor.
 The fallback chain is declared in the bundle and compiler-validated
 (`appearance_bundle.py:533`).
 
 ---
 
-**→ STEP 10, CONTRACT 3** — `ResolveActorBundleLayerWithFallback()` looks up the
+**→ STEP 10, CONTRACT 3** - `ResolveActorBundleLayerWithFallback()` looks up the
 body layer (`game.cpp:3606`):
 
 ```
@@ -3835,13 +3845,13 @@ signature  = base/full/base
 
 If the actor were wide: signature = `wide/full/base` → finds `cyan_suit_body_idle_wide`.
 If the wide variant were absent: `ResolveActorBundleLayerWithFallback()` walks the
-fallback chain and may land on `base/full/base` (base hat on wide body — fallback
+fallback chain and may land on `base/full/base` (base hat on wide body - fallback
 selection, not stretching). This is **CONTRACT 3** lookup plus fallback behavior from
 **CONTRACT 2**'s fallback chain.
 
 ---
 
-**→ STEP 11, CONTRACT 3, CONTRACT 4** — The attachment order for `idle_walk`
+**→ STEP 11, CONTRACT 3, CONTRACT 4** - The attachment order for `idle_walk`
 (`appearance_bundle.json:1`, CONTRACT 4) is:
 
 ```
@@ -3867,7 +3877,7 @@ independent item-owned layers attached on top.
 
 ---
 
-**→ STEP 12** — (Embedded in STEP 10–11.) If gold_hat has no wide variant and the
+**→ STEP 12** - (Embedded in STEP 10-11.) If gold_hat has no wide variant and the
 actor is wide, `ResolveActorBundleLayerWithFallback()` (`game.cpp:3503`) walks the
 fallback chain until it finds any matching layer. This may produce a base-variant hat
 on a wide body, which is visually approximate but mechanically valid. The fallback
@@ -3875,7 +3885,7 @@ chain order is declared in **CONTRACT 2**.
 
 ---
 
-**→ STEP 13, CONTRACT 4** — After all slots are processed, the render array contains:
+**→ STEP 13, CONTRACT 4** - After all slots are processed, the render array contains:
 
 ```
 body:   cyan_suit_body_idle   (layer_definition_id = 700)
@@ -3888,7 +3898,7 @@ Slot order follows **CONTRACT 4**.
 
 ---
 
-**→ STEP 14** — `LookupActorBundleComposedSprite()` (`game.cpp:3822`) builds a
+**→ STEP 14** - `LookupActorBundleComposedSprite()` (`game.cpp:3822`) builds a
 cache key from the render array. On cache miss it:
 1. Loads/clones the base (body) layer sprite
 2. Composites each additional layer in render order onto the clone
@@ -3900,7 +3910,7 @@ combination skip composition and hit the cache directly.
 
 ---
 
-**→ STEP 15** — `ResolvePresentationFrame()` (`game.cpp:8039`) picks the animation
+**→ STEP 15** - `ResolvePresentationFrame()` (`game.cpp:8039`) picks the animation
 frame index:
 - Standing idle → frame 0
 - Walking → frame cycling by tick
@@ -3909,7 +3919,7 @@ frame index:
 
 ---
 
-**→ STEP 16** — The composed sprite from STEP 14 at the frame from STEP 15 produces
+**→ STEP 16** - The composed sprite from STEP 14 at the frame from STEP 15 produces
 the final on-screen pixels.
 
 ---
@@ -3927,7 +3937,7 @@ family is the actor in right now" than to "what does the actor look like to othe
 players." It does not encode which skin the actor wears, which wearables they carry,
 or which camera angle is used. The name is partly historical (the pre-bundle sprite
 system used presentation kind as a broader state identifier) and partly accurate:
-it identifies the *kind* of presentation state — idle/walk, attack, plydie. If you
+it identifies the *kind* of presentation state - idle/walk, attack, plydie. If you
 see `presentation_kind_id = 600` that tells you "this actor is in the idle_walk
 presentation family right now" and nothing about their skin or equipment.
 
@@ -3945,8 +3955,8 @@ layers are owned by items (via `item_definition_id`), not by the skin.
 `base/full/base` means `height_class=base, silhouette_class=full, width_class=base`.
 Style and color are `visual_style_id` (`default=500`, `gold`, `dark`). Wide and tall
 actors are geometry variants, not style variants. The three axes of `variant_signature`
-are independent — `tall+wide` is a valid combination. The count of usable combinations
-is not hardcoded — it is bounded by the token sets declared in the compiler and bundle.
+are independent - `tall+wide` is a valid combination. The count of usable combinations
+is not hardcoded - it is bounded by the token sets declared in the compiler and bundle.
 Adding a `super_tall` height class would require extending both.
 
 **`silhouette_class` is one coordinate inside `variant_signature`, not the whole tuple.**
@@ -3990,11 +4000,11 @@ comes exclusively from layer 0.
 
 The walkthrough above shows what the pipeline-v3 workbench must produce for STEP 1
 (manifest declaration) and STEP 2 (contract validation). The pipeline does not own the
-runtime (STEP 5 onward — those belong to the game server and engine). The pipeline's
+runtime (STEP 5 onward - those belong to the game server and engine). The pipeline's
 job is:
 
 1. Help an author produce an XP that passes STEP 2 (→ `asset layout contract`,
-   `SPRITE_CONTRACTS`, structural gates G10–G12)
+   `SPRITE_CONTRACTS`, structural gates G10-G12)
 2. Help declare the manifest entry for STEP 1 (→ `layer_definition` rows in
    `positive.bundle.json`)
 3. Produce a validated compiled bundle for STEP 3/4 (→ `appearance_bundle.json`)
@@ -4013,18 +4023,18 @@ authoring surface to the generalized bundle identity model is the core open work
 **Added 2026-04-22. Tracks what must be true before a V3 migration is declared ready.**
 
 This section lists the open gaps identified by the 2026-04-22 cross-repo audit. It is
-not a task plan — it is a gate list. Migration is ready when all blocking gates PASS.
+not a task plan - it is a gate list. Migration is ready when all blocking gates PASS.
 
 ### Blocking Gates
 
 | Gate | Section | Status |
 |------|---------|--------|
-| UQ-002 Section 1 REXPaint-parity foundation passes | §Unified Queue `UQ-002` | PASS — root-editor parity blockers closed in current worktree; whole-sheet ownership, resize, and hot-path proof are logged with same-day evidence |
-| UQ-003 root-hosted + prefixed Section 1 proof passes | §Unified Queue `UQ-003` | PASS — headed shipped-UI proof exists for root-hosted and prefixed `/xpedit` whole-sheet flows |
-| UQ-004 backend authority cleanup passes | §Unified Queue `UQ-004` | OPEN — `ENABLED_FAMILIES` and `FAMILY_W_RANGE` hardcoded maps deleted (`a58eda6`..`e23fd3f`); all override-name paths derive from registry `prefix_catalog.ahsw_range`. Remaining gap: `preview_xp` still silently falls back to `l0_ref` |
-| UQ-005 export/web-skin quality contract fully enforced | §Unified Queue `UQ-005` | OPEN — export/web-skin paths already share live G7-G12 enforcement, but the contract is still incomplete because `validate-xp` is not yet the canonical live route/tool and the G8/G9 policy wording is not yet fully locked |
+| UQ-002 Section 1 REXPaint-parity foundation passes | §Unified Queue `UQ-002` | PASS - root-editor parity blockers closed in current worktree; whole-sheet ownership, resize, and hot-path proof are logged with same-day evidence |
+| UQ-003 root-hosted + prefixed Section 1 proof passes | §Unified Queue `UQ-003` | PASS - headed shipped-UI proof exists for root-hosted and prefixed `/xpedit` whole-sheet flows |
+| UQ-004 backend authority cleanup passes | §Unified Queue `UQ-004` | CLOSED - `ENABLED_FAMILIES` and `FAMILY_W_RANGE` hardcoded maps deleted (`a58eda6`..`e23fd3f`); all override-name paths derive from registry `prefix_catalog.ahsw_range`. `preview_xp -> l0_ref` fallback fail-closed. Registry load/fetch errors return 503 and surface as browser warnings — empty truth not cached. |
+| UQ-005 export/web-skin quality contract fully enforced | §Unified Queue `UQ-005` | CLOSED — export/web-skin paths share live G7-G12 enforcement. Canonical `/api/workbench/validate-xp` route + MCP `validate_xp` tool added. G8/G9 threshold policy locked in `gates.py` with named policy constants. |
 | UQ-006 manifest-backed source authoring no longer JSON-first | §Unified Queue `UQ-006` | OPEN |
-| UQ-007 runtime identity layer landed | §Unified Queue `UQ-007` | OPEN — pipeline-v3 still lacks live `skin_definition_id` / `presentation_kind_id` / `layer_definition_id` ownership |
+| UQ-007 runtime identity layer landed | §Unified Queue `UQ-007` | OPEN - pipeline-v3 still lacks live `skin_definition_id` / `presentation_kind_id` / `layer_definition_id` ownership |
 | UQ-008 mounted-family parity for `wolfie` / `wolack` proven | §Unified Queue `UQ-008` | OPEN |
 | UQ-009 current-scope Section 3 signoff + contract runners current | §Unified Queue `UQ-009` | PARTIAL |
 | UQ-010 Y9-2 wizard / launcher gateway wired to shared bundle-authoring contract | §Unified Queue `UQ-010` | OPEN |
@@ -4038,13 +4048,13 @@ not a task plan — it is a gate list. Migration is ready when all blocking gate
 | Proof-only color-variant family authoring surface | §2.5 misalignment ledger | PROOF-ONLY by policy (`service.py`, `workbench.js`) |
 | M2 E2E proof run (PNG→WS→export, committed headed run) | §Milestone 2 | PARTIAL |
 | UQ-013 small-screen layout and persistence | §Unified Queue `UQ-013` | OPEN |
-| Whole-sheet browse-model split implementation | §1.8 / §2 boundary | DECISION FIXED — browse opens XP/root-editor documents first, layer 0 is editable in principle, and template metadata compatibility is a later wrapper concern; implementation remains intentionally sequenced after grid contrast, expanded grid presets, grid-scoped replace semantics, and their proof updates |
+| Whole-sheet browse-model split implementation | §1.8 / §2 boundary | DECISION FIXED - browse opens XP/root-editor documents first, layer 0 is editable in principle, and template metadata compatibility is a later wrapper concern; implementation remains intentionally sequenced after grid contrast, expanded grid presets, grid-scoped replace semantics, and their proof updates |
 
 ### Gate Maintenance Rule
 
 A gate moves to IMPLEMENTED when the corresponding code is committed and the
 spec section above reflects current state accurately. A gate moves to PASS only
 when a verified test run or headed proof is committed with a dated evidence ref.
-Do not remove rows when gates PASS — update Status in-place with the evidence ref.
+Do not remove rows when gates PASS - update Status in-place with the evidence ref.
 
 **Ship gate:** Do not surface the `[3] ASSET PIPELINE` launcher node until the blocking queue rows required for a supported front door are PASS. At minimum that means honest Section 1 proof (`UQ-003`), stable Section 2 backend/wrapper truth (`UQ-004` through `UQ-009`), Y9-2 gateway wiring (`UQ-010`), and the Y9-2 Step 7.12 VERIFY gate. FL-813 is now blocked by end-to-end support truth, not by a missing Section 2.10 backend API implementation.

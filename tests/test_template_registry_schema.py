@@ -145,13 +145,11 @@ def test_normalize_action_spec_v1_family_fallback():
     assert result["family"] == "player"
 
 
-def test_normalize_action_spec_preview_xp_fallback_to_l0_ref():
-    """When preview_xp is absent, preview_xp_sha256 follows the same l0_ref fallback."""
+def test_normalize_action_spec_preview_xp_fail_closed():
+    """When preview_xp is absent, normalization raises ValueError instead of falling back to l0_ref."""
     spec = {k: v for k, v in _VALID_SPEC.items() if k != "preview_xp"}
-    result = _normalize_template_action_spec("player_native_full", "idle", spec)
-    assert result["preview_xp"] == spec["l0_ref"]
-    assert result["preview_xp_sha256"] == spec["l0_ref_sha256"]
-    assert result["preview_xp_sha256"] == spec["l0_ref_sha256"]
+    with pytest.raises(ValueError, match="preview_xp"):
+        _normalize_template_action_spec("player_native_full", "idle", spec)
 
 
 def test_normalize_template_registry_rejects_prefix_catalog_sha_drift():
@@ -164,7 +162,7 @@ def test_normalize_template_registry_rejects_prefix_catalog_sha_drift():
 
 
 def test_normalize_registry_missing_file_returns_schema_version_2(tmp_path, monkeypatch):
-    """load_template_registry returns schema_version 2 even when the config file is absent."""
+    """load_template_registry returns empty dict when config file absent, without caching."""
     import pipeline_v2.service as svc
     monkeypatch.setattr(svc, "CONFIG_DIR", tmp_path)
     _reset_template_registry_cache()
@@ -172,6 +170,14 @@ def test_normalize_registry_missing_file_returns_schema_version_2(tmp_path, monk
         registry = svc.load_template_registry()
         assert registry["schema_version"] == 2
         assert registry["template_sets"] == {}
+        # The empty dict is returned but NOT cached — _template_registry stays None
+        assert svc._template_registry is None
+        # _registry_load_error is set so get_registry_status surfaces the problem
+        assert svc._registry_load_error is not None
+        assert "not found" in svc._registry_load_error
+        # Subsequent call also retries (not cached)
+        registry2 = svc.load_template_registry()
+        assert registry2["schema_version"] == 2
     finally:
         _reset_template_registry_cache()
 
@@ -361,13 +367,13 @@ def test_templates_api_clean_registry_has_empty_status(client):
 
 
 def test_templates_api_missing_registry_shows_load_error(tmp_path, monkeypatch, client):
-    """Missing registry file produces registry_status with load_error."""
+    """Missing registry file returns 503 with registry_status load_error."""
     import pipeline_v2.service as svc
     monkeypatch.setattr(svc, "CONFIG_DIR", tmp_path)
     _reset_template_registry_cache()
     try:
         response = client.get("/api/workbench/templates")
-        assert response.status_code == 200
+        assert response.status_code == 503
         payload = response.get_json()
         assert payload["template_sets"] == {}
         assert "load_error" in payload["registry_status"]
@@ -458,14 +464,14 @@ def test_save_session_normalizes_missing_skin_family_when_prefix_exists(client):
 
 
 def test_templates_api_malformed_registry_shows_load_error(tmp_path, monkeypatch, client):
-    """Malformed JSON in registry produces registry_status with load_error."""
+    """Malformed JSON in registry returns 503 with registry_status load_error."""
     import pipeline_v2.service as svc
     (tmp_path / "template_registry.json").write_text("{ not valid json }", encoding="utf-8")
     monkeypatch.setattr(svc, "CONFIG_DIR", tmp_path)
     _reset_template_registry_cache()
     try:
         response = client.get("/api/workbench/templates")
-        assert response.status_code == 200
+        assert response.status_code == 503
         payload = response.get_json()
         assert payload["template_sets"] == {}
         assert "load_error" in payload["registry_status"]

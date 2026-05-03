@@ -970,20 +970,15 @@ def _reset_template_registry_cache() -> None:
 
 
 def _resolve_preview_xp_fields(spec: dict[str, Any]) -> tuple[str, str]:
-    """Resolve preview XP and hash as a coupled pair.
+    """Resolve preview XP and hash as a coupled pair from the spec.
 
-    When preview_xp is absent, both values fall back together to the l0_ref pair.
+    Fail-closed: returns empty strings when preview_xp is absent.
+    The caller (_normalize_template_action_spec) raises ValueError
+    for missing required fields instead of silently falling back to l0_ref.
     """
     preview_xp = str(spec.get("preview_xp") or "").strip()
     preview_xp_sha256 = str(spec.get("preview_xp_sha256") or "").strip()
-    if preview_xp:
-        return preview_xp, preview_xp_sha256
-    _log.warning(
-        "preview_xp missing for spec %r — falling back to l0_ref %r",
-        spec.get("filename_prefix") or spec.get("family"),
-        spec.get("l0_ref"),
-    )
-    return str(spec.get("l0_ref") or "").strip(), str(spec.get("l0_ref_sha256") or "").strip()
+    return preview_xp, preview_xp_sha256
 
 
 def _normalize_template_action_spec(
@@ -1228,17 +1223,18 @@ def load_template_registry() -> dict[str, Any]:
         return _template_registry
     reg_path = CONFIG_DIR / "template_registry.json"
     if not reg_path.exists():
-        _log.error("template_registry.json not found at %s — serving empty registry", reg_path)
+        _log.error("template_registry.json not found at %s", reg_path)
         _registry_load_error = f"template_registry.json not found at {reg_path}"
-        _template_registry = {"template_sets": {}, "schema_version": 2}
-        return _template_registry
+        # fail-closed: return empty dict without caching so the error
+        # re-surfaces on each call and stays operator-visible via get_registry_status().
+        return {"template_sets": {}, "schema_version": 2}
     try:
         _template_registry = _normalize_template_registry(json.loads(reg_path.read_text(encoding="utf-8")))
     except (json.JSONDecodeError, ValueError) as exc:
         _log.error("template_registry.json is malformed: %s", exc)
         _registry_load_error = f"template_registry.json is malformed: {exc}"
-        _template_registry = {"template_sets": {}, "schema_version": 2}
-        return _template_registry
+        # Same fail-closed approach — don't cache empty truth.
+        return {"template_sets": {}, "schema_version": 2}
     _registry_load_error = None
     # Validate L0 reference checksums at load time
     for ts_key, ts in _template_registry.get("template_sets", {}).items():
@@ -3918,6 +3914,52 @@ def _run_structural_gates(
         results.append(gate_g12_l0_metadata([], expected_l0))
 
     return results
+
+
+def validate_xp_single(
+    xp_path: str,
+    template_set_key: str,
+    action_key: str,
+    req_id: str,
+) -> dict[str, Any]:
+    """Run G7-G12 structural validation on a single XP against its template spec.
+
+    This is the canonical validate-xp surface. It does not require a bundle
+    or session context — callers provide the template identity directly.
+    """
+    reg = load_template_registry()
+    ts = reg.get("template_sets", {}).get(template_set_key)
+    if ts is None:
+        raise ApiError(
+            f"unknown template set '{template_set_key}'",
+            "invalid_template_set", "workbench", req_id, 422,
+        )
+    action_spec = ts.get("actions", {}).get(action_key)
+    if action_spec is None:
+        raise ApiError(
+            f"unknown action '{action_key}' in template set '{template_set_key}'",
+            "invalid_action_key", "workbench", req_id, 422,
+        )
+
+    xp = read_xp(xp_path)
+    gates = _run_structural_gates(xp_path, action_spec, req_id)
+    gate_dicts = [{"gate": g.gate, "verdict": g.verdict, "details": g.details} for g in gates]
+
+    blocked = [g for g in gates if g.verdict == THRESHOLD_BREACHED]
+    overall = "PASS"
+    if blocked:
+        failed_gates = [g.gate for g in blocked]
+        overall = f"FAIL: {', '.join(failed_gates)}"
+
+    return {
+        "xp_path": xp_path,
+        "template_set_key": template_set_key,
+        "action_key": action_key,
+        "overall": overall,
+        "gates": gate_dicts,
+        "xp_dims": [xp["width"], xp["height"]],
+        "layer_count": len(xp["cells"]),
+    }
 
 
 def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:

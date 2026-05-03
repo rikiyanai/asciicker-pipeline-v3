@@ -58,6 +58,7 @@ from .service import (
     workbench_update_bundle_action_status,
     workbench_export_bundle,
     workbench_web_skin_bundle_payload,
+    validate_xp_single,
     compute_mounted_rider_calibration,
     compute_mounted_semantic_proposals,
 )
@@ -389,8 +390,17 @@ def create_app() -> Flask:
     @bp.get("/api/workbench/templates")
     def api_wb_templates():
         registry = load_template_registry()
+        registry_status = get_registry_status()
+        # Return 503 when the registry file is missing or malformed.
+        # The empty-registry fallback dict is still returned so browser
+        # callers can safely render (nothing is authorable with empty
+        # template_sets) but the HTTP status signals a degraded state.
+        if registry_status.get("load_error"):
+            result = dict(registry)
+            result["registry_status"] = registry_status
+            return jsonify(result), 503
         result = dict(registry)
-        result["registry_status"] = get_registry_status()
+        result["registry_status"] = registry_status
         return jsonify(result), 200
 
     @bp.post("/api/workbench/bundle/create")
@@ -633,6 +643,24 @@ def create_app() -> Flask:
             if not xp_bytes:
                 raise ApiError("file is empty", "empty_file", "workbench", req_id, 400)
             return jsonify(workbench_upload_xp(xp_bytes, req_id, file.filename)), 201
+        except ApiError as e:
+            return _err(e)
+
+    @bp.post("/api/workbench/validate-xp")
+    def api_wb_validate_xp():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            xp_path = str(payload.get("xp_path", "")).strip()
+            template_set_key = str(payload.get("template_set_key", "")).strip()
+            action_key = str(payload.get("action_key", "")).strip()
+            if not xp_path:
+                raise ApiError("xp_path is required", "missing_xp_path", "workbench", req_id, 400)
+            if not template_set_key:
+                raise ApiError("template_set_key is required", "missing_template_set_key", "workbench", req_id, 400)
+            if not action_key:
+                raise ApiError("action_key is required", "missing_action_key", "workbench", req_id, 400)
+            return jsonify(validate_xp_single(xp_path, template_set_key, action_key, req_id)), 200
         except ApiError as e:
             return _err(e)
 

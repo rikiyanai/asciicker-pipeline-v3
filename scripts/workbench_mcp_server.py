@@ -428,6 +428,28 @@ def validate_structural_gates(bundle_id: str) -> dict:
     return summary
 
 
+@mcp.tool()
+def validate_xp(xp_path: str, template_set_key: str, action_key: str) -> dict:
+    """Run G7-G12 structural validation on a single XP against its template spec.
+
+    This is the canonical validate-xp surface for agent loops.
+    Does not require a bundle or session context.
+
+    Args:
+        xp_path: Path to the .xp file on disk.
+        template_set_key: Template set key (e.g. "player_native_full").
+        action_key: Action key within the set (e.g. "idle", "attack", "death").
+
+    Returns:
+        Overall pass/fail with per-gate verdicts and details.
+    """
+    return _post_json("/api/workbench/validate-xp", {
+        "xp_path": xp_path,
+        "template_set_key": template_set_key,
+        "action_key": action_key,
+    })
+
+
 # AHSW ternary naming: {family}-{A}{H}{S}{W}.xp
 # A,H,S ∈ {0,1}  W ∈ {0,1,2}  — plus optional "player-nude.xp"
 _AHSW_RE = re.compile(r"^[a-z]+-[01][01][01][012]\.xp$")
