@@ -11289,3 +11289,438 @@ Worse: if user opens a file (openXpFileLocal), the banner can offer a draft from
 unrelated session.
 **Reviewers:** correctness (P2, 75), adversarial (P2, 50)
 **State:** PASS — _checkDraftRestore now runs after loadFromJob().then/.catch (2026-04-30)
+
+## Canon Spec Doc Review — 2026-05-03
+
+Multi-persona doc review of `docs/plans/2026-03-23-workbench-canonical-spec.md`
+using 5 reviewer agents (coherence, feasibility, scope-guardian, adversarial,
+product-lens). 4 gated auto-fixes applied inline. Remaining findings logged below.
+
+### Applied Fixes (4)
+
+1. **§1.x inline audit → FL pointer** (scope-guardian, P2, 75): replaced 30-line
+   resolved-PASS audit table with pointer to this FL's `2026-04-27` audit heading.
+   Content already lived here; inline copy violated the 2-doc authority model.
+2. **§2.11.2 coverage contract not-yet-active caveat** (feasibility+scope-guardian,
+   P2, 100 promoted): added note that `config/SPRITE_COVERAGE_EXCEPTIONS.txt`
+   does not exist and no queue row owns its creation.
+3. **§3.6 action_registry source-of-truth clarification** (coherence, P1, 75):
+   clarified that `action_registry_schema.json` is the sole current authority;
+   no live `action_registry.json` instance exists.
+4. **UQ-009 SUPPORT state definition** (coherence, P2, 75): added queue protocol
+   item 8 defining `CURRENT / SUPPORT` semantics — continuous maintenance,
+   triggered per-slice, no positive completion condition.
+
+### Structural Changes Flagged (not auto-applied — require separate execution)
+
+#### DR-S1. Extract §2.14 Y9-2 walkthrough to reference doc (P1)
+
+**Reviewer:** scope-guardian (75)
+**Section:** §2.14 (lines 3204–3961, ~700 lines)
+**Problem:** §2.14.1–§2.14.6 documents a 17-step Y9-2 render callgraph, C struct
+layouts, and Python compiler internals from an external repo. Only §2.14.7 (12
+lines) defines actionable pipeline-v3 implications. The rest is reference material
+that creates maintenance burden (callgraph citations drift as Y9-2 evolves) and
+buries the actionable content behind external-system internals.
+**Suggested fix:** Extract §2.14.1–§2.14.6 to `docs/reference/y9-2-bundle-system.md`.
+Keep only §2.14.7 inline with a pointer.
+**State:** OPEN
+
+#### DR-S2. Extract §1.1 verbatim REXPaint manual to reference doc (P1)
+
+**Reviewer:** scope-guardian (75)
+**Section:** §1.1 (lines 279–688, ~400 lines)
+**Problem:** The full REXPaint v1.70 manual is embedded verbatim. The derived
+contracts in §1.3–§1.8 already capture everything actionable. The manual is input,
+not canon output, and adds a second maintenance surface.
+**Suggested fix:** Move to `docs/reference/rexpaint-v170-manual.md`. Replace §1.1
+with one-paragraph summary and link.
+**State:** OPEN
+
+### Actionable Findings — P1 Decisions (12)
+
+#### DR-01. Y9-2 mounted scripts deleted — spec references stale toolchain (P1)
+
+**Reviewer:** feasibility (100)
+**Section:** §2.5.4.2
+**Problem:** 7 of 9 Y9-2 mounted pipeline scripts cited as the UQ-008 toolchain
+baseline were deleted from Y9-2 on 2026-05-01 (commits `d9aaf704`, `17093878`).
+Only `mounted_rider_offset.py` and `mounted_rider_residual_compare.py` survive.
+The mounted authoring plan (S2-R9) references artifact shapes from deleted scripts.
+**Action needed:** Audit Y9-2 deletion commits. Update §2.5.4.2 to reflect the
+actual current Y9-2 mounted toolchain baseline.
+**State:** OPEN
+
+#### DR-02. Serial queue dependency chain — no partial-progress model (P1)
+
+**Reviewer:** adversarial (75)
+**Section:** Unified Sequence / Queue protocol
+**Problem:** UQ-004 through UQ-008 form a strict serial dependency chain. If any
+row stalls, all downstream rows remain frozen. The queue provides no escape hatch
+for preparatory work on blocked rows. This could cause multi-month stalls.
+**Action needed:** Define a preparatory-work protocol for blocked rows (non-mutating
+design, contract definition, test scaffolding). Define when prep work crosses the
+line into pulling future-layer work forward.
+**State:** OPEN
+
+#### DR-03. 8+ sequential gates before public value delivery (P1)
+
+**Reviewer:** product-lens (75)
+**Section:** Unified Sequence / Blocking Gates
+**Problem:** UQ-011 cutover is blocked by UQ-002 through UQ-010 in strict sequence.
+Only UQ-002 and UQ-003 are PASS. No time boundary or intermediate value delivery
+milestones exist. Risk of permanent rewrite stall.
+**Action needed:** Define time-boxed milestones or intermediate public value delivery
+points. Evaluate whether partial cutover (Section 1 editor features first) could
+deliver user value sooner.
+**State:** OPEN
+
+#### DR-04. UQ-011 cutover — no rollback plan (P1)
+
+**Reviewer:** adversarial (75)
+**Section:** Unified Sequence / UQ-011
+**Problem:** Cutover involves making a repo private, redeploying to Cloud Run, and
+re-running proof on a live URL. No rollback procedure exists for a failed cutover.
+§2.12 rollback snapshot contract is "not yet implemented." Deploy credential
+survival after visibility change has no verification step.
+**Action needed:** Add pre-cutover credential validation. Define rollback procedure
+restoring v2 if v3 deployment fails. Require §2.12 implemented before UQ-011.
+**State:** OPEN
+
+#### DR-05. Session kind metadata — no upgrade path from legacy sessions (P1)
+
+**Reviewer:** adversarial (75)
+**Section:** §1.8.6a
+**Problem:** §1.8.6a defines session_kind and metadata_status fields. §2.5.2 says
+migration is in-place on load/save. But existing sessions have neither field, and
+no derivation rules map legacy fields to new schema values. Different legacy session
+shapes will produce inconsistent behavior.
+**Action needed:** Add explicit migration rules: template_set_key present →
+template_owned; family without template → pipeline_job; neither → raw_xp. Document
+edge cases.
+**State:** OPEN
+
+#### DR-06. Manifest sidecar — no concurrent-access contract (P1)
+
+**Reviewer:** adversarial (75)
+**Section:** §2.3.2 / §2.3.3
+**Problem:** Sidecar is the only manifest authority but the spec never addresses
+concurrent access. Browser session + MCP agent can write simultaneously. No
+invalidation, version check, or conflict resolution mechanism defined. Concurrent
+writers are an expected operating condition per §2.10.
+**Action needed:** Define version/etag mechanism. Require version check on write.
+Define browser behavior when cached snapshot is stale.
+**State:** OPEN
+
+#### DR-07. Five-contract engine model — 3 contracts unvalidated in pipeline-v3 (P1)
+
+**Reviewer:** adversarial (75)
+**Section:** §2.14.4 / §2.14.7
+**Problem:** §2.14.7 says pipeline-v3 produces assets for Contract 1 (asset layout)
+and Contract 3 (layer ownership). Contracts 2 (selector input), 4 (attachment
+order), and 5 (network appearance) are never assigned to pipeline-v3 validation.
+Authored bundles can pass all pipeline gates but cause wrong runtime behavior.
+**Action needed:** Define which contracts pipeline-v3 validates at compile time vs
+which are Y9-2-owned integration-time validation.
+**State:** OPEN
+
+#### DR-08. Shared headless surface — zero backend implementation (P1)
+
+**Reviewer:** feasibility (75)
+**Section:** §2.10
+**Problem:** All 8 required shared headless commands (phase0-status through status)
+have zero implementation in pipeline-v3 backend. Spec acknowledges the gap but
+defines no incremental delivery order.
+**Action needed:** Add phased delivery order. Identify which commands can wrap
+existing backend primitives vs which require new plumbing.
+**State:** OPEN
+
+#### DR-09. Source manifest sidecar — zero implementation (P1)
+
+**Reviewer:** feasibility (75)
+**Section:** §2.3.2
+**Problem:** `<source>.asciicker-source.json` sidecar pattern has zero implementation.
+`source_boxes`, `source_cuts_v`, `source_cuts_h` remain the live session-local
+authority. Migration path from session-local to sidecar-first is undefined.
+**Action needed:** Define sidecar creation triggers, discovery semantics, conflict
+resolution with session state, and nil/error paths.
+**State:** OPEN
+
+#### DR-10. §2.12 rollback contract — no queue row (P1)
+
+**Reviewer:** scope-guardian (75)
+**Section:** §2.12
+**Problem:** §2.12 defines a new rollback snapshot requirement with SHA256 manifests
+and binary preservation. §2.12.3 says "not yet implemented." But no UQ-* queue row
+exists for this work. The queue crosswalk (§2.5.5) doesn't reference it. An
+unqueued OPEN contract is invisible to queue-driven execution.
+**Action needed:** Add UQ-* row or explicitly defer to a named future milestone
+with justification. Clarify Y9-2 vs pipeline-v3 scope ownership.
+**State:** OPEN
+
+#### DR-11. Y9-2 scope creep — pulling spec away from editor product (P1)
+
+**Reviewer:** product-lens (75)
+**Section:** Section 2 / §2.14
+**Problem:** UQ-007 (runtime identity layer) and UQ-008 (mounted-family authoring)
+are game-engine integration work that blocks public cutover but delivers zero value
+to standalone XP editor users. Mobile access (UQ-013) is PARKED behind engine work.
+The northstar says "editor with helpers layered on top" but the blocking queue
+prioritizes helpers over the editor.
+**Action needed:** Re-evaluate whether UQ-007/UQ-008 must block cutover. Consider
+splitting gate into "editor + basic skin authoring" vs "full Y9-2 bundle parity."
+**State:** OPEN
+
+#### DR-12. Mobile PARKED despite being a northstar goal (P1)
+
+**Reviewer:** product-lens (75)
+**Section:** §1.9 / UQ-013
+**Problem:** Northstar says "web-based, mobile-accessible, REXPaint-class XP editor"
+but UQ-013 (mobile) is PARKED behind all engine-integration rows including mounted
+wolf sprite authoring. The queue protocol says PARKED rows "do not execute until
+earlier rows pass." Mobile is structurally the lowest-priority item despite being
+the second word in the northstar.
+**Action needed:** Either reprioritize UQ-013 ahead of UQ-007/UQ-008 or rewrite
+the northstar to reflect that mobile is a later-phase goal.
+**State:** OPEN
+
+### Actionable Findings — P2 Decisions (4)
+
+#### DR-13. §2.3.9 oscillates between "current-scope" and "deferred" (P2)
+
+**Reviewer:** coherence (75)
+**Section:** §2.3.9
+**Problem:** Title says "Current-Scope Rows" but body marks rows as "explicitly
+deferred/not-yet-authorable" and blocks closure on headed semantic gameplay proof.
+Readers cannot determine the phase these rows are in.
+**Action needed:** Separate modeled contract from current-scope. Clarify whether
+five actor rows are authoring-surface-ready or proof-only.
+**State:** OPEN
+
+#### DR-14. §2.13 wizard parity duplicates §2.10 and defines out-of-scope Y9-2 UX (P2)
+
+**Reviewer:** scope-guardian (75)
+**Section:** §2.13
+**Problem:** §2.10 already defines the shared headless contract. §2.13 re-specifies
+Y9-2 launcher lifecycle, TUI steps, and wizard UX that pipeline-v3 cannot enforce.
+§2.13.4 itself says "the wizard is a thin client." The TUI steps belong in Y9-2.
+**Action needed:** Reduce §2.13 to a pointer. Move wizard lifecycle to Y9-2 canon.
+**State:** OPEN
+
+#### DR-15. Deletion-first creates high cross-repo coordination cost (P2)
+
+**Reviewer:** product-lens (75)
+**Section:** §2.3.0
+**Problem:** Five coordinated deletion surfaces before new authority. Y9-2 continues
+building its own local wizard while pipeline-v3 follows deletion-first discipline.
+No timeline for Y9-2 wizard ownership convergence.
+**Action needed:** Add timeline or boundary condition for Y9-2 wizard convergence.
+**State:** OPEN
+
+#### DR-16. Runtime identity layer zero implementation blocks 3 downstream rows (P2)
+
+**Reviewer:** feasibility (75)
+**Section:** §2.3.10
+**Problem:** `skin_definition_id`, `presentation_kind_id`, `layer_definition_id`
+appear nowhere in pipeline-v3 source. No ID registry location, allocation scheme,
+Y9-2 synchronization mechanism, or nil path defined. UQ-007→UQ-008→UQ-010 all
+depend on this.
+**Action needed:** Define ID registry location, allocation independence/sync with
+Y9-2, and unavailability handling.
+**State:** OPEN
+
+## Y9-2 Cross-Repo Canon Alignment Audit — 2026-05-03
+
+Parallel audit of Y9-2 multiplayer canonical spec
+(`asciicker-Y9-2/docs/plans/2026-03-22-multiplayer-canonical-spec.md`, 2446 lines)
+and Y9-2's copy of the workbench spec
+(`asciicker-Y9-2/pipeline-v3/docs/plans/2026-03-23-workbench-canonical-spec.md`,
+597 lines) against this repo's canon spec.
+
+### Y9-2 Workbench Spec Copy — HIGH DRIFT (stale, recommend delete)
+
+The Y9-2 repo contains a 597-line copy of the workbench canonical spec. It is:
+
+1. **16 days stale** — last updated 2026-04-13 vs pipeline-v3's 2026-04-29
+2. **Pre-refactor baseline** — frozen before the `v3-refactor-start` checkpoint
+3. **Uses the old 3-authority-doc model** — claims "one of the 3 canonical
+   authority docs" while pipeline-v3 now uses a 2-doc model
+4. **Missing all major architecture content:**
+   - Section 0 (Behavior Rule, 9 Architecture Laws) — absent
+   - Section 1 (REXPaint-Parity Spec, 1.1–1.x) — absent
+   - Section 2 (Engine Wrapper Spec, 2.1–2.14) — absent
+   - Section 3 (Harness Spec) — absent
+   - Unified Sequence of Actions (UQ-001 through UQ-013) — absent
+   - Blocking Gates table — absent
+5. **Not referenced as authoritative** in Y9-2 CLAUDE.md or AGENTS.md
+6. **Y9-2's live authority** is its own `2026-03-22-multiplayer-canonical-spec.md`
+
+**Action needed:** Delete the Y9-2 workbench spec copy or move to dumpster.
+Replace with a one-line pointer to pipeline-v3 if cross-repo reference is needed.
+**State:** OPEN
+
+### Blocking Cross-Repo Misalignments (4)
+
+#### XR-01. Shared bundle-authoring headless contract (Section 2.10 / S2-R10) not implemented yet (BLOCKING)
+
+Pipeline-v3 §2.10 defines 8 required shared headless commands as the UQ-010
+convergence target: `phase0-status`, `phase0-build`, `validate-skin-intake`,
+`convert-skin-request`, `register-skin-request`, `compile-skin-request`,
+`validate-xp`, `status`.
+
+**These 8 commands do not exist as route handlers in pipeline-v3 code.** No
+`POST /api/workbench/phase0-status`, `POST /api/workbench/validate-skin-intake`,
+or equivalent S2-R10 route is registered in `src/pipeline_v2/app.py`. The
+spec-defined shared bundle-authoring headless contract is therefore not
+implemented in the live backend.
+
+However, pipeline-v3 **does** have a live workbench-oriented backend API
+surface: `/healthz`, `/api/run`, `/api/status/<job_id>`,
+`/api/workbench/templates`, `/api/workbench/bundle/create`,
+`/api/workbench/action-grid/apply`, `/api/workbench/export-bundle`,
+`/api/workbench/web-skin-bundle-payload`, `/api/workbench/run-verification`,
+browse CRUD, session lifecycle, termpp-stream, and mounted-calibration routes.
+The workbench API is not the same contract as the shared bundle-authoring
+gateway described in Section 2.10. The claim "no shared headless API contract
+exists in either repo's code" is false at the repo level because pipeline-v3 has
+this live backend API surface. The narrower truth is: the specific
+Section 2.10 / S2-R10 shared bundle-authoring contract is not implemented.
+
+Y9-2 currently routes through `scripts.pipeline` CLI subprocess
+and `launcher_lib/pipeline_server.py` (local process launcher), NOT HTTP/API.
+
+Neither repo implements the Section 2.10 shared contract. Both specs reference
+it as a requirement. This is the primary blocker for UQ-010.
+
+**Pipeline-v3 action:** Either (a) implement the S2-R10 commands on the live
+backend, or (b) demote the Section 2.10 contract to `planned_only` in canon and
+keep the workbench API as the live owner.
+**Y9-2 action:** Y9-2 launcher must be prepared to switch from subprocess to
+HTTP/API when the shared contract ships.
+**State:** OPEN — BLOCKING
+
+#### XR-02. Mounted pipeline scripts deleted — Y9-2 spec not updated; pipeline-v3 mounted foundations intact (BLOCKING)
+
+Y9-2 deleted 7 of 9 mounted pipeline scripts on 2026-05-01 (commits `d9aaf704`,
+`17093878`). Pipeline-v3 §2.5.4.2 still references all 9 as the UQ-008 toolchain
+baseline. Y9-2's multiplayer spec has not been updated to reflect the deletions
+either.
+
+Only `mounted_rider_offset.py` and `mounted_rider_residual_compare.py` survive.
+The deleted scripts include the mounted wrapper mask selector (1982 lines), the
+mounted semantic proposals generator, and the mounted wrapper onboard tool.
+
+**Pipeline-v3 clarification:** despite the Y9-2 script deletions, pipeline-v3
+still has mounted backend/MCP foundations in the live code. The
+`/api/workbench/mounted-calibration/compute` and
+`/api/workbench/mounted-semantic/proposals` routes are registered and served.
+Wrapper role constants (`mount_front` / `mount_rear`) are codified in
+`service.py`. Mounted remains `specified_not_authorable` — the foundation
+exists, but authorability and runtime closure for wolfie/wolack are still
+blocked. This is not the same as "mounted support is absent."
+
+**Pipeline-v3 action:** Update §2.5.4.2 script inventory (already logged as DR-01).
+**Y9-2 action:** Update multiplayer spec mounted pipeline section. Clarify whether
+deleted functionality was ported to MCP tools, retired, or consolidated.
+**State:** OPEN — BLOCKING
+
+#### XR-03. Y9-2 wizard accumulates independent ownership (BLOCKING)
+
+Pipeline-v3 §2.10 says Y9-2 launcher must converge on the shared headless
+contract. But Y9-2's `bundle_wizard/main.py` continues to evolve with its own
+local `option_tree`, artifact flow, and pipeline subprocess integration.
+
+Pipeline-v3's deletion-first model requires "delete parallel Y9-2 ownership
+after the shared contract exists" but no timeline or trigger for Y9-2 wizard
+convergence is defined in either spec.
+
+The longer Y9-2's wizard accumulates local state and user expectations, the
+harder convergence becomes. This is already noted in pipeline-v3 DR-15 but
+needs a cross-repo action.
+
+**Pipeline-v3 action:** Add convergence timeline to §2.10 or §2.13.
+**Y9-2 action:** Add DESIGN OPEN item tracking when local wizard becomes
+thin-client over shared API.
+**State:** OPEN — BLOCKING
+
+#### XR-04. Five-contract validation ownership split undefined (BLOCKING)
+
+Pipeline-v3 §2.14.7 says the pipeline produces assets for Contract 1 (Asset
+Layout) and Contract 3 (Layer Ownership). Contracts 2 (Selector Input),
+4 (Attachment Order), and 5 (Network Appearance) are unassigned.
+
+Y9-2's multiplayer spec does not explicitly define which repo validates which
+contract at integration time. The gap means authored bundles can pass all
+pipeline-v3 gates but fail at Y9-2 runtime due to selector or attachment errors.
+
+**Cross-repo action:** Define a contract ownership matrix in both specs.
+Pipeline-v3 owns validation for Contracts 1 and 3. Y9-2 owns validation for
+Contracts 2, 4, and 5. Integration tests (where?) catch cross-contract issues.
+**State:** OPEN — BLOCKING
+
+### Non-Blocking Cross-Repo Gaps (7)
+
+#### XR-05. DESIGN OPEN B-12, B-13, B-14 status unknown
+
+Pipeline-v3 §2.10 cross-references Y9-2 DESIGN OPEN items B-12 (API contract
+hardening), B-13 (launcher wiring), B-14 (agent gateway scope). These items
+were found in the Y9-2 multiplayer spec but their current resolution state is
+unclear from the spec text alone.
+**Action needed:** Verify B-12/B-13/B-14 states in Y9-2 spec and align
+cross-references.
+**State:** OPEN
+
+#### XR-06. ids.lock.json synchronization mechanism undefined
+
+Pipeline-v3 §2.3.10 plans to introduce `skin_definition_id`,
+`presentation_kind_id`, and `layer_definition_id`. Y9-2 maintains
+`ids.lock.json` for bundle ID allocation. No synchronization mechanism is
+defined between the two repos for ID consistency.
+**Action needed:** Define ID sync protocol in both specs (already logged as DR-16).
+**State:** OPEN
+
+#### XR-07. Y9-2 Step 7.12 VERIFY gate referenced but undefined in pipeline-v3
+
+Pipeline-v3 blocking gates reference "Y9-2 Step 7.12 VERIFY gate" as a
+ship gate prerequisite. This step lives in Y9-2's spec, not pipeline-v3's.
+Pipeline-v3 has no local definition of what this gate checks or how to verify it.
+**Action needed:** Add a cross-reference summary of the Y9-2 Step 7.12 gate in
+pipeline-v3 blocking gates section.
+**State:** OPEN
+
+#### XR-08. Y9-2 multiplayer spec references pipeline-v3 routes that may change
+
+Y9-2 spec references `/api/workbench/*` routes. Pipeline-v3's §2.10 plans to
+replace these with the shared headless contract surface. When pipeline-v3 routes
+change, Y9-2 launcher references will break.
+**Action needed:** Document the route migration plan in both specs. Y9-2 should
+reference the shared contract commands, not specific HTTP routes.
+**State:** OPEN
+
+#### XR-09. Template registry schema versioning absent cross-repo
+
+Both repos consume `config/template_registry.json`. Neither spec defines a
+schema version or migration strategy. If pipeline-v3 changes the registry
+schema (planned in UQ-004 vocabulary migration), Y9-2 consumers break.
+**Action needed:** Add registry schema version field. Define cross-repo update
+protocol.
+**State:** OPEN
+
+#### XR-10. Y9-2 MCP tools overlap with pipeline-v3 workbench API
+
+Y9-2 has MCP tools for mounted calibration and semantic proposals. Pipeline-v3
+has its own workbench MCP server. §2.10 says "launcher, MCP, CI, browser
+helpers must hit the same commands." The current dual-MCP state is the
+split-ownership the spec aims to eliminate.
+**Action needed:** Consolidate MCP tool surface as part of UQ-010.
+**State:** OPEN
+
+#### XR-11. Canon read order disagrees between repos
+
+Pipeline-v3 §0 defines startup read order as: (1) conductor_tools.py status,
+(2) PLAYWRIGHT_FAILURE_LOG.md, (3) workbench-canonical-spec.md, (4) live code.
+Y9-2's stale copy defines a different read order. Even after the stale copy is
+removed, no cross-repo canon read order exists for agents that need to operate
+across both repos simultaneously.
+**Action needed:** Define a cross-repo canon read protocol for dual-repo work.
+**State:** OPEN

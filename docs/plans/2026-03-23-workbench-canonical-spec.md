@@ -1348,35 +1348,12 @@ Sources:
 
 ### 1.x — Section 1 Performance And Architecture Audit Status (2026-04-27)
 
-Research-driven audit of the shared editor rendering/architecture path used by
-the shipped whole-sheet root owner. `web/whole-sheet-init.js` imports the
-`web/rexpaint-editor/*` canvas/font/tool modules directly, so the fixes below
-do apply to the Section 1 path. These items are now verified in code and with
-timed evidence, but they do not by themselves close full Section 1 parity.
-
-All items have `PLAYWRIGHT_FAILURE_LOG.md` entries dated `2026-04-27` under the
-`Section 1 Performance And Architecture Audit` heading, and were re-audited
-against live code on `2026-04-27`.
-
-| ID | Title | Scope | State |
-|----|-------|-------|-------|
-| S1-PERF-001 | Full canvas redraws on layer ops | `web/rexpaint-editor/layer-stack.js`, `web/rexpaint-editor/canvas.js` | PASS — offscreen per-layer compositing verified (`f0a83d9`); browser benchmark measured `0.005ms` average toggle render on `200x100` over 20 iterations |
-| S1-PERF-002 | Color string allocation in draw hotpath | `web/rexpaint-editor/canvas.js` | PASS — module-scope color intern map verified (`9e1af0b`) |
-| S1-PERF-003 | `fillText` per-cell instead of glyph atlas `drawImage` | `web/rexpaint-editor/cp437-font.js`, `web/rexpaint-editor/canvas.js` | PASS — atlas/tinted-atlas render path verified (`9e1af0b`); browser benchmark measured `0.005ms` average dirty render on `200x100` over 20 iterations |
-| S1-PERF-004 | Marching ants + grid drive unchecked 60fps rAF loop | `web/rexpaint-editor/canvas.js` | PASS — dirty-region selection redraw verified (`c303db5`); browser benchmark measured `0.09ms` average frame time with `60` draw calls/frame |
-| S1-ARCH-001 | Undo/redo stubbed, not implemented | `web/rexpaint-editor/canvas.js`, `web/rexpaint-editor/editor-app.js`, `web/rexpaint-editor/undo-stack.js` | PASS — command-based undo/redo wiring verified (`a765aef`); editor undo-stack test passes |
-| S1-ARCH-002 | Tool registry is hardcoded, not map-based | `web/rexpaint-editor/editor-app.js` | PASS — `Map`-based tool registry verified (`c303db5`); keyboard-handler test passes through symbolic dispatch |
-
-Verification notes:
-
-1. The two editor test files cited in this audit are real but require an
-   ESM-capable runner; plain `node tests/web/...` does not run them under the
-   current `commonjs` package metadata.
-2. The PASS state here means the six 2026-04-27 perf/architecture rows are
-   implemented, integrated, and measured. Combined with the same-day whole-sheet
-   ownership tests and headed root/prefixed proof runs logged in
-   `PLAYWRIGHT_FAILURE_LOG.md`, they no longer leave unresolved Section 1
-   blockers in `1.6.1` and `1.6.2` for the current worktree state.
+All six perf/architecture audit items (S1-PERF-001 through S1-PERF-004,
+S1-ARCH-001, S1-ARCH-002) are PASS with commit SHAs and timed evidence.
+Full details, verification notes, and benchmark measurements live in
+`PLAYWRIGHT_FAILURE_LOG.md` under the `Section 1 Performance And Architecture
+Audit` heading dated `2026-04-27`. They no longer leave unresolved Section 1
+blockers in `1.6.1` and `1.6.2` for the current worktree state.
 
 ---
 
@@ -2521,6 +2498,13 @@ pipeline-v3 must expose so that Y9-2 launcher flows, MCP tools, CI, browser
 helpers, and manual terminal usage all hit the same bundle-authoring behavior
 instead of creating parallel owners.
 
+> **STATUS: PLANNED / DEFERRED (2026-05-03).** All commands in this section
+> are a design-only target contract. No code in `src/pipeline_v2/app.py` or
+> `service.py` backs any of the S2-R10 command names below. The live backend
+> exposes a different workbench-oriented API surface (see "Live workbench API
+> surface" note at the end of this subsection). Do not treat this command table
+> as current shipped API. UQ-010 is PARKED pending earlier-layer closure.
+
 **Current boundary from live Y9-2 code:** intake may accept partially supplied
 body art, but canonical registration/compile may not. In the current wizard,
 `_bundle_request_ready_for_registration()` requires converted walk, attack, and
@@ -2536,16 +2520,16 @@ the root XP editor; Section 2 adds the bundle-authoring wrapper around it.
 **Required shared headless surface:** the product must converge on one
 authoritative CLI/API contract with at least these command semantics:
 
-| Command | Purpose | Mutation |
-|---------|---------|----------|
-| `phase0-status` | inspect semantic-dict/reference state | no |
-| `phase0-build` | refresh semantic-dict/reference state | yes |
-| `validate-skin-intake` | validate source PNG geometry/coverage for the skin lane | no |
-| `convert-skin-request` | convert walk/attack/death PNG inputs into staged XP and update the request artifact | yes |
-| `register-skin-request` | dry-run or perform canonical registration into bundle source + sprite destinations | yes |
-| `compile-skin-request` | compile canonical bundle outputs from a registered request | yes |
-| `validate-xp` | run XP-only G7-G12 validation without requiring bundle/session context | no |
-| `status` | inspect request artifact state, blockers, next steps, and provenance | no |
+| Command | Purpose | Mutation | Status |
+|---------|---------|----------|--------|
+| `phase0-status` | inspect semantic-dict/reference state | no | `planned_only` — no route exists |
+| `phase0-build` | refresh semantic-dict/reference state | yes | `planned_only` — no route exists |
+| `validate-skin-intake` | validate source PNG geometry/coverage for the skin lane | no | `planned_only` — no route exists |
+| `convert-skin-request` | convert walk/attack/death PNG inputs into staged XP and update the request artifact | yes | `planned_only` — no route exists |
+| `register-skin-request` | dry-run or perform canonical registration into bundle source + sprite destinations | yes | `planned_only` — no route exists |
+| `compile-skin-request` | compile canonical bundle outputs from a registered request | yes | `planned_only` — no route exists |
+| `validate-xp` | run XP-only G7-G12 validation without requiring bundle/session context | no | `planned_only` — no route exists |
+| `status` | inspect request artifact state, blockers, next steps, and provenance | no | `planned_only` — no route exists |
 
 The API naming may differ from the CLI verb spelling, but the semantics and
 validation rules must be identical. There must not be a browser-only, MCP-only,
@@ -2618,12 +2602,43 @@ legacy family strings.
 - if Y9-2 local code still owns a step during migration, that temporary
   ownership must be stated explicitly
 
+**Live workbench API surface (current truth):** The actual live backend routes
+in `src/pipeline_v2/app.py` are organized around the workbench UI, not the
+shared headless gateway:
+
+- `/healthz` — health check
+- `/api/run`, `/api/status/<job_id>`, `/api/upload`, `/api/analyze` — legacy
+  pipeline run/status flow
+- `/api/workbench/templates` — template registry
+- `/api/workbench/bundle/create` — bundle creation
+- `/api/workbench/action-grid/apply` — action-grid source apply
+- `/api/workbench/export-bundle` — bundle export
+- `/api/workbench/web-skin-bundle-payload` — bundle web-skin payload
+- `/api/workbench/run-verification` — session verification
+- `/api/workbench/*/browse/*` — session CRUD
+- `/api/workbench/*/session/*` — session lifecycle (save, load, create-blank,
+  export-xp, upload-xp, termpp-stream, mounted-calibration,
+  mounted-semantic/review)
+
+This is the live owner. The S2-R10 command set above is a planned target that
+would add `phase0-status`, `phase0-build`, `validate-skin-intake`,
+`convert-skin-request`, `register-skin-request`, `compile-skin-request`,
+`validate-xp`, and `status` as shared commands. Do not claim the shared
+headless contract is the current shipped API.
+
 **Current state:** Y9-2 now provides a useful local request-artifact wizard for
-the skin lane, but pipeline-v3 still exposes older `/api/workbench/*` routes
-and wrapper MCP tooling rather than the shared headless bundle-authoring
-surface defined above. Cross-tracked in Y9-2 canon spec Section 2 [5] as DESIGN
+the skin lane, but pipeline-v3 still exposes the workbench-backed routes above
+rather than the shared headless bundle-authoring surface defined in this
+section. Cross-tracked in Y9-2 canon spec Section 2 [5] as DESIGN
 OPEN B-12 (API contract hardening), B-13 (launcher wiring), and B-14 (agent
 gateway scope). This remains an ownership and contract gap, not launcher paint.
+
+**Clarification (2026-05-03):** The statement "no shared headless API contract
+exists in either repo's code" is false if applied at the repo level. Pipeline-v3
+has a live backend API surface. The narrower truth is: the spec-defined shared
+bundle-authoring headless contract (Section 2.10 / S2-R10) is not implemented
+in either repo. The live workbench routes are not the same contract as the
+future shared gateway.
 
 ---
 
@@ -2837,9 +2852,10 @@ Cartesian enumerator and not a machine-learning authority.
 
 The current repo maps onto this harness model as follows:
 
-1. The harness action registry seed and `action_registry_schema.json`
-   - keep
-   - this is the current seed of the User-Reachable Action Graph; this checkout no longer tracks a literal `action_registry.json` file
+1. `action_registry_schema.json` (the harness action registry seed)
+   - keep — this is the sole current source of the User-Reachable Action Graph
+   - no live `action_registry.json` instance file exists in this checkout; the
+     schema file is both the seed definition and the current authority
    - adapt by expanding conditional reachability, gesture coverage, checkpoint
      tags, and random-exploration eligibility
 2. `scripts/xp_fidelity_test/run_source_to_grid_workflow_test.mjs`
@@ -2966,6 +2982,12 @@ Legacy-step normalization for older references:
 7. `PARKED` rows are backlog, not “maybe next.” They do not execute until the
    earlier `CURRENT` / `READY` rows pass or the user explicitly reprioritizes
    them.
+8. `CURRENT / SUPPORT` means the row runs continuously alongside other queue
+   rows as maintenance. It depends on `UQ-001` and whichever Section 1/2 source
+   state currently exists. Its work is triggered by each landed Section 1/2
+   slice, not by its own independent milestone. It has no positive completion
+   condition — its fail condition (`Any verifier lane outruns product reality`)
+   is a boundary guard, not a stop signal.
 
 | Seq | State | Robot Task | Preconditions | Do Exactly This | Pass Condition | Stop / Fail Condition | FL / Owner |
 |---|---|---|---|---|---|---|---|
@@ -3044,6 +3066,12 @@ coverage contract must expand simultaneously. The rule is:
 4. Coverage audits must be machine-driven. A script or CI step must enumerate
    `assets/sprites/*.xp`, cross-reference the active bundle, and emit a coverage
    report before any bundle export gate is declared PASS.
+
+**Current state (2026-05-03):** `config/SPRITE_COVERAGE_EXCEPTIONS.txt` does
+not yet exist and the CI audit step is not implemented. This contract activates
+when `UQ-008` expands bundle scope to mounted families. Until then, the
+exceptions in §2.11.3 are tracked inline only. No queue row currently owns
+the creation of this file or the audit script.
 
 ### 2.11.3 Current Exceptions (2026-04-22)
 
