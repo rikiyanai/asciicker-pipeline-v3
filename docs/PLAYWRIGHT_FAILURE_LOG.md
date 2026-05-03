@@ -11609,9 +11609,11 @@ Section 2.10 / S2-R10 shared bundle-authoring contract is not implemented.
 
 Y9-2 also does not implement the Section 2.10 shared contract. Y9-2 does have
 HTTP wizard paths (`testing/launcher.py`, `testing/launcher_lib/wizard.py`,
-`docs/agent/mcp/wizard_mcp_server.py`), but those target Y9-2's own local
-routes — not pipeline-v3's live backend. The honest problem is route mismatch:
-Y9-2 HTTP clients and pipeline-v3 workbench routes speak different contracts.
+`docs/agent/mcp/wizard_mcp_server.py`), but those target the planned gateway
+route shape (`/health`, `/pipeline/templates`, `/pipeline/run`) rather than
+pipeline-v3's live workbench/backend route shape (`/healthz`, `/api/run`,
+`/api/workbench/*`). The honest problem is contract mismatch: Y9-2 HTTP clients
+and pipeline-v3 live routes speak different contracts.
 
 Neither repo implements the Section 2.10 shared contract. Both specs reference
 it as a requirement. This is the primary blocker for UQ-010.
