@@ -164,6 +164,38 @@ def validate_region_names(map_data: dict, errors: list):
                 )
 
 
+def validate_dual_region_references(map_data: dict, errors: list):
+    """Check that fg_region/bg_region values on semantic_cells reference
+    real region names that exist in the same frame."""
+    for frame_key, frame_data in map_data.get("frames", {}).items():
+        regions = frame_data.get("regions", [])
+        # Build set of valid region names for this frame
+        valid_names: set[str] = set()
+        for region in regions:
+            name = region.get("name", "")
+            if isinstance(name, str) and name.strip():
+                valid_names.add(name)
+
+        for i, region in enumerate(regions):
+            for k, cell in enumerate(region.get("semantic_cells", [])):
+                for ref_key in ("fg_region", "bg_region"):
+                    ref_val = cell.get(ref_key)
+                    if ref_val is not None:
+                        if not isinstance(ref_val, str) or not ref_val.strip():
+                            errors.append(
+                                f"  frames.{frame_key}.regions[{i}].semantic_cells[{k}]"
+                                f".{ref_key} must be a non-empty string, "
+                                f"got {ref_val!r}"
+                            )
+                        elif ref_val not in valid_names:
+                            errors.append(
+                                f"  frames.{frame_key}.regions[{i}].semantic_cells[{k}]"
+                                f".{ref_key}='{ref_val}' does not match any "
+                                f"region name in this frame. Valid names: "
+                                f"{sorted(valid_names)}"
+                            )
+
+
 def validate_ambiguities(map_data: dict, errors: list):
     """Check that ambiguity entries are well-formed non-empty strings."""
     ambiguities = map_data.get("ambiguities")
@@ -346,6 +378,9 @@ def main():
         # Region names
         validate_region_names(map_data, errors)
 
+        # fg_region/bg_region cross-reference validation
+        validate_dual_region_references(map_data, errors)
+
         # Ambiguities
         validate_ambiguities(map_data, errors)
 
@@ -374,6 +409,7 @@ def main():
             print("  XP file reference: OK")
             print("  Palette role references: OK")
             print("  Region names: OK")
+            print("  Dual-region references: OK")
             print("  Ambiguities: OK")
             print("  Hex colors: OK")
             print("  Slot affinity: OK")

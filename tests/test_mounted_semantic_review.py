@@ -170,3 +170,173 @@ def test_proposals_calibration_missing_player_xp(client):
     _post_calibration(client, session_id, bad_calibration)
     resp = _get_proposals(client, session_id)
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Semantic map validator tests (fg_region/bg_region cross-reference)
+# ---------------------------------------------------------------------------
+
+
+def _make_minimal_map(regions: list, cells: list[dict] | None = None) -> dict:
+    """Build a minimal semantic map dict for testing dual-region references."""
+    frame_regions = []
+    for i, name in enumerate(regions):
+        frame_regions.append({
+            "name": name,
+            "bbox": [0, 0, 0, 0],
+            "confidence": "high",
+            "palette_roles": [],
+            "semantic_cells": [
+                c for c in (cells or [])
+                if c.get("parent_region", name) == name
+            ],
+        })
+    return {
+        "schema_version": "0.1.0",
+        "family": "player",
+        "reference_xp": "sprites/player-0100.xp",
+        "semantic_layer": 2,
+        "frame_w": 7,
+        "frame_h": 10,
+        "grid_layout": {"angles": 8, "projections": 2, "anim_counts": [1, 8], "frames_per_row": 9, "rows": 8},
+        "palette_roles": {},
+        "frames": {
+            "0": {
+                "angle": 0,
+                "projection": 0,
+                "anim_index": 0,
+                "anim_name": "idle",
+                "regions": frame_regions,
+            }
+        },
+    }
+
+
+def test_dual_region_ref_valid_reference_passes():
+    """fg_region referencing a real region name passes validation."""
+    from scripts.validate_semantic_maps import validate_dual_region_references
+
+    cell = {
+        "x": 3, "y": 2, "glyph": 220, "fg": "#000000", "bg": "#ffff55",
+        "role": "face_cell",
+        "fg_region": "face",
+        "bg_region": "hair",
+        "parent_region": "face",
+    }
+    map_data = _make_minimal_map(["face", "hair"], cells=[cell])
+    errors: list[str] = []
+    validate_dual_region_references(map_data, errors)
+    assert not errors, f"Expected no errors, got: {errors}"
+
+
+def test_dual_region_ref_invalid_fg_region_fails():
+    """fg_region referencing a non-existent region name fails validation."""
+    from scripts.validate_semantic_maps import validate_dual_region_references
+
+    cell = {
+        "x": 3, "y": 2, "glyph": 220, "fg": "#000000", "bg": "#ffff55",
+        "role": "face_cell",
+        "fg_region": "nonexistent_region",
+        "parent_region": "face",
+    }
+    map_data = _make_minimal_map(["face", "hair"], cells=[cell])
+    errors: list[str] = []
+    validate_dual_region_references(map_data, errors)
+    assert len(errors) >= 1
+    assert "nonexistent_region" in errors[0]
+    assert "does not match any region name" in errors[0]
+
+
+def test_dual_region_ref_invalid_bg_region_fails():
+    """bg_region referencing a non-existent region name fails validation."""
+    from scripts.validate_semantic_maps import validate_dual_region_references
+
+    cell = {
+        "x": 3, "y": 2, "glyph": 220, "fg": "#000000", "bg": "#ffff55",
+        "role": "face_cell",
+        "bg_region": "missing_body_part",
+        "parent_region": "face",
+    }
+    map_data = _make_minimal_map(["face", "hair"], cells=[cell])
+    errors: list[str] = []
+    validate_dual_region_references(map_data, errors)
+    assert len(errors) >= 1
+    assert "missing_body_part" in errors[0]
+
+
+def test_dual_region_ref_both_invalid_fails():
+    """Both fg_region and bg_region invalid produces two errors."""
+    from scripts.validate_semantic_maps import validate_dual_region_references
+
+    cell = {
+        "x": 3, "y": 2, "glyph": 220, "fg": "#000000", "bg": "#ffff55",
+        "role": "face_cell",
+        "fg_region": "phanton_fg",
+        "bg_region": "phanton_bg",
+        "parent_region": "face",
+    }
+    map_data = _make_minimal_map(["face", "hair"], cells=[cell])
+    errors: list[str] = []
+    validate_dual_region_references(map_data, errors)
+    assert len(errors) == 2
+
+
+def test_dual_region_ref_empty_string_fails():
+    """Empty string for fg_region/bg_region fails validation."""
+    from scripts.validate_semantic_maps import validate_dual_region_references
+
+    cell = {
+        "x": 3, "y": 2, "glyph": 220, "fg": "#000000", "bg": "#ffff55",
+        "role": "face_cell",
+        "fg_region": "   ",
+        "parent_region": "face",
+    }
+    map_data = _make_minimal_map(["face", "hair"], cells=[cell])
+    errors: list[str] = []
+    validate_dual_region_references(map_data, errors)
+    assert len(errors) == 1
+
+
+def test_dual_region_ref_no_refs_passes():
+    """Cells without fg_region/bg_region pass validation."""
+    from scripts.validate_semantic_maps import validate_dual_region_references
+
+    cell = {
+        "x": 3, "y": 2, "glyph": 220, "fg": "#000000", "bg": "#ffff55",
+        "role": "face_cell",
+        "parent_region": "face",
+    }
+    map_data = _make_minimal_map(["face", "hair"], cells=[cell])
+    errors: list[str] = []
+    validate_dual_region_references(map_data, errors)
+    assert not errors
+
+
+def test_dual_region_ref_multi_frame():
+    """Validation checks frame-local region names (cross-frame refs are invalid)."""
+    from scripts.validate_semantic_maps import validate_dual_region_references
+
+    cell_frame1 = {
+        "x": 3, "y": 2, "glyph": 220, "fg": "#000000", "bg": "#ffff55",
+        "role": "face_cell",
+        "bg_region": "hair",
+        "parent_region": "face",
+    }
+    map_data = _make_minimal_map(["face"], cells=[cell_frame1])
+    map_data["frames"]["1"] = {
+        "angle": 1,
+        "projection": 0,
+        "anim_index": 0,
+        "anim_name": "idle",
+        "regions": [{
+            "name": "face",
+            "bbox": [0, 0, 0, 0],
+            "confidence": "high",
+            "palette_roles": [],
+            "semantic_cells": [cell_frame1],
+        }],
+    }
+    errors: list[str] = []
+    validate_dual_region_references(map_data, errors)
+    assert len(errors) >= 1
+    assert "hair" in errors[0]
