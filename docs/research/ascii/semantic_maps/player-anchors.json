@@ -1,0 +1,1956 @@
+{
+  "schema_version": "0.1.0",
+  "family": "player",
+  "reference_xp": "../asciicker-pipeline-v3/sprites/player-0100.xp",
+  "semantic_layer": 2,
+  "frame_w": 7,
+  "frame_h": 10,
+  "grid_layout": {
+    "angles": 8,
+    "projections": 2,
+    "anim_counts": [
+      1,
+      8
+    ],
+    "frames_per_row": 9,
+    "rows": 8
+  },
+  "palette_roles": {
+    "subcell_fill": {
+      "colors": [
+        "#ffff55"
+      ],
+      "confidence": "high",
+      "usage": "bg",
+      "description": "Yellow sub-cell rendering fill (NOT hair)"
+    },
+    "skin": {
+      "colors": [
+        "#ff5555"
+      ],
+      "confidence": "high",
+      "usage": "bg",
+      "description": "Flesh tone \u2014 face, arms"
+    },
+    "skin_detail": {
+      "colors": [
+        "#aa0000"
+      ],
+      "confidence": "high",
+      "usage": "fg",
+      "description": "Dark red \u2014 mouth/expression detail"
+    },
+    "shirt_primary": {
+      "colors": [
+        "#aa00aa"
+      ],
+      "confidence": "high",
+      "usage": "both",
+      "description": "Purple torso garment"
+    },
+    "pants_bright": {
+      "colors": [
+        "#5555ff"
+      ],
+      "confidence": "high",
+      "usage": "both",
+      "description": "Bright blue pants highlight"
+    },
+    "pants_dark": {
+      "colors": [
+        "#0000aa"
+      ],
+      "confidence": "high",
+      "usage": "fg",
+      "description": "Dark blue lower garment"
+    },
+    "boots_primary": {
+      "colors": [
+        "#aa5500"
+      ],
+      "confidence": "high",
+      "usage": "fg",
+      "description": "Brown boot/footwear"
+    }
+  },
+  "frames": {
+    "0": {
+      "projection": 0,
+      "angle": 0,
+      "anim_index": 0,
+      "anim_name": "idle",
+      "regions": [
+        {
+          "name": "hair",
+          "bbox": [
+            2,
+            1,
+            4,
+            2
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 1,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            },
+            {
+              "x": 2,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            },
+            {
+              "x": 4,
+              "y": 2,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 3 cells with 'hair' color at angle 0 (N). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "face",
+          "bbox": [
+            1,
+            2,
+            5,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 2,
+              "glyph": 34,
+              "fg": "#000000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 3,
+              "glyph": 118,
+              "fg": "#aa0000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 4,
+              "glyph": 223,
+              "fg": "#ff5555",
+              "bg": "#aa00aa",
+              "role": "skin_cell"
+            },
+            {
+              "x": 1,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 5,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 5 cells with 'skin' color at angle 0 (N). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "shirt",
+          "bbox": [
+            2,
+            4,
+            4,
+            6
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 2,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 5,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 6,
+              "glyph": 220,
+              "fg": "#0000aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            }
+          ],
+          "slot_affinity": "armor",
+          "notes": "Auto-grouped from 6 cells with 'shirt' color at angle 0 (N). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "pants",
+          "bbox": [
+            2,
+            6,
+            4,
+            7
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 6,
+              "glyph": 222,
+              "fg": "#5555ff",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 6,
+              "glyph": 221,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 2,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 4 cells with 'pants' color at angle 0 (N). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "boots",
+          "bbox": [
+            2,
+            8,
+            4,
+            8
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boots_cell"
+            },
+            {
+              "x": 4,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boots_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 2 cells with 'boots' color at angle 0 (N). Review: verify region name, split/merge as needed."
+        }
+      ]
+    },
+    "1": {
+      "projection": 0,
+      "angle": 1,
+      "anim_index": 0,
+      "anim_name": "idle",
+      "regions": [
+        {
+          "name": "hair",
+          "bbox": [
+            2,
+            1,
+            3,
+            2
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 1,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            },
+            {
+              "x": 2,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 2 cells with 'hair' color at angle 1 (NE). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "face",
+          "bbox": [
+            1,
+            2,
+            4,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 2,
+              "glyph": 34,
+              "fg": "#000000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 4,
+              "y": 2,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 3,
+              "glyph": 118,
+              "fg": "#aa0000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 4,
+              "glyph": 223,
+              "fg": "#ff5555",
+              "bg": "#aa00aa",
+              "role": "skin_cell"
+            },
+            {
+              "x": 1,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 6 cells with 'skin' color at angle 1 (NE). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "shirt",
+          "bbox": [
+            2,
+            4,
+            4,
+            6
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 4,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 2,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 5,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 6,
+              "glyph": 220,
+              "fg": "#0000aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            }
+          ],
+          "slot_affinity": "armor",
+          "notes": "Auto-grouped from 5 cells with 'shirt' color at angle 1 (NE). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "pants",
+          "bbox": [
+            2,
+            6,
+            4,
+            7
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 6,
+              "glyph": 222,
+              "fg": "#5555ff",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 6,
+              "glyph": 221,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 2,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            },
+            {
+              "x": 3,
+              "y": 7,
+              "glyph": 223,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 5 cells with 'pants' color at angle 1 (NE). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "boots",
+          "bbox": [
+            2,
+            8,
+            4,
+            8
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boots_cell"
+            },
+            {
+              "x": 4,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boots_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 2 cells with 'boots' color at angle 1 (NE). Review: verify region name, split/merge as needed."
+        }
+      ]
+    },
+    "2": {
+      "projection": 0,
+      "angle": 2,
+      "anim_index": 0,
+      "anim_name": "idle",
+      "regions": [
+        {
+          "name": "hair",
+          "bbox": [
+            2,
+            1,
+            4,
+            8
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 1,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            },
+            {
+              "x": 2,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            },
+            {
+              "x": 4,
+              "y": 8,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 3 cells with 'hair' color at angle 2 (E). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "face",
+          "bbox": [
+            3,
+            2,
+            4,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 2,
+              "glyph": 96,
+              "fg": "#000000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 4,
+              "y": 2,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 3,
+              "glyph": 192,
+              "fg": "#aa0000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#ff5555",
+              "bg": "#aa00aa",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#aa00aa",
+              "role": "skin_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 5 cells with 'skin' color at angle 2 (E). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "shirt",
+          "bbox": [
+            2,
+            4,
+            4,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 4,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 4,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 2,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            }
+          ],
+          "slot_affinity": "armor",
+          "notes": "Auto-grouped from 4 cells with 'shirt' color at angle 2 (E). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "pants",
+          "bbox": [
+            2,
+            6,
+            4,
+            6
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 6,
+              "glyph": 222,
+              "fg": "#5555ff",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 6,
+              "glyph": 221,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 2 cells with 'pants' color at angle 2 (E). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "boots",
+          "bbox": [
+            3,
+            8,
+            3,
+            8
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boots_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 1 cells with 'boots' color at angle 2 (E). Review: verify region name, split/merge as needed."
+        }
+      ]
+    },
+    "3": {
+      "projection": 0,
+      "angle": 3,
+      "anim_index": 0,
+      "anim_name": "idle",
+      "regions": [
+        {
+          "name": "hair",
+          "bbox": [
+            2,
+            1,
+            3,
+            2
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 1,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            },
+            {
+              "x": 2,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 2 cells with 'hair' color at angle 3 (SE). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "outline",
+          "bbox": [
+            3,
+            2,
+            3,
+            2
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 2,
+              "glyph": 219,
+              "fg": "#000000",
+              "bg": "#000000",
+              "role": "outline_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 1 cells with 'outline' color at angle 3 (SE). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "face",
+          "bbox": [
+            1,
+            2,
+            4,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 4,
+              "y": 2,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 3,
+              "glyph": 223,
+              "fg": "#000000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 1,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 4 cells with 'skin' color at angle 3 (SE). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "shirt",
+          "bbox": [
+            2,
+            4,
+            4,
+            6
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 4,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 2,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 5,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 6,
+              "glyph": 220,
+              "fg": "#0000aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            }
+          ],
+          "slot_affinity": "armor",
+          "notes": "Auto-grouped from 6 cells with 'shirt' color at angle 3 (SE). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "pants",
+          "bbox": [
+            2,
+            6,
+            4,
+            7
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 6,
+              "glyph": 222,
+              "fg": "#5555ff",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 6,
+              "glyph": 221,
+              "fg": "#5555ff",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 2,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            },
+            {
+              "x": 3,
+              "y": 7,
+              "glyph": 223,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 5 cells with 'pants' color at angle 3 (SE). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "boots",
+          "bbox": [
+            2,
+            8,
+            4,
+            8
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boots_cell"
+            },
+            {
+              "x": 4,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boots_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 2 cells with 'boots' color at angle 3 (SE). Review: verify region name, split/merge as needed."
+        }
+      ]
+    },
+    "4": {
+      "projection": 0,
+      "angle": 4,
+      "anim_index": 0,
+      "anim_name": "idle",
+      "regions": [
+        {
+          "name": "hair",
+          "bbox": [
+            2,
+            1,
+            4,
+            2
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 1,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            },
+            {
+              "x": 2,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            },
+            {
+              "x": 4,
+              "y": 2,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 3 cells with 'hair' color at angle 4 (S). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "face",
+          "bbox": [
+            1,
+            3,
+            5,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 3,
+              "glyph": 220,
+              "fg": "#ff5555",
+              "bg": "#000000",
+              "role": "skin_cell"
+            },
+            {
+              "x": 1,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 5,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 3 cells with 'skin' color at angle 4 (S). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "shirt",
+          "bbox": [
+            2,
+            4,
+            4,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 2,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 5,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            }
+          ],
+          "slot_affinity": "armor",
+          "notes": "Auto-grouped from 6 cells with 'shirt' color at angle 4 (S). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "pants",
+          "bbox": [
+            2,
+            6,
+            4,
+            8
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 6,
+              "glyph": 222,
+              "fg": "#5555ff",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 3,
+              "y": 6,
+              "glyph": 221,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 6,
+              "glyph": 221,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 2,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            },
+            {
+              "x": 2,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#0000aa",
+              "bg": "#000000",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#0000aa",
+              "bg": "#000000",
+              "role": "pants_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 7 cells with 'pants' color at angle 4 (S). Review: verify region name, split/merge as needed."
+        }
+      ]
+    },
+    "5": {
+      "projection": 0,
+      "angle": 5,
+      "anim_index": 0,
+      "anim_name": "idle",
+      "regions": [
+        {
+          "name": "hair",
+          "bbox": [
+            3,
+            1,
+            4,
+            2
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 1,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            },
+            {
+              "x": 4,
+              "y": 2,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 2 cells with 'hair' color at angle 5 (SW). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "face",
+          "bbox": [
+            2,
+            2,
+            5,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 3,
+              "glyph": 223,
+              "fg": "#000000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 2,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 5,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 4 cells with 'skin' color at angle 5 (SW). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "outline",
+          "bbox": [
+            3,
+            2,
+            3,
+            2
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 2,
+              "glyph": 219,
+              "fg": "#000000",
+              "bg": "#000000",
+              "role": "outline_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 1 cells with 'outline' color at angle 5 (SW). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "shirt",
+          "bbox": [
+            2,
+            4,
+            4,
+            6
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 4,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 5,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 6,
+              "glyph": 220,
+              "fg": "#0000aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            }
+          ],
+          "slot_affinity": "armor",
+          "notes": "Auto-grouped from 6 cells with 'shirt' color at angle 5 (SW). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "pants",
+          "bbox": [
+            2,
+            6,
+            4,
+            7
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 6,
+              "glyph": 222,
+              "fg": "#5555ff",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 6,
+              "glyph": 221,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 2,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            },
+            {
+              "x": 3,
+              "y": 7,
+              "glyph": 223,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 5 cells with 'pants' color at angle 5 (SW). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "boots",
+          "bbox": [
+            2,
+            8,
+            4,
+            8
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boots_cell"
+            },
+            {
+              "x": 4,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boots_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 2 cells with 'boots' color at angle 5 (SW). Review: verify region name, split/merge as needed."
+        }
+      ]
+    },
+    "6": {
+      "projection": 0,
+      "angle": 6,
+      "anim_index": 0,
+      "anim_name": "idle",
+      "regions": [
+        {
+          "name": "hair",
+          "bbox": [
+            2,
+            1,
+            4,
+            8
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 1,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            },
+            {
+              "x": 4,
+              "y": 2,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            },
+            {
+              "x": 2,
+              "y": 8,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 3 cells with 'hair' color at angle 6 (W). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "face",
+          "bbox": [
+            2,
+            2,
+            3,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 2,
+              "glyph": 39,
+              "fg": "#000000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 3,
+              "glyph": 217,
+              "fg": "#aa0000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#ff5555",
+              "bg": "#aa00aa",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#aa00aa",
+              "role": "skin_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 5 cells with 'skin' color at angle 6 (W). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "shirt",
+          "bbox": [
+            2,
+            4,
+            4,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 4,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 4,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 2,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            }
+          ],
+          "slot_affinity": "armor",
+          "notes": "Auto-grouped from 4 cells with 'shirt' color at angle 6 (W). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "pants",
+          "bbox": [
+            2,
+            6,
+            4,
+            6
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 6,
+              "glyph": 222,
+              "fg": "#5555ff",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 6,
+              "glyph": 221,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 2 cells with 'pants' color at angle 6 (W). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "boots",
+          "bbox": [
+            3,
+            8,
+            3,
+            8
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boots_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 1 cells with 'boots' color at angle 6 (W). Review: verify region name, split/merge as needed."
+        }
+      ]
+    },
+    "7": {
+      "projection": 0,
+      "angle": 7,
+      "anim_index": 0,
+      "anim_name": "idle",
+      "regions": [
+        {
+          "name": "hair",
+          "bbox": [
+            3,
+            1,
+            4,
+            2
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 1,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            },
+            {
+              "x": 4,
+              "y": 2,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 2 cells with 'hair' color at angle 7 (NW). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "face",
+          "bbox": [
+            2,
+            2,
+            5,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 2,
+              "glyph": 34,
+              "fg": "#000000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 3,
+              "glyph": 118,
+              "fg": "#aa0000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 4,
+              "glyph": 223,
+              "fg": "#ff5555",
+              "bg": "#aa00aa",
+              "role": "skin_cell"
+            },
+            {
+              "x": 2,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 5,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            }
+          ],
+          "slot_affinity": "head",
+          "notes": "Auto-grouped from 6 cells with 'skin' color at angle 7 (NW). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "shirt",
+          "bbox": [
+            2,
+            4,
+            4,
+            6
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 4,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 5,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_cell"
+            },
+            {
+              "x": 3,
+              "y": 6,
+              "glyph": 220,
+              "fg": "#0000aa",
+              "bg": "#aa00aa",
+              "role": "shirt_cell"
+            }
+          ],
+          "slot_affinity": "armor",
+          "notes": "Auto-grouped from 5 cells with 'shirt' color at angle 7 (NW). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "pants",
+          "bbox": [
+            2,
+            6,
+            4,
+            7
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 6,
+              "glyph": 222,
+              "fg": "#5555ff",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 6,
+              "glyph": 221,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 2,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            },
+            {
+              "x": 3,
+              "y": 7,
+              "glyph": 223,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_cell"
+            },
+            {
+              "x": 4,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 5 cells with 'pants' color at angle 7 (NW). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "boots",
+          "bbox": [
+            2,
+            8,
+            4,
+            8
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boots_cell"
+            },
+            {
+              "x": 4,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boots_cell"
+            }
+          ],
+          "slot_affinity": "body",
+          "notes": "Auto-grouped from 2 cells with 'boots' color at angle 7 (NW). Review: verify region name, split/merge as needed."
+        }
+      ]
+    }
+  },
+  "angle_anchors": {
+    "ground_truth_angles": [],
+    "propagated_angles": []
+  },
+  "ambiguities": [
+    "Auto-populated from real XP data. Regions are grouped by color \u2014 review each angle and correct region names where color grouping is ambiguous (e.g., 'edge' cells may belong to adjacent regions)."
+  ]
+}

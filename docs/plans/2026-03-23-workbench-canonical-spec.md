@@ -2070,6 +2070,131 @@ Minimum `UQ-007` deliverables:
 3. no remaining claim that string-only scope is sufficient for generalized
    bundle-runtime readiness
 
+#### 2.3.11 Per-Angle Semantic Dictionary And Overlay Slot Affinity Contract
+
+The Y9-2 semantic dictionary (`scripts/pipeline/bundle_wizard/semantic_dict.py`)
+currently uses a static `_REGION_ATLAS` with 17 fractional-bounded body regions
+that are the same for every angle and every frame. This makes body-part
+identification unreliable when the character is not facing the reference pose
+(angle 4, South). `get_body_part_at(0, 3)` returns `"head_top"` regardless of
+whether the character faces North (back of head, no face visible) or South
+(full face). Documented as FL-2897.
+
+Per-angle semantic accuracy is a prerequisite for three downstream surfaces:
+
+1. Wearable overlay authoring validation (`S2-FAM-04`) — a new helmet overlay
+   needs validation that its cells actually cover head regions at each angle
+2. Palette-role-scoped recoloring in the workbench — "recolor just the armor
+   cells" requires knowing which cells are armor vs body at each angle
+3. Mounted composition validation (`UQ-008`) — rider/mount overlap cells
+   change dramatically between angles
+
+The pipeline-v3 semantic map JSON schema
+(`docs/research/ascii/semantic_maps/schema.json`) already supports per-frame
+regions with per-frame bboxes, but only 4 frames out of ~352 total (across 3
+families) are annotated — all at angle 0, projection 0. The gap is coverage
+and tooling, not data model.
+
+This section codifies the per-angle semantic dictionary contract:
+
+1. **Anchor model**: The static fractional `_REGION_ATLAS` is replaced by
+   per-angle anchor data. For each sprite family (player, attack, plydie), the
+   user defines one ground-truth region map per angle (8 angles x 1 idle frame
+   = 8 anchor frames per family). Anchors are stored as pipeline-v3 semantic
+   map JSON files with 8 frame entries (one per angle), each containing
+   per-angle `regions` with `bbox`, `semantic_cells`, `palette_roles`, and
+   `slot_affinity`.
+
+2. **Anchor format**: Anchors use the existing pipeline-v3
+   `semantic_maps/schema.json` format. No new data format is introduced. The
+   `frame_w` and `frame_h` fields in the anchor JSON define the coordinate
+   space for that family's anchors. Player anchors use `frame_w: 7`, attack
+   anchors use `frame_w: 9`. Each family's anchors are independent.
+
+3. **`slot_affinity` field**: Each region in the semantic map may carry an
+   optional `slot_affinity` string linking it to an engine wearable slot. Valid
+   values correspond to the engine `APPEARANCE_SLOT_KIND` enum in
+   `server/network.h`:
+   - `"body"` (APPEARANCE_SLOT_KIND_BODY = 300)
+   - `"head"` (APPEARANCE_SLOT_KIND_HEAD = 301)
+   - `"shield"` (APPEARANCE_SLOT_KIND_SHIELD = 302)
+   - `"weapon"` (APPEARANCE_SLOT_KIND_WEAPON = 303)
+   - `"armor"` (APPEARANCE_SLOT_KIND_ARMOR = 306)
+   - `"mount"` (APPEARANCE_SLOT_KIND_MOUNT = 307)
+
+   `slot_affinity` is a region-level field, not a cell-level field. Individual
+   cells inherit slot affinity from their containing region.
+
+4. **Overlay mask derivation**: For each existing overlay XP file (e.g.,
+   `player-armor-regular.xp`), overlay masks are derived — not independently
+   authored — by combining the cell-level diff from
+   `generate_presentation_overlays.py` with the body semantic map:
+   a. Load body and overlay XP files
+   b. At each (angle, frame), compute cell-level diff using visual signatures
+   c. For each differing cell, look up body_part from the body semantic map
+      using angle-aware `get_body_part_at(y, x, angle)`
+   d. Aggregate covered body parts and cells per angle
+   e. Infer slot from the dominant body parts covered (>80% head = helmet slot)
+   f. Overlay cells extending beyond body region bboxes (helmet crowns, weapon
+      swings) are labeled `"overlay_extension"` and excluded from slot
+      inference percentage
+   g. Cells marked with SWOOSH_INDEX=254 are assigned weapon slot regardless
+
+5. **Palette-role x slot binding**: Each `palette_roles` entry in the semantic
+   map may carry an optional `slot` string linking a palette role to a wearable
+   slot. This enables scoped recoloring commands: "recolor armor cells" maps to
+   palette roles with `"slot": "armor"`, leaving body palette roles untouched.
+
+6. **Propagation algorithm**: Given the 8 angle anchors (idle frames), a
+   propagation algorithm labels non-anchor frames (walk, attack, death) at the
+   same angle using RGB-based signature tracking:
+   a. For each angle, extract `(glyph, fg_rgb, bg_rgb)` signatures per body
+      region from the anchor frame
+   b. For each non-anchor frame at the same angle, match cells against anchor
+      region signatures
+   c. When signatures collide (inevitable with a limited palette), use spatial
+      proximity as tiebreaker: prefer the nearest cell within +/-2 of the
+      anchor position for the same region
+   d. Cells with no signature match get `"unknown"` label for human review
+   e. Each propagated region carries a `propagation_confidence` score
+
+   Note: the overlay system's `visual_key()` in
+   `generate_presentation_overlays.py` uses palette indices, not RGB. The
+   propagation algorithm must build its own RGB-based signature function.
+
+7. **Mirror projection**: Projection 1 anchors are derived from projection 0
+   by X-mirroring: `mirrored_x = frame_w - 1 - x`. Left/right body-part
+   labels swap. The user only defines 8 anchors for projection 0.
+
+8. **Backward compatibility**: The `angle` parameter is optional on all
+   public API functions (`get_body_part_at()`, `get_rect_body_part()`,
+   `identify()`). When no anchor data is loaded, results are identical to the
+   existing fractional atlas. When anchor data is loaded and `angle` is
+   supplied, results reflect the per-angle ground truth.
+
+9. **Anchor file convention**: Anchor files are stored in pipeline-v3 at
+   `docs/research/ascii/semantic_maps/<family>-anchors.json`. Y9-2
+   `semantic_dict.py` loads them via an explicit path argument.
+
+Current evidence:
+
+- `scripts/pipeline/bundle_wizard/semantic_dict.py` — Y9-2 static atlas
+- `docs/research/ascii/semantic_maps/schema.json` — pipeline-v3 schema
+- `scripts/pipeline/generate_presentation_overlays.py` — Y9-2 overlay diff
+- `server/network.h` — engine `APPEARANCE_SLOT_KIND` enum
+- FL-2897 — static fractional bounds diagnosis
+
+Queue placement:
+
+1. This contract is a prerequisite for `S2-FAM-04` wearable authoring
+   validation surface. Do not build the wearable authoring UI without per-angle
+   semantic accuracy.
+2. This contract is a prerequisite for `UQ-008` mounted composition
+   validation. Do not claim mounted overlay validation without per-angle
+   region data for rider and mount sprites.
+3. Anchor data authoring (defining the 8 angle anchors per family) is a user
+   task that follows tooling delivery, not a pipeline code deliverable.
+
 ### 2.4 Structural Gate, Export, And Injection Contract
 
 Current wrapper-side structural gates are:
