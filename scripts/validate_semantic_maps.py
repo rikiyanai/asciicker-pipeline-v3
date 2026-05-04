@@ -118,6 +118,15 @@ def validate_schema_conformance(map_data: dict, schema: dict, map_path: Path, er
                                 f"  frames.{frame_key}.regions[{i}].semantic_cells[{k}] "
                                 f"missing required key: '{req_key}'"
                             )
+                    for opt_region_key in ("fg_region", "bg_region"):
+                        val = cell.get(opt_region_key)
+                        if val is not None:
+                            if not isinstance(val, str) or not val.strip():
+                                errors.append(
+                                    f"  frames.{frame_key}.regions[{i}].semantic_cells[{k}]"
+                                    f".{opt_region_key} must be a non-empty string, "
+                                    f"got {val!r}"
+                                )
 
 
 def validate_xp_reference(map_data: dict, map_path: Path, errors: list):
@@ -168,6 +177,96 @@ def validate_ambiguities(map_data: dict, errors: list):
             errors.append(f"  ambiguities[{i}] must be a string, got {type(entry).__name__}")
         elif not entry.strip():
             errors.append(f"  ambiguities[{i}] is empty or whitespace-only")
+
+
+VALID_SLOT_AFFINITIES = {"body", "head", "shield", "weapon", "armor", "mount"}
+
+
+def validate_slot_affinity(map_data: dict, errors: list):
+    """Check that slot_affinity values on regions are valid enum values."""
+    for frame_key, frame_data in map_data.get("frames", {}).items():
+        for i, region in enumerate(frame_data.get("regions", [])):
+            sa = region.get("slot_affinity")
+            if sa is not None and sa not in VALID_SLOT_AFFINITIES:
+                errors.append(
+                    f"  frames.{frame_key}.regions[{i}] ('{region.get('name', '?')}') "
+                    f"slot_affinity invalid: '{sa}' (allowed: {sorted(VALID_SLOT_AFFINITIES)})"
+                )
+
+
+def validate_palette_role_slots(map_data: dict, errors: list):
+    """Check that slot fields on palette_roles are valid slot strings when present."""
+    for role_name, role_data in map_data.get("palette_roles", {}).items():
+        slot = role_data.get("slot")
+        if slot is not None:
+            if not isinstance(slot, str):
+                errors.append(
+                    f"  palette_roles.{role_name}.slot must be a string, got {type(slot).__name__}"
+                )
+            elif slot not in VALID_SLOT_AFFINITIES:
+                errors.append(
+                    f"  palette_roles.{role_name}.slot invalid: '{slot}' "
+                    f"(allowed: {sorted(VALID_SLOT_AFFINITIES)})"
+                )
+
+
+def validate_overlay_masks(map_data: dict, errors: list):
+    """Check overlay_masks structure when present."""
+    masks = map_data.get("overlay_masks")
+    if masks is None:
+        return
+    if not isinstance(masks, dict):
+        errors.append(f"  overlay_masks must be an object, got {type(masks).__name__}")
+        return
+    for slot_name, angle_data in masks.items():
+        if not isinstance(angle_data, dict):
+            errors.append(f"  overlay_masks.{slot_name} must be an object, got {type(angle_data).__name__}")
+            continue
+        for angle_key, coverage in angle_data.items():
+            if not isinstance(coverage, dict):
+                errors.append(
+                    f"  overlay_masks.{slot_name}.{angle_key} must be an object, "
+                    f"got {type(coverage).__name__}"
+                )
+                continue
+            cells = coverage.get("covered_cells")
+            if cells is not None:
+                if not isinstance(cells, list):
+                    errors.append(
+                        f"  overlay_masks.{slot_name}.{angle_key}.covered_cells "
+                        f"must be an array, got {type(cells).__name__}"
+                    )
+                else:
+                    for j, cell in enumerate(cells):
+                        if not (isinstance(cell, list) and len(cell) == 2
+                                and all(isinstance(v, int) for v in cell)):
+                            errors.append(
+                                f"  overlay_masks.{slot_name}.{angle_key}.covered_cells[{j}] "
+                                f"must be [int, int], got {cell!r}"
+                            )
+            sa = coverage.get("slot_affinity")
+            if sa is not None and sa not in VALID_SLOT_AFFINITIES:
+                errors.append(
+                    f"  overlay_masks.{slot_name}.{angle_key}.slot_affinity "
+                    f"invalid: '{sa}'"
+                )
+
+
+def validate_angle_anchors(map_data: dict, errors: list):
+    """Check angle_anchors structure when present."""
+    anchors = map_data.get("angle_anchors")
+    if anchors is None:
+        return
+    if not isinstance(anchors, dict):
+        errors.append(f"  angle_anchors must be an object, got {type(anchors).__name__}")
+        return
+    for key in ("ground_truth_angles", "propagated_angles"):
+        val = anchors.get(key)
+        if val is not None:
+            if not isinstance(val, list):
+                errors.append(f"  angle_anchors.{key} must be an array, got {type(val).__name__}")
+            elif not all(isinstance(v, int) for v in val):
+                errors.append(f"  angle_anchors.{key} entries must be integers")
 
 
 def validate_hex_colors(map_data: dict, errors: list):
@@ -253,6 +352,18 @@ def main():
         # Hex color format
         validate_hex_colors(map_data, errors)
 
+        # Slot affinity on regions
+        validate_slot_affinity(map_data, errors)
+
+        # Palette role slot bindings
+        validate_palette_role_slots(map_data, errors)
+
+        # Overlay masks structure
+        validate_overlay_masks(map_data, errors)
+
+        # Angle anchors structure
+        validate_angle_anchors(map_data, errors)
+
         if errors:
             all_passed = False
             for e in errors:
@@ -265,6 +376,8 @@ def main():
             print("  Region names: OK")
             print("  Ambiguities: OK")
             print("  Hex colors: OK")
+            print("  Slot affinity: OK")
+            print("  Overlay masks: OK")
             print("  RESULT: PASS")
 
         results.append((rel, errors))

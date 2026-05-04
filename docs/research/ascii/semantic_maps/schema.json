@@ -71,6 +71,10 @@
           "description": {
             "type": "string",
             "description": "Human-readable description of this palette role"
+          },
+          "slot": {
+            "type": "string",
+            "description": "Wearable slot this palette role belongs to, enabling scoped recoloring (e.g. 'recolor armor cells')"
           }
         }
       }
@@ -123,10 +127,17 @@
                       "glyph": { "type": "integer", "description": "CP437 glyph index" },
                       "fg": { "type": "string", "pattern": "^#[0-9a-f]{6}$" },
                       "bg": { "type": "string", "pattern": "^#[0-9a-f]{6}$" },
-                      "role": { "type": "string", "description": "Semantic role of this specific cell" }
+                      "role": { "type": "string", "description": "Semantic role of this specific cell" },
+                      "fg_region": { "type": "string", "description": "Foreground region for half-block transition cells where fg and bg belong to different body parts" },
+                      "bg_region": { "type": "string", "description": "Background region for half-block transition cells where fg and bg belong to different body parts" }
                     }
                   },
                   "description": "Individually identified semantic cells within the region"
+                },
+                "slot_affinity": {
+                  "type": "string",
+                  "enum": ["body", "head", "shield", "weapon", "armor", "mount"],
+                  "description": "Engine wearable slot this region maps to (from APPEARANCE_SLOT_KIND). Cells inherit slot affinity from their containing region."
                 },
                 "notes": {
                   "type": "string",
@@ -147,6 +158,55 @@
       "type": "string",
       "pattern": "^#[0-9a-f]{6}$",
       "description": "Background color used for transparent/empty cells (REXPaint convention)"
+    },
+    "angle_anchors": {
+      "type": "object",
+      "description": "Metadata about which angles have ground-truth anchor data vs. propagated labels",
+      "properties": {
+        "ground_truth_angles": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "description": "Angle indices (0-7) with human-verified ground-truth region definitions"
+        },
+        "propagated_angles": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "description": "Angle indices with algorithmically propagated region labels"
+        }
+      }
+    },
+    "overlay_masks": {
+      "type": "object",
+      "description": "Per-overlay-slot coverage masks derived from cell-diff between body and overlay XP files. Keys are overlay slot names (e.g. 'armor', 'helmet').",
+      "additionalProperties": {
+        "type": "object",
+        "description": "Per-angle coverage for one overlay slot. Keys are angle indices as strings.",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "body_parts_covered": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Body-part region names covered by this overlay at this angle"
+            },
+            "covered_cells": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": { "type": "integer" },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "description": "List of [x, y] cell coordinates covered by this overlay at this angle"
+            },
+            "slot_affinity": {
+              "type": "string",
+              "enum": ["body", "head", "shield", "weapon", "armor", "mount"],
+              "description": "Inferred wearable slot for this overlay at this angle"
+            }
+          }
+        }
+      }
     }
   }
 }
