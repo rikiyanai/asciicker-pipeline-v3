@@ -299,11 +299,13 @@ metadata, layer, visual, export, and Skin Dock/runtime mismatches.
   - complete map of all 5 player sprite families (player, attack, plydie, wolfie, wolack), AHSW equipment encoding, current bundle-template coverage, gameplay trigger states, and the two planning axes that must stay separate: runtime-family expansion vs gameplay/state coverage; also records the open audit questions for template-less native-runtime apply, mounted/unmounted parity, and equipment-state coverage
 - `docs/research/ascii/2026-03-21-player-sprite-semantic-dictionary-seed.md`
   - seed semantic dictionary for `player-0100.xp` L2 with verified glyph inventory, face/shirt/pants/boots region labels, palette-role mapping, and a proposed machine-readable schema for future agent-driven sprite edits
-- `docs/research/ascii/semantic_maps/` — machine-readable JSON semantic dictionaries
+- `docs/research/ascii/semantic_maps/` — machine-readable JSON semantic dictionaries (**vendored from Y9-2 via symlink**)
   - `schema.json` — JSON Schema for the semantic dictionary format
-  - `player-0100.json` — fully populated player sprite semantic dictionary (frame 0 idle + frame 1 walk)
-  - `attack-0001.json` — attack sprite semantic dictionary with weapon region (frame 0)
-  - `plydie-0000.json` — death sprite semantic dictionary (frame 0)
+  - `player-0100.json` — player sprite semantic dictionary (angle 0)
+  - `player-anchors.json` — player sprite anchor review data (all 8 angles, with arms/face/hair corrected)
+  - `player-1100-anchors.json` — helmet+armor variant anchor data (all 8 angles)
+  - `attack-0001.json` — attack sprite semantic dictionary with weapon region (angle 0)
+  - `plydie-0000.json` — death sprite semantic dictionary (angle 0)
 
 ## Milestone 2 Implementation
 
