@@ -39,6 +39,11 @@ SKIP_DIRS = {
     "output",
 }
 
+# Symlinks that are allowed to point outside the repo (vendored from sibling repos)
+VENDORED_SYMLINKS = {
+    "docs/research/ascii/semantic_maps",
+}
+
 DOC_EXTS = {".md", ".txt", ".rst"}
 TEXT_EXTS = {
     ".py", ".sh", ".bash", ".zsh", ".js", ".mjs", ".cjs", ".ts", ".tsx",
@@ -137,11 +142,14 @@ def scan_symlinks() -> list[Finding]:
             )
             continue
         if not is_inside_repo(target):
+            rel = str(path.relative_to(REPO_ROOT))
+            if rel in VENDORED_SYMLINKS:
+                continue
             findings.append(
                 Finding(
                     kind="external_symlink",
                     severity="error",
-                    path=str(path.relative_to(REPO_ROOT)),
+                    path=rel,
                     detail=f"resolves outside repo: {target}",
                 )
             )

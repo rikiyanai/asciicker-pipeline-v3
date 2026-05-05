@@ -9,3 +9,13 @@ Always run `conductor:status` first.
 - Direct command: `python3 scripts/conductor_tools.py status --auto-setup`
 - Behavior: if Conductor is missing, status runs setup and creates the baseline.
 <!-- codex-conductor:end -->
+
+## Cross-Repo Vendored Content
+
+`docs/research/ascii/semantic_maps/` is a **symlink** to `asciicker-Y9-2/docs/research/ascii/semantic_maps/`.
+Y9-2 is the source of truth for semantic map JSON files and anchor data.
+Pipeline-v3 vendors them so the validator (`scripts/validate_semantic_maps.py`) can run locally.
+
+- Do NOT create or edit semantic map files in pipeline-v3 directly — edit in Y9-2.
+- The symlink uses a relative path (`../../../../asciicker-Y9-2/...`) assuming both repos are siblings.
+- If the symlink is broken, re-create: `ln -sfn ../../../../asciicker-Y9-2/docs/research/ascii/semantic_maps docs/research/ascii/semantic_maps`
