@@ -8,74 +8,98 @@
   "grid_layout": {
     "angles": 8,
     "projections": 2,
-    "anim_counts": [8],
+    "anim_counts": [
+      8
+    ],
     "frames_per_row": 16,
     "rows": 8
   },
   "transparent_bg": "#ff00ff",
   "palette_roles": {
     "hair": {
-      "colors": ["#000000"],
+      "colors": [
+        "#000000"
+      ],
       "confidence": "high",
       "usage": "fg",
       "description": "Black hair — same role as player family"
     },
     "subcell_fill": {
-      "colors": ["#ffff55"],
+      "colors": [
+        "#ffff55"
+      ],
       "confidence": "high",
       "usage": "bg",
       "description": "Yellow sub-cell rendering fill — rendering technique color, not a body part"
     },
     "skin": {
-      "colors": ["#ff5555"],
+      "colors": [
+        "#ff5555"
+      ],
       "confidence": "high",
       "usage": "both",
       "description": "Flesh tone — same role as player family; appears as bg on face cells and as fg on shirt/arm transition cells"
     },
     "skin_detail": {
-      "colors": ["#aa0000"],
+      "colors": [
+        "#aa0000"
+      ],
       "confidence": "high",
       "usage": "fg",
       "description": "Dark red mouth detail — same role as player family"
     },
     "shirt_primary": {
-      "colors": ["#aa00aa"],
+      "colors": [
+        "#aa00aa"
+      ],
       "confidence": "high",
       "usage": "both",
       "description": "Purple torso — same role as player family"
     },
     "pants_dark": {
-      "colors": ["#0000aa"],
+      "colors": [
+        "#0000aa"
+      ],
       "confidence": "high",
       "usage": "both",
       "description": "Dark blue pants — same role as player family"
     },
     "pants_bright": {
-      "colors": ["#5555ff"],
+      "colors": [
+        "#5555ff"
+      ],
       "confidence": "high",
       "usage": "both",
       "description": "Bright blue pants highlight — same role as player family"
     },
     "boots_primary": {
-      "colors": ["#aa5500"],
+      "colors": [
+        "#aa5500"
+      ],
       "confidence": "high",
       "usage": "fg",
       "description": "Brown boots — same role as player family"
     },
     "outline": {
-      "colors": ["#000000"],
+      "colors": [
+        "#000000"
+      ],
       "confidence": "high",
       "usage": "both",
       "description": "Black outlines and accents"
     },
     "weapon_light": {
-      "colors": ["#aaaaaa"],
+      "colors": [
+        "#aaaaaa"
+      ],
       "confidence": "high",
       "usage": "fg",
       "description": "Light gray weapon blade/metal — attack-family specific"
     },
     "weapon_dark": {
-      "colors": ["#555555"],
+      "colors": [
+        "#555555"
+      ],
       "confidence": "high",
       "usage": "both",
       "description": "Dark gray weapon handle/shadow — attack-family specific"
@@ -90,80 +114,318 @@
       "regions": [
         {
           "name": "weapon",
-          "bbox": [5, 0, 7, 3],
+          "bbox": [
+            5,
+            0,
+            7,
+            3
+          ],
           "confidence": "high",
-          "palette_roles": ["weapon_light", "weapon_dark", "subcell_fill"],
+          "palette_roles": [
+            "weapon_light",
+            "weapon_dark",
+            "subcell_fill"
+          ],
           "semantic_cells": [
-            { "x": 6, "y": 0, "glyph": 222, "fg": "#aaaaaa", "bg": "#ffff55", "role": "blade_top_left" },
-            { "x": 7, "y": 0, "glyph": 221, "fg": "#555555", "bg": "#ffff55", "role": "blade_top_right" },
-            { "x": 6, "y": 1, "glyph": 221, "fg": "#aaaaaa", "bg": "#555555", "role": "blade_mid" },
-            { "x": 5, "y": 2, "glyph": 222, "fg": "#aaaaaa", "bg": "#000000", "role": "guard" },
-            { "x": 6, "y": 2, "glyph": 221, "fg": "#555555", "bg": "#ffff55", "role": "blade_lower" },
-            { "x": 5, "y": 3, "glyph": 220, "fg": "#000000", "bg": "#555555", "role": "handle" }
+            {
+              "x": 6,
+              "y": 0,
+              "glyph": 222,
+              "fg": "#aaaaaa",
+              "bg": "#ffff55",
+              "role": "blade_top_left"
+            },
+            {
+              "x": 7,
+              "y": 0,
+              "glyph": 221,
+              "fg": "#555555",
+              "bg": "#ffff55",
+              "role": "blade_top_right"
+            },
+            {
+              "x": 6,
+              "y": 1,
+              "glyph": 221,
+              "fg": "#aaaaaa",
+              "bg": "#555555",
+              "role": "blade_mid"
+            },
+            {
+              "x": 5,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#aaaaaa",
+              "bg": "#000000",
+              "role": "guard"
+            },
+            {
+              "x": 6,
+              "y": 2,
+              "glyph": 221,
+              "fg": "#555555",
+              "bg": "#ffff55",
+              "role": "blade_lower"
+            },
+            {
+              "x": 5,
+              "y": 3,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#555555",
+              "role": "handle"
+            }
           ],
           "notes": "Sword/weapon held in right hand. Uses gray palette not found in player family. Blade extends above head, handle connects to arm area."
         },
         {
           "name": "hair",
-          "bbox": [4, 1, 4, 1],
+          "bbox": [
+            4,
+            1,
+            4,
+            1
+          ],
           "confidence": "high",
-          "palette_roles": ["hair", "outline"],
+          "palette_roles": [
+            "hair",
+            "outline"
+          ],
           "semantic_cells": [
-            { "x": 4, "y": 1, "glyph": 220, "fg": "#000000", "bg": "#ffff55", "role": "hair_top" }
+            {
+              "x": 4,
+              "y": 1,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_top"
+            }
           ]
         },
         {
           "name": "face",
-          "bbox": [3, 2, 4, 3],
+          "bbox": [
+            3,
+            2,
+            4,
+            3
+          ],
           "confidence": "high",
-          "palette_roles": ["skin", "hair", "subcell_fill", "skin_detail", "outline"],
+          "palette_roles": [
+            "skin",
+            "hair",
+            "subcell_fill",
+            "skin_detail",
+            "outline"
+          ],
           "semantic_cells": [
-            { "x": 3, "y": 2, "glyph": 222, "fg": "#ff5555", "bg": "#ffff55", "role": "face_left_edge" },
-            { "x": 4, "y": 2, "glyph": 34, "fg": "#000000", "bg": "#ff5555", "role": "eyes" },
-            { "x": 4, "y": 3, "glyph": 118, "fg": "#aa0000", "bg": "#ff5555", "role": "mouth" }
+            {
+              "x": 3,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "face_left_edge"
+            },
+            {
+              "x": 4,
+              "y": 2,
+              "glyph": 34,
+              "fg": "#000000",
+              "bg": "#ff5555",
+              "role": "eyes"
+            },
+            {
+              "x": 4,
+              "y": 3,
+              "glyph": 118,
+              "fg": "#aa0000",
+              "bg": "#ff5555",
+              "role": "mouth"
+            }
           ],
           "notes": "Face shifted right vs player idle (centered at x=4 instead of x=3) due to wider frame and weapon. Same glyph/color conventions: \" for eyes, v for mouth."
         },
         {
           "name": "shirt",
-          "bbox": [3, 4, 5, 5],
+          "bbox": [
+            3,
+            4,
+            5,
+            5
+          ],
           "confidence": "high",
-          "palette_roles": ["shirt_primary", "skin", "subcell_fill"],
+          "palette_roles": [
+            "shirt_primary",
+            "skin",
+            "subcell_fill"
+          ],
           "semantic_cells": [
-            { "x": 3, "y": 4, "glyph": 222, "fg": "#aa00aa", "bg": "#ffff55", "role": "shirt_left" },
-            { "x": 4, "y": 4, "glyph": 220, "fg": "#ff5555", "bg": "#aa00aa", "role": "shirt_center_top" },
-            { "x": 5, "y": 4, "glyph": 221, "fg": "#aa00aa", "bg": "#ffff55", "role": "shirt_right" },
-            { "x": 3, "y": 5, "glyph": 222, "fg": "#aa00aa", "bg": "#ffff55", "role": "shirt_lower_left" },
-            { "x": 4, "y": 5, "glyph": 222, "fg": "#ff5555", "bg": "#aa00aa", "role": "shirt_lower_center" },
-            { "x": 5, "y": 5, "glyph": 221, "fg": "#aa00aa", "bg": "#ffff55", "role": "shirt_lower_right" }
+            {
+              "x": 3,
+              "y": 4,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_left"
+            },
+            {
+              "x": 5,
+              "y": 4,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_right"
+            },
+            {
+              "x": 3,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_lower_left"
+            },
+            {
+              "x": 5,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_lower_right"
+            }
           ],
           "notes": "Same purple (#aa00aa) shirt as player family but body is narrower (3 cells wide vs 5) since arms are in attack pose."
         },
         {
           "name": "pants",
-          "bbox": [3, 6, 5, 7],
+          "bbox": [
+            3,
+            6,
+            5,
+            7
+          ],
           "confidence": "high",
-          "palette_roles": ["pants_dark", "pants_bright", "subcell_fill"],
+          "palette_roles": [
+            "pants_dark",
+            "pants_bright",
+            "subcell_fill"
+          ],
           "semantic_cells": [
-            { "x": 3, "y": 6, "glyph": 222, "fg": "#5555ff", "bg": "#ffff55", "role": "pants_top_left" },
-            { "x": 4, "y": 6, "glyph": 32, "fg": "#000000", "bg": "#0000aa", "role": "pants_center" },
-            { "x": 5, "y": 6, "glyph": 221, "fg": "#0000aa", "bg": "#ffff55", "role": "pants_top_right" },
-            { "x": 3, "y": 7, "glyph": 220, "fg": "#aa5500", "bg": "#5555ff", "role": "pants_boot_transition_left" },
-            { "x": 4, "y": 7, "glyph": 223, "fg": "#0000aa", "bg": "#ffff55", "role": "pants_gap" },
-            { "x": 5, "y": 7, "glyph": 222, "fg": "#0000aa", "bg": "#5555ff", "role": "pants_leg_right" }
+            {
+              "x": 3,
+              "y": 6,
+              "glyph": 222,
+              "fg": "#5555ff",
+              "bg": "#ffff55",
+              "role": "pants_top_left"
+            },
+            {
+              "x": 4,
+              "y": 6,
+              "glyph": 32,
+              "fg": "#000000",
+              "bg": "#0000aa",
+              "role": "pants_center"
+            },
+            {
+              "x": 5,
+              "y": 6,
+              "glyph": 221,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_top_right"
+            },
+            {
+              "x": 3,
+              "y": 7,
+              "glyph": 220,
+              "fg": "#aa5500",
+              "bg": "#5555ff",
+              "role": "pants_boot_transition_left"
+            },
+            {
+              "x": 4,
+              "y": 7,
+              "glyph": 223,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_gap"
+            },
+            {
+              "x": 5,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_leg_right"
+            }
           ],
           "notes": "Pants center cell (4,6) is a solid dark-blue space — rare full-cell fill. Same blue palette as player."
         },
         {
           "name": "boots",
-          "bbox": [3, 8, 5, 8],
+          "bbox": [
+            3,
+            8,
+            5,
+            8
+          ],
           "confidence": "high",
-          "palette_roles": ["boots_primary", "outline", "subcell_fill"],
+          "palette_roles": [
+            "boots_primary",
+            "outline",
+            "subcell_fill"
+          ],
           "semantic_cells": [
-            { "x": 3, "y": 8, "glyph": 223, "fg": "#000000", "bg": "#ffff55", "role": "boot_left" },
-            { "x": 5, "y": 8, "glyph": 223, "fg": "#aa5500", "bg": "#000000", "role": "boot_right" }
+            {
+              "x": 3,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "boot_left"
+            },
+            {
+              "x": 5,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boot_right"
+            }
           ],
           "notes": "Boot row. Left boot at (3,8) uses black fg on yellow bg (inverted from player idle pattern). Right boot at (5,8) matches standard player boot pattern."
+        },
+        {
+          "name": "arms",
+          "bbox": [
+            4,
+            4,
+            4,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [
+            "skin"
+          ],
+          "semantic_cells": [
+            {
+              "x": 4,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#ff5555",
+              "bg": "#aa00aa",
+              "role": "arm_cell"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#aa00aa",
+              "role": "arm_cell"
+            }
+          ]
         }
       ]
     }
