@@ -8,62 +8,83 @@
   "grid_layout": {
     "angles": 8,
     "projections": 2,
-    "anim_counts": [1, 8],
+    "anim_counts": [
+      1,
+      8
+    ],
     "frames_per_row": 18,
     "rows": 8
   },
   "transparent_bg": "#ff00ff",
   "palette_roles": {
     "hair": {
-      "colors": ["#000000"],
+      "colors": [
+        "#000000"
+      ],
       "confidence": "high",
       "usage": "fg",
       "description": "Black hair — appears as foreground color on head/hair cells via half-block glyphs"
     },
     "subcell_fill": {
-      "colors": ["#ffff55"],
+      "colors": [
+        "#ffff55"
+      ],
       "confidence": "high",
       "usage": "bg",
       "description": "Yellow sub-cell rendering fill — used as background for half-block glyphs throughout the sprite (head, arms, edges). NOT a body part color; this is a rendering technique color that enables sub-cell detail via half-block characters"
     },
     "skin": {
-      "colors": ["#ff5555"],
+      "colors": [
+        "#ff5555"
+      ],
       "confidence": "high",
       "usage": "bg",
       "description": "Flesh tone for face, exposed arm edges, and neck transition"
     },
     "skin_detail": {
-      "colors": ["#aa0000"],
+      "colors": [
+        "#aa0000"
+      ],
       "confidence": "high",
       "usage": "fg",
       "description": "Dark red foreground on skin-bg cells for mouth/expression detail"
     },
     "shirt_primary": {
-      "colors": ["#aa00aa"],
+      "colors": [
+        "#aa00aa"
+      ],
       "confidence": "high",
       "usage": "both",
       "description": "Purple torso garment fill — used as both fg and bg on shirt cells"
     },
     "pants_dark": {
-      "colors": ["#0000aa"],
+      "colors": [
+        "#0000aa"
+      ],
       "confidence": "high",
       "usage": "fg",
       "description": "Dark blue lower garment — appears as fg on pants cells and belt transition"
     },
     "pants_bright": {
-      "colors": ["#5555ff"],
+      "colors": [
+        "#5555ff"
+      ],
       "confidence": "high",
       "usage": "both",
       "description": "Bright blue pants highlight/shading variant"
     },
     "boots_primary": {
-      "colors": ["#aa5500"],
+      "colors": [
+        "#aa5500"
+      ],
       "confidence": "high",
       "usage": "fg",
       "description": "Brown boot/footwear foreground color"
     },
     "outline": {
-      "colors": ["#000000"],
+      "colors": [
+        "#000000"
+      ],
       "confidence": "high",
       "usage": "both",
       "description": "Black used for eyes, boot soles, and dark accents"
@@ -78,111 +99,267 @@
       "regions": [
         {
           "name": "hair",
-          "bbox": [3, 1, 3, 1],
+          "bbox": [
+            2,
+            1,
+            4,
+            2
+          ],
           "confidence": "high",
-          "palette_roles": ["hair", "outline"],
+          "palette_roles": [
+            "hair",
+            "outline"
+          ],
           "semantic_cells": [
-            { "x": 3, "y": 1, "glyph": 220, "fg": "#000000", "bg": "#ffff55", "role": "hair_cap" }
+            {
+              "x": 3,
+              "y": 1,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "hair_cap"
+            },
+            {
+              "x": 2,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "head_left_edge"
+            },
+            {
+              "x": 4,
+              "y": 2,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "head_right_edge"
+            }
           ],
           "notes": "Single cell hair cap at top of head. Glyph 220 (▄) creates half-block hair edge."
         },
         {
           "name": "face",
-          "bbox": [2, 2, 4, 3],
+          "bbox": [
+            3,
+            2,
+            3,
+            4
+          ],
           "confidence": "high",
-          "palette_roles": ["skin", "hair", "subcell_fill", "skin_detail", "outline"],
+          "palette_roles": [
+            "skin",
+            "hair",
+            "subcell_fill",
+            "skin_detail",
+            "outline"
+          ],
           "semantic_cells": [
-            { "x": 2, "y": 2, "glyph": 222, "fg": "#000000", "bg": "#ffff55", "role": "head_left_edge" },
-            { "x": 3, "y": 2, "glyph": 34, "fg": "#000000", "bg": "#ff5555", "role": "eyes" },
-            { "x": 4, "y": 2, "glyph": 221, "fg": "#000000", "bg": "#ffff55", "role": "head_right_edge" },
-            { "x": 3, "y": 3, "glyph": 118, "fg": "#aa0000", "bg": "#ff5555", "role": "mouth" }
+            {
+              "x": 3,
+              "y": 2,
+              "glyph": 34,
+              "fg": "#000000",
+              "bg": "#ff5555",
+              "role": "eyes"
+            },
+            {
+              "x": 3,
+              "y": 3,
+              "glyph": 118,
+              "fg": "#aa0000",
+              "bg": "#ff5555",
+              "role": "mouth"
+            },
+            {
+              "x": 3,
+              "y": 4,
+              "glyph": 223,
+              "fg": "#ff5555",
+              "bg": "#aa00aa",
+              "role": "neck_transition"
+            }
           ],
           "notes": "Face cluster: eyes are glyph 34 (\") on skin-bg, mouth is glyph 118 (v) with dark-red fg on skin-bg. Flanking cells (2,2) and (4,2) use black fg (hair) on yellow bg (subcell_fill)."
         },
         {
           "name": "shirt",
-          "bbox": [1, 4, 5, 5],
+          "bbox": [
+            2,
+            4,
+            4,
+            6
+          ],
           "confidence": "high",
-          "palette_roles": ["shirt_primary", "skin", "subcell_fill"],
+          "palette_roles": [
+            "shirt_primary",
+            "skin",
+            "subcell_fill"
+          ],
           "semantic_cells": [
-            { "x": 2, "y": 4, "glyph": 220, "fg": "#aa00aa", "bg": "#aa00aa", "role": "shirt_top_left" },
-            { "x": 3, "y": 4, "glyph": 223, "fg": "#ff5555", "bg": "#aa00aa", "role": "neck_transition" },
-            { "x": 4, "y": 4, "glyph": 220, "fg": "#aa00aa", "bg": "#aa00aa", "role": "shirt_top_right" },
-            { "x": 1, "y": 5, "glyph": 222, "fg": "#ff5555", "bg": "#ffff55", "role": "arm_left" },
-            { "x": 2, "y": 5, "glyph": 222, "fg": "#aa00aa", "bg": "#ffff55", "role": "shirt_left_edge" },
-            { "x": 3, "y": 5, "glyph": 220, "fg": "#aa00aa", "bg": "#aa00aa", "role": "shirt_center" },
-            { "x": 4, "y": 5, "glyph": 221, "fg": "#aa00aa", "bg": "#ffff55", "role": "shirt_right_edge" },
-            { "x": 5, "y": 5, "glyph": 221, "fg": "#ff5555", "bg": "#ffff55", "role": "arm_right" }
+            {
+              "x": 2,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_top_left"
+            },
+            {
+              "x": 4,
+              "y": 4,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_top_right"
+            },
+            {
+              "x": 2,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_left_edge"
+            },
+            {
+              "x": 3,
+              "y": 5,
+              "glyph": 220,
+              "fg": "#aa00aa",
+              "bg": "#aa00aa",
+              "role": "shirt_center"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#aa00aa",
+              "bg": "#ffff55",
+              "role": "shirt_right_edge"
+            },
+            {
+              "x": 3,
+              "y": 6,
+              "glyph": 220,
+              "fg": "#0000aa",
+              "bg": "#aa00aa",
+              "role": "belt_transition"
+            }
           ],
           "notes": "Torso region with shirt fill. Arm edge cells at (1,5) and (5,5) use skin fg on subcell_fill bg — these are transition cells where arms show through. Neck transition at (3,4) uses skin fg on shirt bg."
         },
         {
-          "name": "pants",
-          "bbox": [2, 6, 4, 7],
-          "confidence": "high",
-          "palette_roles": ["pants_dark", "pants_bright", "shirt_primary", "subcell_fill"],
+          "name": "arms",
+          "bbox": [
+            1,
+            5,
+            5,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
           "semantic_cells": [
-            { "x": 2, "y": 6, "glyph": 222, "fg": "#5555ff", "bg": "#ffff55", "role": "pants_top_left" },
-            { "x": 3, "y": 6, "glyph": 220, "fg": "#0000aa", "bg": "#aa00aa", "role": "belt_transition" },
-            { "x": 4, "y": 6, "glyph": 221, "fg": "#0000aa", "bg": "#ffff55", "role": "pants_top_right" },
-            { "x": 2, "y": 7, "glyph": 222, "fg": "#0000aa", "bg": "#5555ff", "role": "pants_leg_left" },
-            { "x": 4, "y": 7, "glyph": 222, "fg": "#0000aa", "bg": "#5555ff", "role": "pants_leg_right" }
+            {
+              "x": 1,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "arm_left"
+            },
+            {
+              "x": 5,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "arm_right"
+            }
+          ]
+        },
+        {
+          "name": "pants",
+          "bbox": [
+            2,
+            6,
+            4,
+            7
+          ],
+          "confidence": "high",
+          "palette_roles": [
+            "pants_dark",
+            "pants_bright",
+            "shirt_primary",
+            "subcell_fill"
+          ],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 6,
+              "glyph": 222,
+              "fg": "#5555ff",
+              "bg": "#ffff55",
+              "role": "pants_top_left"
+            },
+            {
+              "x": 4,
+              "y": 6,
+              "glyph": 221,
+              "fg": "#0000aa",
+              "bg": "#ffff55",
+              "role": "pants_top_right"
+            },
+            {
+              "x": 2,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_leg_left"
+            },
+            {
+              "x": 4,
+              "y": 7,
+              "glyph": 222,
+              "fg": "#0000aa",
+              "bg": "#5555ff",
+              "role": "pants_leg_right"
+            }
           ],
           "notes": "Leg region. Belt transition cell at (3,6) uses shirt_primary bg blending into pants_dark fg. Two separate leg cells at row 7 with gap between."
         },
         {
           "name": "boots",
-          "bbox": [2, 8, 4, 8],
+          "bbox": [
+            2,
+            8,
+            4,
+            8
+          ],
           "confidence": "high",
-          "palette_roles": ["boots_primary", "outline"],
+          "palette_roles": [
+            "boots_primary",
+            "outline"
+          ],
           "semantic_cells": [
-            { "x": 2, "y": 8, "glyph": 223, "fg": "#aa5500", "bg": "#000000", "role": "boot_left" },
-            { "x": 4, "y": 8, "glyph": 223, "fg": "#aa5500", "bg": "#000000", "role": "boot_right" }
+            {
+              "x": 2,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boot_left"
+            },
+            {
+              "x": 4,
+              "y": 8,
+              "glyph": 223,
+              "fg": "#aa5500",
+              "bg": "#000000",
+              "role": "boot_right"
+            }
           ],
           "notes": "Glyph 223 (▀) with brown fg on black bg creates boot shape. Two boots with gap between matching leg gap above."
-        }
-      ]
-    },
-    "1": {
-      "projection": 0,
-      "angle": 0,
-      "anim_index": 1,
-      "anim_name": "walk",
-      "regions": [
-        {
-          "name": "face",
-          "bbox": [2, 2, 4, 3],
-          "confidence": "high",
-          "palette_roles": ["skin", "hair", "subcell_fill", "skin_detail", "outline"],
-          "semantic_cells": [
-            { "x": 3, "y": 2, "glyph": 34, "fg": "#000000", "bg": "#ff5555", "role": "eyes" },
-            { "x": 3, "y": 3, "glyph": 118, "fg": "#aa0000", "bg": "#ff5555", "role": "mouth" }
-          ],
-          "notes": "Face identical to idle frame — confirms stable face region across idle/walk."
-        },
-        {
-          "name": "shirt",
-          "bbox": [1, 4, 5, 5],
-          "confidence": "high",
-          "palette_roles": ["shirt_primary", "skin", "subcell_fill"],
-          "semantic_cells": [
-            { "x": 5, "y": 4, "glyph": 221, "fg": "#ff5555", "bg": "#ffff55", "role": "arm_right_extended" }
-          ],
-          "notes": "Walk frame shifts right arm to (5,4) — arm position varies with pose but shirt fill colors remain stable."
-        },
-        {
-          "name": "pants",
-          "bbox": [2, 6, 4, 7],
-          "confidence": "high",
-          "palette_roles": ["pants_dark", "pants_bright"],
-          "notes": "Same region as idle. Walk frame shows leg separation with left leg at (2,7) transitioning to boot early."
-        },
-        {
-          "name": "boots",
-          "bbox": [2, 7, 4, 8],
-          "confidence": "medium",
-          "palette_roles": ["boots_primary", "outline", "subcell_fill"],
-          "notes": "Walk frame boots shift — left boot appears at (2,7) as transition cell with pants, and (2,8) shows subcell_fill/ground. Right boot at (4,8) remains standard. Walk poses create boot/pants mixing at row 7."
         }
       ]
     }
