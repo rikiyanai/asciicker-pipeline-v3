@@ -144,10 +144,10 @@
         {
           "name": "hair",
           "bbox": [
-            1,
             2,
-            5,
-            4
+            2,
+            4,
+            2
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -163,38 +163,6 @@
             {
               "x": 4,
               "y": 2,
-              "glyph": 221,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 2,
-              "y": 3,
-              "glyph": 220,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 4,
-              "y": 3,
-              "glyph": 220,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 1,
-              "y": 4,
-              "glyph": 222,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 5,
-              "y": 4,
               "glyph": 221,
               "fg": "#000000",
               "bg": "#ffff55",
@@ -234,9 +202,9 @@
         {
           "name": "armor",
           "bbox": [
-            2,
-            4,
-            4,
+            1,
+            3,
+            5,
             5
           ],
           "confidence": "medium",
@@ -289,6 +257,38 @@
               "fg": "#000000",
               "bg": "#aaaaaa",
               "role": "armor_cell"
+            },
+            {
+              "x": 2,
+              "y": 3,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
+              "x": 4,
+              "y": 3,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
+              "x": 1,
+              "y": 4,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
+              "x": 5,
+              "y": 4,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
             }
           ]
         },
@@ -465,40 +465,11 @@
           ]
         },
         {
-          "name": "hair",
-          "bbox": [
-            1,
-            3,
-            2,
-            4
-          ],
-          "confidence": "medium",
-          "palette_roles": [],
-          "semantic_cells": [
-            {
-              "x": 2,
-              "y": 3,
-              "glyph": 220,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 1,
-              "y": 4,
-              "glyph": 222,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            }
-          ]
-        },
-        {
           "name": "face",
           "bbox": [
             3,
             2,
-            3,
+            4,
             3
           ],
           "confidence": "medium",
@@ -510,6 +481,14 @@
               "glyph": 34,
               "fg": "#000000",
               "bg": "#ff5555",
+              "role": "skin_cell"
+            },
+            {
+              "x": 4,
+              "y": 2,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
               "role": "skin_cell"
             },
             {
@@ -525,7 +504,7 @@
         {
           "name": "armor",
           "bbox": [
-            2,
+            1,
             3,
             4,
             5
@@ -582,12 +561,28 @@
               "role": "armor_cell"
             },
             {
+              "x": 2,
+              "y": 3,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
               "x": 4,
               "y": 3,
               "glyph": 220,
               "fg": "#555555",
               "bg": "#ffff55",
               "role": "armor_cell"
+            },
+            {
+              "x": 1,
+              "y": 4,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
             }
           ]
         },
@@ -772,7 +767,36 @@
           ]
         },
         {
-          "name": "hair",
+          "name": "face",
+          "bbox": [
+            3,
+            2,
+            4,
+            3
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
+            {
+              "x": 4,
+              "y": 2,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 3,
+              "y": 3,
+              "glyph": 192,
+              "fg": "#aa0000",
+              "bg": "#ff5555",
+              "role": "skin_cell"
+            }
+          ]
+        },
+        {
+          "name": "armor",
           "bbox": [
             2,
             4,
@@ -788,66 +812,8 @@
               "glyph": 222,
               "fg": "#000000",
               "bg": "#ffff55",
-              "role": "hair_cell"
+              "role": "armor_edge"
             },
-            {
-              "x": 4,
-              "y": 4,
-              "glyph": 221,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 2,
-              "y": 5,
-              "glyph": 222,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 4,
-              "y": 6,
-              "glyph": 221,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            }
-          ]
-        },
-        {
-          "name": "face",
-          "bbox": [
-            3,
-            3,
-            3,
-            3
-          ],
-          "confidence": "medium",
-          "palette_roles": [],
-          "semantic_cells": [
-            {
-              "x": 3,
-              "y": 3,
-              "glyph": 192,
-              "fg": "#aa0000",
-              "bg": "#ff5555",
-              "role": "skin_cell"
-            }
-          ]
-        },
-        {
-          "name": "armor",
-          "bbox": [
-            3,
-            4,
-            4,
-            5
-          ],
-          "confidence": "medium",
-          "palette_roles": [],
-          "semantic_cells": [
             {
               "x": 3,
               "y": 4,
@@ -855,6 +821,22 @@
               "fg": "#000000",
               "bg": "#aaaaaa",
               "role": "armor_cell"
+            },
+            {
+              "x": 4,
+              "y": 4,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
+              "x": 2,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
             },
             {
               "x": 3,
@@ -871,6 +853,14 @@
               "fg": "#000000",
               "bg": "#aaaaaa",
               "role": "armor_cell"
+            },
+            {
+              "x": 4,
+              "y": 6,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
             }
           ]
         },
@@ -994,53 +984,24 @@
           ]
         },
         {
-          "name": "hair",
+          "name": "face",
           "bbox": [
-            1,
             3,
-            5,
-            4
+            2,
+            4,
+            3
           ],
           "confidence": "medium",
           "palette_roles": [],
           "semantic_cells": [
             {
               "x": 4,
-              "y": 3,
-              "glyph": 220,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 1,
-              "y": 4,
-              "glyph": 222,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 5,
-              "y": 4,
+              "y": 2,
               "glyph": 221,
-              "fg": "#000000",
+              "fg": "#ff5555",
               "bg": "#ffff55",
-              "role": "hair_cell"
-            }
-          ]
-        },
-        {
-          "name": "face",
-          "bbox": [
-            3,
-            3,
-            3,
-            3
-          ],
-          "confidence": "medium",
-          "palette_roles": [],
-          "semantic_cells": [
+              "role": "skin_cell"
+            },
             {
               "x": 3,
               "y": 3,
@@ -1054,9 +1015,9 @@
         {
           "name": "armor",
           "bbox": [
-            2,
+            1,
             3,
-            4,
+            5,
             5
           ],
           "confidence": "medium",
@@ -1117,6 +1078,30 @@
               "fg": "#555555",
               "bg": "#ffff55",
               "role": "armor_cell"
+            },
+            {
+              "x": 4,
+              "y": 3,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
+              "x": 1,
+              "y": 4,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
+              "x": 5,
+              "y": 4,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
             }
           ]
         },
@@ -1303,10 +1288,10 @@
         {
           "name": "hair",
           "bbox": [
-            1,
+            4,
             2,
-            5,
-            4
+            4,
+            2
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -1318,47 +1303,36 @@
               "fg": "#000000",
               "bg": "#ffff55",
               "role": "hair_cell"
-            },
+            }
+          ]
+        },
+        {
+          "name": "face",
+          "bbox": [
+            3,
+            3,
+            3,
+            3
+          ],
+          "confidence": "medium",
+          "palette_roles": [],
+          "semantic_cells": [
             {
-              "x": 2,
+              "x": 3,
               "y": 3,
               "glyph": 220,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 4,
-              "y": 3,
-              "glyph": 220,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 1,
-              "y": 4,
-              "glyph": 222,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 5,
-              "y": 4,
-              "glyph": 221,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
+              "fg": "#ff5555",
+              "bg": "#000000",
+              "role": "skin_cell"
             }
           ]
         },
         {
           "name": "armor",
           "bbox": [
-            2,
-            4,
-            4,
+            1,
+            3,
+            5,
             5
           ],
           "confidence": "medium",
@@ -1411,6 +1385,38 @@
               "fg": "#000000",
               "bg": "#555555",
               "role": "armor_cell"
+            },
+            {
+              "x": 2,
+              "y": 3,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
+              "x": 4,
+              "y": 3,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
+              "x": 1,
+              "y": 4,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
+              "x": 5,
+              "y": 4,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
             }
           ]
         },
@@ -1449,7 +1455,7 @@
             2,
             6,
             4,
-            7
+            8
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -1493,27 +1499,14 @@
               "fg": "#0000aa",
               "bg": "#5555ff",
               "role": "pants_cell"
-            }
-          ]
-        },
-        {
-          "name": "boots",
-          "bbox": [
-            2,
-            8,
-            4,
-            8
-          ],
-          "confidence": "medium",
-          "palette_roles": [],
-          "semantic_cells": [
+            },
             {
               "x": 2,
               "y": 8,
               "glyph": 223,
               "fg": "#0000aa",
               "bg": "#000000",
-              "role": "boots_cell"
+              "role": "pants_cell"
             },
             {
               "x": 4,
@@ -1521,7 +1514,7 @@
               "glyph": 223,
               "fg": "#0000aa",
               "bg": "#000000",
-              "role": "boots_cell"
+              "role": "pants_cell"
             }
           ]
         }
@@ -1595,53 +1588,24 @@
           ]
         },
         {
-          "name": "hair",
-          "bbox": [
-            1,
-            3,
-            5,
-            4
-          ],
-          "confidence": "medium",
-          "palette_roles": [],
-          "semantic_cells": [
-            {
-              "x": 2,
-              "y": 3,
-              "glyph": 220,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 1,
-              "y": 4,
-              "glyph": 222,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 5,
-              "y": 4,
-              "glyph": 221,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            }
-          ]
-        },
-        {
           "name": "face",
           "bbox": [
-            3,
-            3,
+            2,
+            2,
             3,
             3
           ],
           "confidence": "medium",
           "palette_roles": [],
           "semantic_cells": [
+            {
+              "x": 2,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
             {
               "x": 3,
               "y": 3,
@@ -1655,9 +1619,9 @@
         {
           "name": "armor",
           "bbox": [
-            2,
+            1,
             3,
-            4,
+            5,
             5
           ],
           "confidence": "medium",
@@ -1712,12 +1676,36 @@
               "role": "armor_cell"
             },
             {
+              "x": 2,
+              "y": 3,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
               "x": 4,
               "y": 3,
               "glyph": 220,
               "fg": "#555555",
               "bg": "#ffff55",
               "role": "armor_cell"
+            },
+            {
+              "x": 1,
+              "y": 4,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
+              "x": 5,
+              "y": 4,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
             }
           ]
         },
@@ -1910,61 +1898,24 @@
           ]
         },
         {
-          "name": "hair",
-          "bbox": [
-            2,
-            4,
-            4,
-            6
-          ],
-          "confidence": "medium",
-          "palette_roles": [],
-          "semantic_cells": [
-            {
-              "x": 2,
-              "y": 4,
-              "glyph": 222,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 4,
-              "y": 4,
-              "glyph": 221,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 4,
-              "y": 5,
-              "glyph": 221,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 2,
-              "y": 6,
-              "glyph": 222,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            }
-          ]
-        },
-        {
           "name": "face",
           "bbox": [
-            3,
-            3,
+            2,
+            2,
             3,
             3
           ],
           "confidence": "medium",
           "palette_roles": [],
           "semantic_cells": [
+            {
+              "x": 2,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
             {
               "x": 3,
               "y": 3,
@@ -1980,12 +1931,20 @@
           "bbox": [
             2,
             4,
-            3,
-            5
+            4,
+            6
           ],
           "confidence": "medium",
           "palette_roles": [],
           "semantic_cells": [
+            {
+              "x": 2,
+              "y": 4,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
             {
               "x": 3,
               "y": 4,
@@ -1993,6 +1952,14 @@
               "fg": "#000000",
               "bg": "#aaaaaa",
               "role": "armor_cell"
+            },
+            {
+              "x": 4,
+              "y": 4,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
             },
             {
               "x": 2,
@@ -2009,6 +1976,22 @@
               "fg": "#ff5555",
               "bg": "#555555",
               "role": "armor_cell"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
+              "x": 2,
+              "y": 6,
+              "glyph": 222,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
             }
           ]
         },
@@ -2124,38 +2107,9 @@
           ]
         },
         {
-          "name": "hair",
-          "bbox": [
-            4,
-            3,
-            5,
-            4
-          ],
-          "confidence": "medium",
-          "palette_roles": [],
-          "semantic_cells": [
-            {
-              "x": 4,
-              "y": 3,
-              "glyph": 220,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            },
-            {
-              "x": 5,
-              "y": 4,
-              "glyph": 221,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
-            }
-          ]
-        },
-        {
           "name": "face",
           "bbox": [
-            3,
+            2,
             2,
             3,
             3
@@ -2163,6 +2117,14 @@
           "confidence": "medium",
           "palette_roles": [],
           "semantic_cells": [
+            {
+              "x": 2,
+              "y": 2,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
             {
               "x": 3,
               "y": 2,
@@ -2186,7 +2148,7 @@
           "bbox": [
             2,
             3,
-            4,
+            5,
             5
           ],
           "confidence": "medium",
@@ -2247,6 +2209,22 @@
               "fg": "#555555",
               "bg": "#ffff55",
               "role": "armor_cell"
+            },
+            {
+              "x": 4,
+              "y": 3,
+              "glyph": 220,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
+            },
+            {
+              "x": 5,
+              "y": 4,
+              "glyph": 221,
+              "fg": "#000000",
+              "bg": "#ffff55",
+              "role": "armor_edge"
             }
           ]
         },
