@@ -1,7 +1,7 @@
 {
   "schema_version": "0.1.0",
   "family": "player",
-  "reference_xp": "../asciicker-pipeline-v3/sprites/player-0100.xp",
+  "reference_xp": "../../../../sprites/player-0100.xp",
   "semantic_layer": 2,
   "frame_w": 7,
   "frame_h": 10,
@@ -30,7 +30,7 @@
       ],
       "confidence": "high",
       "usage": "bg",
-      "description": "Flesh tone \u2014 face, arms"
+      "description": "Flesh tone — face, arms"
     },
     "skin_detail": {
       "colors": [
@@ -38,7 +38,7 @@
       ],
       "confidence": "high",
       "usage": "fg",
-      "description": "Dark red \u2014 mouth/expression detail"
+      "description": "Dark red — mouth/expression detail"
     },
     "shirt_primary": {
       "colors": [
@@ -122,10 +122,10 @@
         {
           "name": "face",
           "bbox": [
-            1,
+            3,
             2,
-            5,
-            5
+            3,
+            4
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -152,22 +152,6 @@
               "glyph": 223,
               "fg": "#ff5555",
               "bg": "#aa00aa",
-              "role": "skin_cell"
-            },
-            {
-              "x": 1,
-              "y": 5,
-              "glyph": 222,
-              "fg": "#ff5555",
-              "bg": "#ffff55",
-              "role": "skin_cell"
-            },
-            {
-              "x": 5,
-              "y": 5,
-              "glyph": 221,
-              "fg": "#ff5555",
-              "bg": "#ffff55",
               "role": "skin_cell"
             }
           ],
@@ -314,6 +298,37 @@
           ],
           "slot_affinity": "body",
           "notes": "Auto-grouped from 2 cells with 'boots' color at angle 0 (N). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "arms",
+          "bbox": [
+            1,
+            5,
+            5,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [
+            "skin"
+          ],
+          "semantic_cells": [
+            {
+              "x": 1,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 5,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            }
+          ]
         }
       ]
     },
@@ -357,10 +372,10 @@
         {
           "name": "face",
           "bbox": [
-            1,
+            3,
             2,
             4,
-            5
+            4
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -395,22 +410,6 @@
               "glyph": 223,
               "fg": "#ff5555",
               "bg": "#aa00aa",
-              "role": "skin_cell"
-            },
-            {
-              "x": 1,
-              "y": 5,
-              "glyph": 222,
-              "fg": "#ff5555",
-              "bg": "#ffff55",
-              "role": "skin_cell"
-            },
-            {
-              "x": 4,
-              "y": 5,
-              "glyph": 222,
-              "fg": "#ff5555",
-              "bg": "#ffff55",
               "role": "skin_cell"
             }
           ],
@@ -557,6 +556,37 @@
           ],
           "slot_affinity": "body",
           "notes": "Auto-grouped from 2 cells with 'boots' color at angle 1 (NE). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "arms",
+          "bbox": [
+            1,
+            5,
+            4,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [
+            "skin"
+          ],
+          "semantic_cells": [
+            {
+              "x": 1,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            }
+          ]
         }
       ]
     },
@@ -571,8 +601,8 @@
           "bbox": [
             2,
             1,
-            4,
-            8
+            3,
+            2
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -592,14 +622,6 @@
               "fg": "#000000",
               "bg": "#ffff55",
               "role": "hair_cell"
-            },
-            {
-              "x": 4,
-              "y": 8,
-              "glyph": 221,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
             }
           ],
           "slot_affinity": "head",
@@ -611,7 +633,7 @@
             3,
             2,
             4,
-            5
+            4
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -644,14 +666,6 @@
               "x": 3,
               "y": 4,
               "glyph": 220,
-              "fg": "#ff5555",
-              "bg": "#aa00aa",
-              "role": "skin_cell"
-            },
-            {
-              "x": 3,
-              "y": 5,
-              "glyph": 221,
               "fg": "#ff5555",
               "bg": "#aa00aa",
               "role": "skin_cell"
@@ -760,6 +774,29 @@
           ],
           "slot_affinity": "body",
           "notes": "Auto-grouped from 1 cells with 'boots' color at angle 2 (E). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "arms",
+          "bbox": [
+            3,
+            5,
+            3,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [
+            "skin"
+          ],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#aa00aa",
+              "role": "skin_cell"
+            }
+          ]
         }
       ]
     },
@@ -826,10 +863,10 @@
         {
           "name": "face",
           "bbox": [
-            1,
+            3,
             2,
             4,
-            5
+            3
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -848,22 +885,6 @@
               "glyph": 223,
               "fg": "#000000",
               "bg": "#ff5555",
-              "role": "skin_cell"
-            },
-            {
-              "x": 1,
-              "y": 5,
-              "glyph": 222,
-              "fg": "#ff5555",
-              "bg": "#ffff55",
-              "role": "skin_cell"
-            },
-            {
-              "x": 4,
-              "y": 5,
-              "glyph": 222,
-              "fg": "#ff5555",
-              "bg": "#ffff55",
               "role": "skin_cell"
             }
           ],
@@ -1018,6 +1039,37 @@
           ],
           "slot_affinity": "body",
           "notes": "Auto-grouped from 2 cells with 'boots' color at angle 3 (SE). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "arms",
+          "bbox": [
+            1,
+            5,
+            4,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [
+            "skin"
+          ],
+          "semantic_cells": [
+            {
+              "x": 1,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 4,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            }
+          ]
         }
       ]
     },
@@ -1069,10 +1121,10 @@
         {
           "name": "face",
           "bbox": [
-            1,
             3,
-            5,
-            5
+            3,
+            3,
+            3
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -1083,22 +1135,6 @@
               "glyph": 220,
               "fg": "#ff5555",
               "bg": "#000000",
-              "role": "skin_cell"
-            },
-            {
-              "x": 1,
-              "y": 5,
-              "glyph": 222,
-              "fg": "#ff5555",
-              "bg": "#ffff55",
-              "role": "skin_cell"
-            },
-            {
-              "x": 5,
-              "y": 5,
-              "glyph": 221,
-              "fg": "#ff5555",
-              "bg": "#ffff55",
               "role": "skin_cell"
             }
           ],
@@ -1238,6 +1274,37 @@
           ],
           "slot_affinity": "body",
           "notes": "Auto-grouped from 7 cells with 'pants' color at angle 4 (S). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "arms",
+          "bbox": [
+            1,
+            5,
+            5,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [
+            "skin"
+          ],
+          "semantic_cells": [
+            {
+              "x": 1,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 5,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            }
+          ]
         }
       ]
     },
@@ -1283,8 +1350,8 @@
           "bbox": [
             2,
             2,
-            5,
-            5
+            3,
+            3
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -1303,22 +1370,6 @@
               "glyph": 223,
               "fg": "#000000",
               "bg": "#ff5555",
-              "role": "skin_cell"
-            },
-            {
-              "x": 2,
-              "y": 5,
-              "glyph": 221,
-              "fg": "#ff5555",
-              "bg": "#ffff55",
-              "role": "skin_cell"
-            },
-            {
-              "x": 5,
-              "y": 5,
-              "glyph": 221,
-              "fg": "#ff5555",
-              "bg": "#ffff55",
               "role": "skin_cell"
             }
           ],
@@ -1496,6 +1547,37 @@
           ],
           "slot_affinity": "body",
           "notes": "Auto-grouped from 2 cells with 'boots' color at angle 5 (SW). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "arms",
+          "bbox": [
+            2,
+            5,
+            5,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [
+            "skin"
+          ],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 5,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            }
+          ]
         }
       ]
     },
@@ -1508,10 +1590,10 @@
         {
           "name": "hair",
           "bbox": [
-            2,
+            3,
             1,
             4,
-            8
+            2
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -1531,14 +1613,6 @@
               "fg": "#000000",
               "bg": "#ffff55",
               "role": "hair_cell"
-            },
-            {
-              "x": 2,
-              "y": 8,
-              "glyph": 222,
-              "fg": "#000000",
-              "bg": "#ffff55",
-              "role": "hair_cell"
             }
           ],
           "slot_affinity": "head",
@@ -1550,7 +1624,7 @@
             2,
             2,
             3,
-            5
+            4
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -1583,14 +1657,6 @@
               "x": 3,
               "y": 4,
               "glyph": 220,
-              "fg": "#ff5555",
-              "bg": "#aa00aa",
-              "role": "skin_cell"
-            },
-            {
-              "x": 3,
-              "y": 5,
-              "glyph": 222,
               "fg": "#ff5555",
               "bg": "#aa00aa",
               "role": "skin_cell"
@@ -1699,6 +1765,29 @@
           ],
           "slot_affinity": "body",
           "notes": "Auto-grouped from 1 cells with 'boots' color at angle 6 (W). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "arms",
+          "bbox": [
+            3,
+            5,
+            3,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [
+            "skin"
+          ],
+          "semantic_cells": [
+            {
+              "x": 3,
+              "y": 5,
+              "glyph": 222,
+              "fg": "#ff5555",
+              "bg": "#aa00aa",
+              "role": "skin_cell"
+            }
+          ]
         }
       ]
     },
@@ -1744,8 +1833,8 @@
           "bbox": [
             2,
             2,
-            5,
-            5
+            3,
+            4
           ],
           "confidence": "medium",
           "palette_roles": [],
@@ -1780,22 +1869,6 @@
               "glyph": 223,
               "fg": "#ff5555",
               "bg": "#aa00aa",
-              "role": "skin_cell"
-            },
-            {
-              "x": 2,
-              "y": 5,
-              "glyph": 221,
-              "fg": "#ff5555",
-              "bg": "#ffff55",
-              "role": "skin_cell"
-            },
-            {
-              "x": 5,
-              "y": 5,
-              "glyph": 221,
-              "fg": "#ff5555",
-              "bg": "#ffff55",
               "role": "skin_cell"
             }
           ],
@@ -1942,6 +2015,37 @@
           ],
           "slot_affinity": "body",
           "notes": "Auto-grouped from 2 cells with 'boots' color at angle 7 (NW). Review: verify region name, split/merge as needed."
+        },
+        {
+          "name": "arms",
+          "bbox": [
+            2,
+            5,
+            5,
+            5
+          ],
+          "confidence": "medium",
+          "palette_roles": [
+            "skin"
+          ],
+          "semantic_cells": [
+            {
+              "x": 2,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            },
+            {
+              "x": 5,
+              "y": 5,
+              "glyph": 221,
+              "fg": "#ff5555",
+              "bg": "#ffff55",
+              "role": "skin_cell"
+            }
+          ]
         }
       ]
     }
@@ -1951,6 +2055,6 @@
     "propagated_angles": []
   },
   "ambiguities": [
-    "Auto-populated from real XP data. Regions are grouped by color \u2014 review each angle and correct region names where color grouping is ambiguous (e.g., 'edge' cells may belong to adjacent regions)."
+    "Auto-populated from real XP data. Regions are grouped by color — review each angle and correct region names where color grouping is ambiguous (e.g., 'edge' cells may belong to adjacent regions)."
   ]
 }

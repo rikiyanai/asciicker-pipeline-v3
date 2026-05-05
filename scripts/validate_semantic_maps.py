@@ -135,7 +135,7 @@ def validate_xp_reference(map_data: dict, map_path: Path, errors: list):
     if not isinstance(ref_xp, str) or not ref_xp:
         errors.append(f"  reference_xp must be a non-empty string, got {ref_xp!r}")
         return
-    xp_path = REPO_ROOT / ref_xp
+    xp_path = (map_path.parent / ref_xp).resolve()
     if not xp_path.is_file():
         errors.append(f"  reference_xp file not found: {ref_xp} (resolved: {xp_path})")
 

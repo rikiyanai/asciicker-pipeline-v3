@@ -1,7 +1,7 @@
 {
   "schema_version": "0.1.0",
   "family": "plydie",
-  "reference_xp": "sprites/plydie-0000.xp",
+  "reference_xp": "../../../../sprites/plydie-0000.xp",
   "semantic_layer": 2,
   "frame_w": 11,
   "frame_h": 11,

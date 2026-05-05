@@ -1,7 +1,7 @@
 {
   "schema_version": "0.1.0",
   "family": "player",
-  "reference_xp": "sprites/player-0100.xp",
+  "reference_xp": "../../../../sprites/player-0100.xp",
   "semantic_layer": 2,
   "frame_w": 7,
   "frame_h": 10,

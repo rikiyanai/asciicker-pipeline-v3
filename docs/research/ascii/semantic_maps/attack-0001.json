@@ -1,7 +1,7 @@
 {
   "schema_version": "0.1.0",
   "family": "attack",
-  "reference_xp": "sprites/attack-0001.xp",
+  "reference_xp": "../../../../sprites/attack-0001.xp",
   "semantic_layer": 2,
   "frame_w": 9,
   "frame_h": 10,

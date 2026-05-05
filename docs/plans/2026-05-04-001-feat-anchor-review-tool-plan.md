@@ -1,8 +1,10 @@
 ---
 title: "feat: Anchor review mode in xp_raw_layer_inspector with dual-role cells"
 type: feat
-status: active
+status: implemented
 date: 2026-05-04
+deepened: 2026-05-04
+implemented: 2026-05-04
 origin: docs/brainstorms/2026-05-04-anchor-review-tool-requirements.md
 ---
 
@@ -68,14 +70,17 @@ hair/face, shirt/pants, and pants/boots boundary cells.
 
 **Target repo:** asciicker-Y9-2
 
-- `scripts/pipeline/xp_raw_layer_inspector.py` — base tool (~1164 lines)
+- `scripts/pipeline/xp_raw_layer_inspector.py` — base tool (~2059 lines, post-implementation)
   - Main loop: lines 1038-1082, key-driven with `redraw_pending` flag
   - `_apply_key()`: lines 910-976, returns (keep_running, index_delta, ...)
-  - `RawPreviewCell(glyph, fg, bg, selected)`: line 44, already has `selected` flag
+  - `RawPreviewCell(glyph, fg, bg, selected)`: line 44 (frozen=True)
   - `_style_raw_cell()`: lines 476-485, ANSI 24-bit color with inverted-video when selected
   - Region cycling: `r/f` keys at lines 945-954, index into `_region_atlas()`
   - Frame coords: `_explicit_frame_rect()` at lines 96-122
-  - Argparse: lines 1127-1164
+  - `AnchorReviewState`: line 1148 (added during implementation)
+  - `_handle_anchor_key()`: line 1731
+  - `run_anchor_review()`: line 1922
+  - Argparse: lines 2007-2059
   - Semantic dict: `identify()` at line 354, `get_body_part_at()` at line 321
 
 **Pipeline-v3 schema:**
@@ -107,9 +112,19 @@ hair/face, shirt/pants, and pants/boots boundary cells.
   and presses `m` again to complete the rectangle.
 
 - **Half-block detection**: Glyphs 220, 221, 222, 223 are the four half-block
-  characters. When a cell uses one of these glyphs and fg/bg are different
-  colors from different palette roles, the reviewer prompts for
-  `fg_region`/`bg_region` assignment.
+  characters. Detection predicate: `glyph in {220, 221, 222, 223} AND fg != bg`.
+  This reads directly from raw XP cell data — no `palette_roles` lookup
+  needed (palette_roles is empty on all current regions). When triggered in
+  half-block mode, the reviewer prompts for `fg_region`/`bg_region` assignment.
+
+- **Primary region for vertical half-blocks (221 ▌, 222 ▐)**: Horizontal
+  half-blocks (220 ▄, 223 ▀) have a natural primary based on spatial area
+  (upper=fg for 223, lower=bg for 220). Vertical splits have equal-area
+  halves — default primary to fg. The full split is always written to
+  `fg_region`/`bg_region` regardless; the "primary" is only the tiebreaker
+  for `get_body_part_at()` which returns a single value. Downstream consumers
+  that care about the sub-cell split (recolor, overlay validation) read the
+  dual fields directly.
 
 ---
 
@@ -124,25 +139,19 @@ hair/face, shirt/pants, and pants/boots boundary cells.
   for region overlay. The player sprite has ~5-7 regions per angle; 8 colors
   should suffice.
 
-### From 2026-05-04 review
+### Addressed During Deepening (2026-05-04)
 
-- **Primary-region heuristic for vertical split glyphs 221/222**: The
-  "bg for lower-half, fg for upper-half" heuristic applies only to
-  horizontal half-blocks (220, 223). Glyphs 221 (`▌`) and 222 (`▐`) are
-  left/right vertical splits with equal-area halves — no clear primary.
-  Need a decision: default to fg? default to left-half? prompt always?
-  (feasibility, adversarial — P1)
-- **Stale function references in U4 and U6**: `_selected_region()` (U4
-  Patterns to follow), `export_angle_anchor_template()` (U6 Patterns to
-  follow) are referenced as existing patterns but not found in the Context
-  & Research section. Verify whether these exist in Y9-2 or were assumed
-  without basis. (coherence — P1)
-- **Half-block detection predicate assumes `palette_roles` populated**:
-  The plan says half-block mode triggers when "fg/bg are different colors
-  from different palette roles" but in `player-anchors.json` every region
-  has `palette_roles: []` (empty). The detection logic needs a different
-  predicate — e.g., reverse-lookup colors against the top-level palette
-  map, or simply check fg != bg. (adversarial — P2)
+- **Primary-region heuristic for vertical split glyphs 221/222**: Decision
+  made — default primary to fg. Both 221 (35 cells) and 222 (46 cells) are
+  the most common half-block glyphs in player data. Full split written to
+  `fg_region`/`bg_region` regardless; primary is only the `get_body_part_at()`
+  tiebreaker. See Key Technical Decisions.
+- **Stale function references in U4 and U6**: Verified — `_selected_region()`
+  confirmed at Y9-2 line 162 (U4 reference valid). `export_angle_anchor_template()`
+  does not exist in Y9-2 (U6 reference corrected to mirror input JSON structure).
+- **Half-block detection predicate**: Corrected — actual predicate is
+  `glyph in {220-223} AND fg != bg`, reading from raw cell data. No
+  `palette_roles` involvement needed. See Key Technical Decisions.
 
 ---
 
@@ -246,8 +255,8 @@ and load the anchor JSON into a review-mode state structure.
 - When provided, load the anchor JSON, extract `frame_w`/`frame_h`,
   build a per-angle region list from the `frames` entries
 - Create an `AnchorReviewState` dataclass holding: `anchor_data`, `anchor_path`,
-  `cursor_y`, `cursor_x`, `selected_cells`, `rect_start`, `dirty`,
-  `region_color_map`
+  `cursor_y`, `cursor_x`, `selected_cells`, `rect_start`, `current_angle`,
+  `dirty`, `region_color_map`
 - Pass this state into the main loop; when `None`, existing behavior is
   unchanged
 - Override `_region_atlas()` in anchor mode to return anchor regions instead
@@ -378,8 +387,9 @@ assignment so each color channel maps to its owning body part.
     `semantic_cells` item (identified by x,y coordinates within the
     region's `semantic_cells` array)
   - The primary region assignment (the one used by `get_body_part_at()`)
-    defaults to whichever half has more visual area (bg for lower-half,
-    fg for upper-half, depending on glyph)
+    defaults to: fg for upper-half (glyph 223 ▀), bg for lower-half
+    (glyph 220 ▄), fg for vertical splits (glyphs 221 ▌, 222 ▐) since
+    equal-area halves have no spatial tiebreaker
 - For non-half-block cells in half-block mode, behave like normal assignment
 - Visual indicator: in the side panel, show half-block cells with their
   split annotation (e.g., "fg:hair bg:face")
@@ -409,7 +419,7 @@ JSON file with confidence upgrades and ground_truth_angles tracking.
 
 **Requirements:** R6
 
-**Dependencies:** U4
+**Dependencies:** U4, U5
 
 **Files:**
 - Modify: `scripts/pipeline/xp_raw_layer_inspector.py` (Y9-2)
@@ -436,7 +446,8 @@ JSON file with confidence upgrades and ground_truth_angles tracking.
 
 **Patterns to follow:**
 - Existing status bar feedback pattern
-- `export_angle_anchor_template()` JSON structure for output format
+- Output format mirrors the input anchor JSON structure (same top-level keys,
+  same per-frame region layout)
 
 **Test scenarios:**
 - Happy path: make changes, `Ctrl+S`, file written, dirty flag cleared
@@ -474,6 +485,31 @@ JSON file with confidence upgrades and ground_truth_angles tracking.
 | Shift+arrow may not produce distinguishable escape sequences in all terminals | Fall back to `m`-mark-corner approach for rectangle selection |
 | File overwrite on Ctrl+S without backup | Consider writing to `<path>.bak` before overwriting; defer to implementation |
 | Inspector currently binds `x` to layer cycling | In anchor mode, rebind `x` to cell toggle; layer cycling moves to a different key or is disabled |
+
+---
+
+## Implementation Status (2026-05-04)
+
+All 6 implementation units (U1-U6) are implemented in Y9-2's
+`xp_raw_layer_inspector.py` (now ~2059 lines). Schema extension (U1) landed
+in commits `ea026b5` and `5c5cf8d`.
+
+### Remaining Gaps (follow-up work)
+
+- **reference_xp path bug**: Corrected — all maps now use file-relative paths
+  (`../../../../sprites/<name>.xp`), validator uses `map_path.parent / ref_xp`
+  to match inspector resolution. Both consumers agree. (pending commit on `main`)
+- **r/f region cycling in anchor mode**: Added — `r/f` now cycles the focused
+  region for the region-only isolation panel. (pending commit in Y9-2)
+- **Arrow key frame-nav conflict**: Arrow keys are bound to frame navigation
+  in normal mode. In anchor mode they move the cursor — existing frame-nav
+  binding must be confirmed suppressed (or documented if intentionally kept).
+- **Empty region cleanup**: Removing all cells from a region leaves an empty
+  region struct with `semantic_cells: []` and `bbox: [0,0,0,0]`. Decide
+  whether to prune empty regions on save or keep them.
+- **validate_anchor_file()**: U6 verification references this function from
+  the prior plan's U7. Confirm whether it exists; if not, implement or
+  descope from verification.
 
 ---
 
