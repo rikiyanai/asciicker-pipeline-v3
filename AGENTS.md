@@ -15,6 +15,7 @@ Always run the self-containment audit immediately after conductor status.
 - Direct command: `python3 scripts/self_containment_audit.py`
 - Install hooks: `bash scripts/install_self_containment_hooks.sh`
 - Hard rule: this repo must not reference, symlink, or depend on folders outside `/Users/r/Downloads/asciicker-pipeline-v2` for live code, runtime, tests, or build steps.
+- **Exception**: `docs/research/ascii/semantic_maps/` is a symlink vendoring content from Y9-2 (source of truth for semantic map JSON and anchor data). Re-create if broken: `ln -sfn ../../../../asciicker-Y9-2/docs/research/ascii/semantic_maps docs/research/ascii/semantic_maps`
 
 ## Milestone Requirements
 
