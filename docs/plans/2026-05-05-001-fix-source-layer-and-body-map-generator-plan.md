@@ -3,6 +3,7 @@ title: "fix: Source-layer integrity + body map generator"
 type: fix
 status: active
 date: 2026-05-05
+deepened: false
 ---
 
 # Source-Layer Integrity + Body Map Generator

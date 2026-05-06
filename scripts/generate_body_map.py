@@ -15,6 +15,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import TypedDict
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -22,6 +23,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 Y9_ROOT = REPO_ROOT.parent / "asciicker-Y9-2"
 if not (Y9_ROOT / "scripts" / "pipeline" / "xp_core.py").is_file():
     Y9_ROOT = REPO_ROOT.parent.parent / "asciicker-Y9-2"
+if not (Y9_ROOT / "scripts" / "pipeline" / "xp_core.py").is_file():
+    print(
+        "ERROR: cannot locate asciicker-Y9-2/scripts/pipeline/xp_core.py\n"
+        f"  Tried: {REPO_ROOT.parent / 'asciicker-Y9-2'}\n"
+        f"  Tried: {REPO_ROOT.parent.parent / 'asciicker-Y9-2'}\n"
+        "  Ensure asciicker-Y9-2 is a sibling of this repo.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 sys.path.insert(0, str(Y9_ROOT))
 from scripts.pipeline.xp_core import XPFile, XPLayer
 
@@ -39,9 +49,19 @@ FAMILY_FILL: dict[str, tuple[int, int, int]] = {
 SLOT_ORDER = {"body": 0, "head": 1, "armor": 2, "weapon": 3, "shield": 4, "mount": 5}
 
 
-def _hex_to_rgb(h: str) -> tuple[int, int, int]:
-    h = h.lstrip("#")
-    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+def _digit(v: int) -> int:
+    """Encode a small integer as a CP437 glyph (0-9 → '0'-'9', 10-35 → 'A'-'Z')."""
+    if v <= 9:
+        return ord(str(v))
+    if v <= 35:
+        return ord("A") + (v - 10)
+    raise ValueError(f"value {v} out of CP437 digit range")
+
+
+class RegionEntry(TypedDict):
+    name: str
+    sa: str   # slot_affinity
+    sl: int   # source_layer
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -103,26 +123,48 @@ def build_body_map(map_path: Path) -> XPFile:
     fill_bg = FAMILY_FILL.get(family, (0, 0, 0))
 
     # ── collect unique regions from frame 0 ──
-    frame0 = m["frames"]["0"]
-    regions: list[dict] = []
+    frame0_data = m["frames"].get("0")
+    if frame0_data is None:
+        raise ValueError(
+            "semantic map has no frame '0' — cannot determine region layout"
+        )
+
+    regions: list[RegionEntry] = []
     seen: set[str] = set()
-    for r in frame0.get("regions", []):
+    for r in frame0_data.get("regions", []):
         name = r.get("name", "")
         if name and name not in seen:
             seen.add(name)
-            regions.append({
-                "name": name,
-                # layer-resolution per plan: region.get("source_layer", default_layer)
-                "sl": r.get("source_layer", default_layer),
-            })
+            regions.append(RegionEntry(
+                name=name,
+                sa=r.get("slot_affinity", "body"),
+                sl=r.get("source_layer", default_layer),
+            ))
 
     if not regions:
         raise ValueError("no regions found in frame 0")
 
+    # ── cross-frame source_layer consistency check ──
+    for fk, fdata in m["frames"].items():
+        if fk == "0":
+            continue
+        for r in fdata.get("regions", []):
+            rname = r.get("name", "")
+            if not rname or rname not in seen:
+                continue
+            expected_sl = next(
+                (rr["sl"] for rr in regions if rr["name"] == rname), default_layer
+            )
+            actual_sl = r.get("source_layer", default_layer)
+            if actual_sl != expected_sl:
+                raise ValueError(
+                    f"region '{rname}' has source_layer={actual_sl} in frame {fk!r} "
+                    f"but source_layer={expected_sl} in frame '0' — "
+                    f"source_layer must be consistent across all angles"
+                )
+
     # sort per plan: slot_affinity then name
-    regions.sort(key=lambda r: (SLOT_ORDER.get(
-        next((rr.get("slot_affinity", "body") for rr in frame0["regions"]
-              if rr["name"] == r["name"]), "body"), 99), r["name"]))
+    regions.sort(key=lambda r: (SLOT_ORDER.get(r["sa"], 99), r["name"]))
 
     num_regions = len(regions)
     body_w = num_angles * fw
@@ -130,11 +172,19 @@ def build_body_map(map_path: Path) -> XPFile:
 
     print(f"Body map: {body_w}x{body_h}  ({num_regions} regions × {num_angles} angles)")
 
+    # ── bounds-check source layer indices ──
+    layers_needed = {r["sl"] for r in regions}
+    for sl in layers_needed:
+        if sl >= len(xp.layers):
+            raise ValueError(
+                f"source_layer {sl} is out of range — "
+                f"XP file has {len(xp.layers)} layer(s) (0–{len(xp.layers) - 1})"
+            )
+
     # ── pre-extract visible cells per (layer, angle) ──
     # key: (layer, angle) -> {(lx,ly): (glyph, fg, bg)}
     xp_visible: dict[tuple[int, int], dict[tuple[int, int], tuple]] = {}
 
-    layers_needed = {r["sl"] for r in regions}
     for sl in layers_needed:
         for a in range(num_angles):
             x0, y0 = _atlas_origin(a, fpr, fw, fh, anim_lengths=anim_lengths)
@@ -179,6 +229,9 @@ def build_body_map(map_path: Path) -> XPFile:
             for c in scells:
                 lx = c["x"]
                 ly = c["y"]
+                # bounds check: skip cells that fall outside the frame dimensions
+                if lx < 0 or lx >= fw or ly < 0 or ly >= fh:
+                    continue
                 cell = visible.get((lx, ly))
                 if cell is None:
                     continue
@@ -187,13 +240,6 @@ def build_body_map(map_path: Path) -> XPFile:
                 l2[ty][tx] = cell
 
     # ── L0 metadata, L1 blank ──
-    def _digit(v: int) -> int:
-        if v <= 9:
-            return ord(str(v))
-        if v <= 35:
-            return ord("A") + (v - 10)
-        raise ValueError(f"value {v} out of CP437 digit range")
-
     l0 = XPLayer(body_w, body_h)
     l0.data[0][0] = (_digit(num_angles), (255, 255, 255), (0, 0, 0))
     l0.data[0][1] = (_digit(num_regions), (255, 255, 255), (0, 0, 0))

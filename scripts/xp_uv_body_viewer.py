@@ -15,8 +15,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-# This file is a copy of Y9-2's inspector, running in pipeline-v3.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+# This file lives in scripts/ (one level below repo root).
 # Need Y9-2 on sys.path for xp_core, layer2_browser, etc.
 Y9_ROOT = REPO_ROOT.parent / "asciicker-Y9-2"
 if not Y9_ROOT.is_dir():
@@ -32,6 +32,10 @@ from scripts.pipeline import xp_assets_browser_layer_2_only as layer2_browser
 from scripts.pipeline.xp_core import XPFile
 
 SPRITE_DIR = REPO_ROOT / "assets" / "sprites"
+
+# Region slot ordering — must mirror generate_body_map.SLOT_ORDER exactly.
+_BODY_MAP_SLOT_ORDER = {"body": 0, "head": 1, "armor": 2, "weapon": 3, "shield": 4, "mount": 5}
+
 KEY_ESCAPE = "\x1b"
 KEY_PAGEUP = "PAGEUP"
 KEY_PAGEDOWN = "PAGEDOWN"
@@ -1451,7 +1455,27 @@ def _anchor_render_body_map_band(
         return ["(no region focused — press r)"]
 
     rname = regions[focus]["name"]
-    lines.append(f"Body map band: {rname}")
+
+    # Compute the band index by replicating generate_body_map's sort order.
+    # Collect unique regions from frame 0, sort by slot then name, find this one's index.
+    frame0 = st.anchor_data.get("frames", {}).get("0", {})
+    seen: list[tuple[str, str]] = []  # (name, slot_affinity) in encounter order
+    seen_names: set[str] = set()
+    for r in frame0.get("regions", []):
+        n = r.get("name", "")
+        if n and n not in seen_names:
+            seen_names.add(n)
+            seen.append((n, r.get("slot_affinity", "body")))
+    seen.sort(key=lambda x: (_BODY_MAP_SLOT_ORDER.get(x[1], 99), x[0]))
+    sorted_names = [n for n, _ in seen]
+
+    if rname not in sorted_names:
+        return [f"(region '{rname}' not found in frame 0 — body map may be stale)"]
+
+    band_index = sorted_names.index(rname)
+    band_y0 = band_index * st.frame_h
+
+    lines.append(f"Body map band {band_index}: {rname}")
 
     # Show each angle column with cells from the focused region
     for ly in range(st.frame_h):
@@ -1466,7 +1490,7 @@ def _anchor_render_body_map_band(
                     break
             for lx in range(st.frame_w):
                 if (lx, ly) in acells:
-                    g, fg, bg = l2.data[ly][ax + lx]
+                    g, fg, bg = l2.data[band_y0 + ly][ax + lx]
                     if bg == (255, 0, 255) or g == 0:
                         row += "·"
                     else:
@@ -2295,7 +2319,7 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
     st.anim_lengths = list(asset.entry.meta.anim_lengths)
 
     # Try to load body map XP from pipeline-v3/output/
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[1]
     candidate = repo_root / "output" / f"{anchor_path.stem}_body_map.xp"
     if candidate.is_file():
         try:

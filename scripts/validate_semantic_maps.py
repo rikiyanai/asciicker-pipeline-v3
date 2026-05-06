@@ -38,6 +38,28 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MAPS_DIR = REPO_ROOT / "docs" / "research" / "ascii" / "semantic_maps"
 SCHEMA_FILE = MAPS_DIR / "schema.json"
 
+# ── optional xp_core import for cell cross-reference validation ──
+_Y9_ROOT: Path | None = None
+for _candidate in [
+    REPO_ROOT.parent / "asciicker-Y9-2",
+    REPO_ROOT.parent.parent / "asciicker-Y9-2",
+]:
+    if (_candidate / "scripts" / "pipeline" / "xp_core.py").is_file():
+        _Y9_ROOT = _candidate
+        break
+
+HAS_XP_CORE = False
+if _Y9_ROOT is not None:
+    if str(_Y9_ROOT) not in sys.path:
+        sys.path.insert(0, str(_Y9_ROOT))
+    try:
+        from scripts.pipeline.xp_core import XPFile as _XPFile  # type: ignore
+        HAS_XP_CORE = True
+    except ImportError:
+        pass
+
+MAGENTA = (255, 0, 255)
+
 
 def load_json(path: Path) -> dict:
     """Load and parse a JSON file, raising on failure."""
@@ -211,7 +233,9 @@ def validate_ambiguities(map_data: dict, errors: list):
             errors.append(f"  ambiguities[{i}] is empty or whitespace-only")
 
 
-VALID_SLOT_AFFINITIES = {"body", "head", "shield", "weapon", "armor", "mount"}
+# SLOT_ORDER is the single source of truth; VALID_SLOT_AFFINITIES is derived from it.
+SLOT_ORDER = {"body": 0, "head": 1, "armor": 2, "weapon": 3, "shield": 4, "mount": 5}
+VALID_SLOT_AFFINITIES = set(SLOT_ORDER.keys())
 
 
 def validate_slot_affinity(map_data: dict, errors: list):
@@ -296,11 +320,26 @@ def validate_source_layer(map_data: dict, errors: list):
                 )
 
 
+def _atlas_origin_simple(angle: int, fpr: int, fw: int, fh: int) -> tuple[int, int]:
+    """Return (x0, y0) for anim=0, frame=0 at the given angle.
+
+    Simplified form of the full atlas-origin formula (anim_index=0, frame_idx=0).
+    """
+    atlas_idx = angle * fpr
+    fr_x = atlas_idx % fpr
+    fr_y = atlas_idx // fpr
+    return fr_x * fw, fr_y * fh
+
+
 def validate_cells_against_xp(map_data: dict, map_path: Path, errors: list):
     """Cross-reference semantic_cells against actual XP sprite data.
 
-    For each region, dumps the correct layer (source_layer or semantic_layer)
-    and verifies that each cell exists and has matching glyph/fg/bg values.
+    For each region, reads the correct layer (source_layer or semantic_layer)
+    via xp_core directly and verifies that each cell exists and has matching
+    glyph/fg/bg values.
+
+    Skipped (with a notice) when xp_core is unavailable rather than silently
+    passing — a skipped check must never look like a passing check.
     """
     ref_xp = map_data.get("reference_xp", "")
     if not ref_xp:
@@ -309,69 +348,52 @@ def validate_cells_against_xp(map_data: dict, map_path: Path, errors: list):
     if not xp_path.is_file():
         return  # Already caught by validate_xp_reference
 
-    # Try to import the inspector for XP reading
-    try:
-        import subprocess
-        inspector_paths = [
-            Path(__file__).resolve().parent.parent.parent
-            / "asciicker-Y9-2" / "scripts" / "pipeline" / "xp_raw_layer_inspector.py",
-            Path(__file__).resolve().parent / "pipeline" / "xp_raw_layer_inspector.py",
-        ]
-        inspector = None
-        for p in inspector_paths:
-            if p.is_file():
-                inspector = p
-                break
-        if inspector is None:
-            return  # Inspector not available; skip XP cross-check
-    except Exception:
+    if not HAS_XP_CORE:
+        errors.append(
+            "  [WARN] xp_core not available — cell cross-reference check skipped. "
+            "Ensure asciicker-Y9-2 is a sibling of this repo to enable this check."
+        )
         return
 
+    gl = map_data.get("grid_layout", {})
+    fpr = gl.get("frames_per_row", 1)
+    fw = map_data.get("frame_w", 1)
+    fh = map_data.get("frame_h", 1)
     default_layer = map_data.get("semantic_layer", 2)
-    sprite_dir = xp_path.parent
-    sprite_name = xp_path.name
 
-    # Cache dumps keyed by (layer, angle)
-    dump_cache: dict[tuple[int, int], dict[tuple[int, int], dict]] = {}
+    xp = _XPFile()
+    xp.load(str(xp_path))
 
-    def get_dump(layer: int, angle: int) -> dict[tuple[int, int], dict]:
+    # Cache visible-cell dicts keyed by (layer, angle)
+    # visible[(lx, ly)] = (glyph, fg_tuple, bg_tuple) for non-magenta cells
+    xp_visible: dict[tuple[int, int], dict[tuple[int, int], tuple]] = {}
+
+    def get_visible(layer: int, angle: int) -> dict[tuple[int, int], tuple] | None:
+        """Return cached visibility dict, or None if layer is out of range."""
         key = (layer, angle)
-        if key in dump_cache:
-            return dump_cache[key]
-        try:
-            result = subprocess.run(
-                [
-                    sys.executable, str(inspector),
-                    "--sprite-dir", str(sprite_dir),
-                    "--sprite", sprite_name,
-                    "--layer", str(layer),
-                    "--anim", "0", "--frame", "0", "--angle", str(angle),
-                    "--json",
-                ],
-                capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode != 0:
-                dump_cache[key] = {}
-                return {}
-            d = json.loads(result.stdout)
-            visible = {}
-            for c in d.get("cells", []):
-                if c.get("engine_visible"):
-                    fg = c["fg_rgb"]
-                    bg = c["bg_rgb"]
-                    visible[(c["local_col"], c["local_row"])] = {
-                        "glyph": c["glyph_id"],
-                        "fg": f"#{fg[0]:02x}{fg[1]:02x}{fg[2]:02x}",
-                        "bg": f"#{bg[0]:02x}{bg[1]:02x}{bg[2]:02x}",
-                    }
-            dump_cache[key] = visible
-            return visible
-        except Exception:
-            dump_cache[key] = {}
-            return {}
+        if key in xp_visible:
+            return xp_visible[key]
+        if layer >= len(xp.layers):
+            return None
+        x0, y0 = _atlas_origin_simple(angle, fpr, fw, fh)
+        xp_layer = xp.layers[layer]
+        cells: dict[tuple[int, int], tuple] = {}
+        for ly in range(fh):
+            for lx in range(fw):
+                ax = x0 + lx
+                ay = y0 + ly
+                if ax < xp_layer.width and ay < xp_layer.height:
+                    g, fg, bg = xp_layer.data[ay][ax]
+                    if bg != MAGENTA:
+                        cells[(lx, ly)] = (g, fg, bg)
+        xp_visible[key] = cells
+        return cells
+
+    def _rgb_to_hex(rgb: tuple) -> str:
+        return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
 
     cell_errors = 0
-    max_report = 10  # Cap error output to avoid flooding
+    max_report = 10
 
     for frame_key, frame_data in map_data.get("frames", {}).items():
         try:
@@ -381,9 +403,16 @@ def validate_cells_against_xp(map_data: dict, map_path: Path, errors: list):
 
         for i, region in enumerate(frame_data.get("regions", [])):
             layer = region.get("source_layer", default_layer)
-            visible = get_dump(layer, angle)
-            if not visible:
-                continue  # Dump failed; skip
+            visible = get_visible(layer, angle)
+            if visible is None:
+                cell_errors += 1
+                if cell_errors <= max_report:
+                    errors.append(
+                        f"  frames.{frame_key}.regions[{i}] ('{region.get('name', '?')}') "
+                        f"source_layer={layer} is out of range "
+                        f"(XP has {len(xp.layers)} layer(s))"
+                    )
+                continue
 
             for k, cell in enumerate(region.get("semantic_cells", [])):
                 xy = (cell.get("x", -1), cell.get("y", -1))
@@ -400,30 +429,33 @@ def validate_cells_against_xp(map_data: dict, map_path: Path, errors: list):
                 cell_fg = cell.get("fg", "")
                 cell_bg = cell.get("bg", "")
                 cell_glyph = cell.get("glyph", -1)
+                actual_glyph, actual_fg_rgb, actual_bg_rgb = actual
+                actual_fg = _rgb_to_hex(actual_fg_rgb)
+                actual_bg = _rgb_to_hex(actual_bg_rgb)
 
-                if actual["glyph"] != cell_glyph:
+                if actual_glyph != cell_glyph:
                     cell_errors += 1
                     if cell_errors <= max_report:
                         errors.append(
                             f"  frames.{frame_key}.regions[{i}] ('{region.get('name', '?')}') "
                             f"cell ({xy[0]},{xy[1]}) glyph mismatch: "
-                            f"map={cell_glyph}, xp={actual['glyph']}"
+                            f"map={cell_glyph}, xp={actual_glyph}"
                         )
-                elif actual["fg"].lower() != cell_fg.lower():
+                if actual_fg.lower() != cell_fg.lower():
                     cell_errors += 1
                     if cell_errors <= max_report:
                         errors.append(
                             f"  frames.{frame_key}.regions[{i}] ('{region.get('name', '?')}') "
                             f"cell ({xy[0]},{xy[1]}) fg mismatch: "
-                            f"map={cell_fg}, xp={actual['fg']}"
+                            f"map={cell_fg}, xp={actual_fg}"
                         )
-                elif actual["bg"].lower() != cell_bg.lower():
+                if actual_bg.lower() != cell_bg.lower():
                     cell_errors += 1
                     if cell_errors <= max_report:
                         errors.append(
                             f"  frames.{frame_key}.regions[{i}] ('{region.get('name', '?')}') "
                             f"cell ({xy[0]},{xy[1]}) bg mismatch: "
-                            f"map={cell_bg}, xp={actual['bg']}"
+                            f"map={cell_bg}, xp={actual_bg}"
                         )
 
     if cell_errors > max_report:
