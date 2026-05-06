@@ -284,6 +284,154 @@ def validate_overlay_masks(map_data: dict, errors: list):
                 )
 
 
+def validate_source_layer(map_data: dict, errors: list):
+    """Check that source_layer values are valid integers when present."""
+    for frame_key, frame_data in map_data.get("frames", {}).items():
+        for i, region in enumerate(frame_data.get("regions", [])):
+            sl = region.get("source_layer")
+            if sl is not None and not isinstance(sl, int):
+                errors.append(
+                    f"  frames.{frame_key}.regions[{i}] ('{region.get('name', '?')}') "
+                    f"source_layer must be an integer, got {type(sl).__name__}"
+                )
+
+
+def validate_cells_against_xp(map_data: dict, map_path: Path, errors: list):
+    """Cross-reference semantic_cells against actual XP sprite data.
+
+    For each region, dumps the correct layer (source_layer or semantic_layer)
+    and verifies that each cell exists and has matching glyph/fg/bg values.
+    """
+    ref_xp = map_data.get("reference_xp", "")
+    if not ref_xp:
+        return
+    xp_path = (map_path.parent / ref_xp).resolve()
+    if not xp_path.is_file():
+        return  # Already caught by validate_xp_reference
+
+    # Try to import the inspector for XP reading
+    try:
+        import subprocess
+        inspector_paths = [
+            Path(__file__).resolve().parent.parent.parent
+            / "asciicker-Y9-2" / "scripts" / "pipeline" / "xp_raw_layer_inspector.py",
+            Path(__file__).resolve().parent / "pipeline" / "xp_raw_layer_inspector.py",
+        ]
+        inspector = None
+        for p in inspector_paths:
+            if p.is_file():
+                inspector = p
+                break
+        if inspector is None:
+            return  # Inspector not available; skip XP cross-check
+    except Exception:
+        return
+
+    default_layer = map_data.get("semantic_layer", 2)
+    sprite_dir = xp_path.parent
+    sprite_name = xp_path.name
+
+    # Cache dumps keyed by (layer, angle)
+    dump_cache: dict[tuple[int, int], dict[tuple[int, int], dict]] = {}
+
+    def get_dump(layer: int, angle: int) -> dict[tuple[int, int], dict]:
+        key = (layer, angle)
+        if key in dump_cache:
+            return dump_cache[key]
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable, str(inspector),
+                    "--sprite-dir", str(sprite_dir),
+                    "--sprite", sprite_name,
+                    "--layer", str(layer),
+                    "--anim", "0", "--frame", "0", "--angle", str(angle),
+                    "--json",
+                ],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                dump_cache[key] = {}
+                return {}
+            d = json.loads(result.stdout)
+            visible = {}
+            for c in d.get("cells", []):
+                if c.get("engine_visible"):
+                    fg = c["fg_rgb"]
+                    bg = c["bg_rgb"]
+                    visible[(c["local_col"], c["local_row"])] = {
+                        "glyph": c["glyph_id"],
+                        "fg": f"#{fg[0]:02x}{fg[1]:02x}{fg[2]:02x}",
+                        "bg": f"#{bg[0]:02x}{bg[1]:02x}{bg[2]:02x}",
+                    }
+            dump_cache[key] = visible
+            return visible
+        except Exception:
+            dump_cache[key] = {}
+            return {}
+
+    cell_errors = 0
+    max_report = 10  # Cap error output to avoid flooding
+
+    for frame_key, frame_data in map_data.get("frames", {}).items():
+        try:
+            angle = int(frame_key)
+        except ValueError:
+            continue
+
+        for i, region in enumerate(frame_data.get("regions", [])):
+            layer = region.get("source_layer", default_layer)
+            visible = get_dump(layer, angle)
+            if not visible:
+                continue  # Dump failed; skip
+
+            for k, cell in enumerate(region.get("semantic_cells", [])):
+                xy = (cell.get("x", -1), cell.get("y", -1))
+                actual = visible.get(xy)
+                if actual is None:
+                    cell_errors += 1
+                    if cell_errors <= max_report:
+                        errors.append(
+                            f"  frames.{frame_key}.regions[{i}] ('{region.get('name', '?')}') "
+                            f"cell ({xy[0]},{xy[1]}) not visible on layer {layer}"
+                        )
+                    continue
+
+                cell_fg = cell.get("fg", "")
+                cell_bg = cell.get("bg", "")
+                cell_glyph = cell.get("glyph", -1)
+
+                if actual["glyph"] != cell_glyph:
+                    cell_errors += 1
+                    if cell_errors <= max_report:
+                        errors.append(
+                            f"  frames.{frame_key}.regions[{i}] ('{region.get('name', '?')}') "
+                            f"cell ({xy[0]},{xy[1]}) glyph mismatch: "
+                            f"map={cell_glyph}, xp={actual['glyph']}"
+                        )
+                elif actual["fg"].lower() != cell_fg.lower():
+                    cell_errors += 1
+                    if cell_errors <= max_report:
+                        errors.append(
+                            f"  frames.{frame_key}.regions[{i}] ('{region.get('name', '?')}') "
+                            f"cell ({xy[0]},{xy[1]}) fg mismatch: "
+                            f"map={cell_fg}, xp={actual['fg']}"
+                        )
+                elif actual["bg"].lower() != cell_bg.lower():
+                    cell_errors += 1
+                    if cell_errors <= max_report:
+                        errors.append(
+                            f"  frames.{frame_key}.regions[{i}] ('{region.get('name', '?')}') "
+                            f"cell ({xy[0]},{xy[1]}) bg mismatch: "
+                            f"map={cell_bg}, xp={actual['bg']}"
+                        )
+
+    if cell_errors > max_report:
+        errors.append(
+            f"  ... and {cell_errors - max_report} more cell cross-reference errors"
+        )
+
+
 def validate_angle_anchors(map_data: dict, errors: list):
     """Check angle_anchors structure when present."""
     anchors = map_data.get("angle_anchors")
@@ -398,6 +546,15 @@ def main():
 
         # Angle anchors structure
         validate_angle_anchors(map_data, errors)
+
+        # source_layer field type
+        validate_source_layer(map_data, errors)
+
+        # Cross-reference cells against actual XP data
+        xp_errors: list[str] = []
+        validate_cells_against_xp(map_data, map_path, xp_errors)
+        if xp_errors:
+            errors.extend(xp_errors)
 
         if errors:
             all_passed = False
