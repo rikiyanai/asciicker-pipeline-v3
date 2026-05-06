@@ -16,12 +16,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# This file is a copy of Y9-2's inspector, running in pipeline-v3.
+# Need Y9-2 on sys.path for xp_core, layer2_browser, etc.
+Y9_ROOT = REPO_ROOT.parent / "asciicker-Y9-2"
+if not Y9_ROOT.is_dir():
+    Y9_ROOT = REPO_ROOT.parent.parent / "asciicker-Y9-2"
+if str(Y9_ROOT) not in sys.path:
+    sys.path.insert(0, str(Y9_ROOT))
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.cli_style import kv, sparkline
 from scripts.pipeline.bundle_wizard import semantic_dict
 from scripts.pipeline import xp_assets_browser_layer_2_only as layer2_browser
+from scripts.pipeline.xp_core import XPFile
 
 SPRITE_DIR = REPO_ROOT / "assets" / "sprites"
 KEY_ESCAPE = "\x1b"
@@ -1183,6 +1191,9 @@ class AnchorReviewState:
     current_anim: int = 0
     current_frame: int = 0
     anim_lengths: list[int] = field(default_factory=lambda: [1])
+    # body map view
+    body_map_xp: object | None = None  # XPFile of generated body map
+    show_body_map: bool = False  # toggle body map band vs UV coords
 
     @property
     def region_color_map(self) -> dict[int, tuple[int, int, int]]:
@@ -1425,6 +1436,50 @@ def _anchor_render_region_only(
     return lines
 
 
+def _anchor_render_body_map_band(
+    st: AnchorReviewState,
+) -> list[str]:
+    """Render body map band — all 8 angles of the focused region's cells."""
+    lines: list[str] = []
+    if st.body_map_xp is None:
+        return ["(no body map loaded)"]
+
+    l2 = st.body_map_xp.layers[2]
+    regions = st.regions_at_angle()
+    focus = st.region_focus
+    if focus is None or focus >= len(regions):
+        return ["(no region focused — press r)"]
+
+    rname = regions[focus]["name"]
+    lines.append(f"Body map band: {rname}")
+
+    # Show each angle column with cells from the focused region
+    for ly in range(st.frame_h):
+        row = ""
+        for a in range(st.num_angles):
+            ax = a * st.frame_w
+            aframe = st.anchor_data["frames"].get(str(a), {})
+            acells = set()
+            for r in aframe.get("regions", []):
+                if r.get("name") == rname:
+                    acells = {(c["x"], c["y"]) for c in r.get("semantic_cells", [])}
+                    break
+            for lx in range(st.frame_w):
+                if (lx, ly) in acells:
+                    g, fg, bg = l2.data[ly][ax + lx]
+                    if bg == (255, 0, 255) or g == 0:
+                        row += "·"
+                    else:
+                        ch = _cp437_char(g)
+                        row += f"\033[38;2;{fg[0]};{fg[1]};{fg[2]}m\033[48;2;{bg[0]};{bg[1]};{bg[2]}m{ch}\033[0m"
+                else:
+                    row += " "
+            row += "│"
+        if row.strip(" │·"):
+            lines.append(row)
+    return lines
+
+
 def _anchor_render_uv_map(
     st: AnchorReviewState,
     asset: object,
@@ -1518,7 +1573,7 @@ def _anchor_help_lines() -> list[str]:
         "Anchor review",
         "[arrows] move cursor  [a/d] angle  [w/s] anim  [,/.] frame  [x] toggle  [m] rect",
         "[1-9] assign region  [n] new region  [Backspace] unassign  [h] half-block mode",
-        "[r/f] cycle region focus  [p] autoplay angles  [Ctrl+S] save  [q] quit  [Esc] clear",
+        "[r/f] cycle region focus  [b] body map  [p] autoplay angles  [Ctrl+S] save  [q] quit",
     ]
 
 
@@ -1542,8 +1597,10 @@ def _anchor_compose_screen(
     region_lines = _anchor_render_region_only(st, cell_data)
     box2 = _box_preview_lines(region_lines)
 
-    # Panel 3: UV coordinate map
-    if asset is not None:
+    # Panel 3: UV coordinate map OR body map band
+    if st.show_body_map:
+        box3 = _anchor_render_body_map_band(st)
+    elif asset is not None:
         uv_lines = _anchor_render_uv_map(st, asset, layer_index)
         box3 = _box_preview_lines(uv_lines)
     else:
@@ -2000,6 +2057,13 @@ def _handle_anchor_key(
         st.quit_pending = False
         return True
 
+    # --- Body map toggle (b) ---
+    if key in ("b", "B"):
+        st.show_body_map = not st.show_body_map
+        st.status = "Body map ON" if st.show_body_map else "Body map OFF"
+        st.quit_pending = False
+        return True
+
     # --- Region focus cycling (r/f) ---
     if key in ("r", "R"):
         regions = st.regions_at_angle()
@@ -2229,6 +2293,17 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
 
     # Use the asset's actual anim_lengths (from XP layer-0 metadata)
     st.anim_lengths = list(asset.entry.meta.anim_lengths)
+
+    # Try to load body map XP from pipeline-v3/output/
+    repo_root = Path(__file__).resolve().parents[2]
+    candidate = repo_root / "output" / f"{anchor_path.stem}_body_map.xp"
+    if candidate.is_file():
+        try:
+            bm = XPFile(str(candidate))
+            st.body_map_xp = bm
+            st.status = f"Body map loaded: {candidate.name}"
+        except Exception:
+            pass
 
     # Mark initial angle as visited (view-only, not dirty)
     st.visited_angles.add(st.current_angle)
