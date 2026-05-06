@@ -1601,48 +1601,88 @@ def _anchor_help_lines() -> list[str]:
     ]
 
 
+def _layout_three(
+    left: list[str],
+    mid: list[str],
+    right: list[str],
+    *,
+    terminal_cols: int,
+    gap: int = 2,
+) -> list[str]:
+    """Place three columns side-by-side, falling back to stacked if too wide."""
+    lw = max((_visible_len(l) for l in left), default=0)
+    mw = max((_visible_len(l) for l in mid), default=0)
+    rw = max((len(l) for l in right), default=0)
+    if lw + gap + mw + gap + rw <= terminal_cols:
+        total = max(len(left), len(mid), len(right))
+        result: list[str] = []
+        for i in range(total):
+            l = left[i] if i < len(left) else ""
+            m = mid[i] if i < len(mid) else ""
+            r = right[i] if i < len(right) else ""
+            result.append(
+                f"{_pad_visible(l, lw)}{' ' * gap}{_pad_visible(m, mw)}{' ' * gap}{r}".rstrip()
+            )
+        return result
+    # Too wide for 3 columns — fall back: left | mid, then right below
+    row1 = _layout_preview_and_info(left, mid, terminal_cols=terminal_cols, gap=gap)
+    return row1 + [""] + right
+
+
 def _anchor_compose_screen(
     st: AnchorReviewState,
     cell_data: list[list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]],
     asset: object | None = None,
     layer_index: int = 2,
 ) -> str:
-    """Compose the full terminal output for anchor review mode (3-panel layout)."""
+    """Compose the full terminal output for anchor review mode.
+
+    Layout depends on whether a body map is loaded:
+
+    Body map loaded (show_body_map=True):
+        [body map band (left)] | [sprite+tint (centre)] | [region-only (right)]
+        [region info panel below]
+
+    No body map:
+        Row 1: [sprite+tint] | [region-only]
+        Row 2: [UV map]      | [region info]
+    """
     cols, rows = shutil.get_terminal_size(fallback=(120, 32))
 
     help_lines = _anchor_help_lines()
     status_lines = _anchor_status_bar(st)
 
-    # Panel 1: current view (sprite + region tint overlay)
+    # Panel A: sprite + region tint overlay
     frame_lines = _anchor_render_frame(st, cell_data)
-    box1 = _box_preview_lines(frame_lines)
+    box_sprite = _box_preview_lines(frame_lines)
 
-    # Panel 2: region-only view (focused region isolated)
+    # Panel B: region-only view (focused region isolated)
     region_lines = _anchor_render_region_only(st, cell_data)
-    box2 = _box_preview_lines(region_lines)
+    box_region = _box_preview_lines(region_lines)
 
-    # Panel 3: UV coordinate map OR body map band
-    if st.show_body_map:
-        box3 = _anchor_render_body_map_band(st)
-    elif asset is not None:
+    # Panel C: UV coordinate map (only used when body map is hidden)
+    box_uv: list[str] = []
+    if asset is not None:
         uv_lines = _anchor_render_uv_map(st, asset, layer_index)
-        box3 = _box_preview_lines(uv_lines)
-    else:
-        box3 = []
+        box_uv = _box_preview_lines(uv_lines)
 
-    # Region info panel (text list)
+    # Region info text list
     panel_lines = _anchor_region_panel(st)
 
-    # Layout: try to fit panels side-by-side
-    # Compose box1 + box2 side-by-side first
-    row1 = _layout_preview_and_info(box1, box2, terminal_cols=cols)
-    # Then append box3 + region panel below or to the right
-    if box3:
-        row2 = _layout_preview_and_info(box3, panel_lines, terminal_cols=cols)
+    if st.show_body_map and st.body_map_xp is not None:
+        # 3-panel horizontal: [body map | sprite | region-only]
+        box_body = _anchor_render_body_map_band(st)
+        top = _layout_three(box_body, box_sprite, box_region, terminal_cols=cols)
+        visible = (help_lines + [""] + top + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
     else:
-        row2 = panel_lines
+        # Classic 2-row layout
+        row1 = _layout_preview_and_info(box_sprite, box_region, terminal_cols=cols)
+        if box_uv:
+            row2 = _layout_preview_and_info(box_uv, panel_lines, terminal_cols=cols)
+        else:
+            row2 = panel_lines
+        visible = (help_lines + [""] + row1 + [""] + row2 + [""] + status_lines)[:max(1, rows)]
 
-    visible = (help_lines + [""] + row1 + [""] + row2 + [""] + status_lines)[:max(1, rows)]
     return "\033[H\033[2J" + "\r\n".join(visible)
 
 
@@ -2325,7 +2365,8 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
         try:
             bm = XPFile(str(candidate))
             st.body_map_xp = bm
-            st.status = f"Body map loaded: {candidate.name}"
+            st.show_body_map = True  # auto-enable body map panel on load
+            st.status = f"Body map loaded: {candidate.name} — press [b] to toggle"
         except Exception:
             pass
 
