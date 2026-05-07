@@ -1198,6 +1198,22 @@ class AnchorReviewState:
     # body map view
     body_map_xp: object | None = None  # XPFile of generated body map
     show_body_map: bool = False  # toggle body map band vs UV coords
+    # composite mode: mount base + rider UV substitution from skin XP
+    show_composite: bool = False
+    skin_assets: list = field(default_factory=list)  # list of RawAsset, pre-loaded skins
+    skin_xp_index: int = 0
+
+    @property
+    def skin_asset(self) -> "RawAsset | None":
+        if not self.skin_assets or self.skin_xp_index >= len(self.skin_assets):
+            return None
+        return self.skin_assets[self.skin_xp_index]
+
+    @property
+    def skin_name(self) -> str:
+        if not self.skin_assets:
+            return "no skin"
+        return self.skin_assets[self.skin_xp_index].entry.name
 
     @property
     def region_color_map(self) -> dict[int, tuple[int, int, int]]:
@@ -1539,6 +1555,97 @@ def _anchor_render_uv_map(
     return lines
 
 
+def _anchor_get_rider_cells(st: AnchorReviewState) -> set[tuple[int, int]]:
+    """Return (x, y) positions tagged as 'rider' region at the current angle."""
+    regions = st.regions_at_angle()
+    rider_cells: set[tuple[int, int]] = set()
+    for (a, x, y), ridx in st.cell_assignments.items():
+        if a == st.current_angle and ridx < len(regions):
+            if regions[ridx].get("name") == "rider":
+                rider_cells.add((x, y))
+    return rider_cells
+
+
+_SKIN_TRANSPARENT_FG = (255, 255, 255)
+
+
+def _anchor_render_composite(
+    st: AnchorReviewState,
+    mount_cell_data: list[list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]],
+    skin_cell_data: list[list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]],
+) -> list[str]:
+    """Render composite: mount base with rider UV positions substituted from skin.
+
+    For each rider-tagged cell (x, y): replace with skin cell at the same
+    local (x, y) if the skin cell is non-transparent. Pass through mount
+    cell (with region tint) otherwise.
+    """
+    rider_cells = _anchor_get_rider_cells(st)
+    color_map = st.region_color_map
+    lines: list[str] = []
+    tens = "".join(str((i // 10) % 10) if i >= 10 else " " for i in range(st.frame_w))
+    ones = "".join(str(i % 10) for i in range(st.frame_w))
+    lines.append(f"    {tens}")
+    lines.append(f"    {ones}")
+    for y in range(st.frame_h):
+        row_chars: list[str] = []
+        for x in range(st.frame_w):
+            mount_glyph, mount_fg, mount_bg = mount_cell_data[y][x]
+            if (x, y) in rider_cells:
+                skin_glyph, skin_fg, skin_bg = skin_cell_data[y][x]
+                if skin_glyph not in (0, 32) or skin_fg != _SKIN_TRANSPARENT_FG:
+                    row_chars.append(_style_anchor_cell(
+                        skin_glyph, skin_fg, skin_bg,
+                        region_tint=None, is_cursor=False, is_selected=False,
+                    ))
+                    continue
+            ridx = _anchor_cell_region_index(st, st.current_angle, x, y)
+            tint = color_map.get(ridx) if ridx is not None else None
+            row_chars.append(_style_anchor_cell(
+                mount_glyph, mount_fg, mount_bg,
+                region_tint=tint, is_cursor=False, is_selected=False,
+            ))
+        lines.append(f"{y:02d}  {''.join(row_chars)}")
+    return lines
+
+
+def _anchor_render_skin_panel(
+    st: AnchorReviewState,
+    skin_cell_data: list[list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]],
+) -> list[str]:
+    """Render the skin XP frame; rider-region cells are highlighted with a purple tint."""
+    rider_cells = _anchor_get_rider_cells(st)
+    count = len(st.skin_assets)
+    skin_name = st.skin_name
+    lines: list[str] = [
+        f"Skin [{st.skin_xp_index + 1}/{count}]: {skin_name}",
+        "[j] prev  [k] next",
+    ]
+    tens = "".join(str((i // 10) % 10) if i >= 10 else " " for i in range(st.frame_w))
+    ones = "".join(str(i % 10) for i in range(st.frame_w))
+    lines.append(f"    {tens}")
+    lines.append(f"    {ones}")
+    for y in range(st.frame_h):
+        row_chars: list[str] = []
+        for x in range(st.frame_w):
+            glyph, fg, bg = skin_cell_data[y][x]
+            is_rider = (x, y) in rider_cells
+            if glyph in (0, 32) and fg == _SKIN_TRANSPARENT_FG:
+                # Transparent: dim slot; brighter if within rider region
+                shade = (40, 30, 55) if is_rider else (18, 18, 18)
+                row_chars.append(
+                    f"\033[38;2;50;40;70m\033[48;2;{shade[0]};{shade[1]};{shade[2]}m·\033[0m"
+                )
+            else:
+                tint = (90, 30, 90) if is_rider else None
+                row_chars.append(_style_anchor_cell(
+                    glyph, fg, bg,
+                    region_tint=tint, is_cursor=False, is_selected=False,
+                ))
+        lines.append(f"{y:02d}  {''.join(row_chars)}")
+    return lines
+
+
 def _anchor_region_panel(st: AnchorReviewState) -> list[str]:
     """Side panel showing regions at current angle with cell counts."""
     regions = st.regions_at_angle()
@@ -1577,7 +1684,8 @@ def _anchor_status_bar(st: AnchorReviewState) -> list[str]:
     hb_indicator = "  [H-BLOCK ON]" if st.half_block_mode else ""
     dirty_indicator = "  [MODIFIED]" if st.dirty else ""
     play_indicator = "  [PLAY]" if st.autoplay else ""
-    lines.append(f"{frame_info}  {cursor_info}{hb_indicator}{dirty_indicator}{play_indicator}")
+    composite_indicator = f"  [COMPOSITE: {st.skin_name}]" if st.show_composite else ""
+    lines.append(f"{frame_info}  {cursor_info}{hb_indicator}{dirty_indicator}{play_indicator}{composite_indicator}")
 
     # Prompt line
     if st.prompt_mode == "new_region":
@@ -1597,7 +1705,7 @@ def _anchor_help_lines() -> list[str]:
         "Anchor review",
         "[arrows] move cursor  [a/d] angle  [w/s] anim  [,/.] frame  [x] toggle  [m] rect",
         "[1-9] assign region  [n] new region  [Backspace] unassign  [h] half-block mode",
-        "[r/f] cycle region focus  [b] body map  [p] autoplay angles  [Ctrl+S] save  [q] quit",
+        "[r/f] cycle region focus  [b] body map  [p] autoplay  [c] composite  [j/k] skin  [Ctrl+S] save  [q] quit",
     ]
 
 
@@ -1669,7 +1777,17 @@ def _anchor_compose_screen(
     # Region info text list
     panel_lines = _anchor_region_panel(st)
 
-    if st.show_body_map and st.body_map_xp is not None:
+    if st.show_composite and st.skin_asset is not None:
+        # Composite mode: [source/mount | composite result | skin selector]
+        skin_layer = min(2, st.skin_asset.layer_count - 1)
+        skin_cell_data = _load_frame_cell_data_from_xp(st, st.skin_asset, skin_layer)
+        composite_lines = _anchor_render_composite(st, cell_data, skin_cell_data)
+        skin_panel_lines = _anchor_render_skin_panel(st, skin_cell_data)
+        box_composite = _box_preview_lines(composite_lines)
+        box_skin_sel = _box_preview_lines(skin_panel_lines)
+        top = _layout_three(box_sprite, box_composite, box_skin_sel, terminal_cols=cols)
+        visible = (help_lines + [""] + top + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
+    elif st.show_body_map and st.body_map_xp is not None:
         # 3-panel horizontal: [body map | sprite | region-only]
         box_body = _anchor_render_body_map_band(st)
         top = _layout_three(box_body, box_sprite, box_region, terminal_cols=cols)
@@ -2128,6 +2246,34 @@ def _handle_anchor_key(
         st.quit_pending = False
         return True
 
+    # --- Composite mode toggle (c) ---
+    if key in ("c", "C"):
+        if not st.skin_assets:
+            st.status = "No skin XPs found — composite unavailable"
+        else:
+            st.show_composite = not st.show_composite
+            st.status = f"Composite ON ({st.skin_name})" if st.show_composite else "Composite OFF"
+        st.quit_pending = False
+        return True
+
+    # --- Skin cycle: [j] prev / [k] next (composite mode) ---
+    if key in ("j", "J"):
+        if not st.skin_assets:
+            st.status = "No skin XPs loaded"
+        else:
+            st.skin_xp_index = (st.skin_xp_index - 1) % len(st.skin_assets)
+            st.status = f"Skin: {st.skin_name}"
+        st.quit_pending = False
+        return True
+    if key in ("k", "K"):
+        if not st.skin_assets:
+            st.status = "No skin XPs loaded"
+        else:
+            st.skin_xp_index = (st.skin_xp_index + 1) % len(st.skin_assets)
+            st.status = f"Skin: {st.skin_name}"
+        st.quit_pending = False
+        return True
+
     # --- Region focus cycling (r/f) ---
     if key in ("r", "R"):
         regions = st.regions_at_angle()
@@ -2369,6 +2515,35 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
             st.status = f"Body map loaded: {candidate.name} — press [b] to toggle"
         except Exception:
             pass
+
+    # Discover skin XPs for composite mode.
+    # Heuristic: family name is the first word of the anchor filename (e.g. "wolack" from "wolack-0101.json").
+    # Look for sprites matching "{family}-attack-*.xp" or "{family}-mounted-*rider*.xp".
+    anchor_family = anchor_path.stem.split("-")[0]  # e.g. "wolack", "bigbee"
+    skin_candidates: list[Path] = []
+    for pattern in (
+        f"{anchor_family}-attack-*.xp",
+        f"{anchor_family}-mounted-*rider*.xp",
+        f"{anchor_family}-mounted-idle-rider-*.xp",
+    ):
+        skin_candidates.extend(sorted(sprite_dir.glob(pattern)))
+    # Deduplicate while preserving order
+    seen_paths: set[Path] = set()
+    unique_skins: list[Path] = []
+    for p in skin_candidates:
+        if p not in seen_paths:
+            seen_paths.add(p)
+            unique_skins.append(p)
+    for skin_path in unique_skins:
+        try:
+            skin_entry = _resolve_sprite_entry(str(skin_path), sprite_dir)
+            st.skin_assets.append(_load_raw_asset(skin_entry))
+        except Exception:
+            pass  # skip unloadable skin XPs silently
+    if st.skin_assets:
+        skin_names = ", ".join(a.entry.name for a in st.skin_assets[:3])
+        ellipsis = "…" if len(st.skin_assets) > 3 else ""
+        st.status = f"Skins loaded ({len(st.skin_assets)}): {skin_names}{ellipsis} — press [c] for composite"
 
     # Mark initial angle as visited (view-only, not dirty)
     st.visited_angles.add(st.current_angle)
