@@ -1556,7 +1556,11 @@ def _anchor_render_uv_map(
 
 
 def _anchor_get_rider_cells(st: AnchorReviewState) -> set[tuple[int, int]]:
-    """Return (x, y) positions tagged as 'rider' region at the current angle."""
+    """Return (x, y) positions tagged as 'rider' region at the current angle.
+
+    Keys in cell_assignments are (angle, x, y) — the angle filter ensures only
+    the current angle's assignments are returned.
+    """
     regions = st.regions_at_angle()
     rider_cells: set[tuple[int, int]] = set()
     for (a, x, y), ridx in st.cell_assignments.items():
@@ -1566,19 +1570,62 @@ def _anchor_get_rider_cells(st: AnchorReviewState) -> set[tuple[int, int]]:
     return rider_cells
 
 
-_SKIN_TRANSPARENT_FG = (255, 255, 255)
+def _load_skin_visibility_grid(
+    st: AnchorReviewState,
+    skin_asset: "RawAsset",
+    skin_layer_index: int,
+) -> list[list[bool]]:
+    """Return a frame_h × frame_w grid of engine-visible flags for the current skin frame.
+
+    Uses semantic_dict._engine_cell_transparency_flags with the layer-0 background
+    colour as the key colour — the same logic the runtime uses. This is correct for
+    white-on-dark glyphs (e.g. white armour highlights) that would be falsely treated
+    as transparent by an fg-colour heuristic.
+    """
+    meta = skin_asset.entry.meta
+    frame_base = sum(meta.anim_lengths[:st.current_anim]) + st.current_frame
+    atlas_idx = frame_base + st.current_angle * meta.fr_num_x
+    fr_x = atlas_idx % meta.fr_num_x
+    fr_y = atlas_idx // meta.fr_num_x
+    x0 = fr_x * meta.fr_width
+    y0 = fr_y * meta.fr_height
+
+    skin_layer = skin_asset.xp.layers[skin_layer_index]
+    layer0 = skin_asset.xp.layers[0]
+
+    grid: list[list[bool]] = []
+    for local_y in range(st.frame_h):
+        row: list[bool] = []
+        for local_x in range(st.frame_w):
+            sy = y0 + local_y
+            sx = x0 + local_x
+            if sy < len(skin_layer.data) and sx < len(skin_layer.data[sy]):
+                raw = skin_layer.data[sy][sx]
+                cell = (raw[0], tuple(raw[1]), tuple(raw[2]))
+                key_rgb: tuple[int, int, int] | None = None
+                if sy < len(layer0.data) and sx < len(layer0.data[sy]):
+                    key_rgb = tuple(layer0.data[sy][sx][2])
+                flags = semantic_dict._engine_cell_transparency_flags(
+                    cell, layer0_key_rgb=key_rgb
+                )
+                row.append(bool(flags["engine_visible"]))
+            else:
+                row.append(False)
+        grid.append(row)
+    return grid
 
 
 def _anchor_render_composite(
     st: AnchorReviewState,
     mount_cell_data: list[list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]],
     skin_cell_data: list[list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]],
+    skin_visible: list[list[bool]],
 ) -> list[str]:
     """Render composite: mount base with rider UV positions substituted from skin.
 
-    For each rider-tagged cell (x, y): replace with skin cell at the same
-    local (x, y) if the skin cell is non-transparent. Pass through mount
-    cell (with region tint) otherwise.
+    For each rider-tagged cell (x, y): replace with skin cell if engine-visible
+    (per skin_visible grid built by _load_skin_visibility_grid). Pass through
+    mount cell with region tint otherwise.
     """
     rider_cells = _anchor_get_rider_cells(st)
     color_map = st.region_color_map
@@ -1591,14 +1638,13 @@ def _anchor_render_composite(
         row_chars: list[str] = []
         for x in range(st.frame_w):
             mount_glyph, mount_fg, mount_bg = mount_cell_data[y][x]
-            if (x, y) in rider_cells:
+            if (x, y) in rider_cells and skin_visible[y][x]:
                 skin_glyph, skin_fg, skin_bg = skin_cell_data[y][x]
-                if skin_glyph not in (0, 32) or skin_fg != _SKIN_TRANSPARENT_FG:
-                    row_chars.append(_style_anchor_cell(
-                        skin_glyph, skin_fg, skin_bg,
-                        region_tint=None, is_cursor=False, is_selected=False,
-                    ))
-                    continue
+                row_chars.append(_style_anchor_cell(
+                    skin_glyph, skin_fg, skin_bg,
+                    region_tint=None, is_cursor=False, is_selected=False,
+                ))
+                continue
             ridx = _anchor_cell_region_index(st, st.current_angle, x, y)
             tint = color_map.get(ridx) if ridx is not None else None
             row_chars.append(_style_anchor_cell(
@@ -1612,13 +1658,13 @@ def _anchor_render_composite(
 def _anchor_render_skin_panel(
     st: AnchorReviewState,
     skin_cell_data: list[list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]],
+    skin_visible: list[list[bool]],
 ) -> list[str]:
     """Render the skin XP frame; rider-region cells are highlighted with a purple tint."""
     rider_cells = _anchor_get_rider_cells(st)
     count = len(st.skin_assets)
-    skin_name = st.skin_name
     lines: list[str] = [
-        f"Skin [{st.skin_xp_index + 1}/{count}]: {skin_name}",
+        f"Skin [{st.skin_xp_index + 1}/{count}]: {st.skin_name}",
         "[j] prev  [k] next",
     ]
     tens = "".join(str((i // 10) % 10) if i >= 10 else " " for i in range(st.frame_w))
@@ -1628,15 +1674,15 @@ def _anchor_render_skin_panel(
     for y in range(st.frame_h):
         row_chars: list[str] = []
         for x in range(st.frame_w):
-            glyph, fg, bg = skin_cell_data[y][x]
             is_rider = (x, y) in rider_cells
-            if glyph in (0, 32) and fg == _SKIN_TRANSPARENT_FG:
-                # Transparent: dim slot; brighter if within rider region
+            if not skin_visible[y][x]:
+                # Transparent slot: dim marker; purple-tinted if within rider region
                 shade = (40, 30, 55) if is_rider else (18, 18, 18)
                 row_chars.append(
                     f"\033[38;2;50;40;70m\033[48;2;{shade[0]};{shade[1]};{shade[2]}m·\033[0m"
                 )
             else:
+                glyph, fg, bg = skin_cell_data[y][x]
                 tint = (90, 30, 90) if is_rider else None
                 row_chars.append(_style_anchor_cell(
                     glyph, fg, bg,
@@ -1781,8 +1827,9 @@ def _anchor_compose_screen(
         # Composite mode: [source/mount | composite result | skin selector]
         skin_layer = min(2, st.skin_asset.layer_count - 1)
         skin_cell_data = _load_frame_cell_data_from_xp(st, st.skin_asset, skin_layer)
-        composite_lines = _anchor_render_composite(st, cell_data, skin_cell_data)
-        skin_panel_lines = _anchor_render_skin_panel(st, skin_cell_data)
+        skin_visible = _load_skin_visibility_grid(st, st.skin_asset, skin_layer)
+        composite_lines = _anchor_render_composite(st, cell_data, skin_cell_data, skin_visible)
+        skin_panel_lines = _anchor_render_skin_panel(st, skin_cell_data, skin_visible)
         box_composite = _box_preview_lines(composite_lines)
         box_skin_sel = _box_preview_lines(skin_panel_lines)
         top = _layout_three(box_sprite, box_composite, box_skin_sel, terminal_cols=cols)
@@ -2524,7 +2571,6 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
     for pattern in (
         f"{anchor_family}-attack-*.xp",
         f"{anchor_family}-mounted-*rider*.xp",
-        f"{anchor_family}-mounted-idle-rider-*.xp",
     ):
         skin_candidates.extend(sorted(sprite_dir.glob(pattern)))
     # Deduplicate while preserving order
@@ -2537,7 +2583,15 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
     for skin_path in unique_skins:
         try:
             skin_entry = _resolve_sprite_entry(str(skin_path), sprite_dir)
-            st.skin_assets.append(_load_raw_asset(skin_entry))
+            skin_raw = _load_raw_asset(skin_entry)
+            # Guard: skin frame height must match anchor; width must be >= anchor frame_w
+            # so that local x-coordinates 0..frame_w-1 fall within the skin frame.
+            m = skin_raw.entry.meta
+            if m.fr_height != st.frame_h:
+                continue  # height mismatch — atlas rows would misalign
+            if m.fr_width < st.frame_w:
+                continue  # skin frame too narrow — local x coords would overflow
+            st.skin_assets.append(skin_raw)
         except Exception:
             pass  # skip unloadable skin XPs silently
     if st.skin_assets:
