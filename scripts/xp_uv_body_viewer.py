@@ -1206,6 +1206,8 @@ class AnchorReviewState:
     show_composite: bool = False
     skin_assets: list = field(default_factory=list)  # list of RawAsset, pre-loaded skins
     skin_xp_index: int = 0
+    skin_search_dirs: list[Path] = field(default_factory=list)
+    skin_search_patterns: list[str] = field(default_factory=list)
 
     @property
     def skin_asset(self) -> "RawAsset | None":
@@ -2302,7 +2304,8 @@ def _handle_anchor_key(
     # --- Composite mode toggle (c) ---
     if key in ("c", "C"):
         if not st.skin_assets:
-            st.status = "No skin XPs found — composite unavailable"
+            searched = ", ".join(str(p) for p in st.skin_search_dirs) or "(none)"
+            st.status = f"No skin XPs found (searched: {searched}) — composite unavailable"
         else:
             st.show_composite = not st.show_composite
             st.status = f"Composite ON ({st.skin_name})" if st.show_composite else "Composite OFF"
@@ -2536,6 +2539,47 @@ def run_anchor_batch(anchor_path: Path, batch_ops_json: str | None, sprite_dir: 
     return 0
 
 
+def _discover_skin_candidate_paths(
+    *,
+    anchor_path: Path,
+    sprite_dir: Path,
+    reference_xp_path: Path,
+) -> tuple[list[Path], list[Path], list[str]]:
+    """Discover skin XP paths for composite mode (non-interactive).
+
+    IMPORTANT: this does not depend solely on `--sprite-dir`.
+    `reference_xp_path.parent` is treated as authoritative and always searched.
+    """
+    anchor_family = anchor_path.stem.split("-")[0]  # e.g. "wolack", "bigbee"
+    patterns = [
+        f"{anchor_family}-attack-*.xp",
+        f"{anchor_family}-mounted-*rider*.xp",
+    ]
+
+    search_dirs: list[Path] = []
+    if sprite_dir.is_dir():
+        search_dirs.append(sprite_dir.resolve())
+    ref_dir = reference_xp_path.parent.resolve()
+    if ref_dir not in search_dirs:
+        search_dirs.append(ref_dir)
+
+    skin_candidates: list[Path] = []
+    for base_dir in search_dirs:
+        for pattern in patterns:
+            skin_candidates.extend(sorted(base_dir.glob(pattern)))
+
+    # Deduplicate while preserving order
+    seen_paths: set[Path] = set()
+    unique_skins: list[Path] = []
+    for p in skin_candidates:
+        resolved = p.resolve()
+        if resolved not in seen_paths:
+            seen_paths.add(resolved)
+            unique_skins.append(p)
+
+    return unique_skins, search_dirs, patterns
+
+
 def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
     """Run the interactive anchor review mode."""
     if not sys.stdin.isatty() or not sys.stdout.isatty():
@@ -2583,23 +2627,13 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
         except Exception:
             pass
 
-    # Discover skin XPs for composite mode.
-    # Heuristic: family name is the first word of the anchor filename (e.g. "wolack" from "wolack-0101.json").
-    # Look for sprites matching "{family}-attack-*.xp" or "{family}-mounted-*rider*.xp".
-    anchor_family = anchor_path.stem.split("-")[0]  # e.g. "wolack", "bigbee"
-    skin_candidates: list[Path] = []
-    for pattern in (
-        f"{anchor_family}-attack-*.xp",
-        f"{anchor_family}-mounted-*rider*.xp",
-    ):
-        skin_candidates.extend(sorted(sprite_dir.glob(pattern)))
-    # Deduplicate while preserving order
-    seen_paths: set[Path] = set()
-    unique_skins: list[Path] = []
-    for p in skin_candidates:
-        if p not in seen_paths:
-            seen_paths.add(p)
-            unique_skins.append(p)
+    unique_skins, skin_search_dirs, patterns = _discover_skin_candidate_paths(
+        anchor_path=anchor_path,
+        sprite_dir=sprite_dir,
+        reference_xp_path=ref_path,
+    )
+    st.skin_search_dirs = list(skin_search_dirs)
+    st.skin_search_patterns = list(patterns)
     for skin_path in unique_skins:
         try:
             skin_entry = _resolve_sprite_entry(str(skin_path), sprite_dir)
