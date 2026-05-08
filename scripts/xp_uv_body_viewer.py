@@ -1197,6 +1197,7 @@ class AnchorReviewState:
     # animation frame navigation
     current_anim: int = 0
     current_frame: int = 0
+    proj_idx: int = 0  # 0=front, 1=rear (for projs=2 assets)
     anim_lengths: list[int] = field(default_factory=lambda: [1])
     # body map view
     body_map_xp: object | None = None  # XPFile of generated body map
@@ -1587,7 +1588,8 @@ def _load_skin_visibility_grid(
     """
     meta = skin_asset.entry.meta
     frame_base = sum(meta.anim_lengths[:st.current_anim]) + st.current_frame
-    atlas_idx = frame_base + st.current_angle * meta.fr_num_x
+    proj_offset = st.proj_idx * meta.anim_sum if meta.projs > 1 else 0
+    atlas_idx = frame_base + proj_offset + st.current_angle * meta.fr_num_x
     fr_x = atlas_idx % meta.fr_num_x
     fr_y = atlas_idx // meta.fr_num_x
     x0 = fr_x * meta.fr_width
@@ -1734,7 +1736,8 @@ def _anchor_status_bar(st: AnchorReviewState) -> list[str]:
     dirty_indicator = "  [MODIFIED]" if st.dirty else ""
     play_indicator = "  [PLAY]" if st.autoplay else ""
     composite_indicator = f"  [COMPOSITE: {st.skin_name}]" if st.show_composite else ""
-    lines.append(f"{frame_info}  {cursor_info}{hb_indicator}{dirty_indicator}{play_indicator}{composite_indicator}")
+    proj_indicator = f"  [REAR]" if st.proj_idx == 1 else ""
+    lines.append(f"{frame_info}  {cursor_info}{hb_indicator}{dirty_indicator}{play_indicator}{composite_indicator}{proj_indicator}")
 
     # Prompt line
     if st.prompt_mode == "new_region":
@@ -1754,7 +1757,7 @@ def _anchor_help_lines() -> list[str]:
         "Anchor review",
         "[arrows] move cursor  [a/d] angle  [w/s] anim  [,/.] frame  [x] toggle  [m] rect",
         "[1-9] assign region  [n] new region  [Backspace] unassign  [h] half-block mode",
-        "[r/f] cycle region focus  [b] body map  [p] autoplay  [c] composite  [j/k] skin  [Ctrl+S] save  [q] quit",
+        "[r/f] cycle region focus  [b] body map  [p] autoplay  [c] composite  [j/k] skin  [v] proj  [Ctrl+S] save  [q] quit",
     ]
 
 
@@ -2324,6 +2327,19 @@ def _handle_anchor_key(
         st.quit_pending = False
         return True
 
+    # --- Projection toggle (v): cycle front/rear for projs=2 assets ---
+    if key in ("v", "V"):
+        meta = asset.entry.meta if asset else None
+        num_projs = meta.projs if meta else 1
+        if num_projs > 1:
+            st.proj_idx = (st.proj_idx + 1) % num_projs
+            proj_name = "rear" if st.proj_idx == 1 else "front"
+            st.status = f"Projection: {proj_name} (proj {st.proj_idx})"
+        else:
+            st.status = "Single-projection asset — no alternate view"
+        st.quit_pending = False
+        return True
+
     # --- Region focus cycling (r/f) ---
     if key in ("r", "R"):
         regions = st.regions_at_angle()
@@ -2378,10 +2394,11 @@ def _load_frame_cell_data_from_xp(
 ) -> list[list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]]:
     """Load raw cell data for the current angle/anim/frame from the XP asset."""
     meta = asset.entry.meta
-    # Compute atlas position for this angle + anim + frame
+    # Compute atlas position for this angle + anim + frame + proj
     angle = st.current_angle
     frame_base = sum(meta.anim_lengths[:st.current_anim]) + st.current_frame
-    atlas_idx = frame_base + angle * meta.fr_num_x
+    proj_offset = st.proj_idx * meta.anim_sum if meta.projs > 1 else 0
+    atlas_idx = frame_base + proj_offset + angle * meta.fr_num_x
     fr_x = atlas_idx % meta.fr_num_x
     fr_y = atlas_idx // meta.fr_num_x
     x0 = fr_x * meta.fr_width
@@ -2628,13 +2645,16 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
         prev_angle = st.current_angle
         prev_anim = st.current_anim
         prev_frame = st.current_frame
+        prev_proj = st.proj_idx
 
         while True:
-            if st.current_angle != prev_angle or st.current_anim != prev_anim or st.current_frame != prev_frame:
+            if (st.current_angle != prev_angle or st.current_anim != prev_anim
+                    or st.current_frame != prev_frame or st.proj_idx != prev_proj):
                 cell_data = _load_frame_cell_data_from_xp(st, asset, layer_index)
                 prev_angle = st.current_angle
                 prev_anim = st.current_anim
                 prev_frame = st.current_frame
+                prev_proj = st.proj_idx
 
             # Autoplay: advance angle on timer
             if st.autoplay:
