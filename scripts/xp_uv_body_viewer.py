@@ -31,7 +31,10 @@ from scripts.pipeline.bundle_wizard import semantic_dict
 from scripts.pipeline import xp_assets_browser_layer_2_only as layer2_browser
 from scripts.pipeline.xp_core import XPFile
 
-SPRITE_DIR = REPO_ROOT / "assets" / "sprites"
+_sprite_dir_default = REPO_ROOT / "assets" / "sprites"
+if not _sprite_dir_default.is_dir() and (Y9_ROOT / "assets" / "sprites").is_dir():
+    _sprite_dir_default = Y9_ROOT / "assets" / "sprites"
+SPRITE_DIR = _sprite_dir_default
 
 # Region slot ordering — must mirror generate_body_map.SLOT_ORDER exactly.
 _BODY_MAP_SLOT_ORDER = {"body": 0, "head": 1, "armor": 2, "weapon": 3, "shield": 4, "mount": 5}
