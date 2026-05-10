@@ -1204,6 +1204,8 @@ class AnchorReviewState:
     show_body_map: bool = False  # toggle body map band vs UV coords
     # composite mode: mount base + rider UV substitution from skin XP
     show_composite: bool = False
+    # region grid mode: show focused region across all angles × frames
+    show_region_grid: bool = False
     skin_assets: list = field(default_factory=list)  # list of RawAsset, pre-loaded skins
     skin_xp_index: int = 0
     skin_search_dirs: list[Path] = field(default_factory=list)
@@ -1459,6 +1461,127 @@ def _anchor_render_region_only(
             else:
                 row_chars.append("\033[2m.\033[0m")
         lines.append(f"{y:02d}  {''.join(row_chars)}")
+    return lines
+
+
+def _anchor_render_region_grid(
+    st: AnchorReviewState,
+    asset: RawAsset,
+    layer_index: int,
+) -> list[str]:
+    """Render focused region across ALL angles and ALL frames in a grid.
+
+    Layout: columns = angles (0..N-1), rows = frames (anim0 f0, f1, ... animK fN).
+    Each cell block is frame_w × frame_h.  Only region-assigned cells are shown;
+    the rest render as dim dots.  Current angle/frame is highlighted with a border.
+    """
+    focus = st.region_focus
+    if focus is None:
+        return ["(no region focused — press r, then g)"]
+
+    regions = st.regions_at_angle()
+    if focus >= len(regions):
+        return ["(region index out of range)"]
+
+    region_name = regions[focus]["name"]
+    color_map = st.region_color_map
+    tint = color_map.get(focus, (128, 128, 128))
+    meta = asset.entry.meta
+
+    # Collect all (anim, frame) pairs
+    anim_frames: list[tuple[int, int]] = []
+    for ai, al in enumerate(meta.anim_lengths):
+        for fi in range(al):
+            anim_frames.append((ai, fi))
+
+    lines: list[str] = []
+    lines.append(f"Region grid: \033[1m{region_name}\033[0m  ({len(anim_frames)} frames × {st.num_angles} angles)")
+
+    # Header row: angle indices
+    header = "         "  # left gutter
+    for a in range(st.num_angles):
+        label = f"ang {a}"
+        pad = max(0, st.frame_w - len(label))
+        marker = "*" if a == st.current_angle else " "
+        header += f"{marker}{label}{' ' * pad} "
+    lines.append(header)
+
+    layer = asset.xp.layers[layer_index]
+
+    for ai, fi in anim_frames:
+        frame_base = sum(meta.anim_lengths[:ai]) + fi
+        is_current_frame = (ai == st.current_anim and fi == st.current_frame)
+
+        for local_y in range(st.frame_h):
+            row_label = ""
+            if local_y == 0:
+                row_label = f"a{ai}f{fi}"
+            gutter = f"{row_label:<8} "
+
+            row_parts: list[str] = []
+            for a in range(st.num_angles):
+                proj_offset = st.proj_idx * meta.anim_sum if meta.projs > 1 else 0
+                atlas_idx = frame_base + proj_offset + a * meta.fr_num_x
+                fr_x = atlas_idx % meta.fr_num_x
+                fr_y = atlas_idx // meta.fr_num_x
+                x0 = fr_x * meta.fr_width
+                y0 = fr_y * meta.fr_height
+
+                # Find region name match at this angle
+                ridx_at_angle = None
+                angle_regions = st.regions_at_angle(a)
+                for ri, rr in enumerate(angle_regions):
+                    if rr["name"] == region_name:
+                        ridx_at_angle = ri
+                        break
+
+                angle_chars: list[str] = []
+                for local_x in range(st.frame_w):
+                    sy = y0 + local_y
+                    sx = x0 + local_x
+                    if sy < len(layer.data) and sx < len(layer.data[sy]):
+                        glyph, fg, bg = layer.data[sy][sx]
+                    else:
+                        glyph, fg, bg = 0, (0, 0, 0), (0, 0, 0)
+
+                    cell_ridx = _anchor_cell_region_index(st, a, local_x, local_y)
+                    in_region = (cell_ridx is not None and ridx_at_angle is not None
+                                 and cell_ridx == ridx_at_angle)
+
+                    is_current = (a == st.current_angle and is_current_frame)
+
+                    if in_region:
+                        ch = _cp437_char(glyph) if glyph else "·"
+                        border = "\033[4m" if is_current else ""
+                        angle_chars.append(
+                            f"{border}\033[38;2;{fg[0]};{fg[1]};{fg[2]}m"
+                            f"\033[48;2;{tint[0]};{tint[1]};{tint[2]}m{ch}\033[0m"
+                        )
+                    elif is_current:
+                        angle_chars.append("\033[2;4m·\033[0m")
+                    else:
+                        angle_chars.append("\033[2m·\033[0m")
+
+                row_parts.append("".join(angle_chars))
+            lines.append(gutter + " ".join(row_parts))
+
+        # Separator between frames
+        lines.append("")
+
+    # Summary: cell counts per angle
+    summary = "Cells:   "
+    for a in range(st.num_angles):
+        angle_regions = st.regions_at_angle(a)
+        ridx_at_angle = None
+        for ri, rr in enumerate(angle_regions):
+            if rr["name"] == region_name:
+                ridx_at_angle = ri
+                break
+        count = st.region_cell_count(a, ridx_at_angle) if ridx_at_angle is not None else 0
+        pad = max(0, st.frame_w - len(str(count)) - 1)
+        summary += f" {count}{' ' * pad} "
+    lines.append(summary)
+
     return lines
 
 
@@ -1759,7 +1882,8 @@ def _anchor_help_lines() -> list[str]:
         "Anchor review",
         "[arrows] move cursor  [a/d] angle  [w/s] anim  [,/.] frame  [x] toggle  [m] rect",
         "[1-9] assign region  [n] new region  [Backspace] unassign  [h] half-block mode",
-        "[r/f] cycle region focus  [b] body map  [p] autoplay  [c] composite  [j/k] skin  [v] proj  [Ctrl+S] save  [q] quit",
+        "[r/f] cycle region focus  [g] region grid (all angles×frames)  [b] body map  [p] autoplay",
+        "[c] composite  [j/k] skin  [v] proj  [Ctrl+S] save  [q] quit",
     ]
 
 
@@ -1831,7 +1955,11 @@ def _anchor_compose_screen(
     # Region info text list
     panel_lines = _anchor_region_panel(st)
 
-    if st.show_composite and st.skin_asset is not None:
+    if st.show_region_grid and st.region_focus is not None and asset is not None:
+        # Region grid mode: full-screen grid of focused region across angles × frames
+        grid_lines = _anchor_render_region_grid(st, asset, layer_index)
+        visible = (help_lines + [""] + grid_lines + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
+    elif st.show_composite and st.skin_asset is not None:
         # Composite mode: [source/mount | composite result | skin selector]
         skin_layer = min(2, st.skin_asset.layer_count - 1)
         skin_cell_data = _load_frame_cell_data_from_xp(st, st.skin_asset, skin_layer)
@@ -2366,6 +2494,21 @@ def _handle_anchor_key(
         else:
             st.region_focus = (st.region_focus - 1) % len(regions)
         st.status = f"Focus: {regions[st.region_focus]['name']}"
+        st.quit_pending = False
+        return True
+
+    # --- Region grid toggle (g): show focused region across all angles × frames ---
+    if key in ("g", "G"):
+        if st.region_focus is None:
+            st.status = "Focus a region first (press r), then press g"
+        else:
+            st.show_region_grid = not st.show_region_grid
+            if st.show_region_grid:
+                regions = st.regions_at_angle()
+                rname = regions[st.region_focus]["name"] if st.region_focus < len(regions) else "?"
+                st.status = f"Region grid ON: {rname} across all angles × frames"
+            else:
+                st.status = "Region grid OFF"
         st.quit_pending = False
         return True
 
