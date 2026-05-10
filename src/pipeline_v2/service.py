@@ -1884,6 +1884,47 @@ def _row0_has_metadata_signal(xp_data: dict, cols: int) -> bool:
     return False
 
 
+def _derive_missing_raw_xp_geometry_from_visual(
+    xp_data: dict,
+    cols: int,
+    rows: int,
+) -> dict[str, int | list[int]] | None:
+    """Infer a single-row frame grid for raw XP strips without L0 metadata."""
+    if cols <= 0 or rows <= 0 or cols < rows * 2:
+        return None
+    layer_count = int(xp_data.get("layers") or 0)
+    if layer_count < 3:
+        return None
+    cells = xp_data.get("cells") or []
+    visual_idx = 2 if layer_count >= 3 else 0
+    if visual_idx >= len(cells):
+        return None
+    visual = cells[visual_idx]
+    if len(visual) < cols * rows:
+        return None
+    populated = sum(1 for glyph, _fg, _bg in visual if int(glyph) not in (0, 32))
+    if populated <= 0:
+        return None
+
+    candidate_widths = [
+        width for width in range(4, max(4, rows * 2) + 1)
+        if cols % width == 0 and (cols // width) >= 2
+    ]
+    if not candidate_widths:
+        return None
+    cell_w = min(candidate_widths, key=lambda width: (width > rows, abs(width - rows), width))
+    frame_cols = cols // cell_w
+    return {
+        "angles": 1,
+        "anims": [frame_cols],
+        "projs": 1,
+        "cell_w": cell_w,
+        "cell_h": rows,
+        "frame_rows": 1,
+        "frame_cols": frame_cols,
+    }
+
+
 def _derive_raw_xp_geometry(
     xp_data: dict,
     cols: int,
@@ -1894,6 +1935,10 @@ def _derive_raw_xp_geometry(
         return _derive_geometry_from_l0(xp_data, cols, rows, req_id), "valid"
     except ApiError:
         status = "invalid" if _row0_has_metadata_signal(xp_data, cols) else "missing"
+        if status == "missing":
+            inferred = _derive_missing_raw_xp_geometry_from_visual(xp_data, cols, rows)
+            if inferred is not None:
+                return inferred, status
         return {
             "angles": 1,
             "anims": [1],
@@ -3038,7 +3083,19 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
     if populated <= 0:
         raise ApiError("workbench session would be empty", "empty_workbench", "workbench", req_id, 422)
 
-    meta = job["metadata"]
+    meta = dict(job["metadata"])
+    if str(meta.get("metadata_status") or "").strip() == "missing":
+        inferred = _derive_missing_raw_xp_geometry_from_visual(parsed, width, height)
+        if inferred is not None:
+            meta.update({
+                "angles": inferred["angles"],
+                "anims": inferred["anims"],
+                "source_projs": inferred["projs"],
+                "projs": inferred["projs"],
+                "render_resolution": inferred["cell_w"],
+                "cell_w_chars": inferred["cell_w"],
+                "cell_h_chars": inferred["cell_h"],
+            })
     session_id = str(uuid.uuid4())
     sess = WorkbenchSession(
         session_id=session_id,
@@ -3053,7 +3110,7 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
         cells=cells,
         layers=all_layers,
         session_kind="pipeline_job",
-        metadata_status="generated",
+        metadata_status=str(meta.get("metadata_status") or "generated"),
     )
     sess_dict = sess.to_dict()
     family_val = str(meta.get("family", "player"))
