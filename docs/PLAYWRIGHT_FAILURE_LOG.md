@@ -11788,3 +11788,187 @@ removed, no cross-repo canon read order exists for agents that need to operate
 across both repos simultaneously.
 **Action needed:** Define a cross-repo canon read protocol for dual-repo work.
 **State:** OPEN
+
+## Sprite Authoring Issue — ski-robot-draft.xp Column Layout + Canvas Width (2026-05-10)
+
+### Findings
+
+`sprites/ski-robot-draft.xp` was authored with 8 frames arranged as **columns** (left-to-right, 72×11 canvas). Upstream convention — confirmed by reference to `bigbee-0000.xp` (66×104), `player-0000.xp` (126×72), `character.xp` (14×6) — is **angles as rows** (stacked top-to-bottom).
+
+Additionally, `scripts/xp_core.py` contains an engine-alignment constraint:
+
+```python
+# [ENGINE-ALIGN] sprite.cpp:806-808 — projs=2 when angles > 0
+if angles > 0:
+    projs = 2
+```
+
+This means any sprite with `angles > 0` has `projs` forced to 2 by the reader, making `fr_num_x = projs × sum(anims)`. A 9-wide canvas with `angles=8, anims=[1]` yields `fr_width = 9 / 2 = 4.5` — non-integer, broken frame reads.
+
+### What changed
+
+- Transformed canvas from 72×11 (columns) to 9×88 (rows) — 8 frames stacked top-to-bottom, frame height 11.
+- Set metadata: `angles=8, anims=[1]`.
+- Canvas width is not yet correct for engine compatibility.
+
+### Still needed
+
+- Determine correct frame width for the ski-robot sprite.
+- Resize canvas to `(projs × frame_count × frame_width) × (angles × frame_height)` = `(2 × 1 × fw) × 88`.
+- Manually crop and reorder frames within REXPaint so each angle row contains the correct frame in the correct position.
+- Confirm whether 8 frames = 8 angles (rotation) or 8 animation frames of 1 angle.
+
+**State:** OPEN
+
+## Review Finding — Canonical Spec Section 2 CE Doc Review (2026-05-10)
+
+This is a structured CE Doc Review of `docs/plans/2026-03-23-workbench-canonical-spec.md`
+Section 2 (Asciicker Engine Sprite Wrapper Spec) using the compound-engineering
+review lenses: coherence, feasibility, product-lens, design-lens, scope-guardian,
+and adversarial-reviewer. Eight findings. No code changes; document-structure audit
+only.
+
+### F1 — §2.3.0: Deletion-first claims are partially executed, not fully discharged
+
+**Type:** unverifiable claim / coherence
+
+§2.3.0 lists five explicit deletions as the "deletion-first cutover surface."
+Of these five:
+
+1. **Deletion 1** (delete `family` / `ENABLED_FAMILIES`): cited commit SHAs;
+   declared CLOSED in §2.5 and queue. Evidence exists.
+2. **Deletion 2** (delete template-first product wording from frontend): **not
+   executed.** §2.5.3 lists 9 required UI changes; §2.5.1 confirms
+   "User-facing controls still speak in template/bundle-action terms."
+3. **Deletion 3** (delete session-local `source_boxes` / `source_cuts_*`):
+   **not executed.** §2.5.1 confirms they are still persisted as saved authority.
+4. **Deletion 4** (delete false gateway claims): partially done — §2.10 labels
+   commands as `planned_only`, but §2.13 defines wizard parity invariants that
+   depend on those same planned-only commands.
+5. **Deletion 5** (delete parallel Y9-2 ownership): **not executed.** §2.10 says
+   the Y9-2 wizard "is still a separate owner rather than a thin client."
+
+**Proposed fix:** Rename §2.3.0 to "Deletion-First Cutover Target" or move it
+into the planned S2-R10 contract. Do not frame pending deletions as if they are
+executed.
+
+### F2 — §2.5.1 vs §2.5: Duplicate structure with semantic drift
+
+**Type:** coherence / duplication
+
+§2.5 (20-row narrative table) and §2.5.1 (16-row surface-indexed table)
+re-encode the same gap set with different row counts, different status language,
+and slightly different scope boundaries. This is the third parallel gap
+representation in Section 2, after §2.5.4 (contract slices) and the Unified Queue
+(fourth). An update to any one table silently desyncs the others.
+
+**Proposed fix:** Retire §2.5's narrative table. Keep §2.5.1 as canonical gap
+inventory. Reduce to one normative gap table plus the queue crosswalk.
+
+### F3 — §2.11 and §2.12: Y9-2-side gaps with no pipeline-v3 ownership
+
+**Type:** scope leak
+
+§2.11 (Bundle Coverage Policy) defines a machine-driven coverage audit. §2.12
+(Rollback Asset Snapshot Contract) defines a rollback mechanism requiring XP
+binary snapshots. Both say they are unimplemented. No queue row on either side
+owns them. These are Y9-2 bundle artifact concerns (`artifacts/bundled_xp_sprite_packs/`,
+`appearance_bundle.json`). The text does not clearly state whether these are
+Y9-2 implementation gaps or pipeline-v3 implementation gaps.
+
+**Proposed fix:** Either assign to explicit queue rows with repo ownership stated,
+or mark them as Y9-2-side only and move to a Y9-2 cross-reference appendix.
+
+### F4 — §2.13: Wizard Parity Contract belongs in Y9-2 canon, not pipeline-v3
+
+**Type:** scope leak
+
+§2.13 defines wizard parity invariants, an 8-step TUI lifecycle, and priority
+client paths — all about Y9-2 launcher `option_tree.py` behavior and Y9-2
+terminal UX. Pipeline-v3 owns the API surface; Y9-2 owns the client that calls
+it. §2.13 defines the client contract in the server's spec — an inverted
+ownership boundary.
+
+**Proposed fix:** Move §2.13 to `asciicker-Y9-2` docs. Keep only the API contract
+surface in pipeline-v3's §2.10.
+
+### F5 — §2.14: 3500+ word reference tome inside a spec
+
+**Type:** design-lens / coherence
+
+§2.14 (Y9-2 Bundle System Architecture Reference) is ~300 lines: 17 numbered
+steps, an abstraction hierarchy diagram, a 30-row glossary, 5 distinct contracts,
+and a concrete walkthrough. Excellent reference material, but its size buries the
+pipeline-v3-specific contract entries (§§2.3-2.5). A reader scanning for
+"what does pipeline-v3 actually require?" must dig through 3500 words of Y9-2
+internals.
+
+**Proposed fix:** Extract §2.14 into a standalone reference document
+(e.g., `docs/research/y9-2-bundle-system-reference.md`). Replace in spec with a
+~5-paragraph summary plus cross-reference.
+
+### F6 — §2.5.2: "Locked Design Decisions" with unresolved forward references
+
+**Type:** feasibility / coherence
+
+§2.5.2 lists 12 locked design decisions. Several reference queue rows that are
+themselves PARKED or BLOCKED:
+
+- Decision 11 references `UQ-007` — BLOCKED (precondition: UQ-006 pass condition met)
+- Decision 12 references `S2-FAM-04` — has no queue row at all
+
+Locking a decision that depends on an unimplemented row is valid, but the
+decisions should carry the dependency chain explicitly.
+
+**Proposed fix:** Add an "activates when" field to each decision that references
+a BLOCKED/PARKED queue row.
+
+### F7 — §2.3.4: Stale self-correction note may contradict later closure claims
+
+**Type:** unverifiable claim / coherence
+
+§2.3.4 has a "CONTRACT CLARIFICATION (2026-04-27)" note saying "this spec no
+longer claims that the exact `/api/workbench/validate-xp` route is live." But
+§2.5.1 and the UQ-005 CLOSED declaration both state the route IS live. The
+CLARIFICATION note appears stale.
+
+**Proposed fix:** Remove or update the 2026-04-27 CLARIFICATION note. If
+`validate-xp` is live (per UQ-005), the note is stale. If it's not, the gap
+inventory is wrong. One must give.
+
+### F8 — Term "CLOSED" used inconsistently across the spec
+
+**Type:** coherence
+
+The misalignment ledger (§2.5) uses "CLOSED" / "RESOLVED" for rows describing
+implementation completions. The queue table uses "CLOSED" / "PASS" for workflow
+states. The migration gate list (§2.14-end) uses "PASS" / "OPEN". A single row
+may be CLOSED in §2.5 (misalignment resolved), CLOSED in the queue (work
+finished), and PASS in the gate list (evidence committed) — three different
+meanings for overlapping vocabulary.
+
+**Proposed fix:** Standardize status vocabulary across all sections. Proposal:
+- `DESIGN_FIXED` — decision locked, no code yet
+- `IMPLEMENTED` — code committed, not yet proven
+- `PROVEN` — evidence committed, gate PASS
+
+### Synthesis
+
+Section 2 defines a thorough, well-researched wrapper architecture. Its strongest
+aspects: honest self-auditing (the gap inventory admits what is broken with
+specific file paths), clear architecture laws (§0 + §2.5.2), and deep Y9-2
+integration knowledge (§2.14).
+
+Its primary weaknesses: four parallel gap representations that risk desync,
+Y9-2 client contracts leaking into the server spec (§§2.11-2.13), a
+deletion-first framing that overstates completion (§2.3.0), and a 3500-word
+reference tome (§2.14) that buries the pipeline-v3 contract surface.
+
+**Highest-impact fixes (structural):** Extract §2.14 into a standalone reference.
+Retire duplicate gap tables. Move Y9-2 client contracts (§§2.11-2.13) out of the
+server spec or assign them explicit cross-repo ownership.
+
+**Highest-impact fix (vocabulary):** Standardize CLOSED/PASS/PROVEN across all
+internal tables.
+
+**State:** OPEN — document-structure findings; no code changes required
