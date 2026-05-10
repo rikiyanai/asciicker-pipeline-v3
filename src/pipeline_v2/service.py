@@ -1494,7 +1494,7 @@ def _default_layer_names(sess_dict: dict[str, Any], layer_count: int) -> list[st
 def _default_active_layer(sess_dict: dict[str, Any], layer_count: int) -> int:
     if layer_count <= 0:
         return 0
-    if _session_kind(sess_dict) == "template_owned" and layer_count > 2:
+    if _session_kind(sess_dict) in {"pipeline_job", "template_owned"} and layer_count > 2:
         return 2
     return 0
 
@@ -1502,13 +1502,13 @@ def _default_active_layer(sess_dict: dict[str, Any], layer_count: int) -> int:
 def _default_visible_layers(sess_dict: dict[str, Any], layer_count: int) -> list[int]:
     if layer_count <= 0:
         return []
-    if _session_kind(sess_dict) == "template_owned" and layer_count > 2:
+    if _session_kind(sess_dict) in {"pipeline_job", "template_owned"} and layer_count > 2:
         return [2]
     return list(range(layer_count))
 
 
 def _default_locked_layers(sess_dict: dict[str, Any]) -> list[int]:
-    if _session_kind(sess_dict) == "template_owned":
+    if _session_kind(sess_dict) in {"pipeline_job", "template_owned"}:
         return [0]
     return []
 
