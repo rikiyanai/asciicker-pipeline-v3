@@ -11,9 +11,12 @@ def test_skin_discovery_falls_back_to_reference_xp_dir() -> None:
     The anchor file's reference_xp points at the authoritative sprite directory and must
     be used as a fallback for discovering composite skin XPs.
     """
-    y9_root = Path(__file__).resolve().parents[2]
+    y9_root = Path(__file__).resolve().parents[1]
     scripts_dir = (Path(__file__).resolve().parents[1] / "scripts").resolve()
     sys.path.insert(0, str(scripts_dir))
+    for name in list(sys.modules):
+        if name == "scripts" or name.startswith("scripts."):
+            del sys.modules[name]
 
     import xp_uv_body_viewer as uv  # type: ignore
 
@@ -33,4 +36,3 @@ def test_skin_discovery_falls_back_to_reference_xp_dir() -> None:
 
     assert ref_path.parent.resolve() in search_dirs
     assert any(p.name == "wolack-attack-body.xp" for p in unique)
-
