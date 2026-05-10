@@ -502,6 +502,19 @@ runner.describe('Canvas Module', () => {
     expect(ctx.strokeStyle).toBe('rgba(48,72,96,0.92)');
   });
 
+  runner.it('should leave glyph-zero magenta cells transparent on layer offscreens', () => {
+    const canvas = new Canvas(document.createElement('canvas'), 4, 4);
+    const calls = [];
+    const ctx = {
+      fillStyle: '',
+      fillRect: (...args) => calls.push({ fillStyle: ctx.fillStyle, args }),
+    };
+
+    canvas._drawCellToContext(ctx, { glyph: 0, fg: [0, 0, 0], bg: [255, 0, 255] }, 0, 0);
+
+    expect(calls.length).toBe(0);
+  });
+
   runner.it('should composite multiple visible layers in z-order', () => {
     const canvas = new Canvas(document.createElement('canvas'), 4, 4);
     const layerStack = new LayerStack(4, 4);

@@ -451,6 +451,49 @@ def test_upload_raw_xp_opens_without_template_metadata_and_roundtrips(client, tm
     assert parsed["cells"][0][width + 1][0] == ord("A")
 
 
+def test_upload_missing_metadata_visual_strip_infers_frame_width(client, tmp_path: Path):
+    width, height = 72, 11
+    blank = [_xp_cell(0, (0, 0, 0), (0, 0, 0)) for _ in range(width * height)]
+    visual = [_xp_cell(32, (255, 255, 255), (255, 0, 255)) for _ in range(width * height)]
+    for frame in range(8):
+        x0 = frame * 9
+        for y in range(1, height):
+            visual[y * width + x0] = _xp_cell(179, (255, 255, 255), (255, 0, 255))
+            visual[y * width + x0 + 8] = _xp_cell(179, (255, 255, 255), (255, 0, 255))
+        for x in range(x0, x0 + 9):
+            visual[(height - 1) * width + x] = _xp_cell(196, (255, 255, 255), (0, 64, 64))
+    xp_path = _write_test_xp(tmp_path / "raw-strip-missing-meta.xp", width, height, [blank, blank, visual])
+
+    with xp_path.open("rb") as fh:
+        upload_resp = client.post(
+            "/api/workbench/upload-xp",
+            data={"file": (fh, xp_path.name)},
+            content_type="multipart/form-data",
+        )
+    assert upload_resp.status_code == 201
+    uploaded = upload_resp.get_json()
+    assert uploaded["metadata_status"] == "missing"
+    assert uploaded["grid_cols"] == width
+    assert uploaded["grid_rows"] == height
+    assert uploaded["angles"] == 1
+    assert uploaded["anims"] == [8]
+    assert uploaded["projs"] == 1
+    assert uploaded["cell_w"] == 9
+    assert uploaded["cell_h"] == 11
+
+    load_resp = client.post(
+        "/api/workbench/load-from-job",
+        data=json.dumps({"job_id": uploaded["job_id"]}),
+        content_type="application/json",
+    )
+    assert load_resp.status_code == 201
+    loaded = load_resp.get_json()
+    assert loaded["metadata_status"] == "missing"
+    assert loaded["anims"] == [8]
+    assert loaded["cell_w"] == 9
+    assert loaded["cell_h"] == 11
+
+
 def test_upload_invalid_metadata_xp_still_exports_but_runtime_payload_refuses(client, tmp_path: Path):
     width, height = 4, 3
     layer0 = [_xp_cell() for _ in range(width * height)]
@@ -602,6 +645,9 @@ def test_run_pipeline_honors_explicit_target_geometry(client):
     assert payload["projs"] == 2
     assert payload["cell_w"] == 12
     assert payload["cell_h"] == 8
+    assert payload["active_layer"] == 2
+    assert payload["visible_layers"] == [2]
+    assert payload["locked_layers"] == [0]
 
 
 def test_web_skin_payload_maps_four_angle_sessions_to_cardinal_native_rows(client, tmp_path: Path):

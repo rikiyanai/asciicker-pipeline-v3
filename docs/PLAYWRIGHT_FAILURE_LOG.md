@@ -11972,3 +11972,105 @@ server spec or assign them explicit cross-repo ownership.
 internal tables.
 
 **State:** OPEN — document-structure findings; no code changes required
+
+---
+
+## Fix Attempt — Whole-Sheet Layer Offscreens Treated Transparent Magenta as Opaque (2026-05-10)
+
+### User-facing symptom
+
+User reported `http://127.0.0.1:5071/workbench?job_id=2ab1e761-3c96-4492-b1b9-75444abbb7ca`
+with a populated grid panel but an all-magenta whole-sheet XP editor.
+
+### Root cause
+
+The backend load path was not empty: `/api/workbench/load-from-job` returned a
+`pipeline_job` session with `grid_cols=64`, `grid_rows=60`, four visible layers,
+and populated cells. The defect was in the browser canvas layer compositor:
+
+- `web/rexpaint-editor/canvas.js::_drawCellToContext()` filled the cell
+  background before checking `cell.glyph === 0`.
+- Pipeline XP transparency uses `glyph=0` with magenta background
+  `[255,0,255]`.
+- Whole-sheet rendering builds per-layer offscreen canvases, then composites
+  visible layers. Because glyph-zero cells filled their magenta background into
+  each offscreen layer, transparent cells became opaque and covered real content
+  underneath.
+
+### Fix
+
+`web/rexpaint-editor/canvas.js` now returns immediately for `glyph === 0` before
+painting the background. This preserves transparent XP cells as transparent on
+layer offscreens instead of turning them into magenta opaque pixels.
+
+Added a focused regression assertion in `tests/web/rexpaint-editor-canvas.test.js`
+that `glyph:0/bg:[255,0,255]` issues no background fill.
+
+### Verification
+
+- `python3 -m pytest tests/test_workbench_flow.py -q` -> PASS, 14 tests.
+- Direct execution of `tests/web/rexpaint-editor-canvas.test.js` is currently
+  blocked by the repo's CommonJS package configuration while the file uses ESM
+  imports. A temporary `.mjs` copy also exposed that imported source `.js` files
+  are treated as CommonJS without a module-type package boundary. The regression
+  test is present but was not executable through the current package setup.
+- The documented FL front-door scripts named in `AGENTS.md`
+  (`scripts/analyze_runs.py`, `scripts/analyze_failure_log.py`) are absent in
+  this checkout, so this entry was appended directly to
+  `docs/PLAYWRIGHT_FAILURE_LOG.md`.
+
+### Follow-up
+
+User screenshot after this fix still showed a full magenta `80x48, 4 layers`
+whole-sheet surface. Direct XP inspection found a second root cause:
+
+- Job `2ab1e761-3c96-4492-b1b9-75444abbb7ca` is `80x48`, not `64x60`.
+- Layer 1 contains `3840/3840` nonblank glyphs, all glyph `48` with magenta
+  background.
+- `_default_visible_layers()` made every layer visible for `pipeline_job`
+  sessions, while only `template_owned` sessions defaulted to visual layer `2`.
+
+Follow-up fix in the same pass: `src/pipeline_v2/service.py` now gives
+`pipeline_job` sessions the same visual-layer defaults as template-owned
+sessions when `layer_count > 2`: active layer `2`, visible layers `[2]`, and
+locked layers `[0]`. `tests/test_workbench_flow.py` now asserts this on the
+explicit target geometry load-from-job path.
+
+Additional verification:
+
+- `python3 -m pytest tests/test_workbench_flow.py -q` -> PASS, 14 tests.
+- The actual visible server on `127.0.0.1:5071` was running from the sibling
+  `/Users/r/Downloads/asciicker-Y9-2/pipeline-v3` checkout, not this checkout.
+  The matching `canvas.js` and `service.py` fixes were copied there and the
+  Flask server was restarted from that directory.
+
+The second user-reported URL
+`http://127.0.0.1:5071/workbench?job_id=7016da9c-6a0e-4d47-b6e2-f691a39ca167`
+was fixed as a separate geometry/metadata issue. Direct XP inspection showed it
+is `72x11`, with no valid L0 metadata and visual content arranged as an
+eight-frame strip. The prior missing-metadata fallback collapsed all raw XP
+uploads to `angles=1`, `anims=[1]`, `projs=1`, `cell_w_chars=cols`, which made
+this strip appear as one 72-character-wide frame.
+
+Second fix in the same pass:
+
+- `src/pipeline_v2/service.py::_derive_raw_xp_geometry()` now tries
+  `_derive_missing_raw_xp_geometry_from_visual()` when L0 metadata is missing.
+- The inference is deliberately narrow: layer count must be at least 3, the XP
+  must be a wide strip (`cols >= rows * 2`), visual layer content must be
+  nonempty, and the chosen frame width must evenly divide the sheet. For `72x11`
+  it infers `anims=[8]`, `cell_w=9`, `cell_h=11`.
+- `workbench_load_from_job()` now repairs existing missing-metadata job records
+  at load time instead of trusting stale `cell_w_chars=72` metadata forever.
+- `workbench_load_from_job()` also preserves `metadata_status` from the job
+  record instead of hardcoding `generated`.
+- `tests/test_workbench_flow.py` adds
+  `test_upload_missing_metadata_visual_strip_infers_frame_width`.
+
+Verification:
+
+- `python3 -m pytest tests/test_workbench_flow.py -k "missing_metadata_visual_strip or explicit_target_geometry" -q` -> PASS.
+- `python3 -m pytest tests/test_workbench_flow.py -q` -> PASS, 15 tests.
+- The patched `service.py` was copied to the actual served sibling checkout
+  `/Users/r/Downloads/asciicker-Y9-2/pipeline-v3`, and the Flask server on
+  `127.0.0.1:5071` was restarted from that directory.
