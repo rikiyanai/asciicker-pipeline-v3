@@ -12074,3 +12074,20 @@ Verification:
 - The patched `service.py` was copied to the actual served sibling checkout
   `/Users/r/Downloads/asciicker-Y9-2/pipeline-v3`, and the Flask server on
   `127.0.0.1:5071` was restarted from that directory.
+
+### Deploy Follow-up — Y9-2 Dependency Missing In Cloud Run Pre-Deploy Tests (2026-05-10)
+
+The XPedit Cloud Run workflow failed before deployment in the pre-deploy pytest
+step after the workbench fixes were pushed. The failing test imported
+`scripts/xp_uv_body_viewer.py`, which expected Y9-2-only `scripts.pipeline`
+helpers to exist in a sibling checkout. GitHub Actions checks out only the
+XPedit repository, so that sibling path is absent.
+
+Fix: add `asciicker-Y9-2` as an in-repo git submodule, make the deploy workflow
+checkout submodules, and make `xp_uv_body_viewer.py` prefer the in-repo
+submodule before falling back to the historical sibling checkout layout.
+
+Verification:
+
+- `python3 -m py_compile src/pipeline_v2/app.py src/pipeline_v2/service.py src/pipeline_v2/config.py wsgi.py scripts/xp_uv_body_viewer.py` -> PASS.
+- `python3 -m pytest --ignore=tests/e2e -q` -> PASS.

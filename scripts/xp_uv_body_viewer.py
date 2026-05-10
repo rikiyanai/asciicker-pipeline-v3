@@ -18,7 +18,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 # This file lives in scripts/ (one level below repo root).
 # Need Y9-2 on sys.path for xp_core, layer2_browser, etc.
-Y9_ROOT = REPO_ROOT.parent / "asciicker-Y9-2"
+Y9_ROOT = REPO_ROOT / "asciicker-Y9-2"
+if not Y9_ROOT.is_dir():
+    Y9_ROOT = REPO_ROOT.parent / "asciicker-Y9-2"
 if not Y9_ROOT.is_dir():
     Y9_ROOT = REPO_ROOT.parent.parent / "asciicker-Y9-2"
 if str(Y9_ROOT) not in sys.path:
@@ -27,9 +29,23 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.cli_style import kv, sparkline
-from scripts.pipeline.bundle_wizard import semantic_dict
-from scripts.pipeline import xp_assets_browser_layer_2_only as layer2_browser
-from scripts.pipeline.xp_core import XPFile
+
+try:
+    from scripts.pipeline.bundle_wizard import semantic_dict
+    from scripts.pipeline import xp_assets_browser_layer_2_only as layer2_browser
+    from scripts.pipeline.xp_core import XPFile
+except ModuleNotFoundError:
+    semantic_dict = None
+    layer2_browser = None
+    XPFile = None
+
+
+def _require_y9_helpers() -> None:
+    if semantic_dict is None or layer2_browser is None or XPFile is None:
+        raise RuntimeError(
+            "xp_uv_body_viewer requires the Y9-2 scripts.pipeline helpers; "
+            "run it from a checkout with the asciicker-Y9-2 submodule initialized"
+        )
 
 _sprite_dir_default = REPO_ROOT / "assets" / "sprites"
 if not _sprite_dir_default.is_dir() and (Y9_ROOT / "assets" / "sprites").is_dir():
@@ -2900,6 +2916,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
+    _require_y9_helpers()
 
     # Anchor batch mode (agent-friendly, no TTY required)
     if args.anchor_batch is not None:

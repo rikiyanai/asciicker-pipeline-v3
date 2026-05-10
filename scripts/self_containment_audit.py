@@ -39,6 +39,25 @@ SKIP_DIRS = {
     "output",
 }
 
+
+def discover_submodule_dirs(root: Path) -> set[str]:
+    """Return repo-relative submodule paths from .gitmodules."""
+    gitmodules = root / ".gitmodules"
+    if not gitmodules.is_file():
+        return set()
+    submodules: set[str] = set()
+    for line in gitmodules.read_text(encoding="utf-8", errors="ignore").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("path"):
+            continue
+        _key, sep, value = stripped.partition("=")
+        if sep:
+            submodules.add(value.strip().strip("/"))
+    return submodules
+
+
+SUBMODULE_DIRS = discover_submodule_dirs(REPO_ROOT)
+
 # Symlinks that are allowed to point outside the repo (vendored from sibling repos)
 VENDORED_SYMLINKS = {
     "docs/research/ascii/semantic_maps",
@@ -119,7 +138,11 @@ def classify_path(path: Path) -> str:
 
 def iter_repo_paths(root: Path):
     for path in root.rglob("*"):
-        if any(part in SKIP_DIRS for part in path.relative_to(root).parts):
+        parts = path.relative_to(root).parts
+        if any(part in SKIP_DIRS for part in parts):
+            continue
+        rel = Path(*parts).as_posix()
+        if any(rel == submodule or rel.startswith(f"{submodule}/") for submodule in SUBMODULE_DIRS):
             continue
         yield path
 
