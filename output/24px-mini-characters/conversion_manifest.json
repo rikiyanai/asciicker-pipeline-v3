@@ -1,0 +1,2693 @@
+[
+  {
+    "name": "Nude-template",
+    "normalized_name": "nude-template",
+    "inputs": {
+      "idle": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Parts/Nude/Nude_Idle.png",
+      "move": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Parts/Nude/Nude_Move.png",
+      "attack": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Parts/Nude/Nude_Attack.png",
+      "faint": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Parts/Nude/Nude_Faint.png"
+    },
+    "jobs": {
+      "player": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/nude-template-player-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/nude-template-player.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/nude-template-player.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/50679db4-cf1d-406a-85ec-2de59ae154cf.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            1,
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 7,
+          "cell_h_chars": 10,
+          "checksum": "7c758b653e7174470e3da00a8e196c4c7f015fc66677a76e68e49e3e3622ee71",
+          "family": "player"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/nude-template-player.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "idle",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 10080,
+                "actual_cells": 10080
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.10257936507936508,
+                "min_ratio": 0.05,
+                "nonempty": 1034,
+                "total": 10080
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 10080
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  126,
+                  80
+                ],
+                "expected": [
+                  126,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            126,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "attack": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/nude-template-attack-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/nude-template-attack.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/nude-template-attack.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/867d32de-7541-4805-8661-72ef16505179.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 9,
+          "cell_h_chars": 10,
+          "checksum": "0e43a71ec2f331315097831a0cbe755c319fb279b4a7ccdfb3e9e58f51ec2309",
+          "family": "attack"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/nude-template-attack.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "attack",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 11520,
+                "actual_cells": 11520
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.10538194444444444,
+                "min_ratio": 0.05,
+                "nonempty": 1214,
+                "total": 11520
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 11520
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  144,
+                  80
+                ],
+                "expected": [
+                  144,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            144,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "plydie": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/nude-template-plydie-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/nude-template-plydie.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/nude-template-plydie.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/6451b08c-0c60-4e83-81f1-0fb10542794f.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            5
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 11,
+          "cell_h_chars": 11,
+          "checksum": "f2e906f00442a2f74935f0fd501e742284f22733e2c5ddb8427f33ca6bf462c4",
+          "family": "plydie"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/nude-template-plydie.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "death",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 9680,
+                "actual_cells": 9680
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.09917355371900827,
+                "min_ratio": 0.05,
+                "nonempty": 960,
+                "total": 9680
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 9680
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  110,
+                  88
+                ],
+                "expected": [
+                  110,
+                  88
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 3,
+                "expected_layers": 3
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "5"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "5"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            110,
+            88
+          ],
+          "layer_count": 3
+        }
+      }
+    },
+    "notes": [
+      "Source tiles are 52x52. Player sheet maps idle pose + move frames duplicated 4->8.",
+      "Attack frames duplicated 4->8.",
+      "Faint single pose duplicated across 8 angles x 5 death frames."
+    ]
+  },
+  {
+    "name": "Civilian1(black)-Weapon1",
+    "normalized_name": "civilian1-black-weapon1",
+    "inputs": {
+      "idle": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1(black)_Idle(Weapon1).png",
+      "move": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1(black)_Move(Weapon1).png",
+      "attack": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1(black)_Attack(Weapon1).png",
+      "faint": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1(black)_Faint.png"
+    },
+    "jobs": {
+      "player": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-black-weapon1-player-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian1-black-weapon1-player.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian1-black-weapon1-player.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/bac68e47-ac4f-4e71-a762-d05e063a7e91.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            1,
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 7,
+          "cell_h_chars": 10,
+          "checksum": "bf02d475555ae066874031a594474df286ba592fece7786c074e5e39263a40a7",
+          "family": "player"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian1-black-weapon1-player.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "idle",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 10080,
+                "actual_cells": 10080
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.11646825396825397,
+                "min_ratio": 0.05,
+                "nonempty": 1174,
+                "total": 10080
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 10080
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  126,
+                  80
+                ],
+                "expected": [
+                  126,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            126,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "attack": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-black-weapon1-attack-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian1-black-weapon1-attack.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian1-black-weapon1-attack.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/e4243e5c-e6e8-4437-ab60-df119550e487.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 9,
+          "cell_h_chars": 10,
+          "checksum": "7f05c100bf8ce9ca1b1072b9816c3f2bdb246e742e543a230c5423f5cda1496e",
+          "family": "attack"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian1-black-weapon1-attack.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "attack",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 11520,
+                "actual_cells": 11520
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.14322916666666666,
+                "min_ratio": 0.05,
+                "nonempty": 1650,
+                "total": 11520
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 11520
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  144,
+                  80
+                ],
+                "expected": [
+                  144,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            144,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "plydie": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-black-weapon1-plydie-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian1-black-weapon1-plydie.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian1-black-weapon1-plydie.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/d8fa494f-2cee-4b8f-8741-e80e9a377173.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            5
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 11,
+          "cell_h_chars": 11,
+          "checksum": "24139c985e21395ea765cf133f75f2fa69e79ca152201b9f222ae1b027144da4",
+          "family": "plydie"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian1-black-weapon1-plydie.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "death",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 9680,
+                "actual_cells": 9680
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.09917355371900827,
+                "min_ratio": 0.05,
+                "nonempty": 960,
+                "total": 9680
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 9680
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  110,
+                  88
+                ],
+                "expected": [
+                  110,
+                  88
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 3,
+                "expected_layers": 3
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "5"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "5"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            110,
+            88
+          ],
+          "layer_count": 3
+        }
+      }
+    },
+    "notes": [
+      "Source tiles are 52x52. Player sheet maps idle pose + move frames duplicated 4->8.",
+      "Attack frames duplicated 4->8.",
+      "Faint single pose duplicated across 8 angles x 5 death frames."
+    ]
+  },
+  {
+    "name": "Civilian1(black)",
+    "normalized_name": "civilian1-black",
+    "inputs": {
+      "idle": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1(black)_Idle.png",
+      "move": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1(black)_Move.png",
+      "attack": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1(black)_Attack.png",
+      "faint": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1(black)_Faint.png"
+    },
+    "jobs": {
+      "player": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-black-player-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian1-black-player.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian1-black-player.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/89e53daa-3969-4fde-85a6-9496cc83caf0.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            1,
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 7,
+          "cell_h_chars": 10,
+          "checksum": "27565d4650f54d3d9b11b8c435274620bcd9d87df713eebe6486d1fb7d34cdee",
+          "family": "player"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian1-black-player.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "idle",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 10080,
+                "actual_cells": 10080
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.10972222222222222,
+                "min_ratio": 0.05,
+                "nonempty": 1106,
+                "total": 10080
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 10080
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  126,
+                  80
+                ],
+                "expected": [
+                  126,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            126,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "attack": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-black-attack-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian1-black-attack.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian1-black-attack.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/dc4722fd-433b-4268-8aa0-6f190de60770.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 9,
+          "cell_h_chars": 10,
+          "checksum": "049bce3f35bca389eb56a8d7f40bad708f5fda0644fa68236dcf5d0bc79d0ae3",
+          "family": "attack"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian1-black-attack.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "attack",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 11520,
+                "actual_cells": 11520
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.11163194444444445,
+                "min_ratio": 0.05,
+                "nonempty": 1286,
+                "total": 11520
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 11520
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  144,
+                  80
+                ],
+                "expected": [
+                  144,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            144,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "plydie": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-black-plydie-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian1-black-plydie.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian1-black-plydie.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/4d2d805c-87e6-42c7-9c44-89bf7bd8c485.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            5
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 11,
+          "cell_h_chars": 11,
+          "checksum": "ea86f0817e0b912be661b632b07c4db017651c2b9168b794f9d41ffa87072f9e",
+          "family": "plydie"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian1-black-plydie.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "death",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 9680,
+                "actual_cells": 9680
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.09917355371900827,
+                "min_ratio": 0.05,
+                "nonempty": 960,
+                "total": 9680
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 9680
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  110,
+                  88
+                ],
+                "expected": [
+                  110,
+                  88
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 3,
+                "expected_layers": 3
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "5"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "5"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            110,
+            88
+          ],
+          "layer_count": 3
+        }
+      }
+    },
+    "notes": [
+      "Source tiles are 52x52. Player sheet maps idle pose + move frames duplicated 4->8.",
+      "Attack frames duplicated 4->8.",
+      "Faint single pose duplicated across 8 angles x 5 death frames."
+    ]
+  },
+  {
+    "name": "Civilian1-weapon1",
+    "normalized_name": "civilian1-weapon1",
+    "inputs": {
+      "idle": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1_Idle(weapon1).png",
+      "move": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1_Move(weapon1).png",
+      "attack": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1_Attack(weapon1).png",
+      "faint": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1_Faint.png"
+    },
+    "jobs": {
+      "player": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-weapon1-player-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian1-weapon1-player.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian1-weapon1-player.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/a94cc245-39a3-47e7-97f4-fae2a7e8e640.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            1,
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 7,
+          "cell_h_chars": 10,
+          "checksum": "bd426c70a66922eadd069bd4ebe72cf3c6907821e1bbacfd152ef8f724606630",
+          "family": "player"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian1-weapon1-player.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "idle",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 10080,
+                "actual_cells": 10080
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.11646825396825397,
+                "min_ratio": 0.05,
+                "nonempty": 1174,
+                "total": 10080
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 10080
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  126,
+                  80
+                ],
+                "expected": [
+                  126,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            126,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "attack": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-weapon1-attack-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian1-weapon1-attack.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian1-weapon1-attack.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/cb9ca0fa-f450-4e21-8754-5ae0ffdea43b.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 9,
+          "cell_h_chars": 10,
+          "checksum": "87aa508d13e08893171276305c337a3810c7bb3f4c47a5f94f5b6a597a3cfa02",
+          "family": "attack"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian1-weapon1-attack.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "attack",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 11520,
+                "actual_cells": 11520
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.14322916666666666,
+                "min_ratio": 0.05,
+                "nonempty": 1650,
+                "total": 11520
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 11520
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  144,
+                  80
+                ],
+                "expected": [
+                  144,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            144,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "plydie": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-weapon1-plydie-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian1-weapon1-plydie.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian1-weapon1-plydie.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/3f25e060-ed81-44be-a19e-36e3133bb59b.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            5
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 11,
+          "cell_h_chars": 11,
+          "checksum": "6ffb8031a885d8540d8e0e5721fd15aa2e5b9ef28b823402091249f81f4bd69c",
+          "family": "plydie"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian1-weapon1-plydie.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "death",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 9680,
+                "actual_cells": 9680
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.09917355371900827,
+                "min_ratio": 0.05,
+                "nonempty": 960,
+                "total": 9680
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 9680
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  110,
+                  88
+                ],
+                "expected": [
+                  110,
+                  88
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 3,
+                "expected_layers": 3
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "5"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "5"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            110,
+            88
+          ],
+          "layer_count": 3
+        }
+      }
+    },
+    "notes": [
+      "Source tiles are 52x52. Player sheet maps idle pose + move frames duplicated 4->8.",
+      "Attack frames duplicated 4->8.",
+      "Faint single pose duplicated across 8 angles x 5 death frames."
+    ]
+  },
+  {
+    "name": "Civilian1",
+    "normalized_name": "civilian1",
+    "inputs": {
+      "idle": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1_Idle.png",
+      "move": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1_Move.png",
+      "attack": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1_Attack.png",
+      "faint": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian1_Faint.png"
+    },
+    "jobs": {
+      "player": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-player-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian1-player.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian1-player.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/127c25cf-9d59-4501-91b7-934be520d4c9.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            1,
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 7,
+          "cell_h_chars": 10,
+          "checksum": "0f2d11a7edd64634aaa030e3a5fca33c9c47fd70586edc8363c6c8c01eef4755",
+          "family": "player"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian1-player.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "idle",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 10080,
+                "actual_cells": 10080
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.10972222222222222,
+                "min_ratio": 0.05,
+                "nonempty": 1106,
+                "total": 10080
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 10080
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  126,
+                  80
+                ],
+                "expected": [
+                  126,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            126,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "attack": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-attack-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian1-attack.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian1-attack.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/4870a989-0292-4eaa-b9e9-e2d2307acf62.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 9,
+          "cell_h_chars": 10,
+          "checksum": "d803afc10a2cffbac2e65c7ff5502501dffa2f695acca366e8b259e3df21e26a",
+          "family": "attack"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian1-attack.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "attack",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 11520,
+                "actual_cells": 11520
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.11163194444444445,
+                "min_ratio": 0.05,
+                "nonempty": 1286,
+                "total": 11520
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 11520
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  144,
+                  80
+                ],
+                "expected": [
+                  144,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            144,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "plydie": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-plydie-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian1-plydie.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian1-plydie.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/41652f96-1588-43bc-ba20-a29f675475de.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            5
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 11,
+          "cell_h_chars": 11,
+          "checksum": "bafecaa787241ee1abaa7f4b03334077c1dd51c2be2d92b6c499ff256389461f",
+          "family": "plydie"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian1-plydie.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "death",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 9680,
+                "actual_cells": 9680
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.09917355371900827,
+                "min_ratio": 0.05,
+                "nonempty": 960,
+                "total": 9680
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 9680
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  110,
+                  88
+                ],
+                "expected": [
+                  110,
+                  88
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 3,
+                "expected_layers": 3
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "5"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "5"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            110,
+            88
+          ],
+          "layer_count": 3
+        }
+      }
+    },
+    "notes": [
+      "Source tiles are 52x52. Player sheet maps idle pose + move frames duplicated 4->8.",
+      "Attack frames duplicated 4->8.",
+      "Faint single pose duplicated across 8 angles x 5 death frames."
+    ]
+  },
+  {
+    "name": "Civilian2(black)-Weapon1",
+    "normalized_name": "civilian2-black-weapon1",
+    "inputs": {
+      "idle": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian2(black)_Idle(Weapon1).png",
+      "move": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian2(black)_Move(Weapon1).png",
+      "attack": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian2(black)_Attack(Weapon1).png",
+      "faint": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian2(black)_Faint.png"
+    },
+    "jobs": {
+      "player": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-black-weapon1-player-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian2-black-weapon1-player.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian2-black-weapon1-player.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/b8f5b57e-7410-4e0b-83a7-bdd47d585d2f.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            1,
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 7,
+          "cell_h_chars": 10,
+          "checksum": "bd5d7a5b2dce936afba507e1eb4e60b27d3527cf18a64c8cecd028716df6e5bc",
+          "family": "player"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian2-black-weapon1-player.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "idle",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 10080,
+                "actual_cells": 10080
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.11646825396825397,
+                "min_ratio": 0.05,
+                "nonempty": 1174,
+                "total": 10080
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 10080
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  126,
+                  80
+                ],
+                "expected": [
+                  126,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            126,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "attack": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-black-weapon1-attack-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian2-black-weapon1-attack.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian2-black-weapon1-attack.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/9af478c4-5d9a-4c63-8ea8-7eeea5db220f.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 9,
+          "cell_h_chars": 10,
+          "checksum": "6465304ee9ee130c0518505de24dd560119f1200061efc0e363960f1e4d991ee",
+          "family": "attack"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian2-black-weapon1-attack.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "attack",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 11520,
+                "actual_cells": 11520
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.14340277777777777,
+                "min_ratio": 0.05,
+                "nonempty": 1652,
+                "total": 11520
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 11520
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  144,
+                  80
+                ],
+                "expected": [
+                  144,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            144,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "plydie": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-black-weapon1-plydie-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian2-black-weapon1-plydie.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian2-black-weapon1-plydie.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/f8af2f89-5a01-4d57-9c40-12cb6420816e.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            5
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 11,
+          "cell_h_chars": 11,
+          "checksum": "c754c8e04d8ee6e17310962246bf9faaf943f202fcfa0542d308ba5bdb370695",
+          "family": "plydie"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian2-black-weapon1-plydie.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "death",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 9680,
+                "actual_cells": 9680
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.09917355371900827,
+                "min_ratio": 0.05,
+                "nonempty": 960,
+                "total": 9680
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 9680
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  110,
+                  88
+                ],
+                "expected": [
+                  110,
+                  88
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 3,
+                "expected_layers": 3
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "5"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "5"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            110,
+            88
+          ],
+          "layer_count": 3
+        }
+      }
+    },
+    "notes": [
+      "Source tiles are 52x52. Player sheet maps idle pose + move frames duplicated 4->8.",
+      "Attack frames duplicated 4->8.",
+      "Faint single pose duplicated across 8 angles x 5 death frames."
+    ]
+  },
+  {
+    "name": "Civilian2(black)",
+    "normalized_name": "civilian2-black",
+    "inputs": {
+      "idle": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian2(black)_Idle.png",
+      "move": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian2(black)_Move.png",
+      "attack": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian2(black)_Attack.png",
+      "faint": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian2(black)_Faint.png"
+    },
+    "jobs": {
+      "player": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-black-player-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian2-black-player.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian2-black-player.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/29718365-d385-4d6a-aeaa-558016dbf70d.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            1,
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 7,
+          "cell_h_chars": 10,
+          "checksum": "8b47bb9460b589e7a2f5c053204b8caa4712015c99a4d75747d02fc1790652c2",
+          "family": "player"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian2-black-player.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "idle",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 10080,
+                "actual_cells": 10080
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.10972222222222222,
+                "min_ratio": 0.05,
+                "nonempty": 1106,
+                "total": 10080
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 10080
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  126,
+                  80
+                ],
+                "expected": [
+                  126,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            126,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "attack": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-black-attack-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian2-black-attack.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian2-black-attack.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/0c645e31-4b54-4365-9bfc-ffe170439ccf.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 9,
+          "cell_h_chars": 10,
+          "checksum": "63b6876312c22b2b12d4c5400f1669ff13695e9a12ca2594ed04e3b8c32575ec",
+          "family": "attack"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian2-black-attack.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "attack",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 11520,
+                "actual_cells": 11520
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.11163194444444445,
+                "min_ratio": 0.05,
+                "nonempty": 1286,
+                "total": 11520
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 11520
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  144,
+                  80
+                ],
+                "expected": [
+                  144,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            144,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "plydie": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-black-plydie-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian2-black-plydie.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian2-black-plydie.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/120e6bc7-d6b5-436d-a7bd-6010e95a1858.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            5
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 11,
+          "cell_h_chars": 11,
+          "checksum": "6c4bce86340b6810e9ea939f3b02d925d61df0d8a5f0b89fbd2f7f684976d289",
+          "family": "plydie"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian2-black-plydie.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "death",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 9680,
+                "actual_cells": 9680
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.09917355371900827,
+                "min_ratio": 0.05,
+                "nonempty": 960,
+                "total": 9680
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 9680
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  110,
+                  88
+                ],
+                "expected": [
+                  110,
+                  88
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 3,
+                "expected_layers": 3
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "5"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "5"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            110,
+            88
+          ],
+          "layer_count": 3
+        }
+      }
+    },
+    "notes": [
+      "Source tiles are 52x52. Player sheet maps idle pose + move frames duplicated 4->8.",
+      "Attack frames duplicated 4->8.",
+      "Faint single pose duplicated across 8 angles x 5 death frames."
+    ]
+  },
+  {
+    "name": "Civilian2",
+    "normalized_name": "civilian2",
+    "inputs": {
+      "idle": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian2_Idle.png",
+      "move": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian2_Move.png",
+      "attack": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian2_Attack.png",
+      "faint": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Civilian2_Faint.png"
+    },
+    "jobs": {
+      "player": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-player-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian2-player.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian2-player.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/7c133830-2fe2-41d3-b05b-68b1fdca023b.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            1,
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 7,
+          "cell_h_chars": 10,
+          "checksum": "27f6f54cbf847c966c816ed1a5c41ca6dcd72622f5ef5db8645c58793216281d",
+          "family": "player"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian2-player.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "idle",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 10080,
+                "actual_cells": 10080
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.10972222222222222,
+                "min_ratio": 0.05,
+                "nonempty": 1106,
+                "total": 10080
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 10080
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  126,
+                  80
+                ],
+                "expected": [
+                  126,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            126,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "attack": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-attack-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian2-attack.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian2-attack.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/a6c38dd5-7ba9-4a00-b88e-0353b0220b6b.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 9,
+          "cell_h_chars": 10,
+          "checksum": "154ac6102c6aba97bfd06191f844ebe339f068617b807577907ab6167573bf33",
+          "family": "attack"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian2-attack.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "attack",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 11520,
+                "actual_cells": 11520
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.11163194444444445,
+                "min_ratio": 0.05,
+                "nonempty": 1286,
+                "total": 11520
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 11520
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  144,
+                  80
+                ],
+                "expected": [
+                  144,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            144,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "plydie": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-plydie-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/civilian2-plydie.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/civilian2-plydie.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/cf0b7e59-c90a-47e6-b9fe-147fd78e8f42.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            5
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 11,
+          "cell_h_chars": 11,
+          "checksum": "aa3217aec0761960d782000beb0309e5939f847675c43fcd61c9d76b22193c42",
+          "family": "plydie"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/civilian2-plydie.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "death",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 9680,
+                "actual_cells": 9680
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.09917355371900827,
+                "min_ratio": 0.05,
+                "nonempty": 960,
+                "total": 9680
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 9680
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  110,
+                  88
+                ],
+                "expected": [
+                  110,
+                  88
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 3,
+                "expected_layers": 3
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "5"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "5"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            110,
+            88
+          ],
+          "layer_count": 3
+        }
+      }
+    },
+    "notes": [
+      "Source tiles are 52x52. Player sheet maps idle pose + move frames duplicated 4->8.",
+      "Attack frames duplicated 4->8.",
+      "Faint single pose duplicated across 8 angles x 5 death frames."
+    ]
+  },
+  {
+    "name": "Knight1",
+    "normalized_name": "knight1",
+    "inputs": {
+      "idle": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Knight1_Idle.png",
+      "move": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Knight1_Move.png",
+      "attack": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Knight1_Attack.png",
+      "faint": "/Users/r/Library/Mobile Documents/com~apple~CloudDocs/Documents - r\u2019s MacBook Pro/24px Mini Characters/images/Characters/Knight1_Faint.png"
+    },
+    "jobs": {
+      "player": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/knight1-player-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/knight1-player.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/knight1-player.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/0b7b0804-61c4-4b7b-b5d2-8f7f491e00c6.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            1,
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 7,
+          "cell_h_chars": 10,
+          "checksum": "4450a9ac75cffacd8c230869efe709e8f3563a97538ccc8c6840657ff768bc04",
+          "family": "player"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/knight1-player.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "idle",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 10080,
+                "actual_cells": 10080
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.11349206349206349,
+                "min_ratio": 0.05,
+                "nonempty": 1144,
+                "total": 10080
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 10080
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  126,
+                  80
+                ],
+                "expected": [
+                  126,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "1",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            126,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "attack": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/knight1-attack-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/knight1-attack.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/knight1-attack.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/1ee71ba1-30f8-4b51-90a3-3c999da66593.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 9,
+          "cell_h_chars": 10,
+          "checksum": "3c4249814658b92c1ee03c5151a95090baf1cba3d72cdef1b753fd52bf3876ac",
+          "family": "attack"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/knight1-attack.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "attack",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 11520,
+                "actual_cells": 11520
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.14305555555555555,
+                "min_ratio": 0.05,
+                "nonempty": 1648,
+                "total": 11520
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 11520
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  144,
+                  80
+                ],
+                "expected": [
+                  144,
+                  80
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 4,
+                "expected_layers": 4
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "8"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "8"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            144,
+            80
+          ],
+          "layer_count": 4
+        }
+      },
+      "plydie": {
+        "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/knight1-plydie-source.png",
+        "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/xps/knight1-plydie.xp",
+        "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/previews/knight1-plydie.png",
+        "job_xp": "/Users/r/Downloads/asciicker-pipeline-v3/data/exports/a745cf87-759e-4db8-b98d-a1e334a80b9a.xp",
+        "metadata": {
+          "angles": 8,
+          "anims": [
+            5
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "render_resolution": 2,
+          "cell_w_chars": 11,
+          "cell_h_chars": 11,
+          "checksum": "f615a341deb9d059e99b2836337d1fc20c1687d3b040f8c7009640e97f79e88b",
+          "family": "plydie"
+        },
+        "validation": {
+          "xp_path": "output/24px-mini-characters/xps/knight1-plydie.xp",
+          "template_set_key": "player_native_full",
+          "action_key": "death",
+          "overall": "PASS",
+          "gates": [
+            {
+              "gate": "G7",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "expected_cells": 9680,
+                "actual_cells": 9680
+              }
+            },
+            {
+              "gate": "G8",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "ratio": 0.09917355371900827,
+                "min_ratio": 0.05,
+                "nonempty": 960,
+                "total": 9680
+              }
+            },
+            {
+              "gate": "G9",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "populated_cells": 9680
+              }
+            },
+            {
+              "gate": "G10",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual": [
+                  110,
+                  88
+                ],
+                "expected": [
+                  110,
+                  88
+                ]
+              }
+            },
+            {
+              "gate": "G11",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_layers": 3,
+                "expected_layers": 3
+              }
+            },
+            {
+              "gate": "G12",
+              "verdict": "THRESHOLD_MET",
+              "details": {
+                "actual_l0_row0": [
+                  "8",
+                  "5"
+                ],
+                "expected_l0_row0": [
+                  "8",
+                  "5"
+                ]
+              }
+            }
+          ],
+          "xp_dims": [
+            110,
+            88
+          ],
+          "layer_count": 3
+        }
+      }
+    },
+    "notes": [
+      "Source tiles are 52x52. Player sheet maps idle pose + move frames duplicated 4->8.",
+      "Attack frames duplicated 4->8.",
+      "Faint single pose duplicated across 8 angles x 5 death frames."
+    ]
+  }
+]
