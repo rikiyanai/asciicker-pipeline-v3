@@ -1,0 +1,542 @@
+[
+  {
+    "name": "civilian1",
+    "family": "attack",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-attack.xp",
+    "session_id": "9a5cee8d-f74e-49ef-8a10-61b365833ab4",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 288,
+    "grid_rows": 160,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "populated_cells": 2132
+  },
+  {
+    "name": "civilian1-black",
+    "family": "attack",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-black-attack.xp",
+    "session_id": "c93c5e7b-61b1-4013-a438-067b3d005e76",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 288,
+    "grid_rows": 160,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "populated_cells": 2132
+  },
+  {
+    "name": "civilian1-black",
+    "family": "player",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-black-player.xp",
+    "session_id": "d79c5fb5-c526-45a6-bf0c-efa4353e7ebb",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 252,
+    "grid_rows": 160,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "populated_cells": 2064
+  },
+  {
+    "name": "civilian1-black",
+    "family": "plydie",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-black-plydie.xp",
+    "session_id": "ba9ba830-db21-486b-9aa7-216a568b2ea5",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 220,
+    "grid_rows": 176,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "populated_cells": 2080
+  },
+  {
+    "name": "civilian1-black-weapon1",
+    "family": "attack",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-black-weapon1-attack.xp",
+    "session_id": "036a3793-d3e5-42b8-a4ab-8acceb3e6230",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 288,
+    "grid_rows": 160,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "populated_cells": 2820
+  },
+  {
+    "name": "civilian1-black-weapon1",
+    "family": "player",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-black-weapon1-player.xp",
+    "session_id": "df8b772c-5ca2-431a-93d6-cfe3dcdb76f4",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 252,
+    "grid_rows": 160,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "populated_cells": 2180
+  },
+  {
+    "name": "civilian1-black-weapon1",
+    "family": "plydie",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-black-weapon1-plydie.xp",
+    "session_id": "93d39b6e-7128-461b-8921-ff9970cfe389",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 220,
+    "grid_rows": 176,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "populated_cells": 2080
+  },
+  {
+    "name": "civilian1",
+    "family": "player",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-player.xp",
+    "session_id": "729774a0-1ae4-4158-97df-b9424c4f42cc",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 252,
+    "grid_rows": 160,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "populated_cells": 2064
+  },
+  {
+    "name": "civilian1",
+    "family": "plydie",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-plydie.xp",
+    "session_id": "9bb5044f-80c6-4166-9269-9c62886da216",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 220,
+    "grid_rows": 176,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "populated_cells": 2080
+  },
+  {
+    "name": "civilian1-weapon1",
+    "family": "attack",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-weapon1-attack.xp",
+    "session_id": "27b2e39c-c587-4e16-9146-f0ec84af4c7b",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 288,
+    "grid_rows": 160,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "populated_cells": 2820
+  },
+  {
+    "name": "civilian1-weapon1",
+    "family": "player",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-weapon1-player.xp",
+    "session_id": "9fcadd86-86f2-40ca-8b10-54b760b81c0b",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 252,
+    "grid_rows": 160,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "populated_cells": 2180
+  },
+  {
+    "name": "civilian1-weapon1",
+    "family": "plydie",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-weapon1-plydie.xp",
+    "session_id": "0bc7426d-0479-4959-95c4-982f3746b60a",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 220,
+    "grid_rows": 176,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "populated_cells": 2080
+  },
+  {
+    "name": "civilian2",
+    "family": "attack",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-attack.xp",
+    "session_id": "a584865e-d7e1-4c5d-bdc7-26c1902cf880",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 288,
+    "grid_rows": 160,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "populated_cells": 2164
+  },
+  {
+    "name": "civilian2-black",
+    "family": "attack",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-black-attack.xp",
+    "session_id": "e8bbe6bc-2ecf-4058-b8aa-1ad9e9dfd987",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 288,
+    "grid_rows": 160,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "populated_cells": 2180
+  },
+  {
+    "name": "civilian2-black",
+    "family": "player",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-black-player.xp",
+    "session_id": "5a68436f-9dc9-4e7c-acfc-4a66a66dace2",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 252,
+    "grid_rows": 160,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "populated_cells": 2074
+  },
+  {
+    "name": "civilian2-black",
+    "family": "plydie",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-black-plydie.xp",
+    "session_id": "60ee3ffa-08b1-4c11-b801-392e079b5072",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 220,
+    "grid_rows": 176,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "populated_cells": 2160
+  },
+  {
+    "name": "civilian2-black-weapon1",
+    "family": "attack",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-black-weapon1-attack.xp",
+    "session_id": "80a2b7a0-5ca4-4dbe-bce1-00fd974b9271",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 288,
+    "grid_rows": 160,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "populated_cells": 2868
+  },
+  {
+    "name": "civilian2-black-weapon1",
+    "family": "player",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-black-weapon1-player.xp",
+    "session_id": "31130873-d758-401a-ac10-a86e3b5a2be6",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 252,
+    "grid_rows": 160,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "populated_cells": 2180
+  },
+  {
+    "name": "civilian2-black-weapon1",
+    "family": "plydie",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-black-weapon1-plydie.xp",
+    "session_id": "4cc77531-b66c-4c57-9e3e-b045976a5134",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 220,
+    "grid_rows": 176,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "populated_cells": 2160
+  },
+  {
+    "name": "civilian2",
+    "family": "player",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-player.xp",
+    "session_id": "820feaeb-13ab-461a-9f86-f766940b9e35",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 252,
+    "grid_rows": 160,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "populated_cells": 2074
+  },
+  {
+    "name": "civilian2",
+    "family": "plydie",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-plydie.xp",
+    "session_id": "bbcf2101-e950-42c6-9d3b-44176477af50",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 220,
+    "grid_rows": 176,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "populated_cells": 2160
+  },
+  {
+    "name": "knight1",
+    "family": "attack",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/knight1-attack.xp",
+    "session_id": "cede6978-e00e-482e-91d9-a357f05004aa",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 288,
+    "grid_rows": 160,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "populated_cells": 2804
+  },
+  {
+    "name": "knight1",
+    "family": "player",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/knight1-player.xp",
+    "session_id": "d1451fdf-52e1-47dd-8b37-5e968c69db9c",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 252,
+    "grid_rows": 160,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "populated_cells": 2104
+  },
+  {
+    "name": "knight1",
+    "family": "plydie",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/knight1-plydie.xp",
+    "session_id": "587fabe6-aabc-4622-803f-7808244ab774",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 220,
+    "grid_rows": 176,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "populated_cells": 2160
+  },
+  {
+    "name": "nude-template",
+    "family": "attack",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/nude-template-attack.xp",
+    "session_id": "5aa455bd-5f83-44bc-9068-fd2adae15824",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 288,
+    "grid_rows": 160,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "populated_cells": 1992
+  },
+  {
+    "name": "nude-template",
+    "family": "player",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/nude-template-player.xp",
+    "session_id": "331ab4f1-4783-4a28-b089-153bd29a8778",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 252,
+    "grid_rows": 160,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "populated_cells": 1904
+  },
+  {
+    "name": "nude-template",
+    "family": "plydie",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/nude-template-plydie.xp",
+    "session_id": "4cf8b76d-e5e0-4170-8c29-aa523147069e",
+    "session_kind": "raw_xp",
+    "metadata_status": "valid",
+    "active_layer": 2,
+    "visible_layers": [
+      2
+    ],
+    "locked_layers": [
+      0
+    ],
+    "grid_cols": 220,
+    "grid_rows": 176,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "populated_cells": 2000
+  }
+]

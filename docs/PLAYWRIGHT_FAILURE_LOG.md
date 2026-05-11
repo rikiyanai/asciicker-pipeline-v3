@@ -12132,3 +12132,45 @@ Verification:
 - Full-fidelity workbench manifest check: 27 sessions, no session with bad
   layer defaults; dimensions are `player=936x416`, `attack=832x416`,
   `plydie=520x416`, with `cell_w_chars=52`, `cell_h_chars=52`.
+
+### Follow-up — Pixel-Cell Full-Fidelity Sessions Were Too Large For Workbench JSON (2026-05-11)
+
+The 2026-05-11 "full-fidelity" conversion interpreted fidelity as one source
+pixel per XP cell. That was wrong for this asset set. The user's source
+constraint was "only 2x the size", not `52x52` cells per frame. The mistaken
+conversion produced huge documents such as `832x416x4` layers for attack. When
+persisted through the current workbench session model, one local
+`data/sessions/*.json` file reached `285,432,295` bytes.
+
+Root cause:
+
+- The current workbench session model stores uploaded XP layers as JSON cell
+  objects (`layers[layer][cell] = {glyph, fg, bg}`).
+- `save_json()` pretty-printed those cell arrays with `indent=2`, multiplying
+  the physical line count and file size.
+- Very large XP-backed sessions can make the server/browser appear stale,
+  disconnected, or all-magenta because the document load path is dominated by
+  JSON parsing/transfer rather than rendering.
+
+Fix:
+
+- The mistaken `output/24px-mini-characters-full-fidelity/` set was removed.
+- `scripts/convert_24px_mini_template_2x.py` now writes the intended 2x
+  template geometry beside the original smaller set:
+  `player=252x160`, `attack=288x160`, `plydie=220x176`.
+- Session JSON writes now use compact JSON through `_save_session_json()` for
+  workbench sessions only; jobs, bundles, and other small documents keep their
+  readable formatting.
+- `data/sessions/*.json` remains ignored and is not part of the committed
+  artifact set.
+
+Verification:
+
+- 2x-template generation created 27 XP files with no bad layer defaults:
+  active layer `2`, visible layers `[2]`, locked layers `[0]`.
+- Example 2x attack load-session response returned HTTP 200 and `9,706,002`
+  bytes with `active_layer=2`, `visible_layers=[2]`, `locked_layers=[0]`.
+- Regenerated local 2x session files are compact JSON with zero newline
+  characters; example sizes: attack `9,705,364` bytes, player `8,493,927`
+  bytes.
+- `python3 -m pytest tests/test_workbench_flow.py -q` -> PASS, 16 tests.

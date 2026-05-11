@@ -476,6 +476,8 @@ def test_upload_valid_native_xp_defaults_to_visual_layer(client, tmp_path: Path)
     assert uploaded["active_layer"] == 2
     assert uploaded["visible_layers"] == [2]
     assert uploaded["locked_layers"] == [0]
+    session_path = Path(__file__).resolve().parents[1] / "data" / "sessions" / f"{uploaded['session_id']}.json"
+    assert "\n" not in session_path.read_text()
 
 
 def test_upload_missing_metadata_visual_strip_infers_frame_width(client, tmp_path: Path):

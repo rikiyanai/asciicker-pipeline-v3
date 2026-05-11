@@ -5,10 +5,14 @@ from pathlib import Path
 from typing import Any
 
 
-def save_json(path: str | Path, payload: dict[str, Any]) -> None:
+def save_json(path: str | Path, payload: dict[str, Any], *, compact: bool = False) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    if compact:
+        text = json.dumps(payload, separators=(",", ":"))
+    else:
+        text = json.dumps(payload, indent=2)
+    p.write_text(text, encoding="utf-8")
 
 
 def load_json(path: str | Path) -> dict[str, Any]:

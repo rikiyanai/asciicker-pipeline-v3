@@ -1667,7 +1667,7 @@ def workbench_rename_session(session_id: str, name: str, req_id: str) -> dict[st
         raise ApiError("name must be <= 120 characters", "invalid_name", "workbench", req_id, 422)
     sess_dict = load_json(p)
     sess_dict["name"] = clean_name
-    save_json(p, sess_dict)
+    _save_session_json(p, sess_dict)
     owners = _bundle_session_owners()
     return _browse_session_summary(sess_dict, p, owners.get(session_id))
 
@@ -1682,7 +1682,7 @@ def workbench_duplicate_session(session_id: str, req_id: str) -> dict[str, Any]:
     duplicated["session_id"] = str(uuid.uuid4())
     duplicated["name"] = f"{source_label} copy"
     out_path = _session_path(duplicated["session_id"])
-    save_json(out_path, duplicated)
+    _save_session_json(out_path, duplicated)
     owners = _bundle_session_owners()
     return _browse_session_summary(duplicated, out_path, owners.get(str(duplicated["session_id"])))
 
@@ -1717,6 +1717,10 @@ def _job_path(job_id: str) -> Path:
 
 def _session_path(session_id: str) -> Path:
     return SESSIONS_DIR / f"{session_id}.json"
+
+
+def _save_session_json(path: str | Path, payload: dict[str, Any]) -> None:
+    save_json(path, payload, compact=True)
 
 
 def upload_image(file_storage, req_id: str) -> dict[str, Any]:
@@ -3139,7 +3143,7 @@ def workbench_load_from_job(job_id: str, req_id: str) -> dict[str, Any]:
         reg = load_template_registry()
         pcat = reg.get("prefix_catalog", {}).get(sess_dict["filename_prefix"], {})
         sess_dict["skin_family"] = str(pcat.get("skin_family") or "")
-    save_json(_session_path(session_id), sess_dict)
+    _save_session_json(_session_path(session_id), sess_dict)
 
     return _session_payload(sess_dict)
 
@@ -3184,7 +3188,7 @@ def workbench_create_blank_session(
         pcat = reg.get("prefix_catalog", {}).get(family_val, {})
         sess_dict["skin_family"] = str(pcat.get("skin_family") or "")
         sess_dict["source_projs"] = int(spec["source_projs"])
-        save_json(_session_path(session_id), sess_dict)
+        _save_session_json(_session_path(session_id), sess_dict)
         return _session_payload(sess_dict)
 
     reg = load_template_registry()
@@ -3257,7 +3261,7 @@ def workbench_create_blank_session(
     sess_dict["source_projs"] = int(action_spec.get("source_projs", action_spec.get("projs", projs)))
     sess_dict["template_set_key"] = template_set_key
     sess_dict["action_key"] = action_key
-    save_json(_session_path(session_id), sess_dict)
+    _save_session_json(_session_path(session_id), sess_dict)
     return _session_payload(sess_dict)
 
 
@@ -3520,7 +3524,7 @@ def workbench_upload_xp(xp_bytes: bytes, req_id: str, source_name: str = "") -> 
     clean_name = Path(str(source_name or "").strip()).name
     if clean_name:
         sess_dict["name"] = clean_name
-    save_json(sess_path, sess_dict)
+    _save_session_json(sess_path, sess_dict)
 
     response = _session_payload(sess_dict)
     response["job_id"] = job_id
@@ -4398,7 +4402,7 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
             filename_prefix,
         )
 
-    save_json(p, sess)
+    _save_session_json(p, sess)
     response = _session_payload(sess)
     response["cell_count"] = len(sess["cells"])
     response["source_boxes"] = len(sess.get("source_boxes", [])) if isinstance(sess.get("source_boxes"), list) else 0

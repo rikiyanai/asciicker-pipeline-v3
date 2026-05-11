@@ -1,0 +1,488 @@
+[
+  {
+    "name": "civilian1",
+    "family": "attack",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-attack-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-attack.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian1-attack.png",
+    "frames": 8,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "dimensions": [
+      288,
+      160
+    ],
+    "workbench_session_id": "9a5cee8d-f74e-49ef-8a10-61b365833ab4"
+  },
+  {
+    "name": "civilian1-black",
+    "family": "attack",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-black-attack-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-black-attack.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian1-black-attack.png",
+    "frames": 8,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "dimensions": [
+      288,
+      160
+    ],
+    "workbench_session_id": "c93c5e7b-61b1-4013-a438-067b3d005e76"
+  },
+  {
+    "name": "civilian1-black",
+    "family": "player",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-black-player-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-black-player.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian1-black-player.png",
+    "frames": 9,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "dimensions": [
+      252,
+      160
+    ],
+    "workbench_session_id": "d79c5fb5-c526-45a6-bf0c-efa4353e7ebb"
+  },
+  {
+    "name": "civilian1-black",
+    "family": "plydie",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-black-plydie-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-black-plydie.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian1-black-plydie.png",
+    "frames": 5,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "dimensions": [
+      220,
+      176
+    ],
+    "workbench_session_id": "ba9ba830-db21-486b-9aa7-216a568b2ea5"
+  },
+  {
+    "name": "civilian1-black-weapon1",
+    "family": "attack",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-black-weapon1-attack-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-black-weapon1-attack.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian1-black-weapon1-attack.png",
+    "frames": 8,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "dimensions": [
+      288,
+      160
+    ],
+    "workbench_session_id": "036a3793-d3e5-42b8-a4ab-8acceb3e6230"
+  },
+  {
+    "name": "civilian1-black-weapon1",
+    "family": "player",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-black-weapon1-player-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-black-weapon1-player.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian1-black-weapon1-player.png",
+    "frames": 9,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "dimensions": [
+      252,
+      160
+    ],
+    "workbench_session_id": "df8b772c-5ca2-431a-93d6-cfe3dcdb76f4"
+  },
+  {
+    "name": "civilian1-black-weapon1",
+    "family": "plydie",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-black-weapon1-plydie-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-black-weapon1-plydie.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian1-black-weapon1-plydie.png",
+    "frames": 5,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "dimensions": [
+      220,
+      176
+    ],
+    "workbench_session_id": "93d39b6e-7128-461b-8921-ff9970cfe389"
+  },
+  {
+    "name": "civilian1",
+    "family": "player",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-player-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-player.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian1-player.png",
+    "frames": 9,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "dimensions": [
+      252,
+      160
+    ],
+    "workbench_session_id": "729774a0-1ae4-4158-97df-b9424c4f42cc"
+  },
+  {
+    "name": "civilian1",
+    "family": "plydie",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-plydie-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-plydie.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian1-plydie.png",
+    "frames": 5,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "dimensions": [
+      220,
+      176
+    ],
+    "workbench_session_id": "9bb5044f-80c6-4166-9269-9c62886da216"
+  },
+  {
+    "name": "civilian1-weapon1",
+    "family": "attack",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-weapon1-attack-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-weapon1-attack.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian1-weapon1-attack.png",
+    "frames": 8,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "dimensions": [
+      288,
+      160
+    ],
+    "workbench_session_id": "27b2e39c-c587-4e16-9146-f0ec84af4c7b"
+  },
+  {
+    "name": "civilian1-weapon1",
+    "family": "player",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-weapon1-player-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-weapon1-player.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian1-weapon1-player.png",
+    "frames": 9,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "dimensions": [
+      252,
+      160
+    ],
+    "workbench_session_id": "9fcadd86-86f2-40ca-8b10-54b760b81c0b"
+  },
+  {
+    "name": "civilian1-weapon1",
+    "family": "plydie",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian1-weapon1-plydie-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian1-weapon1-plydie.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian1-weapon1-plydie.png",
+    "frames": 5,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "dimensions": [
+      220,
+      176
+    ],
+    "workbench_session_id": "0bc7426d-0479-4959-95c4-982f3746b60a"
+  },
+  {
+    "name": "civilian2",
+    "family": "attack",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-attack-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-attack.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian2-attack.png",
+    "frames": 8,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "dimensions": [
+      288,
+      160
+    ],
+    "workbench_session_id": "a584865e-d7e1-4c5d-bdc7-26c1902cf880"
+  },
+  {
+    "name": "civilian2-black",
+    "family": "attack",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-black-attack-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-black-attack.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian2-black-attack.png",
+    "frames": 8,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "dimensions": [
+      288,
+      160
+    ],
+    "workbench_session_id": "e8bbe6bc-2ecf-4058-b8aa-1ad9e9dfd987"
+  },
+  {
+    "name": "civilian2-black",
+    "family": "player",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-black-player-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-black-player.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian2-black-player.png",
+    "frames": 9,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "dimensions": [
+      252,
+      160
+    ],
+    "workbench_session_id": "5a68436f-9dc9-4e7c-acfc-4a66a66dace2"
+  },
+  {
+    "name": "civilian2-black",
+    "family": "plydie",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-black-plydie-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-black-plydie.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian2-black-plydie.png",
+    "frames": 5,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "dimensions": [
+      220,
+      176
+    ],
+    "workbench_session_id": "60ee3ffa-08b1-4c11-b801-392e079b5072"
+  },
+  {
+    "name": "civilian2-black-weapon1",
+    "family": "attack",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-black-weapon1-attack-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-black-weapon1-attack.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian2-black-weapon1-attack.png",
+    "frames": 8,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "dimensions": [
+      288,
+      160
+    ],
+    "workbench_session_id": "80a2b7a0-5ca4-4dbe-bce1-00fd974b9271"
+  },
+  {
+    "name": "civilian2-black-weapon1",
+    "family": "player",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-black-weapon1-player-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-black-weapon1-player.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian2-black-weapon1-player.png",
+    "frames": 9,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "dimensions": [
+      252,
+      160
+    ],
+    "workbench_session_id": "31130873-d758-401a-ac10-a86e3b5a2be6"
+  },
+  {
+    "name": "civilian2-black-weapon1",
+    "family": "plydie",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-black-weapon1-plydie-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-black-weapon1-plydie.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian2-black-weapon1-plydie.png",
+    "frames": 5,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "dimensions": [
+      220,
+      176
+    ],
+    "workbench_session_id": "4cc77531-b66c-4c57-9e3e-b045976a5134"
+  },
+  {
+    "name": "civilian2",
+    "family": "player",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-player-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-player.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian2-player.png",
+    "frames": 9,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "dimensions": [
+      252,
+      160
+    ],
+    "workbench_session_id": "820feaeb-13ab-461a-9f86-f766940b9e35"
+  },
+  {
+    "name": "civilian2",
+    "family": "plydie",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/civilian2-plydie-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/civilian2-plydie.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/civilian2-plydie.png",
+    "frames": 5,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "dimensions": [
+      220,
+      176
+    ],
+    "workbench_session_id": "bbcf2101-e950-42c6-9d3b-44176477af50"
+  },
+  {
+    "name": "knight1",
+    "family": "attack",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/knight1-attack-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/knight1-attack.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/knight1-attack.png",
+    "frames": 8,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "dimensions": [
+      288,
+      160
+    ],
+    "workbench_session_id": "cede6978-e00e-482e-91d9-a357f05004aa"
+  },
+  {
+    "name": "knight1",
+    "family": "player",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/knight1-player-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/knight1-player.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/knight1-player.png",
+    "frames": 9,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "dimensions": [
+      252,
+      160
+    ],
+    "workbench_session_id": "d1451fdf-52e1-47dd-8b37-5e968c69db9c"
+  },
+  {
+    "name": "knight1",
+    "family": "plydie",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/knight1-plydie-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/knight1-plydie.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/knight1-plydie.png",
+    "frames": 5,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "dimensions": [
+      220,
+      176
+    ],
+    "workbench_session_id": "587fabe6-aabc-4622-803f-7808244ab774"
+  },
+  {
+    "name": "nude-template",
+    "family": "attack",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/nude-template-attack-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/nude-template-attack.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/nude-template-attack.png",
+    "frames": 8,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 18,
+    "cell_h_chars": 20,
+    "dimensions": [
+      288,
+      160
+    ],
+    "workbench_session_id": "5aa455bd-5f83-44bc-9068-fd2adae15824"
+  },
+  {
+    "name": "nude-template",
+    "family": "player",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/nude-template-player-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/nude-template-player.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/nude-template-player.png",
+    "frames": 9,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 14,
+    "cell_h_chars": 20,
+    "dimensions": [
+      252,
+      160
+    ],
+    "workbench_session_id": "331ab4f1-4783-4a28-b089-153bd29a8778"
+  },
+  {
+    "name": "nude-template",
+    "family": "plydie",
+    "source_sheet": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters/source_sheets/nude-template-plydie-source.png",
+    "xp": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/xps/nude-template-plydie.xp",
+    "preview": "/Users/r/Downloads/asciicker-pipeline-v3/output/24px-mini-characters-template-2x/previews/nude-template-plydie.png",
+    "frames": 5,
+    "angles": 8,
+    "projections": 2,
+    "source_tile_px": 52,
+    "cell_w_chars": 22,
+    "cell_h_chars": 22,
+    "dimensions": [
+      220,
+      176
+    ],
+    "workbench_session_id": "4cf8b76d-e5e0-4170-8c29-aa523147069e"
+  }
+]
