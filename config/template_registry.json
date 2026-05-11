@@ -20,7 +20,8 @@
       ],
       "authorable_template_sets": [
         "player_native_idle_only",
-        "player_native_full"
+        "player_native_full",
+        "mounted_native_full"
       ]
     },
     "green": {
@@ -101,14 +102,16 @@
       "skin_family": "human",
       "runtime_role": "mounted_idle_walk",
       "mounted": true,
-      "authorable": false,
+      "authorable": true,
       "ahsw_range": "all_16",
-      "status": "specified_not_authorable",
-      "authoring_blockers": [
-        "mounted_family_scope_not_enabled",
-        "missing_native_builder"
+      "status": "authorable",
+      "authoring_blockers": [],
+      "template_actions": [
+        {
+          "template_set_key": "mounted_native_full",
+          "action_key": "mounted_idle"
+        }
       ],
-      "template_actions": [],
       "preview_xp": "sprites/wolfie-0001.xp",
       "preview_xp_sha256": "a9917ee5172cdc1ea335d07754f3b389653905bf7a4ad56701c94f00bd18496c",
       "l0_ref": "sprites/wolfie-0100.xp",
@@ -119,14 +122,16 @@
       "skin_family": "human",
       "runtime_role": "mounted_attack",
       "mounted": true,
-      "authorable": false,
+      "authorable": true,
       "ahsw_range": "weapon_gte_1",
-      "status": "specified_not_authorable",
-      "authoring_blockers": [
-        "mounted_family_scope_not_enabled",
-        "missing_native_builder"
+      "status": "authorable",
+      "authoring_blockers": [],
+      "template_actions": [
+        {
+          "template_set_key": "mounted_native_full",
+          "action_key": "mounted_attack"
+        }
       ],
-      "template_actions": [],
       "preview_xp": "sprites/wolack-0001.xp",
       "preview_xp_sha256": "20247d143b306be27a14a6a8034b4a70f1c5441912f5d13b5bcf8616fef084dc",
       "l0_ref": "sprites/wolack-0001.xp",
@@ -263,6 +268,64 @@
           "preview_xp_sha256": "6ed765f6ffd56ef8cfd7f6de5f13ff91a1438ae9cd7a9ac22775485ae350890c",
           "l0_ref": "sprites/plydie-0000.xp",
           "l0_ref_sha256": "29627bf1873555e2935ad8eaf31834fc7a6f9b0fe5694de398a1b2e351e45442"
+        }
+      }
+    },
+    "mounted_native_full": {
+      "label": "Mounted Skin (Wolf Full Bundle)",
+      "skin_family_scope": [
+        "human"
+      ],
+      "actions": {
+        "mounted_idle": {
+          "filename_prefix": "wolfie",
+          "skin_family": "human",
+          "label": "Mounted Idle / Walk",
+          "required": true,
+          "xp_dims": [
+            180,
+            104
+          ],
+          "angles": 8,
+          "frames": [
+            1,
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "cell_w": 10,
+          "cell_h": 13,
+          "layers": 4,
+          "ahsw_range": "all_16",
+          "preview_xp": "sprites/wolfie-0001.xp",
+          "preview_xp_sha256": "a9917ee5172cdc1ea335d07754f3b389653905bf7a4ad56701c94f00bd18496c",
+          "l0_ref": "sprites/wolfie-0100.xp",
+          "l0_ref_sha256": "930b9e3dc2482258c5b492e89bd083ee70fe2705ade2dd6b527f68190e54fe28"
+        },
+        "mounted_attack": {
+          "filename_prefix": "wolack",
+          "skin_family": "human",
+          "label": "Mounted Attack",
+          "required": false,
+          "xp_dims": [
+            160,
+            104
+          ],
+          "angles": 8,
+          "frames": [
+            8
+          ],
+          "source_projs": 1,
+          "projs": 2,
+          "cell_w": 10,
+          "cell_h": 13,
+          "layers": 5,
+          "ahsw_range": "weapon_gte_1",
+          "weapon_filter": "W>=1",
+          "preview_xp": "sprites/wolack-0001.xp",
+          "preview_xp_sha256": "20247d143b306be27a14a6a8034b4a70f1c5441912f5d13b5bcf8616fef084dc",
+          "l0_ref": "sprites/wolack-0001.xp",
+          "l0_ref_sha256": "20247d143b306be27a14a6a8034b4a70f1c5441912f5d13b5bcf8616fef084dc"
         }
       }
     }

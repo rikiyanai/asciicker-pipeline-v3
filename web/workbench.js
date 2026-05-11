@@ -4057,6 +4057,8 @@
     if ($("jitterRightBtn")) $("jitterRightBtn").disabled = jitterDisabled;
     if ($("jitterUpBtn")) $("jitterUpBtn").disabled = jitterDisabled;
     if ($("jitterDownBtn")) $("jitterDownBtn").disabled = jitterDisabled;
+    if ($("mountedCalibrationBtn")) $("mountedCalibrationBtn").disabled = !state.sessionId;
+    if ($("mountedSemanticBtn")) $("mountedSemanticBtn").disabled = !state.sessionId;
   }
 
   function cancelWholeSheetAutosaveIdle() {
@@ -5881,6 +5883,78 @@
       (clipped || clampedFrames) ? "warn" : "ok"
     );
     return true;
+  }
+
+  async function runMountedOverlayCalibration() {
+    if (!state.sessionId) {
+      status("Open or create a session before mounted calibration.", "warn");
+      return;
+    }
+    const mountedPath = String(state.activeActionKey || "").includes("attack")
+      ? "sprites/wolack-0001.xp"
+      : "sprites/wolfie-0100.xp";
+    const out = $("mountedReviewOut");
+    if (out) out.textContent = "Computing mounted calibration artifact...";
+    const r = await fetch(bp("/api/workbench/mounted-calibration/compute"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        player_xp: "sprites/player-0100.xp",
+        mounted_xp: mountedPath,
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      status(data.error || "Mounted calibration failed", "err");
+      if (out) out.textContent = JSON.stringify(data, null, 2);
+      return;
+    }
+    const save = await fetch(bp("/api/workbench/session/mounted-calibration"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: state.sessionId, data }),
+    });
+    const saved = await save.json().catch(() => ({}));
+    if (!save.ok) {
+      status(saved.error || "Mounted calibration artifact save failed", "err");
+      if (out) out.textContent = JSON.stringify(saved, null, 2);
+      return;
+    }
+    if (out) out.textContent = JSON.stringify(data, null, 2);
+    status("Mounted calibration artifact saved without mutating XP art.", "ok");
+  }
+
+  async function runMountedSemanticReview() {
+    if (!state.sessionId) {
+      status("Open or create a session before mounted semantic review.", "warn");
+      return;
+    }
+    const out = $("mountedReviewOut");
+    if (out) out.textContent = "Computing mounted semantic review artifact...";
+    const r = await fetch(bp("/api/workbench/mounted-semantic/proposals"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: state.sessionId }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      status(data.error || "Mounted semantic review failed", "err");
+      if (out) out.textContent = JSON.stringify(data, null, 2);
+      return;
+    }
+    const save = await fetch(bp("/api/workbench/session/mounted-semantic-review"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: state.sessionId, data }),
+    });
+    const saved = await save.json().catch(() => ({}));
+    if (!save.ok) {
+      status(saved.error || "Mounted semantic review artifact save failed", "err");
+      if (out) out.textContent = JSON.stringify(saved, null, 2);
+      return;
+    }
+    if (out) out.textContent = JSON.stringify(data, null, 2);
+    status("Mounted semantic review artifact saved without mutating XP art.", "ok");
   }
 
   function renderJitterInfo() {
@@ -8441,6 +8515,8 @@
     $("applyGroupsToAnimsBtn").addEventListener("click", applyGroupsToAnims);
     $("autoAlignSelectedBtn").addEventListener("click", () => autoAlignFrameJitter(false));
     $("autoAlignRowBtn").addEventListener("click", () => autoAlignFrameJitter(true));
+    $("mountedCalibrationBtn")?.addEventListener("click", runMountedOverlayCalibration);
+    $("mountedSemanticBtn")?.addEventListener("click", runMountedSemanticReview);
     $("jitterLeftBtn").addEventListener("click", () => {
       const step = Math.max(1, Number($("jitterStep").value || 1));
       nudgeSelectedFrames(-step, 0);

@@ -14,6 +14,7 @@ from pipeline_v2.service import (
     is_action_authorized,
     is_prefix_authorized,
     load_template_registry,
+    runtime_identity_for_action,
 )
 
 
@@ -73,16 +74,38 @@ def test_template_registry_mounted_scope_is_explicit():
     bigbee = registry["prefix_catalog"]["bigbee"]
 
     assert wolfie["mounted"] is True
-    assert wolfie["authorable"] is False
-    assert wolfie["status"] == "specified_not_authorable"
+    assert wolfie["authorable"] is True
+    assert wolfie["status"] == "authorable"
 
     assert wolack["mounted"] is True
-    assert wolack["authorable"] is False
-    assert wolack["status"] == "specified_not_authorable"
+    assert wolack["authorable"] is True
+    assert wolack["status"] == "authorable"
 
     assert bigbee["mounted"] is True
     assert bigbee["authorable"] is False
     assert bigbee["status"] == "deferred"
+
+
+def test_mounted_template_actions_are_authorable_after_identity_and_builders():
+    registry = load_template_registry()
+    mounted = registry["template_sets"]["mounted_native_full"]["actions"]
+
+    assert mounted["mounted_idle"]["filename_prefix"] == "wolfie"
+    assert mounted["mounted_idle"]["xp_dims"] == [180, 104]
+    assert mounted["mounted_idle"]["layers"] == 4
+    assert mounted["mounted_attack"]["filename_prefix"] == "wolack"
+    assert mounted["mounted_attack"]["xp_dims"] == [160, 104]
+    assert mounted["mounted_attack"]["layers"] == 5
+
+    ok, reason = is_action_authorized(
+        mounted["mounted_idle"],
+        registry,
+        template_set=registry["template_sets"]["mounted_native_full"],
+        template_set_key="mounted_native_full",
+        action_key="mounted_idle",
+    )
+    assert ok is True
+    assert reason == ""
 
 
 def test_templates_api_exposes_normalized_contract(client):
@@ -101,6 +124,34 @@ def test_templates_api_exposes_normalized_contract(client):
 
     human_scope = payload["skin_family_scope"]["human"]
     assert human_scope["mounted_prefixes"] == ["wolfie", "wolack"]
+
+
+def test_runtime_identity_registry_resolves_v2_ids_for_mounted_action():
+    registry = load_template_registry()
+    action = registry["template_sets"]["mounted_native_full"]["actions"]["mounted_idle"]
+
+    identity = runtime_identity_for_action("mounted_native_full", "mounted_idle", action)
+
+    assert identity["skin_definition_id"] == 100
+    assert identity["presentation_kind_id"] == 600
+    assert identity["layer_definition_id"] == 760
+
+
+def test_create_bundle_threads_runtime_identity_to_mounted_actions(client):
+    resp = client.post("/api/workbench/bundle/create", json={
+        "template_set_key": "mounted_native_full",
+    })
+    assert resp.status_code == 201
+    data = resp.get_json()
+
+    idle_identity = data["actions"]["mounted_idle"]["runtime_identity"]
+    attack_identity = data["actions"]["mounted_attack"]["runtime_identity"]
+    assert idle_identity["skin_definition_id"] == 100
+    assert idle_identity["presentation_kind_id"] == 600
+    assert idle_identity["layer_definition_id"] == 760
+    assert attack_identity["skin_definition_id"] == 100
+    assert attack_identity["presentation_kind_id"] == 601
+    assert attack_identity["layer_definition_id"] == 761
 
 
 # --- Normalizer unit tests ---
@@ -562,14 +613,11 @@ def test_normalizer_catches_ahsw_range_drift():
         _normalize_template_registry(raw)
 
 
-def test_normalizer_skips_ahsw_range_check_for_empty_template_actions():
-    """Prefixes with empty template_actions (wolfie/wolack) are not drift-checked
-    for ahsw_range — they are sole-source. Verify no error is raised."""
+def test_normalizer_checks_mounted_ahsw_range_after_template_actions_land():
+    """Mounted prefixes are drift-checked once they have live template_actions."""
     import json
     reg_path = REPO_ROOT / "config" / "template_registry.json"
     raw = json.loads(reg_path.read_text(encoding="utf-8"))
-    # Even if wolfie has a different ahsw_range, no error because no linked actions
     raw["prefix_catalog"]["wolfie"]["ahsw_range"] = "weapon_gte_1"
-    # Should not raise — wolfie has template_actions: []
-    result = _normalize_template_registry(raw)
-    assert result["prefix_catalog"]["wolfie"]["ahsw_range"] == "weapon_gte_1"
+    with pytest.raises(ValueError, match="wolfie.*ahsw_range"):
+        _normalize_template_registry(raw)

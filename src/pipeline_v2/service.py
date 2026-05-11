@@ -956,16 +956,18 @@ _template_registry: dict[str, Any] | None = None
 _l0_reference_cache: dict[str, list[Cell]] = {}
 _l0_reference_status: dict[str, str] = {}
 _l1_reference_cache: dict[str, list[Cell]] = {}
+_runtime_identity_registry: dict[str, Any] | None = None
 _registry_load_error: str | None = None  # Set if registry file was missing or malformed
 
 
 def _reset_template_registry_cache() -> None:
     """Reset all template registry and reference caches. For use in tests only."""
-    global _template_registry, _l0_reference_cache, _l0_reference_status, _l1_reference_cache, _registry_load_error
+    global _template_registry, _l0_reference_cache, _l0_reference_status, _l1_reference_cache, _registry_load_error, _runtime_identity_registry
     _template_registry = None
     _l0_reference_cache = {}
     _l0_reference_status = {}
     _l1_reference_cache = {}
+    _runtime_identity_registry = None
     _registry_load_error = None
 
 
@@ -1261,6 +1263,62 @@ def get_registry_status() -> dict[str, Any]:
     if errors:
         result["l0_errors"] = errors
     return result
+
+
+def load_runtime_identity_registry() -> dict[str, Any]:
+    """Load the single pipeline-v3 owner for Y9-2 runtime V2 identity IDs."""
+    global _runtime_identity_registry
+    if _runtime_identity_registry is not None:
+        return _runtime_identity_registry
+    p = CONFIG_DIR / "runtime_identity_registry.json"
+    if not p.exists():
+        raise ValueError("runtime_identity_registry.json not found")
+    registry = json.loads(p.read_text(encoding="utf-8"))
+    if registry.get("schema_version") != 1:
+        raise ValueError("runtime_identity_registry.json schema_version must be 1")
+    for top_key in ("skin_definitions", "presentation_kinds", "layer_definitions"):
+        if not isinstance(registry.get(top_key), dict):
+            raise ValueError(f"runtime_identity_registry.json missing object: {top_key}")
+    _runtime_identity_registry = registry
+    return registry
+
+
+def runtime_identity_for_action(
+    template_set_key: str,
+    action_key: str,
+    action_spec: dict[str, Any],
+) -> dict[str, int | str]:
+    """Resolve stable V2 IDs for a template action.
+
+    This is the UQ-007 owner used by backend bundle creation/export/payload
+    surfaces. Callers must not derive these IDs from family strings.
+    """
+    registry = load_runtime_identity_registry()
+    skin_family = str(action_spec.get("skin_family") or "").strip()
+    skin_spec = registry["skin_definitions"].get(skin_family)
+    if not isinstance(skin_spec, dict):
+        raise ValueError(f"runtime identity missing skin_definition for skin_family={skin_family!r}")
+    presentation_spec = registry["presentation_kinds"].get(action_key)
+    if not isinstance(presentation_spec, dict):
+        raise ValueError(f"runtime identity missing presentation kind for action={action_key!r}")
+    layer_key = f"{template_set_key}:{action_key}"
+    layer_spec = registry["layer_definitions"].get(layer_key)
+    if not isinstance(layer_spec, dict):
+        raise ValueError(f"runtime identity missing layer definition for {layer_key!r}")
+
+    skin_definition_id = int(skin_spec["skin_definition_id"])
+    presentation_kind_id = int(presentation_spec["presentation_kind_id"])
+    layer_definition_id = int(layer_spec["layer_definition_id"])
+    return {
+        "schema_version": 1,
+        "template_set_key": template_set_key,
+        "action_key": action_key,
+        "skin_family": skin_family,
+        "filename_prefix": str(action_spec.get("filename_prefix") or action_spec.get("family") or "").strip(),
+        "skin_definition_id": skin_definition_id,
+        "presentation_kind_id": presentation_kind_id,
+        "layer_definition_id": layer_definition_id,
+    }
 
 
 def _load_reference_l0(family: str) -> list[Cell] | None:
@@ -1559,6 +1617,7 @@ def create_bundle(template_set_key: str, req_id: str) -> dict[str, Any]:
                 job_id=str(blank.get("job_id") or ""),
                 source_path=None,
                 status="blank",
+                runtime_identity=runtime_identity_for_action(template_set_key, act_key, act_spec),
             )
         else:
             _log.info("create_bundle: skipping action '%s' — %s", act_key, auth_reason)
@@ -1991,6 +2050,8 @@ _FAMILY_DIMS: dict[str, tuple[int, int]] = {
     "player": (126, 80),
     "attack": (144, 80),
     "plydie": (110, 88),
+    "wolfie": (180, 104),
+    "wolack": (160, 104),
 }
 
 
@@ -2112,6 +2173,37 @@ def _build_native_death_layers(
     return [l0, l1, cells_layer2]
 
 
+def _build_native_mounted_layers(
+    *,
+    family: str,
+    cells_layer2: list[Cell],
+    cols: int,
+    rows: int,
+    stage: str,
+    req_id: str,
+) -> list[list[Cell]]:
+    """Assemble mounted native XP layers using the checked-in mounted reference.
+
+    Mounted families have family-specific dimensions and metadata layers. The
+    content layer remains the authored layer 2; surrounding layers come from the
+    registry-owned native reference or transparent placeholders.
+    """
+    _assert_native_dims(cols, rows, family, stage, req_id)
+    l0_ref = _assert_l0_reference_available(family, req_id)
+    l0: list[Cell] = list(l0_ref)
+    l1_ref = _load_reference_l1(family)
+    l1: list[Cell]
+    if l1_ref is not None and len(l1_ref) == cols * rows:
+        l1 = list(l1_ref)
+    else:
+        l1 = _build_native_l1_layer(cols, rows)
+    target_layers = 4 if family == "wolfie" else 5
+    layers: list[list[Cell]] = [l0, l1, cells_layer2]
+    while len(layers) < target_layers:
+        layers.append([_transparent_cell() for _ in range(cols * rows)])
+    return layers
+
+
 def _build_native_layers(
     *,
     family: str,
@@ -2135,6 +2227,11 @@ def _build_native_layers(
     if family == "plydie":
         return _build_native_death_layers(
             cells_layer2=cells_layer2, cols=cols, rows=rows,
+            stage=stage, req_id=req_id,
+        )
+    if family in {"wolfie", "wolack"}:
+        return _build_native_mounted_layers(
+            family=family, cells_layer2=cells_layer2, cols=cols, rows=rows,
             stage=stage, req_id=req_id,
         )
     raise ApiError(
@@ -2743,6 +2840,7 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
         "family": family,
         "filename_prefix": filename_prefix,
         "skin_family": skin_family,
+        "runtime_identity": sess_dict.get("runtime_identity"),
         "mounted_rider_calibration": sess_dict.get("mounted_rider_calibration"),
         "mounted_semantic_review": sess_dict.get("mounted_semantic_review"),
     }
@@ -3261,6 +3359,7 @@ def workbench_create_blank_session(
     sess_dict["source_projs"] = int(action_spec.get("source_projs", action_spec.get("projs", projs)))
     sess_dict["template_set_key"] = template_set_key
     sess_dict["action_key"] = action_key
+    sess_dict["runtime_identity"] = runtime_identity_for_action(template_set_key, action_key, action_spec)
     _save_session_json(_session_path(session_id), sess_dict)
     return _session_payload(sess_dict)
 
@@ -3318,6 +3417,7 @@ def bundle_action_run(bundle_id: str, action_key: str, source_path: str, req_id:
     action_state.job_id = job_id
     action_state.source_path = source_path
     action_state.status = "converted"
+    action_state.runtime_identity = runtime_identity_for_action(bundle.template_set_key, action_key, action_spec)
     save_bundle(bundle)
 
     return {
@@ -3939,6 +4039,8 @@ _FAMILY_L0_COL0: dict[str, list[str]] = {
     "player": ["8", "1", "8"],
     "attack": ["8", "8"],
     "plydie": ["8", "5"],
+    "wolfie": ["8", "1", "8"],
+    "wolack": ["8", "8"],
 }
 
 
@@ -4096,6 +4198,7 @@ def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
             "xp_path": export["xp_path"],
             "checksum": export["checksum"],
             "family": family,
+            "runtime_identity": runtime_identity_for_action(bundle.template_set_key, act_key, action_spec),
             "gates": gate_dicts,
         }
 
@@ -4184,6 +4287,7 @@ def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, 
             "xp_size_bytes": len(raw),
             "checksum": export["checksum"],
             "family": family,
+            "runtime_identity": runtime_identity_for_action(bundle.template_set_key, act_key, action_spec),
         }
 
     return {

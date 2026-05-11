@@ -5,9 +5,19 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const TEMPLATE_REGISTRY_PATH = path.join(REPO_ROOT, 'config', 'template_registry.json');
+const RUNTIME_IDENTITY_REGISTRY_PATH = path.join(REPO_ROOT, 'config', 'runtime_identity_registry.json');
 const EXPECTED_SCHEMA_VERSION = 2;
+const MOUNTED_AUTHORING_E2E_REQUIRED_EVIDENCE = [
+  'pipeline_v3_generated_mounted_xp',
+  'semantic_anchors_bound_to_generated_output',
+  'y9_2_bundle_rows_with_server_owned_v2_ids',
+  'runtime_parser_acceptance',
+  'runtime_selection_of_generated_rows',
+  'no_legacy_sprite_fallback',
+];
 
 let cachedRegistry = null;
+let cachedRuntimeIdentityRegistry = null;
 
 function readTemplateRegistry() {
   if (!cachedRegistry) {
@@ -18,6 +28,17 @@ function readTemplateRegistry() {
     cachedRegistry = registry;
   }
   return cachedRegistry;
+}
+
+function readRuntimeIdentityRegistry() {
+  if (!cachedRuntimeIdentityRegistry) {
+    const registry = JSON.parse(fs.readFileSync(RUNTIME_IDENTITY_REGISTRY_PATH, 'utf-8'));
+    if (registry.schema_version !== 1) {
+      throw new Error(`Unsupported runtime identity schema_version: ${registry.schema_version}`);
+    }
+    cachedRuntimeIdentityRegistry = registry;
+  }
+  return cachedRuntimeIdentityRegistry;
 }
 
 function requireObject(value, context) {
@@ -57,6 +78,22 @@ function findTemplateAction(prefixSpec, expectedTemplateSetKey, expectedActionKe
     && entry.template_set_key === expectedTemplateSetKey
     && entry.action_key === expectedActionKey
   )) || null;
+}
+
+function runtimeIdentityForAction(templateSetKey, actionKey, actionSpec) {
+  const registry = readRuntimeIdentityRegistry();
+  const skinFamily = requireString(actionSpec.skin_family, `${templateSetKey}:${actionKey}`, 'skin_family');
+  const skin = registry.skin_definitions?.[skinFamily];
+  const presentation = registry.presentation_kinds?.[actionKey];
+  const layer = registry.layer_definitions?.[`${templateSetKey}:${actionKey}`];
+  if (!skin || !presentation || !layer) {
+    throw new Error(`Missing runtime identity for ${templateSetKey}:${actionKey}`);
+  }
+  return {
+    skin_definition_id: Number(skin.skin_definition_id),
+    presentation_kind_id: Number(presentation.presentation_kind_id),
+    layer_definition_id: Number(layer.layer_definition_id),
+  };
 }
 
 export function semanticFrameCountFromAnims(anims = []) {
@@ -143,10 +180,14 @@ export function getSemanticRuntimeParityContract() {
   const playerPrefix = getPrefixSpec('player');
   const attackPrefix = getPrefixSpec('attack');
   const deathPrefix = getPrefixSpec('plydie');
+  const wolfiePrefix = getPrefixSpec('wolfie');
+  const wolackPrefix = getPrefixSpec('wolack');
 
   const fullIdle = findTemplateAction(playerPrefix, 'player_native_full', 'idle');
   const fullAttack = findTemplateAction(attackPrefix, 'player_native_full', 'attack');
   const fullDeath = findTemplateAction(deathPrefix, 'player_native_full', 'death');
+  const mountedIdle = findTemplateAction(wolfiePrefix, 'mounted_native_full', 'mounted_idle');
+  const mountedAttack = findTemplateAction(wolackPrefix, 'mounted_native_full', 'mounted_attack');
 
   const requiredRows = [
     {
@@ -314,12 +355,12 @@ export function getSemanticRuntimeParityContract() {
         presentation_kinds: ['idle', 'move'],
       },
       pipeline_v3: {
-        mapping_status: 'specified_not_authorable',
-        filename_prefix: requireString(getPrefixSpec('wolfie').filename_prefix, "prefix_catalog 'wolfie'", 'filename_prefix'),
-        runtime_role: requireString(getPrefixSpec('wolfie').runtime_role, "prefix_catalog 'wolfie'", 'runtime_role'),
-        blockers: Array.isArray(getPrefixSpec('wolfie').authoring_blockers)
-          ? [...getPrefixSpec('wolfie').authoring_blockers]
-          : ['mounted_family_scope_not_enabled'],
+        mapping_status: mountedIdle ? 'mapped_to_authoring_action' : 'mapping_missing',
+        template_set_key: mountedIdle?.template_set_key || '',
+        action_key: mountedIdle?.action_key || '',
+        filename_prefix: requireString(wolfiePrefix.filename_prefix, "prefix_catalog 'wolfie'", 'filename_prefix'),
+        runtime_role: requireString(wolfiePrefix.runtime_role, "prefix_catalog 'wolfie'", 'runtime_role'),
+        authorable: wolfiePrefix.authorable === true,
       },
     },
     {
@@ -336,36 +377,69 @@ export function getSemanticRuntimeParityContract() {
         presentation_kinds: ['attack'],
       },
       pipeline_v3: {
-        mapping_status: 'specified_not_authorable',
-        filename_prefix: requireString(getPrefixSpec('wolack').filename_prefix, "prefix_catalog 'wolack'", 'filename_prefix'),
-        runtime_role: requireString(getPrefixSpec('wolack').runtime_role, "prefix_catalog 'wolack'", 'runtime_role'),
-        blockers: Array.isArray(getPrefixSpec('wolack').authoring_blockers)
-          ? [...getPrefixSpec('wolack').authoring_blockers]
-          : ['mounted_family_scope_not_enabled'],
+        mapping_status: mountedAttack ? 'mapped_to_authoring_action' : 'mapping_missing',
+        template_set_key: mountedAttack?.template_set_key || '',
+        action_key: mountedAttack?.action_key || '',
+        filename_prefix: requireString(wolackPrefix.filename_prefix, "prefix_catalog 'wolack'", 'filename_prefix'),
+        runtime_role: requireString(wolackPrefix.runtime_role, "prefix_catalog 'wolack'", 'runtime_role'),
+        authorable: wolackPrefix.authorable === true,
       },
     },
   ];
 
-  for (const row of requiredRows) {
+  const rowsWithActionMappings = [...requiredRows, ...fullReadinessExtensionRows].filter((row) => (
+    row.pipeline_v3.template_set_key && row.pipeline_v3.action_key
+  ));
+  for (const row of rowsWithActionMappings) {
+    const templateSet = registry.template_sets?.[row.pipeline_v3.template_set_key];
+    const actionSpec = templateSet?.actions?.[row.pipeline_v3.action_key];
+    if (actionSpec) {
+      Object.assign(row.pipeline_v3, runtimeIdentityForAction(
+        row.pipeline_v3.template_set_key,
+        row.pipeline_v3.action_key,
+        actionSpec
+      ));
+    }
+  }
+
+  for (const row of [...requiredRows, ...fullReadinessExtensionRows]) {
     if (row.pipeline_v3.mapping_status === 'mapped_to_authoring_action') {
       if (!row.pipeline_v3.template_set_key || !row.pipeline_v3.action_key) {
         throw new Error(`Semantic runtime row '${row.row_key}' lost its authoring mapping`);
       }
+      for (const field of ['skin_definition_id', 'presentation_kind_id', 'layer_definition_id']) {
+        if (!Number.isInteger(row.pipeline_v3[field])) {
+          throw new Error(`Semantic runtime row '${row.row_key}' missing runtime identity field '${field}'`);
+        }
+      }
     }
+  }
+
+  for (const row of requiredRows) {
     if (row.pipeline_v3.mapping_status === 'unmodeled_gap') {
       requireArray(row.pipeline_v3.blockers, `semantic runtime row '${row.row_key}'`, 'blockers');
     }
   }
 
   for (const row of fullReadinessExtensionRows) {
-    requireArray(row.pipeline_v3.blockers, `semantic runtime extension row '${row.row_key}'`, 'blockers');
+    if (row.pipeline_v3.mapping_status !== 'mapped_to_authoring_action') {
+      requireArray(row.pipeline_v3.blockers, `semantic runtime extension row '${row.row_key}'`, 'blockers');
+    }
   }
 
   const readinessBlockers = requiredRows
     .filter((row) => row.pipeline_v3.mapping_status !== 'mapped_to_authoring_action')
     .map((row) => `${row.row_key}:${row.pipeline_v3.mapping_status}`);
 
-  readinessBlockers.push(...fullReadinessExtensionRows.map((row) => `${row.row_key}:${row.pipeline_v3.mapping_status}`));
+  readinessBlockers.push(...fullReadinessExtensionRows
+    .filter((row) => row.pipeline_v3.mapping_status !== 'mapped_to_authoring_action')
+    .map((row) => `${row.row_key}:${row.pipeline_v3.mapping_status}`));
+  readinessBlockers.push('mounted_authoring_e2e:missing_pipeline_v3_generated_mounted_xp');
+  readinessBlockers.push('mounted_authoring_e2e:missing_semantic_anchors_for_generated_output');
+  readinessBlockers.push('mounted_authoring_e2e:missing_server_owned_v2_bundle_rows');
+  readinessBlockers.push('mounted_authoring_e2e:missing_runtime_parser_acceptance');
+  readinessBlockers.push('mounted_authoring_e2e:missing_runtime_selection_of_generated_rows');
+  readinessBlockers.push('mounted_authoring_e2e:missing_no_legacy_sprite_fallback_proof');
   readinessBlockers.push('headed_semantic_gameplay_proof_missing');
   const minimumSemanticRuntimeRowsReady = requiredRows.every(
     (row) => row.pipeline_v3.mapping_status === 'mapped_to_authoring_action'
@@ -378,6 +452,26 @@ export function getSemanticRuntimeParityContract() {
     authorable_template_sets: Array.isArray(humanScope.authorable_template_sets)
       ? [...humanScope.authorable_template_sets]
       : [],
+    runtime_identity_ready: true,
+    runtime_identity_required_ids: [
+      'skin_definition_id',
+      'presentation_kind_id',
+      'layer_definition_id',
+    ],
+    mounted_authoring_proof: {
+      mode: 'mounted_authoring_e2e',
+      status: 'blocked',
+      existing_wrapper_inventory_smoke_label: 'existing wrapper inventory OK',
+      required_evidence: [...MOUNTED_AUTHORING_E2E_REQUIRED_EVIDENCE],
+      blocker_codes: [
+        'missing_pipeline_v3_generated_mounted_xp',
+        'missing_semantic_anchors_for_generated_output',
+        'missing_server_owned_v2_bundle_rows',
+        'missing_runtime_parser_acceptance',
+        'missing_runtime_selection_of_generated_rows',
+        'missing_no_legacy_sprite_fallback_proof',
+      ],
+    },
     minimum_semantic_runtime_rows_ready: minimumSemanticRuntimeRowsReady,
     generalized_bundle_port_ready: false,
     readiness_blockers: readinessBlockers,

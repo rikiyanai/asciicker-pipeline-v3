@@ -128,6 +128,7 @@ class BundleActionState:
     job_id: str | None = None
     source_path: str | None = None
     status: str = "empty"
+    runtime_identity: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

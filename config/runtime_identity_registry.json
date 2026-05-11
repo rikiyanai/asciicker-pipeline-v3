@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "skin_definitions": {
+    "human": {
+      "skin_definition_id": 100,
+      "label": "Human body owner"
+    }
+  },
+  "presentation_kinds": {
+    "idle": {
+      "presentation_kind_id": 600,
+      "slug": "idle_walk"
+    },
+    "attack": {
+      "presentation_kind_id": 601,
+      "slug": "attack"
+    },
+    "death": {
+      "presentation_kind_id": 602,
+      "slug": "fall_dead"
+    },
+    "mounted_idle": {
+      "presentation_kind_id": 600,
+      "slug": "idle_walk"
+    },
+    "mounted_attack": {
+      "presentation_kind_id": 601,
+      "slug": "attack"
+    }
+  },
+  "layer_definitions": {
+    "player_native_idle_only:idle": {
+      "layer_definition_id": 700
+    },
+    "player_native_full:idle": {
+      "layer_definition_id": 700
+    },
+    "player_native_full:attack": {
+      "layer_definition_id": 701
+    },
+    "player_native_full:death": {
+      "layer_definition_id": 702
+    },
+    "mounted_native_full:mounted_idle": {
+      "layer_definition_id": 760
+    },
+    "mounted_native_full:mounted_attack": {
+      "layer_definition_id": 761
+    }
+  }
+}

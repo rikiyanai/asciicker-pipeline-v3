@@ -45,7 +45,8 @@ It does not claim a new queue-row advance beyond the existing `UQ-004` state.
 
 1. `preview_xp -> l0_ref` fallback was fail-closed in this session; no
    remaining `UQ-004` gap.
-2. No mounted browser authoring surface shipped.
+2. Historical at that UQ-004 slice: no mounted browser authoring surface shipped
+   yet. Current state is tracked under PG-004 below.
 3. No `UQ-010` Y9-2 thin-client synchrony work shipped.
 
 ## Audit — UQ-004 Deletion-First Closeout: FAMILY_W_RANGE Maps Deleted (2026-04-29)
@@ -79,8 +80,9 @@ with one registry-derived override-name path.
 4. Both `termpp_skin_lab.js` copies fetch the registry at page load and derive
    `DEFAULT_OVERRIDE_SETS.player_common` from `prefix_catalog`.
 5. Normalizer drift-checks `ahsw_range` between `prefix_catalog` and linked
-   action specs (ValueError on mismatch). Wolfie/wolack have empty
-   `template_actions` so their `ahsw_range` is sole-source.
+   action specs (ValueError on mismatch). Wolfie/wolack now have mounted
+   template actions, so their `ahsw_range` is drift-checked against those
+   actions too.
 
 ### Claimed
 
@@ -226,7 +228,9 @@ entry. It does not claim UQ-008 progress.
      - `mounted_wrapper_unresolved.py` — fail-closed unresolved reporter for
        blocked family/presentation rows
 
-2. **No native builder for wolfie/wolack in PV3.** HIGH.
+2. **No native builder for wolfie/wolack in PV3.** HIGH. **Superseded
+   2026-05-11:** mounted native builders now exist for `wolfie` and `wolack`;
+   `bigbee` remains deferred.
    - `_build_native_layers()` raises `ApiError("no native builder")` for any
      family outside player/attack/plydie
    - Y9-2 solves this via `generate_mounted_wrapper_assets.py` which composes
@@ -265,11 +269,9 @@ entry. It does not claim UQ-008 progress.
 
 ### Still not claimed
 
-1. No mounted browser panels shipped (U2/U4 still missing).
-2. No mounted native builder shipped.
-3. No Y9-2 scripts ported to PV3.
-4. wolfie/wolack remain `authorable: false`.
-5. UQ-008 is still OPEN.
+1. No Y9-2 scripts ported wholesale to PV3.
+2. UQ-008 remains proof-blocked until `mounted_authoring_e2e` proves generated
+   mounted XP, runtime row selection, and no legacy fallback.
 
 ## Audit — Canon Gate Summary Correction For UQ-005 (2026-04-29)
 
@@ -1698,7 +1700,7 @@ pass.
 3. **The registry is no longer “missing mounted families”; it is mounted-aware but not executable end-to-end. MEDIUM.**
    - Live code evidence:
      - `config/template_registry.json` now contains explicit `filename_prefix`, `skin_family`, `runtime_role`, `mounted`, and mounted/deferred prefix lists
-     - `wolfie` / `wolack` are present with `status="specified_not_authorable"` and blockers `mounted_family_scope_not_enabled`, `missing_native_builder`
+     - Historical at audit time: `wolfie` / `wolack` were present with `status="specified_not_authorable"` and blockers `mounted_family_scope_not_enabled`, `missing_native_builder`
      - `tests/xp_fidelity_test/semantic_runtime_contract.test.mjs:64-71` keeps mounted rows explicit as blockers rather than silent omissions
    - Consequence:
      - the open gap is mounted authorability/native-builder/runtime proof
@@ -1715,7 +1717,7 @@ pass.
 5. **Generalized bundle parity is still blocked on semantic rows, not just on action tabs. HIGH.**
    - Live code evidence:
      - `scripts/xp_fidelity_test/bundle_contract.mjs` still marks `item.world_item` and `item.inventory_grid` as `unmodeled_gap`
-     - mounted rows remain `specified_not_authorable`
+     - Historical at audit time: mounted rows remained `specified_not_authorable`
    - Consequence:
      - bundle parity remains blocked on item/world/inventory implementation plus runtime-facing semantic proof
      - mounted parity remains blocked after that
@@ -10956,9 +10958,10 @@ run. Two design questions remain open before the contract can be called closed:
 
 ---
 
-### PG-003 — UQ-007: Runtime identity layer (skin_definition_id / layer_definition_id) [BLOCKED on PG-001]
+### PG-003 — UQ-007: Runtime identity layer (skin_definition_id / layer_definition_id) [CLOSED 2026-05-11]
 
-**Scope:** All of `src/`, `config/template_registry.json`
+**Scope:** `config/runtime_identity_registry.json`, `src/pipeline_v2/service.py`,
+`scripts/xp_fidelity_test/bundle_contract.mjs`, `config/template_registry.json`
 
 The Y9-2 bundle system uses a numeric identity layer: `skin_definition_id`
 (body-owner family identity, e.g. cyan_suit=100), `presentation_kind_id`
@@ -10966,42 +10969,42 @@ The Y9-2 bundle system uses a numeric identity layer: `skin_definition_id`
 and `layer_definition_id` (compiled row binding across six axes). None of these
 identifiers exist anywhere in the pipeline-v3 codebase.
 
-`bundle_contract.mjs` has informational-only rows for `presentation_kind_id`
-values (600–604) but nothing in the backend consumes them.
-`generalized_bundle_port_ready: false` in `bundle_contract.mjs` accurately
-documents this state.
-
-This identity layer cannot be added until UQ-004 (PG-001) settles the
-`filename_prefix`/`skin_family` authority model — the numeric IDs are the
-next abstraction layer above that. Also unresolved: where these IDs live
-(hard-coded constants, a new `id_registry.json`, or emitted by the bundle
-compiler itself).
-
-**Also in scope (STALE-4):** `bundle_contract.mjs:377` `scope_skin_family()`
-returns the string `"human"` not a `skin_definition_id`. This correctly
-reflects current pipeline-v3 scope, but means the contract does not prove
-Y9-2 runtime identity. The flag accurately captures this.
+**Runtime identity owner landed (2026-05-11):**
+`config/runtime_identity_registry.json` is now the single pipeline-v3 owner for
+`skin_definition_id`, `presentation_kind_id`, and `layer_definition_id`.
+`bundle_contract.mjs`, bundle creation, bundle export, runtime payloads, and
+template-owned sessions now carry those V2 IDs. The guard prevents
+bundle/runtime parity claims from passing on string-only `family`,
+`runtime_role`, or normalized-registry metadata.
 
 ---
 
-### PG-004 — UQ-008: Mounted families (wolfie, wolack) authoring surface [BLOCKED]
+### PG-004 — UQ-008: Mounted families (wolfie, wolack) authoring surface [PROOF BLOCKED]
 
 **Scope:** `src/pipeline_v2/service.py:1793–1812`, `config/template_registry.json`
 
-`wolfie` and `wolack` are in the registry with `authorable: false` and correct
-`authoring_blockers`. The `_build_native_layers()` dispatcher raises
-`ApiError("no native builder for family")` for any family outside the
-player/attack/plydie set. Three things are missing before mounted families can
-be authored:
+`wolfie` and `wolack` are now authorable in the registry only after UQ-007 V2
+identity ownership and mounted native builders landed. `_build_native_layers()`
+dispatches those two families through the mounted builder path; `bigbee`
+remains deferred and still fails closed.
 
-1. A native layer builder for mounted sprite geometry (different frame layout
-   and anchor conventions from humanoid families).
-2. Template action specs in `template_registry.json` for mounted actions
-   (`idle_walk_mount`, `attack_mount`).
-3. A SPRITE_CONTRACT entry covering mounted angles/projs/anims.
+**Proof contract update (2026-05-11):** UQ-008 now requires a separate
+`mounted_authoring_e2e` proof lane. Current Y9-2
+`mounted_compose_parity_check.py --smoke` evidence remains useful only as
+**existing wrapper inventory OK**; it is not the mounted authoring proof lane.
+It does not satisfy the generated mounted authoring proof mode. The replacement
+proof must start from generated mounted XP from pipeline-v3 (`wolfie` /
+`wolack`), bind semantic anchors/review artifacts to that generated output,
+emit Y9-2 bundle rows with server-owned V2 IDs, pass runtime parser acceptance,
+select those generated rows at runtime, and prove no legacy sprite fallback was
+used.
+Backend/MCP mounted calibration and semantic-review routes are foundations for
+this lane, not substitutes for it.
 
-Blocked on: no design spec for mounted frame layout, no Y9-2 source template
-to reference, and no clarity on whether mounted authoring is in M2 or M3 scope.
+Remaining blocker: execute `mounted_authoring_e2e` against generated mounted XP
+and runtime evidence. Backend/MCP/browser artifact foundations and authorable
+registry state are not enough without runtime parser acceptance, generated-row
+selection, and no-legacy-fallback proof.
 
 ---
 
@@ -11679,9 +11682,9 @@ still has mounted backend/MCP foundations in the live code. The
 `/api/workbench/mounted-calibration/compute` and
 `/api/workbench/mounted-semantic/proposals` routes are registered and served.
 Wrapper role constants (`mount_front` / `mount_rear`) are codified in
-`service.py`. Mounted remains `specified_not_authorable` — the foundation
-exists, but authorability and runtime closure for wolfie/wolack are still
-blocked. This is not the same as "mounted support is absent."
+`service.py`. **Superseded 2026-05-11:** mounted is now authorable for
+`wolfie`/`wolack`; runtime closure remains proof-blocked on
+`mounted_authoring_e2e`. This is not the same as "mounted support is absent."
 
 **Pipeline-v3 action:** Update §2.5.4.2 script inventory (already logged as DR-01).
 **Y9-2 action:** Update multiplayer spec mounted pipeline section. Clarify whether
@@ -12432,3 +12435,22 @@ Status:
 - Planned only. No converter output has been regenerated under this plan yet.
 - The next implementation slice must add the shared module and tests before
   reconverting the 24px Mini Characters or promoting any block XP artifacts.
+
+Review correction:
+
+- The plan now grounds font presentation as a pipeline-v3-local design
+  invariant instead of relying on Y9-2 `FL-3833` / `RQ-074` as local authority:
+  matching may use alternate font atlases, but exported XP stores glyph indices
+  and colors only.
+- The module is now described as pipeline-v3-first with a repo-portable contract
+  and explicit Y9-2 vendor provenance requirements, not an unqualified shared
+  owner.
+- Semantic-map bias now acknowledges the AGENTS.md symlink rule. Missing or
+  invalid semantic maps disable bias with a warning; schema expectations belong
+  to the glyph-assignment module docs.
+- The human review loop now has a concrete sidecar surface:
+  `glyph_suggestions.json` plus optional `glyph_review_overrides.json` consumed
+  on reruns.
+- Operational thresholds now define `solid`, `close`, and `ambiguous`:
+  `solid_bg_threshold`, `solid_feature_max_ratio`, and
+  `score_delta_threshold`.
