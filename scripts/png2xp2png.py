@@ -193,6 +193,7 @@ def _cp437_to_unicode(code):
 
 # Pre-build the full lookup table once
 _CP437_TO_UNI = {i: _cp437_to_unicode(i) for i in range(256)}
+CP437_TO_UNI = _CP437_TO_UNI
 
 
 # ---------------------------------------------------------------------------

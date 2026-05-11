@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 
-from png2xp2png import BdfFont, _CP437_TO_UNI  # noqa: E402
+from png2xp2png import BdfFont, CP437_TO_UNI  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ def _load_bdf_masks(path: Path, target_cell_size: tuple[int, int]) -> list[Glyph
     font = BdfFont(str(path))
     masks: list[GlyphMask] = []
     for glyph in range(256):
-        raw = font.get_mask(_CP437_TO_UNI.get(glyph, glyph))
+        raw = font.get_mask(CP437_TO_UNI.get(glyph, glyph))
         if raw is None:
             continue
         shaped = np.array(raw, dtype=bool).reshape(font.cell_h, font.cell_w)

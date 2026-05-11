@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 
@@ -19,52 +18,23 @@ def _dominant_color(pixels: np.ndarray) -> Color:
     return tuple(int(v) for v in colors[int(np.argmax(counts))])
 
 
-def _top_colors(pixels: np.ndarray, limit: int = 2) -> list[Color]:
-    counter = Counter(tuple(int(v) for v in row) for row in pixels.reshape(-1, 3))
-    return [color for color, _count in counter.most_common(limit)]
+def _unique_color_count(pixels: np.ndarray) -> int:
+    return int(len(np.unique(pixels.reshape(-1, 3), axis=0)))
 
 
-def _render_error(tile_rgb: np.ndarray, alpha: np.ndarray, mask: np.ndarray, fg: Color, bg: Color) -> float:
-    fg_arr = np.array(fg, dtype=np.float32)
-    bg_arr = np.array(bg, dtype=np.float32)
-    rendered = np.where(mask[:, :, None], fg_arr, bg_arr)
-    diff = tile_rgb.astype(np.float32) - rendered
-    visible = alpha.astype(bool)
-    if not visible.any():
-        return 0.0
-    return float(np.mean(np.square(diff[visible])) / (255.0 * 255.0 * 3.0))
-
-
-def _mask_iou_score(source_mask: np.ndarray, candidate_mask: np.ndarray) -> float:
-    union = source_mask | candidate_mask
-    if not union.any():
-        return 1.0
-    intersection = source_mask & candidate_mask
-    return float(intersection.sum() / union.sum())
-
-
-def _candidate(
-    tile_rgb: np.ndarray,
-    alpha: np.ndarray,
-    ink: np.ndarray,
-    glyph_mask: GlyphMask,
-    fg: Color,
-    bg: Color,
-    solid_penalty: float,
-) -> GlyphCandidate:
-    iou = _mask_iou_score(ink, glyph_mask.mask)
-    rgb_error = _render_error(tile_rgb, alpha, glyph_mask.mask, fg, bg)
-    score = max(0.0, min(1.0, (0.72 * iou) + (0.28 * (1.0 - rgb_error)) - solid_penalty))
-    reasons = ["matched CP437 mask against non-background pixels"]
-    if glyph_mask.glyph == 219 and solid_penalty:
-        reasons.append("solid block penalized because non-solid ink exists")
-    return GlyphCandidate(
-        glyph_mask.glyph,
-        fg,
-        bg,
-        score,
-        {"mask_iou": iou, "rgb_error": rgb_error, "solid_penalty": solid_penalty},
-        reasons,
+def _is_solid_cell(
+    color_count: int,
+    bg_ratio: float,
+    ink_count: int,
+    visible_count: int,
+    config: GlyphAssignmentConfig,
+) -> bool:
+    if color_count == 1:
+        return True
+    allowed_feature_pixels = max(1, int(visible_count * config.solid_feature_max_ratio))
+    return (
+        bg_ratio >= config.solid_bg_threshold
+        and ink_count <= allowed_feature_pixels
     )
 
 
@@ -97,7 +67,8 @@ def _rank_candidates(
         solid_penalties = np.array([0.35 if glyph == 219 and int(ink.sum()) > 1 else 0.0 for glyph in glyph_codes], dtype=np.float32)
         scores = np.maximum(0.0, np.minimum(1.0, (0.72 * iou_scores) + (0.28 * (1.0 - rgb_errors)) - solid_penalties))
         order = np.argsort(-scores)
-        for idx in order[: max(candidate_limit * 4, candidate_limit)]:
+        pool_size = max(candidate_limit * 4, 4)
+        for idx in order[:pool_size]:
             glyph = glyph_codes[int(idx)]
             reasons = ["matched CP437 mask against non-background pixels"]
             if glyph == 219 and solid_penalties[int(idx)]:
@@ -144,32 +115,22 @@ def assign_cell(
     tile_rgb = rgba[:, :, :3]
     visible_rgb = tile_rgb[alpha]
     bg = _dominant_color(visible_rgb)
-    colors = _top_colors(visible_rgb, 2)
-    fg = colors[1] if len(colors) > 1 and colors[0] == bg else colors[0]
+    color_count = _unique_color_count(visible_rgb)
     bg_arr = np.array(bg, dtype=np.int16)
     color_delta = np.abs(tile_rgb.astype(np.int16) - bg_arr).max(axis=2)
     ink = alpha & (color_delta > config.color_delta_threshold)
     visible_count = int(alpha.sum())
     ink_count = int(ink.sum())
-    total = int(alpha.size)
     bg_ratio = (visible_count - ink_count) / max(1, visible_count)
     feature_ratio = ink_count / max(1, visible_count)
 
-    solid = (
-        len(colors) == 1
-        or (
-            bg_ratio >= config.solid_bg_threshold
-            and feature_ratio <= config.solid_feature_max_ratio
-            and ink_count <= 1
-        )
-    )
-    if solid:
+    if _is_solid_cell(color_count, bg_ratio, ink_count, visible_count, config):
         block = GlyphCandidate(
             219,
             bg,
             TRANSPARENT_BG,
             1.0,
-            {"solid_bg_ratio": bg_ratio, "feature_ratio": feature_ratio},
+            {"solid_bg_ratio": bg_ratio, "feature_ratio": feature_ratio, "ink_count": ink_count},
             ["solid visible cell uses full block"],
         )
         alt = GlyphCandidate(

@@ -7,10 +7,11 @@ from PIL import Image
 from scripts.glyph_assignment import (
     GlyphAssignmentConfig,
     assign_cell,
+    assign_image_cells,
     load_glyph_masks,
     load_optional_semantic_bias,
 )
-from scripts.png2xp2png import BdfFont, _CP437_TO_UNI
+from scripts.png2xp2png import BdfFont, CP437_TO_UNI
 
 FONT_PATH = Path("runtime/termpp-skin-lab-static/termpp-web-flat/fonts/cp437_6x6.png.bdf")
 
@@ -27,7 +28,7 @@ def _config(**kwargs):
 
 def _tile_for_glyph(glyph, fg=(0, 0, 0), bg=(180, 180, 180)):
     font = BdfFont(str(FONT_PATH))
-    mask = np.array(font.get_mask(_CP437_TO_UNI[glyph]), dtype=bool).reshape(6, 6)
+    mask = np.array(font.get_mask(CP437_TO_UNI[glyph]), dtype=bool).reshape(6, 6)
     tile = np.zeros((6, 6, 4), dtype=np.uint8)
     tile[:, :, :3] = bg
     tile[:, :, 3] = 255
@@ -80,6 +81,23 @@ def test_non_solid_cells_do_not_collapse_to_full_block():
     assert len(assigned.alternatives) >= 2
 
 
+def test_tiny_features_allow_one_pixel_solid_but_penalize_two_pixel_block():
+    one_pixel = Image.new("RGBA", (6, 6), (180, 180, 180, 255))
+    one_pixel.putpixel((0, 0), (0, 0, 0, 255))
+    two_pixel = Image.new("RGBA", (6, 6), (180, 180, 180, 255))
+    two_pixel.putpixel((0, 0), (0, 0, 0, 255))
+    two_pixel.putpixel((1, 0), (0, 0, 0, 255))
+
+    one = assign_cell(one_pixel, _config())
+    two = assign_cell(two_pixel, _config(candidate_limit=256))
+    block_alternative = next(candidate for candidate in two.alternatives if candidate.glyph == 219)
+
+    assert one.chosen.glyph == 219
+    assert one.chosen.components["ink_count"] == 1
+    assert two.chosen.glyph != 219
+    assert block_alternative.components["solid_penalty"] == pytest.approx(0.35)
+
+
 def test_semantic_bias_only_changes_close_candidates():
     masks = load_glyph_masks(FONT_PATH, (6, 6))
     unbiased = assign_cell(_tile_for_glyph(117), _config(), masks, region="mouth")
@@ -104,12 +122,8 @@ def test_semantic_bias_only_changes_close_candidates():
 def test_missing_font_path_fails_at_matching_boundary():
     missing = Path("/tmp/does-not-exist-cp437.bdf")
 
-    try:
+    with pytest.raises(FileNotFoundError):
         assign_cell(_tile_for_glyph(47), _config(font_path=missing))
-    except FileNotFoundError:
-        pass
-    else:
-        raise AssertionError("missing font should fail before encoding presentation into XP")
 
 
 def test_missing_semantic_map_path_disables_bias_with_warning(tmp_path):
@@ -119,3 +133,25 @@ def test_missing_semantic_map_path_disables_bias_with_warning(tmp_path):
         bias = load_optional_semantic_bias(missing)
 
     assert bias == {}
+
+
+def test_assign_image_cells_preserves_cached_tile_coordinates_and_regions():
+    tile = _tile_for_glyph(47)
+    image = Image.new("RGBA", (12, 6), (0, 0, 0, 0))
+    image.alpha_composite(tile, (0, 0))
+    image.alpha_composite(tile, (6, 0))
+
+    cells = assign_image_cells(image, _config(), regions={(1, 0): "mouth"})
+
+    assert [(cell.x, cell.y, cell.region, cell.chosen.glyph) for cell in cells] == [
+        (0, 0, None, 47),
+        (1, 0, "mouth", 47),
+    ]
+
+
+def test_unsupported_font_atlas_extension_fails_closed(tmp_path):
+    atlas = tmp_path / "atlas.txt"
+    atlas.write_text("not a font\n")
+
+    with pytest.raises(ValueError, match="unsupported glyph atlas format"):
+        load_glyph_masks(atlas, (6, 6))
