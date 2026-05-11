@@ -12286,3 +12286,42 @@ Risk:
 - This is an automated reconstruction from a screenshot, not source `.xp`.
   Some OCR choices are still heuristic and should be visually reviewed before
   treating these as canonical gameplay skins.
+
+### Fix Attempt — XP Preview Plays Idle-Only Angle Sheets And Direct Session URLs (2026-05-11)
+
+Follow-up for the panel `12 xp preview` failure above.
+
+Root cause:
+
+- `Play` only advanced semantic frame columns.
+- The redone block XPs are intentionally idle-only sheets: one semantic frame
+  and eight angle rows. For those sheets the preview timer could be running
+  while rendering the same row/frame forever, which looked like "Play" did
+  nothing.
+- The workbench also lacked a direct `?session_id=` root-editor load path, so
+  leaving the browser opened on a specific raw XP session still depended on
+  Browse/UI state.
+
+Patch:
+
+- `web/workbench.js` now uses frame playback when `semanticFrames > 1`.
+- For one-frame, multi-angle sheets it cycles angle rows and updates the
+  Direction input, so idle-only angle sheets visibly animate in XP Preview.
+- One-frame, one-angle sheets render once and report a still-frame status.
+- `/workbench?session_id=<id>` and `/workbench?session=<id>` now hydrate through
+  the same `loadSession()` path as Browse, without requiring Full Bundle.
+
+Verification:
+
+- `node --test tests/web/workbench-xp-preview-playback.test.mjs` -> PASS, 3
+  tests.
+- `python3 -m pytest tests/test_workbench_flow.py -q` -> PASS, 16 tests.
+- Created local raw XP session
+  `df06dda0-80b1-48d3-9f1f-1027a0ddd1e3` from
+  `sprites/blocks_idle_redone/block_01_idle.xp` and opened:
+  `http://127.0.0.1:5071/workbench?session_id=df06dda0-80b1-48d3-9f1f-1027a0ddd1e3`.
+
+Note:
+
+- The local `data/sessions/*.json` session file is intentionally not part of
+  the commit.

@@ -4008,12 +4008,27 @@
   function startPreview() {
     stopPreview();
     const fps = Math.max(1, Number($("fpsInput").value || 8));
-    const row = Math.max(0, Math.min(state.angles - 1, Number($("previewAngle").value || 0)));
+    const baseRow = Math.max(0, Math.min(state.angles - 1, Number($("previewAngle").value || 0)));
     const semanticFrames = semanticFrameCount();
-    state.previewTimer = setInterval(() => {
-      renderPreviewFrame(row, state.previewFrameIdx % semanticFrames);
+    const angleCount = Math.max(1, Number(state.angles || 1));
+    const mode = semanticFrames > 1 ? "frames" : (angleCount > 1 ? "angles" : "still");
+    state.previewFrameIdx = 0;
+    const tick = () => {
+      if (mode === "angles") {
+        const row = (baseRow + state.previewFrameIdx) % angleCount;
+        $("previewAngle").value = String(row);
+        renderPreviewFrame(row, 0);
+      } else {
+        renderPreviewFrame(baseRow, state.previewFrameIdx % semanticFrames);
+      }
       state.previewFrameIdx += 1;
-    }, Math.floor(1000 / fps));
+    };
+    tick();
+    if (mode === "still") {
+      status("Preview has one frame and one direction; rendered still frame.", "warn");
+      return;
+    }
+    state.previewTimer = setInterval(tick, Math.floor(1000 / fps));
   }
 
   function updateActionButtons() {
@@ -9668,7 +9683,12 @@
   updateClassicGeometryControls();
   renderSourceCanvas();
   // CR-6: defer draft restore check until after loadFromJob settles
-  if (state.jobId) {
+  const initialSessionId = String(params.get("session_id") || params.get("session") || "").trim();
+  if (initialSessionId) {
+    loadSession(initialSessionId, { reason: `Opening session ${initialSessionId.slice(0, 8)}...` })
+      .then(() => _checkDraftRestore())
+      .catch(() => _checkDraftRestore());
+  } else if (state.jobId) {
     loadFromJob().then(() => _checkDraftRestore()).catch(() => _checkDraftRestore());
   } else {
     setTimeout(_checkDraftRestore, 0);
