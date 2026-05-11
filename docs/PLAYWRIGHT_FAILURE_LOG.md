@@ -12174,3 +12174,115 @@ Verification:
   characters; example sizes: attack `9,705,364` bytes, player `8,493,927`
   bytes.
 - `python3 -m pytest tests/test_workbench_flow.py -q` -> PASS, 16 tests.
+
+### Open Architecture Failure — Whole-Sheet Browse, Glyph Fidelity, XP Preview, And Skin Dock Still Not A Self-Contained Section 1 Flow (2026-05-11)
+
+User reported a broader Section 1 failure after the 2x sprite conversion:
+
+- The 24px mini character conversions still have no meaningful glyph selection;
+  they are colored full-block/solid-cell approximations and read as too
+  "blobby" for an ASCII/CP437 editor workflow.
+- Layer 0 expectations are unclear in the UI: if the XP is an engine/template
+  XP, layer 0 should be inspectable as metadata because the game-engine
+  metadata contract is stored there. If the XP is a pure Section 1 raw editor
+  document, missing or non-engine metadata may block wrapper/runtime export, but
+  must not block open/edit/browse behavior.
+- The user cannot simply open the workbench as a whole-sheet XP editor and view
+  these sprites. The discovered route was "Full Bundle" template selection plus
+  Browse, which is a Section 2 wrapper path and risks contaminating a Section 1
+  root-editor inspection workflow.
+- Browse did load the XP, but the `12 xp preview` animation/metadata panel did
+  not play the loaded sheet as expected.
+- `Test This Skin` in Skin Dock loaded the default mounted/Y9-2-active sprite
+  instead of the current workbench document. Skin Dock must be self-contained in
+  the workbench ecosystem: the current whole-sheet XP document (or current
+  workbench bundle) is the runtime payload source, not Y9-2's active bundle or
+  ambient mounted state.
+
+Canon grounding:
+
+- Section 1 is the root editor owner: whole-sheet document state, editing
+  behavior, layers, history, browse mode, and root image actions belong to the
+  Section 1 owner graph.
+- Section 2 templates/bundles/Skin Dock are wrappers over that root editor
+  state. They may seed, validate, export, or preview it, but may not replace the
+  root editor or require template selection merely to inspect/edit an XP.
+- Section 1.8.1 explicitly says missing layer-0 metadata may block later wrapper
+  export/runtime flows, but may not block Section 1 open/edit/browse behavior.
+- Section 1.8.3 says Browse must not require template selection merely to
+  inspect or edit an XP document in the Section 1 editor.
+- The user-facing runtime lane is singular: the current whole-sheet XP editor
+  state is what gets tested in the embedded Skin Dock/runtime preview.
+
+Architecture-first fix plan:
+
+1. **Separate Section 1 raw XP open from Section 2 template/bundle entry.**
+   Add or expose a direct "Open XP / Browse XP" root-editor path that loads a
+   saved or uploaded XP into the whole-sheet owner without forcing `Full Bundle`
+   or any template context.
+2. **Make document kind explicit in the UI.** Surface whether the loaded sheet is
+   `raw_xp`, `template_owned`, or `pipeline_job`, and whether layer 0 contains
+   engine-compatible metadata. Layer 0 must be viewable as ordinary layer
+   content regardless of wrapper compatibility.
+3. **Fix glyph fidelity before another sprite-family conversion.** The 2x
+   conversion is correctly sized, but not glyph-faithful. The next converter
+   must choose CP437 glyphs from source pixels/blocks instead of painting every
+   visible pixel as glyph 219. Gemini's Y9-2 OCR extraction is a candidate
+   falsifier/input for that path and must be reviewed before reuse.
+4. **Make panel 12 animation/metadata preview consume the loaded document.**
+   It must derive animation rows/frames from the current whole-sheet/session
+   metadata and provide a play path for raw/template-compatible sheets loaded
+   through Browse.
+5. **Make Skin Dock self-contained.** `Test This Skin` must export or serialize
+   the current workbench document/bundle and inject that payload into the dock.
+   It must not fall back to Y9-2's active mounted bundle/default sprite when a
+   current workbench document exists.
+6. **Add proof around the shipped user path, not just APIs.** Required proof is:
+   open `/workbench` -> Browse/Open XP -> whole-sheet visible on layer 2 ->
+   layer 0 manually selectable/visible -> panel 12 preview can play -> `Test
+   This Skin` uses the current workbench XP payload.
+
+No gameplay/runtime or conversion patch should be attempted before this owner
+plan is implemented, because repeated conversion tweaks have been masking the
+real Section 1/Section 2 ownership split.
+
+### Review Note — Gemini Y9-2 Screenshot OCR Block Extraction Was Not Correct Enough To Reuse (2026-05-11)
+
+After the architecture plan above was logged, the Y9-2 Gemini output was
+reviewed as a detour input for glyph-faithful conversion.
+
+Findings:
+
+- Gemini claimed 38 individual sprites named `block_01.xp` through
+  `block_38.xp`, but `assets/sprites/blocks/` contained irregular names such as
+  `block_1105.xp`, `block_1895.xp`, and `block_354.xp`.
+- `tmp/xp_extraction/blocks/` contained 3,558 intermediate PNG components, so
+  the detector was fragmenting the whole screenshot/terrain/UI rather than
+  isolating only the intended structures.
+- The OCR script detected/used an oversized cell scale for the representative
+  crop; many generated XPs were `1x1`, `1x2`, or similarly tiny fragments.
+- The stitched `blocks_sheet.xp` used only five glyphs (`219-223`) and had 334
+  nonzero cells. That is better than a no-glyph full-block conversion, but it
+  is still not a reliable CP437 reconstruction of the screenshot.
+
+Redo result:
+
+- A new Y9-2 extraction script was written at
+  `tmp/xp_extraction/extract_blocks_idle_redone.py`.
+- It uses the screenshot's 6x6 CP437 grid, isolates gray/white/black stone
+  objects from the green REXPaint canvas, OCRs cells against the CP437 BDF
+  masks, and emits each object as an idle-style XP sheet.
+- Redone Y9-2 output lives in `assets/sprites/blocks_idle_redone/`.
+- A copy was brought into this repo at `sprites/blocks_idle_redone/`.
+- Output count is 65 block/object XP files plus `manifest.json`.
+- Each XP is shaped as a temporary idle-player-like sheet: layer 0 metadata
+  `8,1`, layer 2 visual, 8 angle rows, one frame, and mirrored second
+  projection columns.
+- Validation summary: 65 XP files, 4 layers each, nonempty metadata, and 120
+  unique glyph IDs across the set.
+
+Risk:
+
+- This is an automated reconstruction from a screenshot, not source `.xp`.
+  Some OCR choices are still heuristic and should be visually reviewed before
+  treating these as canonical gameplay skins.
