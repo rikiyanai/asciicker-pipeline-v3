@@ -241,7 +241,8 @@
 
   function ensureSpritesDir(M) {
     if (typeof M.FS_createPath === "function") {
-      try { M.FS_createPath("/", "sprites", true, true); } catch (_e) {}
+      try { M.FS_createPath("/", "assets", true, true); } catch (_e) {}
+      try { M.FS_createPath("/assets", "sprites", true, true); } catch (_e) {}
     }
   }
 
@@ -279,7 +280,7 @@
     }
     let fsWriteMode = "";
     for (const name of names) {
-      const res = emfsReplaceFile(M, `/sprites/${name}`, xpBytes);
+      const res = emfsReplaceFile(M, `/assets/sprites/${name}`, xpBytes);
       if (!fsWriteMode && res && res.mode) fsWriteMode = String(res.mode);
     }
     const playerName = String($("playerName")?.value || "player").trim() || "player";

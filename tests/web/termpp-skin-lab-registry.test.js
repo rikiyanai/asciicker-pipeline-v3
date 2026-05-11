@@ -181,6 +181,13 @@ t.describe("termpp skin lab registry loading", () => {
     expect(webScript).toBe(runtimeScript);
   });
 
+  t.it("injects uploaded skins into the engine asset path", async () => {
+    const webScript = fs.readFileSync(webScriptPath, "utf8");
+    expect(webScript).toContain('M.FS_createPath("/", "assets", true, true)');
+    expect(webScript).toContain('M.FS_createPath("/assets", "sprites", true, true)');
+    expect(webScript).toContain("`/assets/sprites/${name}`");
+  });
+
   t.it("uses injected BASE_PATH for registry fetch on prefixed termpp-skin-lab route", async () => {
     const { fetchCalls } = await runScript({
       scriptPath: webScriptPath,
