@@ -12382,3 +12382,53 @@ Risk:
   but the OCR-render contacts still need human review before replacing
   `sprites/blocks_idle_redone/` or using this path for the 24px mini character
   reconversion.
+
+### Architecture Plan - Insertable Glyph Assignment Layer For PNG-to-XP Conversion (2026-05-11)
+
+Follow-up to the 24px Mini Characters no-glyph/blobby conversion and the block
+OCR detour.
+
+Root cause:
+
+- The current pipeline-v3 24px template converter
+  `scripts/convert_24px_mini_template_2x.py` still writes every opaque visual
+  cell as glyph `219` after resizing source tiles. This cannot produce
+  meaningful CP437 sprites and directly explains the "no glyphs" / "too
+  blobby" failure.
+- The block extractor proved a better local OCR tactic: infer each cell's
+  dominant background first, then match CP437 masks against foreground pixels
+  that differ from that background. That logic is still local to
+  `scripts/extract_block_face_manifest.py`, not an insertable cross-tool layer.
+- Y9-2 has stronger Stage 3 processors in `scripts/pipeline/processor.py` and
+  `scripts/pipeline/matcher.py`, but they are embedded in the Y9-2 pipeline and
+  do not emit ranked, reviewable glyph suggestions with semantic-region bias.
+- Y9-2 `FL-3833` / `RQ-074` also require font presentation swapping while
+  preserving glyph-index truth, so conversion-time matching must not become a
+  second font owner.
+
+Plan artifact:
+
+- Added `docs/plans/2026-05-11-001-feat-insertable-glyph-assignment-plan.md`.
+- The plan defines a standalone glyph-assignment package with font atlas
+  loading, ranked glyph candidates, semantic bias, and review artifact output.
+- The planned integration order is:
+  1. shared module and unit tests in pipeline-v3
+  2. adapt `convert_24px_mini_template_2x.py`
+  3. adapt `extract_block_face_manifest.py`
+  4. port/adapt Y9-2 Stage 3 without changing XP glyph-index truth
+
+External references checked:
+
+- REXPaint `.xp` stores layered cells with glyph code plus foreground and
+  background RGB, compressed with gzip:
+  `https://steveasleep.com/rexpaint_manual.html`
+- IBM documents `ibm-437` as PC base data:
+  `https://www.ibm.com/docs/en/idr/11.4.0?topic=source-code-page-requirements`
+- Unicode publishes IBM PC memory-mapped graphics mappings:
+  `https://www.unicode.org/Public/MAPPINGS/VENDORS/MISC/IBMGRAPH.TXT`
+
+Status:
+
+- Planned only. No converter output has been regenerated under this plan yet.
+- The next implementation slice must add the shared module and tests before
+  reconverting the 24px Mini Characters or promoting any block XP artifacts.
