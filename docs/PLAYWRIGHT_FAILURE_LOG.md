@@ -12325,3 +12325,60 @@ Note:
 
 - The local `data/sessions/*.json` session file is intentionally not part of
   the commit.
+
+### Fix Attempt — Block Face Extraction Moved To Reviewed Manifest Before XP Rebuild (2026-05-11)
+
+Follow-up for the rejected block idle-sheet conversion. The previous output was
+not usable because component filenames were treated as semantic blocks, angle
+rows repeated the same object, the source set included non-block debris/player
+components, and glyph OCR still collapsed too much visual structure into
+blocky cells.
+
+Patch:
+
+- Added `scripts/extract_block_face_manifest.py` as the reviewed source-strip
+  path for this detour. It reads the user-cleaned RGBA strips in
+  `/private/tmp/xp_block_source_review`, records the discard decisions
+  (`block_354`, `block_1895`, `block_280`, `block_2215`, `block_1044`, and
+  contact-sheet order after `block_43`), and emits a manifest-driven
+  `semantic_slices_v2/` review set.
+- The slicer no longer uses connected-component filename order. It groups
+  middle block faces by source row and source column, top pillars by visible
+  source-column direction, and tiny vertical faces as a separate family.
+- Semantic slices are written with transparent padding, green background residue
+  removed, and row-band masking so upper/lower middle-face crops do not steal
+  pixels from each other.
+- The OCR path now infers each cell's dominant background color first and
+  matches CP437 glyph masks from the differing foreground pixels. This fixes
+  the earlier alpha-as-ink mistake that made colored cell backgrounds turn into
+  solid blobs. Focused tests now assert recovery of `/` and `\` glyphs from
+  colored-background cells.
+
+Generated review artifacts:
+
+- `/private/tmp/xp_block_source_review/semantic_slices_v2/manifest.json`
+- `/private/tmp/xp_block_source_review/semantic_slices_v2/*_contact.png`
+- `/private/tmp/xp_block_source_review/semantic_slices_v2/*_ocr_render_contact.png`
+- `/private/tmp/xp_block_source_review/semantic_slices_v2/xp/` provisional
+  idle-angle XP files for review only
+
+Verification:
+
+- `python3 scripts/extract_block_face_manifest.py` -> generated 42 semantic
+  slices: 24 middle block faces, 12 top pillar faces, and 6 tiny vertical faces.
+- Slice audit: `edge_touch_count 0`; all slices have transparent border padding.
+- XP audit: 42 provisional `.xp` files load, all have 4 layers, layer-0 metadata
+  `angles=8`, `anims=[1]`, and nonempty visual layer glyphs.
+- Glyph audit: 108 unique glyph IDs across the provisional XP set, including
+  `/` (`47`) and `\` (`92`) in recovered side/corner cells.
+- `python3 -m pytest tests/test_extract_block_face_manifest.py -q` -> PASS, 2
+  tests.
+- `python3 -m py_compile scripts/extract_block_face_manifest.py` -> PASS.
+
+Risk:
+
+- The generated XP files are still provisional review artifacts, not promoted
+  gameplay assets. The source contact sheets are visually ordered and padded,
+  but the OCR-render contacts still need human review before replacing
+  `sprites/blocks_idle_redone/` or using this path for the 24px mini character
+  reconversion.
