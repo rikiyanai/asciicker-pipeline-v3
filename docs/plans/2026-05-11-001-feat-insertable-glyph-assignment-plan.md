@@ -42,9 +42,12 @@ Y9-2:
 - `scripts/pipeline/processor_subcell.py` implements a quality mode based on
   subcell dithering and half/block glyphs. It is useful for high-res conversion
   quality but is not a semantic glyph reviewer by itself.
-- Y9-2 `FL-3833` and `RQ-074` make font presentation ship-blocking. The shared
-  rule is that XP glyph indices stay canonical; font selection is presentation
-  state, not stored sprite truth.
+- Y9-2 `FL-3833` and `RQ-074` make font presentation ship-blocking in that
+  repo. Pipeline-v3 enforces the compatible local design invariant directly:
+  font presentation remains downstream of glyph-index storage. The assignment
+  module may use different font atlases for matching, but exported XP stores
+  glyph indices and colors only. The Y9-2 refs are cross-repo context, not the
+  local authority for this plan.
 
 Online references checked:
 
@@ -60,9 +63,10 @@ Online references checked:
 
 ## Architecture
 
-Create a repo-portable Python module with no pipeline-v3 or Y9-2 app imports.
-The module should accept frame/cell pixels and return ranked glyph candidates
-plus review evidence.
+Create a pipeline-v3 module with a repo-portable contract: no pipeline-v3 or
+Y9-2 app imports, no Flask/browser/runtime imports, and only ordinary Python
+data inputs/outputs. The module should accept frame/cell pixels and return
+ranked glyph candidates plus review evidence.
 
 Proposed package path in pipeline-v3:
 
@@ -76,8 +80,25 @@ scripts/glyph_assignment/
   review_artifacts.py
 ```
 
-Y9-2 can vendor or mirror the same module after the pipeline-v3 contract is
-stable. Do not fork the algorithm under a different owner.
+Y9-2 integration must use an explicit vendor contract after the pipeline-v3
+contract is stable: a copied vendored module must carry a source commit,
+contract version, and parity test. Mirroring without provenance is not allowed
+because it creates two silent owners.
+
+### Font Presentation Invariant
+
+Font matching input and font presentation output are separate concerns:
+
+- `font_atlas.py` loads a CP437-compatible font source for matching only.
+- The matching atlas may be a BDF file or a PNG atlas with a regular glyph
+  grid. BDF support should wrap or share the existing `BdfFont` behavior from
+  `scripts/png2xp2png.py` rather than inventing a second parser unless that
+  parser is deliberately retired.
+- PNG atlas support must derive glyph masks from luminance, not alpha, matching
+  the browser renderer fix in `web/rexpaint-editor/cp437-font.js`.
+- Exported XP does not store a font name or presentation font. It stores glyph
+  indices plus foreground/background colors. Runtime/editor font selection is a
+  downstream presentation adapter.
 
 ### Core Interface
 
@@ -90,6 +111,9 @@ class GlyphAssignmentConfig:
     charset: str = "cp437"
     supersample: int = 3
     candidate_limit: int = 5
+    score_delta_threshold: float = 0.10
+    solid_bg_threshold: float = 0.95
+    solid_feature_max_ratio: float = 0.02
     semantic_bias: dict[str, dict[int, float]] = field(default_factory=dict)
 
 @dataclass(frozen=True)
@@ -116,6 +140,15 @@ The conversion caller owns slicing, animation metadata, and XP assembly. The
 glyph layer owns only cell-level glyph/color assignment and explainable ranked
 suggestions.
 
+`semantic_bias` maps semantic region labels to `{glyph_code: bias_weight}`.
+Weights are normalized per region and applied only when candidates are within
+`score_delta_threshold` of the current best score. Regions absent from the bias
+table are unbiased.
+
+`score_delta_threshold` defines "close" and "ambiguous": a cell is ambiguous
+when the top two normalized candidate scores differ by less than this threshold.
+The default is `0.10`, meaning within 10 percent of the top score.
+
 ## Matching Pipeline
 
 1. Normalize the source cell.
@@ -129,6 +162,11 @@ suggestions.
    - Treat pixels that differ from the background as ink.
    - Keep a fallback for true solid color cells: `219` is valid when the cell
      is actually solid, but invalid as the universal answer.
+   - "Actually solid" means the dominant visible color covers at least
+     `solid_bg_threshold` of visible pixels and the remaining differing pixels
+     are below `solid_feature_max_ratio` or do not match any configured edge,
+     corner, stroke, or semantic-feature detector. A cell with a single-pixel
+     slash/edge/corner feature is not solid even if most pixels share one color.
 
 3. Generate color hypotheses.
    - Top two palette/raw colors.
@@ -154,13 +192,17 @@ suggestions.
    - Semantic regions come from existing maps such as
      `docs/research/ascii/semantic_maps/*.json` and must remain advisory until
      human-reviewed.
+   - Those maps are read from the AGENTS.md-defined symlink to Y9-2. If the
+     symlink is absent or validation fails, semantic bias is disabled with a
+     warning and matching continues unbiased. Bias schema expectations live in
+     this plan and the future module docs, not in the vendored map files.
 
 6. Emit review artifacts.
    - XP output with chosen cells.
    - JSON sidecar containing top candidates per cell.
    - Contact sheet comparing source, chosen render, diff heatmap, and ambiguous
      cells.
-   - A concise suggestion report suitable for a human loop:
+   - A concise suggestion report suitable for a human review loop:
      `"mouth cells suggest v/u/o; side corners suggest / and \\; review 14 low-confidence cells."`
 
 ## Integration Plan
@@ -175,7 +217,9 @@ cover:
 - solid cells remain `219`
 - non-solid cells do not collapse to `219`
 - candidate ranking returns at least two alternatives for ambiguous cells
-- semantic bias changes ranking only within a bounded score delta
+- semantic bias changes ranking only within `score_delta_threshold`
+- missing/broken semantic-map symlink disables bias with a warning
+- font atlas loading separates matching font masks from exported XP data
 
 ### Slice 2: Pipeline-v3 24px Converter Adapter
 
@@ -208,12 +252,13 @@ Port the module into Y9-2 without changing the font-presentation contract:
   strategy.
 - `processor_subcell.py` remains a quality/halftone strategy, not semantic OCR.
 - ASCIIID/WebSuit font swapping remains presentation-only per `FL-3833` /
-  `RQ-074`; the assignment module may use different font atlases as matching
+  `RQ-074` in Y9-2 and per the local font presentation invariant above in
+  pipeline-v3. The assignment module may use different font atlases as matching
   bases, but exported XP still stores glyph indices.
 
-## Human Review Workflow
+## Human Review And Feedback Contract
 
-The intended conversation after conversion should be:
+The intended human review summary after conversion should be:
 
 ```text
 The glyph mapper suggested v/u/o for these mouth cells, / and \ for side
@@ -225,6 +270,22 @@ toward v/u/o or keep the current ranking?
 This is the missing product behavior: conversion proposes an ASCII reading, but
 does not silently pretend the first automated pass is canonical.
 
+The first implementation does not need a full browser review UI, but it must
+produce a programmatic feedback surface:
+
+- `glyph_suggestions.json` records every chosen cell, alternatives, confidence,
+  ambiguity status, and reason strings.
+- `glyph_review_overrides.json` is an optional human-authored sidecar keyed by
+  asset/frame/layer/x/y. Each override may set `glyph`, `fg`, `bg`, `region`,
+  or `accepted=true`.
+- Overrides are batch-capable and per-cell-addressable. A reviewer may accept
+  all high-confidence cells by batch while overriding individual low-confidence
+  cells.
+- Reruns consume the override sidecar before semantic bias so accepted human
+  choices remain stable unless the source cell pixels materially change.
+- A future workbench UI can edit the same sidecar, but the sidecar is the first
+  product surface.
+
 ## Gates Before Promotion
 
 - No visual PASS without viewing generated contact sheets or recording human
@@ -234,8 +295,9 @@ does not silently pretend the first automated pass is canonical.
 - Workbench upload must show non-magenta whole-sheet render with shaped glyphs.
 - XP preview animation must work for the generated sheets.
 - `data/sessions/*.json` must stay out of commits unless explicitly requested.
-- Y9-2 changes must not create a second font owner or encode font presentation
-  into XP data.
+- Font presentation remains a design constraint, not a new pipeline-v3
+  acceptance-contract gate: implementation must preserve XP glyph-index truth
+  and must not encode presentation font choices into XP data.
 
 ## Non-Goals
 
@@ -248,8 +310,8 @@ does not silently pretend the first automated pass is canonical.
 
 ## Open Questions For Implementation
 
-1. Whether the shared module should live in pipeline-v3 first and be copied to
-   Y9-2, or whether it should be extracted into a tiny tracked shared package.
+1. Whether the pipeline-v3-first vendor contract is enough for Y9-2, or whether
+   this should become a tiny tracked shared package before the Y9-2 adapter.
 2. Whether 24px Mini Characters should use raw RGB color preservation or Y9-2's
    216-color terminal palette for the first full-fidelity pass.
 3. Which semantic maps are authoritative enough for bias on the first 24px pass:
