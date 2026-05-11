@@ -451,6 +451,33 @@ def test_upload_raw_xp_opens_without_template_metadata_and_roundtrips(client, tm
     assert parsed["cells"][0][width + 1][0] == ord("A")
 
 
+def test_upload_valid_native_xp_defaults_to_visual_layer(client, tmp_path: Path):
+    width, height = 126, 80
+    layer0 = [_xp_cell(0, (0, 0, 0), (255, 0, 255)) for _ in range(width * height)]
+    layer0[0] = _xp_cell(ord("8"), (255, 255, 255), (255, 0, 255))
+    layer0[1] = _xp_cell(ord("1"), (255, 255, 255), (255, 0, 255))
+    layer0[2] = _xp_cell(ord("8"), (255, 255, 255), (255, 0, 255))
+    layer1 = [_xp_cell(ord("0"), (0, 0, 0), (255, 0, 255)) for _ in range(width * height)]
+    visual = [_xp_cell(0, (0, 0, 0), (255, 0, 255)) for _ in range(width * height)]
+    visual[width + 1] = _xp_cell(ord("@"), (255, 255, 0), (255, 0, 255))
+    blank = [_xp_cell(0, (0, 0, 0), (255, 0, 255)) for _ in range(width * height)]
+    xp_path = _write_test_xp(tmp_path / "native-valid-raw.xp", width, height, [layer0, layer1, visual, blank])
+
+    with xp_path.open("rb") as fh:
+        upload_resp = client.post(
+            "/api/workbench/upload-xp",
+            data={"file": (fh, xp_path.name)},
+            content_type="multipart/form-data",
+        )
+    assert upload_resp.status_code == 201
+    uploaded = upload_resp.get_json()
+    assert uploaded["session_kind"] == "raw_xp"
+    assert uploaded["metadata_status"] == "valid"
+    assert uploaded["active_layer"] == 2
+    assert uploaded["visible_layers"] == [2]
+    assert uploaded["locked_layers"] == [0]
+
+
 def test_upload_missing_metadata_visual_strip_infers_frame_width(client, tmp_path: Path):
     width, height = 72, 11
     blank = [_xp_cell(0, (0, 0, 0), (0, 0, 0)) for _ in range(width * height)]

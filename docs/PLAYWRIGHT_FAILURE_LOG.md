@@ -12091,3 +12091,44 @@ Verification:
 
 - `python3 -m py_compile src/pipeline_v2/app.py src/pipeline_v2/service.py src/pipeline_v2/config.py wsgi.py scripts/xp_uv_body_viewer.py` -> PASS.
 - `python3 -m pytest --ignore=tests/e2e -q` -> PASS.
+
+### Fix Attempt — Uploaded Raw XP Still Opened Whole-Sheet With Magenta Metadata Layer (2026-05-11)
+
+User reported the 24px mini character conversions appeared in the grid panel but
+the whole-sheet XP editor stayed magenta. This was the same visible symptom as
+the 2026-05-10 pipeline-job magenta-layer bug, but the owner path was different:
+these files entered through `/api/workbench/upload-xp` as `session_kind=raw_xp`.
+
+Root cause: the previous fix only defaulted `pipeline_job` and `template_owned`
+sessions with more than two layers to active layer `2`, visible layers `[2]`,
+and locked metadata layer `[0]`. Valid uploaded raw XPs still defaulted to
+active layer `0` with all layers visible, so layer 0/1 metadata could cover the
+visual layer with magenta in the whole-sheet editor.
+
+Fix:
+
+- `src/pipeline_v2/service.py` now treats valid multi-layer `raw_xp` sessions
+  as visual-layer-first documents: active layer `2`, visible layers `[2]`,
+  locked layers `[0]`.
+- Missing-metadata and one-layer raw uploads keep their existing raw behavior.
+- `tests/test_workbench_flow.py` adds
+  `test_upload_valid_native_xp_defaults_to_visual_layer` to pin the uploaded
+  raw-XP regression.
+- `scripts/convert_24px_mini_full_fidelity.py` generates a separate
+  `output/24px-mini-characters-full-fidelity/` set from the previously composed
+  source sheets. It preserves the smaller `output/24px-mini-characters/` set,
+  writes one source pixel as one XP cell, keeps 8 angle rows, adds mirrored
+  second-projection columns, and registers the outputs in workbench sessions.
+
+Verification:
+
+- Focused regression first failed with `active_layer == 0` before the service
+  fix.
+- `python3 -m pytest tests/test_workbench_flow.py -k "upload_raw_xp_opens_without_template_metadata_and_roundtrips or upload_valid_native_xp_defaults_to_visual_layer or upload_missing_metadata_visual_strip_infers_frame_width or upload_invalid_metadata_xp_still_exports_but_runtime_payload_refuses" -q`
+  -> PASS, 4 tests.
+- `python3 -m py_compile scripts/convert_24px_mini_full_fidelity.py src/pipeline_v2/service.py`
+  -> PASS.
+- `python3 -m pytest tests/test_workbench_flow.py -q` -> PASS, 16 tests.
+- Full-fidelity workbench manifest check: 27 sessions, no session with bad
+  layer defaults; dimensions are `player=936x416`, `attack=832x416`,
+  `plydie=520x416`, with `cell_w_chars=52`, `cell_h_chars=52`.

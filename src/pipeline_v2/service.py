@@ -1483,6 +1483,14 @@ def _template_metadata_compatible(sess_dict: dict[str, Any]) -> bool:
     return _metadata_status(sess_dict) in {"valid", "generated"}
 
 
+def _raw_xp_prefers_visual_layer(sess_dict: dict[str, Any], layer_count: int) -> bool:
+    return (
+        _session_kind(sess_dict) == "raw_xp"
+        and _metadata_status(sess_dict) == "valid"
+        and layer_count > 2
+    )
+
+
 def _default_layer_names(sess_dict: dict[str, Any], layer_count: int) -> list[str]:
     if layer_count <= 0:
         return []
@@ -1494,7 +1502,10 @@ def _default_layer_names(sess_dict: dict[str, Any], layer_count: int) -> list[st
 def _default_active_layer(sess_dict: dict[str, Any], layer_count: int) -> int:
     if layer_count <= 0:
         return 0
-    if _session_kind(sess_dict) in {"pipeline_job", "template_owned"} and layer_count > 2:
+    if (
+        _session_kind(sess_dict) in {"pipeline_job", "template_owned"}
+        or _raw_xp_prefers_visual_layer(sess_dict, layer_count)
+    ) and layer_count > 2:
         return 2
     return 0
 
@@ -1502,13 +1513,19 @@ def _default_active_layer(sess_dict: dict[str, Any], layer_count: int) -> int:
 def _default_visible_layers(sess_dict: dict[str, Any], layer_count: int) -> list[int]:
     if layer_count <= 0:
         return []
-    if _session_kind(sess_dict) in {"pipeline_job", "template_owned"} and layer_count > 2:
+    if (
+        _session_kind(sess_dict) in {"pipeline_job", "template_owned"}
+        or _raw_xp_prefers_visual_layer(sess_dict, layer_count)
+    ) and layer_count > 2:
         return [2]
     return list(range(layer_count))
 
 
 def _default_locked_layers(sess_dict: dict[str, Any]) -> list[int]:
-    if _session_kind(sess_dict) in {"pipeline_job", "template_owned"}:
+    layer_count = len(sess_dict.get("layers") or [])
+    if _session_kind(sess_dict) in {"pipeline_job", "template_owned"} or _raw_xp_prefers_visual_layer(
+        sess_dict, layer_count
+    ):
         return [0]
     return []
 
