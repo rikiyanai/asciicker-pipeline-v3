@@ -67,6 +67,72 @@ TINY_LABELS = [
     "southeast_tiny",
 ]
 
+BLOCK_EDGE_GLYPHS = (
+    34,   # "
+    95,   # _
+    176,  # light shade
+    177,  # medium shade
+    178,  # dark shade
+    179,  # vertical line
+    180,
+    181,
+    182,
+    183,
+    184,
+    185,
+    186,  # double vertical line
+    187,
+    188,
+    189,
+    190,
+    191,
+    192,
+    193,
+    194,
+    195,
+    196,  # horizontal line
+    197,
+    198,
+    199,
+    200,
+    201,
+    202,
+    203,
+    204,
+    205,
+    206,
+    207,
+    208,
+    209,
+    210,
+    211,
+    212,
+    213,
+    214,
+    215,
+    216,
+    217,
+    218,
+    219,  # full block
+    220,  # lower half block
+    221,  # left half block
+    222,  # right half block
+    223,  # upper half block
+    254,  # small square
+)
+TEXT_INTRUSION_GLYPHS = tuple(range(33, 91)) + (93,) + tuple(range(97, 123))
+
+
+def block_semantic_bias() -> dict[str, dict[int, float]]:
+    weights = {glyph: 1.0 for glyph in BLOCK_EDGE_GLYPHS}
+    for glyph in TEXT_INTRUSION_GLYPHS:
+        weights.setdefault(glyph, -1.0)
+    return {
+        "middle_block_faces": dict(weights),
+        "top_pillar_faces": dict(weights),
+        "tiny_vertical_faces": dict(weights),
+    }
+
 
 @dataclass(frozen=True)
 class SliceSpec:
@@ -225,23 +291,37 @@ def load_masks(font_path: Path) -> tuple[GlyphAssignmentConfig, list]:
         font_path=font_path,
         font_cell_size=(CELL, CELL),
         target_cell_size=(CELL, CELL),
-        candidate_limit=3,
+        candidate_limit=12,
+        score_delta_threshold=0.35,
+        semantic_bias=block_semantic_bias(),
     )
     return config, load_glyph_masks(font_path, config.target_cell_size)
 
 
-def infer_tile_cell(tile: np.ndarray, masks: tuple[GlyphAssignmentConfig, list]) -> tuple[int, tuple[int, int, int], tuple[int, int, int], int]:
-    assigned = infer_assigned_cell(tile, masks)
+def infer_tile_cell(
+    tile: np.ndarray,
+    masks: tuple[GlyphAssignmentConfig, list],
+    *,
+    region: str | None = None,
+) -> tuple[int, tuple[int, int, int], tuple[int, int, int], int]:
+    assigned = infer_assigned_cell(tile, masks, region=region)
     score = int(round(assigned.chosen.score * tile[:, :, 3].size))
     return assigned.chosen.glyph, assigned.chosen.fg, assigned.chosen.bg, score
 
 
-def infer_assigned_cell(tile: np.ndarray, masks: tuple[GlyphAssignmentConfig, list], *, x: int = 0, y: int = 0):
+def infer_assigned_cell(
+    tile: np.ndarray,
+    masks: tuple[GlyphAssignmentConfig, list],
+    *,
+    x: int = 0,
+    y: int = 0,
+    region: str | None = None,
+):
     config, glyph_masks = masks
-    return assign_cell(tile, config, glyph_masks, x=x, y=y)
+    return assign_cell(tile, config, glyph_masks, x=x, y=y, region=region)
 
 
-def ocr_image(image: Image.Image, masks: tuple[GlyphAssignmentConfig, list], cell: int = CELL):
+def ocr_image(image: Image.Image, masks: tuple[GlyphAssignmentConfig, list], cell: int = CELL, *, region: str | None = None):
     rgba = np.array(image.convert("RGBA"))
     best = None
     for oy in range(cell):
@@ -258,7 +338,7 @@ def ocr_image(image: Image.Image, masks: tuple[GlyphAssignmentConfig, list], cel
                 assigned_row = []
                 for col in range(max_cols):
                     tile = rgba[oy + row * cell : oy + (row + 1) * cell, ox + col * cell : ox + (col + 1) * cell]
-                    assigned = infer_assigned_cell(tile, masks, x=col, y=row)
+                    assigned = infer_assigned_cell(tile, masks, x=col, y=row, region=region)
                     glyph = assigned.chosen.glyph
                     fg = assigned.chosen.fg
                     bg = assigned.chosen.bg
@@ -422,7 +502,7 @@ def main() -> int:
         slice_path = slices_dir / spec.family / f"{spec.name}.png"
         slice_path.parent.mkdir(exist_ok=True)
         crop.save(slice_path)
-        ox, oy, cells, assigned = ocr_image(crop, masks, CELL)
+        ox, oy, cells, assigned = ocr_image(crop, masks, CELL, region=spec.family)
         xp_path = xp_dir / spec.family / f"{spec.name}_idle.xp"
         xp_path.parent.mkdir(exist_ok=True)
         xp_meta = write_idle_xp(xp_path, cells)

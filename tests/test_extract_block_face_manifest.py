@@ -2,7 +2,7 @@ from pathlib import Path
 
 import numpy as np
 
-from scripts.extract_block_face_manifest import infer_tile_cell, load_masks
+from scripts.extract_block_face_manifest import block_semantic_bias, infer_tile_cell, load_masks
 from scripts.png2xp2png import BdfFont, CP437_TO_UNI
 
 
@@ -42,3 +42,17 @@ def test_ocr_keeps_solid_single_color_cells_as_full_blocks():
     assert glyph == 219
     assert fg == (210, 210, 210)
     assert bg == (255, 0, 255)
+
+
+def test_block_semantic_bias_prefers_block_glyphs_over_text_intrusions():
+    bias = block_semantic_bias()["middle_block_faces"]
+
+    assert bias[219] > 0
+    assert bias[220] > 0
+    assert bias[221] > 0
+    assert bias[222] > 0
+    assert bias[223] > 0
+    assert bias[72] < 0
+    assert bias[55] < 0
+    assert bias[44] < 0
+    assert bias[93] < 0
