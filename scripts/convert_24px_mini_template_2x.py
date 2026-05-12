@@ -100,14 +100,17 @@ def build_regions_grid(
     to a different sprite variant with a different 1x resolution.
 
     The assignment sheet lays out angles vertically (angle_idx * cell_h_chars)
-    and animation frames horizontally (anim_index * cell_w_chars).  The
-    semantic map uses 1x cell dimensions; the sheet uses 2x, so each bbox cell
-    expands to a 2×2 block in the sheet grid.
+    and animation frames horizontally for both the source projection
+    (anim_index * cell_w_chars) and the mirrored projection
+    ((total_frames + anim_index) * cell_w_chars).  The semantic map uses 1x
+    cell dimensions; the sheet uses 2x, so each bbox cell expands to a 2×2
+    block in the sheet grid.
 
     Returns ``{}`` when no compatible map file exists (all cells get
     ``region=None``).
     """
     regions_dict: dict[tuple[int, int], str] = {}
+    total_frames = sum(spec.anims)
 
     for map_path in sorted(map_root.glob(f"{family}-*.json")):
         try:
@@ -132,7 +135,10 @@ def build_regions_grid(
             angle_idx: int = frame_data.get("angle", 0)
             anim_index: int = frame_data.get("anim_index", 0)
             y_offset = angle_idx * spec.cell_h_chars
-            x_offset = anim_index * spec.cell_w_chars
+            x_offsets = [
+                anim_index * spec.cell_w_chars,
+                (total_frames + anim_index) * spec.cell_w_chars,
+            ]
 
             for region in frame_data.get("regions", []):
                 name: str = region.get("name", "")
@@ -140,14 +146,15 @@ def build_regions_grid(
                 if not name or len(bbox) != 4:
                     continue
                 x0, y0, x1, y1 = bbox
-                # Expand each 1x cell in the bbox to scale_x × scale_y cells
-                for bx in range(x0, x1 + 1):
-                    for by in range(y0, y1 + 1):
-                        for dx in range(scale_x):
-                            for dy in range(scale_y):
-                                ax = x_offset + bx * scale_x + dx
-                                ay = y_offset + by * scale_y + dy
-                                regions_dict[(ax, ay)] = name
+                for x_offset in x_offsets:
+                    # Expand each 1x cell in the bbox to scale_x × scale_y cells
+                    for bx in range(x0, x1 + 1):
+                        for by in range(y0, y1 + 1):
+                            for dx in range(scale_x):
+                                for dy in range(scale_y):
+                                    ax = x_offset + bx * scale_x + dx
+                                    ay = y_offset + by * scale_y + dy
+                                    regions_dict[(ax, ay)] = name
 
     return regions_dict
 

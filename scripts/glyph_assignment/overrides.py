@@ -62,6 +62,13 @@ def load_overrides(
             x, y = int(parts[0]), int(parts[1])
         except ValueError:
             continue
+        if not isinstance(record, dict):
+            warnings.warn(
+                f"override record for {key!r} is {type(record).__name__}, not dict; skipped",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            continue
         result[(x, y)] = record
 
     return result

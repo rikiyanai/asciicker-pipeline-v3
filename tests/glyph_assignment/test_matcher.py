@@ -329,7 +329,7 @@ def test_assign_image_cells_accepted_override_ignores_semantic_bias():
     image.alpha_composite(tile, (0, 0))
     image.alpha_composite(tile, (6, 0))
 
-    overrides = {(0, 0): {"glyph": 92, "accepted": True}}
+    overrides = {(0, 0): {"glyph": 92, "fg": [0, 0, 0], "bg": [180, 180, 180], "accepted": True}}
     # Bias that would prefer glyph 47 over 92 — must not affect the override cell
     config_with_bias = _config(
         semantic_bias={"face": {47: 1.0}},
@@ -349,6 +349,68 @@ def test_assign_image_cells_override_none_path_runs_normally():
     cells = assign_image_cells(image, _config(), overrides=None)
 
     assert cells[0].chosen.glyph == 47
+
+
+def test_assign_image_cells_accepted_override_missing_fg_falls_through_to_scoring(tmp_path):
+    """F2: accepted override without fg/bg must not wipe colours; fall through instead."""
+    tile = _tile_for_glyph(47)
+    image = Image.new("RGBA", (12, 6), (0, 0, 0, 0))
+    image.alpha_composite(tile, (0, 0))
+    image.alpha_composite(tile, (6, 0))
+
+    # Override cell (0,0) with glyph=92 but no fg → should fall through to normal scoring
+    overrides = {(0, 0): {"glyph": 92, "accepted": True}}
+    with pytest.warns(RuntimeWarning, match="missing fg or bg"):
+        cells = assign_image_cells(image, _config(), overrides=overrides)
+
+    # Cell (0,0) fell through and was scored normally (glyph 47, not 92)
+    assert cells[0].chosen.glyph == 47
+    # Cell (1,0) unaffected
+    assert cells[1].chosen.glyph == 47
+
+
+def test_assign_image_cells_accepted_override_missing_bg_falls_through_to_scoring(tmp_path):
+    """F2: accepted override with glyph+fg but no bg → falls through to normal scoring."""
+    tile = _tile_for_glyph(47)
+    image = Image.new("RGBA", (6, 6), (0, 0, 0, 0))
+    image.alpha_composite(tile, (0, 0))
+
+    overrides = {(0, 0): {"glyph": 92, "fg": [255, 255, 255], "accepted": True}}
+    with pytest.warns(RuntimeWarning, match="missing fg or bg"):
+        cells = assign_image_cells(image, _config(), overrides=overrides)
+
+    # Fell through to normal scoring
+    assert cells[0].chosen.glyph == 47
+
+
+def test_assign_image_cells_accepted_override_invalid_fg_skipped(tmp_path):
+    """F3: non-3-element fg/bg arrays fail closed per cell."""
+    tile = _tile_for_glyph(47)
+    image = Image.new("RGBA", (6, 6), (0, 0, 0, 0))
+    image.alpha_composite(tile, (0, 0))
+
+    overrides = {(0, 0): {"glyph": 92, "fg": "#fff", "bg": (255, 0, 255), "accepted": True}}
+    with pytest.warns(RuntimeWarning, match="missing fg or bg"):
+        cells = assign_image_cells(image, _config(), overrides=overrides)
+
+    # Fell through to normal scoring — no crash
+    assert cells[0].chosen.glyph == 47
+
+
+def test_load_overrides_skips_non_dict_records(tmp_path):
+    """F3: non-dict records are warned and skipped, not stored for later crash."""
+    import json as _json
+    path = tmp_path / "glyph_review_overrides.json"
+    path.write_text(_json.dumps({
+        "civilian1/player/0/0": "not a dict",
+        "civilian1/player/1/1": {"glyph": 47, "accepted": True},
+    }))
+
+    with pytest.warns(RuntimeWarning, match="not dict"):
+        result = load_overrides(path, "civilian1", "player")
+
+    assert (0, 0) not in result
+    assert (1, 1) in result
 
 
 # ---------------------------------------------------------------------------
@@ -447,7 +509,7 @@ def test_write_sheet_summary_has_required_fields(tmp_path):
     entry = data["groups"][0]
     assert entry["name"] == "civilian1"
     assert entry["family"] == "player"
-    assert entry["total_cells"] == 3
+    assert entry["cells_listed"] == 3
     assert entry["low_confidence_cells"] == 1
     assert entry["needs_review_cells"] == 1
     assert isinstance(entry["top_5_glyphs"], list)
@@ -471,8 +533,100 @@ def test_write_sheet_summary_empty_cells(tmp_path):
     write_sheet_summary(path, groups)
 
     data = json.loads(path.read_text())
-    assert data["groups"][0]["total_cells"] == 0
+    assert data["groups"][0]["cells_listed"] == 0
     assert data["groups"][0]["confidence_p50"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# U1/U2 — build_regions_grid mirror coverage tests
+# ---------------------------------------------------------------------------
+
+
+def test_build_regions_grid_covers_mirrored_projection(tmp_path):
+    """F1: semantic regions must apply to both source and mirrored halves."""
+    import json as _json
+    from scripts.convert_24px_mini_template_2x import build_regions_grid, FamilySpec
+
+    maps = tmp_path / "semantic_maps"
+    maps.mkdir()
+    data = {
+        "frame_w": 7,
+        "frame_h": 10,
+        "frames": {
+            "0": {
+                "angle": 0,
+                "anim_index": 0,
+                "regions": [{"name": "face", "bbox": [0, 0, 1, 2]}],
+            },
+            "1": {
+                "angle": 0,
+                "anim_index": 1,
+                "regions": [{"name": "shirt", "bbox": [3, 4, 5, 6]}],
+            },
+        },
+    }
+    (maps / "player-test.json").write_text(_json.dumps(data))
+
+    # family=player, cell_w=14, cell_h=20, anims=(1, 8) → total_frames=9
+    spec = FamilySpec((1, 8), 14, 20)
+    regions = build_regions_grid(maps, "player", spec)
+
+    # Source half: anim_index=0, x_offset=0; anim_index=1, x_offset=14
+    # face bbox [0,0,1,2] → min cell (0,0) in 2x space
+    assert (0, 0) in regions  # face, source half, frame 0
+    # shirt bbox [3,4,5,6] at anim_index=1 → min cell (14+6, 0+8) = (20,8)
+    assert (20, 8) in regions  # shirt, source half, frame 1
+
+    # Mirrored half: mirror offset = total_frames * cell_w = 9 * 14 = 126
+    assert (126, 0) in regions  # face, mirrored half, frame 0
+    assert (146, 8) in regions  # shirt, mirrored half, frame 1
+
+
+def test_build_regions_grid_dimension_filtered_files_skipped(tmp_path):
+    """Files whose frame_w doesn't divide evenly are skipped."""
+    import json as _json
+    from scripts.convert_24px_mini_template_2x import build_regions_grid, FamilySpec
+
+    maps = tmp_path / "semantic_maps"
+    maps.mkdir()
+    # Bad file: frame_w=5 doesn't divide 14
+    (maps / "player-bad.json").write_text(_json.dumps({
+        "frame_w": 5, "frame_h": 10,
+        "frames": {"0": {"angle": 0, "anim_index": 0,
+                          "regions": [{"name": "face", "bbox": [0, 0, 1, 1]}]}},
+    }))
+    # Good file: frame_w=7 divides 14
+    (maps / "player-good.json").write_text(_json.dumps({
+        "frame_w": 7, "frame_h": 10,
+        "frames": {"0": {"angle": 0, "anim_index": 0,
+                          "regions": [{"name": "face", "bbox": [0, 0, 1, 1]}]}},
+    }))
+
+    spec = FamilySpec((1, 8), 14, 20)
+    regions = build_regions_grid(maps, "player", spec)
+
+    # Only the compatible file's regions appear
+    assert any(v == "face" for v in regions.values())
+
+
+def test_build_regions_grid_no_compatible_files_returns_empty(tmp_path):
+    """Returns {} when no map files match the sprite dimensions."""
+    import json as _json
+    from scripts.convert_24px_mini_template_2x import build_regions_grid, FamilySpec
+
+    maps = tmp_path / "semantic_maps"
+    maps.mkdir()
+    # All files have frame_w=5, but spec cell_w_chars=14 → 14 % 5 != 0 → skip
+    (maps / "player-a.json").write_text(_json.dumps({
+        "frame_w": 5, "frame_h": 10,
+        "frames": {"0": {"angle": 0, "anim_index": 0,
+                          "regions": [{"name": "face", "bbox": [0, 0, 1, 1]}]}},
+    }))
+
+    spec = FamilySpec((1, 8), 14, 20)
+    regions = build_regions_grid(maps, "player", spec)
+
+    assert regions == {}
 
 
 def test_compact_file_smaller_than_full_when_majority_high_confidence(tmp_path):

@@ -8,6 +8,71 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Fix Attempt — Glyph Assignment Quality Pass Review Findings (2026-05-11)
+
+Follow-up to commit c720568 (glyph assignment quality pass — semantic bias,
+overrides, compact artifacts). Code review found 5 issues; this entry records
+their fixes.
+
+### Findings
+
+1. **High: semantic regions did not cover the mirrored projection half.**
+   `build_regions_grid()` built region coordinates only for the source (left)
+   half of the assignment sheet. The mirrored half at
+   `(total_frames + anim_index) * cell_w_chars` received no region labels,
+   so semantic bias applied to only 50% of every generated XP sheet.
+
+2. **High: accepted overrides missing fg/bg silently used black-on-magenta.**
+   `_cell_from_override()` defaulted missing `fg` to `[0,0,0]` (black) and
+   missing `bg` to transparent magenta, erasing inferred tile colours when a
+   human override specified only a glyph.
+
+3. **Medium: override parsing could crash on non-dict records.**
+   `load_overrides()` stored any JSON value as a record without type-checking;
+   `_cell_from_override()` would then index it as a dict, crashing the whole
+   converter.
+
+4. **Medium: `glyph_suggestions_summary.json` labelled filtered cells as
+   `total_cells`.**  The suggestions group excludes transparent non-review
+   cells, but `write_sheet_summary()` reported the filtered count as
+   `total_cells`, misleading acceptance metrics.
+
+5. **Process gap: commit c720568 lacked a matching failure-log entry.**
+   This repo's front matter requires checkpoint/product entries.
+
+### What changed
+
+1. `build_regions_grid()` now produces region entries for both the source and
+   mirrored projection halves (using `total_frames = sum(spec.anims)`).
+
+2. `_cell_from_override()` returns `None` when `fg` or `bg` is missing or not
+   a 3-element sequence, causing `assign_image_cells` to fall through to
+   normal scoring (with a `RuntimeWarning`).
+
+3. `load_overrides()` validates each value is a `dict` before storing;
+   non-dict records emit a `RuntimeWarning` and are skipped.
+
+4. `write_sheet_summary()` field renamed `total_cells` → `cells_listed`, with
+   updated docstring explaining the filtered semantics.
+
+5. This entry added.
+
+### Verification
+
+- `python3 -m pytest tests/glyph_assignment/test_matcher.py -q`
+  -> PASS, 40 tests (was 229 per the commit claim for the wider suite; the
+  glyph_assignment module specifically held the reviewed changes).
+- `python3 -m compileall -q scripts/glyph_assignment scripts/convert_24px_mini_template_2x.py`
+  -> PASS.
+- New tests added:
+  - `test_build_regions_grid_covers_mirrored_projection`
+  - `test_build_regions_grid_dimension_filtered_files_skipped`
+  - `test_build_regions_grid_no_compatible_files_returns_empty`
+  - `test_assign_image_cells_accepted_override_missing_fg_falls_through_to_scoring`
+  - `test_assign_image_cells_accepted_override_missing_bg_falls_through_to_scoring`
+  - `test_assign_image_cells_accepted_override_invalid_fg_skipped`
+  - `test_load_overrides_skips_non_dict_records`
+
 ## Fix Attempt — Block Face Semantic Slice V2 Promotion After Bias Review (2026-05-11)
 
 Follow-up to the block-face extraction/glyph-assignment detour. The shared

@@ -83,8 +83,13 @@ def write_sheet_summary(path: Path, groups: list[dict]) -> None:
     Each group produces one entry with aggregate counts and confidence
     percentiles.  No per-cell data is included.
 
+    ``cells_listed`` is the count of cells included in the suggestions group
+    (non-transparent and needs-review cells), NOT the total sheet cell count.
+    Transparent cells where needs_review is False are excluded from the
+    suggestions file and are therefore not counted here.
+
     Fields per entry:
-      name, family, total_cells, low_confidence_cells, needs_review_cells,
+      name, family, cells_listed, low_confidence_cells, needs_review_cells,
       top_5_glyphs [{glyph, count}], confidence_p50, confidence_p90
     """
     summary_groups = []
@@ -113,7 +118,7 @@ def write_sheet_summary(path: Path, groups: list[dict]) -> None:
         summary_groups.append({
             "name": group.get("name", ""),
             "family": group.get("family", ""),
-            "total_cells": total,
+            "cells_listed": total,
             "low_confidence_cells": low_conf,
             "needs_review_cells": low_conf,
             "top_5_glyphs": [{"glyph": g, "count": c} for g, c in top_5],

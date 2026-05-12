@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import replace
 from pathlib import Path
 
@@ -171,15 +172,23 @@ def assign_cell(
 def _cell_from_override(x: int, y: int, record: dict) -> AssignedCell | None:
     """Build a synthetic AssignedCell from an accepted override record.
 
-    Returns ``None`` when the record is missing the required ``glyph`` field.
+    Returns ``None`` when the record is missing the required ``glyph`` field
+    or when ``fg`` / ``bg`` are missing — an override that doesn't specify
+    both colours cannot decompose a tile and must fall through to normal
+    scoring.
+
     The resulting cell has ``confidence=1.0``, ``needs_review=False``, and an
     empty alternatives tuple — it bypasses scoring entirely.
     """
     glyph = record.get("glyph")
     if not isinstance(glyph, int):
         return None
-    raw_fg = record.get("fg", [0, 0, 0])
-    raw_bg = record.get("bg", list(TRANSPARENT_BG))
+    raw_fg = record.get("fg")
+    raw_bg = record.get("bg")
+    if not isinstance(raw_fg, (list, tuple)) or len(raw_fg) != 3:
+        return None
+    if not isinstance(raw_bg, (list, tuple)) or len(raw_bg) != 3:
+        return None
     fg: Color = (int(raw_fg[0]), int(raw_fg[1]), int(raw_fg[2]))
     bg: Color = (int(raw_bg[0]), int(raw_bg[1]), int(raw_bg[2]))
     region: str | None = record.get("region")
@@ -219,6 +228,12 @@ def assign_image_cells(
                     if synthetic is not None:
                         cells.append(synthetic)
                         continue
+                    # accepted override missing fg/bg — fall through to scoring
+                    warnings.warn(
+                        f"accepted override at ({x},{y}) missing fg or bg; falling through to scoring",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
 
             tile = rgba.crop((x * target_w, y * target_h, (x + 1) * target_w, (y + 1) * target_h))
             region = regions.get((x, y)) if regions else None
