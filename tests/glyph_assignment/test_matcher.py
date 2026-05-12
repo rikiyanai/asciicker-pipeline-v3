@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import numpy as np
@@ -10,7 +11,12 @@ from scripts.glyph_assignment import (
     assign_image_cells,
     load_glyph_masks,
     load_optional_semantic_bias,
+    load_overrides,
+    write_sheet_summary,
+    write_suggestions_compact,
+    write_suggestions_json,
 )
+from scripts.glyph_assignment.semantic_bias import BUILT_IN_ROLE_TABLES
 from scripts.png2xp2png import BdfFont, CP437_TO_UNI
 
 FONT_PATH = Path("runtime/termpp-skin-lab-static/termpp-web-flat/fonts/cp437_6x6.png.bdf")
@@ -126,13 +132,106 @@ def test_missing_font_path_fails_at_matching_boundary():
         assign_cell(_tile_for_glyph(47), _config(font_path=missing))
 
 
-def test_missing_semantic_map_path_disables_bias_with_warning(tmp_path):
+def test_missing_semantic_map_path_warns_and_returns_builtin_tables(tmp_path):
     missing = tmp_path / "semantic_maps"
 
     with pytest.warns(RuntimeWarning):
         bias = load_optional_semantic_bias(missing)
 
+    # Built-in tables are returned even when the path is missing; they are not empty
+    assert len(bias) > 0
+
+
+def test_missing_semantic_map_path_with_role_returns_role_tables(tmp_path):
+    missing = tmp_path / "semantic_maps"
+
+    with pytest.warns(RuntimeWarning):
+        bias = load_optional_semantic_bias(missing, role="player")
+
+    # Returns player built-in tables for known regions
+    assert set(bias.keys()) >= set(BUILT_IN_ROLE_TABLES["player"].keys())
+
+
+def test_load_semantic_bias_unknown_role_returns_empty(tmp_path):
+    maps = tmp_path / "semantic_maps"
+    maps.mkdir()
+
+    bias = load_optional_semantic_bias(maps, role="unknown_family")
+
     assert bias == {}
+
+
+def test_load_semantic_bias_valid_map_root_augments_builtin_tables():
+    map_root = Path("docs/research/ascii/semantic_maps")
+    if not map_root.exists():
+        pytest.skip("semantic maps not present")
+
+    bias = load_optional_semantic_bias(map_root, role="player")
+
+    assert len(bias) > 0
+    # face region should have glyph hints from the player map (glyph 34 = ", 118 = v)
+    assert "face" in bias
+    assert 34 in bias["face"] or 118 in bias["face"]
+
+
+def test_load_semantic_bias_malformed_json_warns_and_skips(tmp_path):
+    maps = tmp_path / "semantic_maps"
+    maps.mkdir()
+    (maps / "player-bad.json").write_text("not { valid json")
+    # Also write a valid file to confirm it is still parsed
+    import json as _json
+    valid_data = {
+        "frames": {
+            "0": {
+                "regions": [
+                    {"name": "face", "semantic_cells": [{"glyph": 34}]}
+                ]
+            }
+        }
+    }
+    (maps / "player-good.json").write_text(_json.dumps(valid_data))
+
+    with pytest.warns(RuntimeWarning):
+        bias = load_optional_semantic_bias(maps, role="player")
+
+    # The valid file's hint for glyph 34 in "face" should appear
+    assert "face" in bias
+    assert 34 in bias["face"]
+
+
+def test_load_semantic_bias_empty_semantic_cells_uses_builtin_only(tmp_path):
+    import json as _json
+    maps = tmp_path / "semantic_maps"
+    maps.mkdir()
+    data = {
+        "frames": {
+            "0": {
+                "regions": [
+                    {"name": "face", "semantic_cells": []}
+                ]
+            }
+        }
+    }
+    (maps / "player-empty.json").write_text(_json.dumps(data))
+
+    bias = load_optional_semantic_bias(maps, role="player")
+
+    # face still has built-in weights even with empty semantic_cells
+    assert "face" in bias
+    assert len(bias["face"]) > 0
+
+
+def test_load_semantic_bias_integration_with_config_and_apply():
+    """Returned dict is compatible with GlyphAssignmentConfig and apply_semantic_bias."""
+    map_root = Path("docs/research/ascii/semantic_maps")
+    if not map_root.exists():
+        pytest.skip("semantic maps not present")
+
+    bias = load_optional_semantic_bias(map_root, role="player")
+    config = _config(semantic_bias=bias, candidate_limit=10, score_delta_threshold=0.35)
+    # assign_cell should run without error when bias dict is present
+    result = assign_cell(_tile_for_glyph(47), config, region="face")
+    assert result.chosen.glyph is not None
 
 
 def test_assign_image_cells_preserves_cached_tile_coordinates_and_regions():
@@ -155,3 +254,234 @@ def test_unsupported_font_atlas_extension_fails_closed(tmp_path):
 
     with pytest.raises(ValueError, match="unsupported glyph atlas format"):
         load_glyph_masks(atlas, (6, 6))
+
+
+# ---------------------------------------------------------------------------
+# U3 — override sidecar tests
+# ---------------------------------------------------------------------------
+
+def _make_override_file(tmp_path, records: dict) -> Path:
+    import json as _json
+    path = tmp_path / "glyph_review_overrides.json"
+    path.write_text(_json.dumps(records))
+    return path
+
+
+def test_load_overrides_accepted_cell_returned_as_is(tmp_path):
+    path = _make_override_file(tmp_path, {
+        "civilian1/player/3/5": {"glyph": 47, "fg": [0, 0, 0], "bg": [180, 180, 180], "accepted": True}
+    })
+    result = load_overrides(path, "civilian1", "player")
+    assert (3, 5) in result
+    assert result[(3, 5)]["glyph"] == 47
+    assert result[(3, 5)]["accepted"] is True
+
+
+def test_load_overrides_filters_by_name_and_family(tmp_path):
+    path = _make_override_file(tmp_path, {
+        "civilian1/player/3/5": {"glyph": 47, "accepted": True},
+        "knight1/player/1/1": {"glyph": 92, "accepted": True},
+        "civilian1/attack/0/0": {"glyph": 219, "accepted": True},
+    })
+    result = load_overrides(path, "civilian1", "player")
+    assert list(result.keys()) == [(3, 5)]
+
+
+def test_load_overrides_none_path_returns_empty():
+    assert load_overrides(None, "civilian1", "player") == {}
+
+
+def test_load_overrides_missing_file_returns_empty(tmp_path):
+    missing = tmp_path / "does_not_exist.json"
+    assert load_overrides(missing, "civilian1", "player") == {}
+
+
+def test_load_overrides_malformed_json_warns_and_returns_empty(tmp_path):
+    bad = tmp_path / "glyph_review_overrides.json"
+    bad.write_text("not { valid")
+    with pytest.warns(RuntimeWarning):
+        result = load_overrides(bad, "civilian1", "player")
+    assert result == {}
+
+
+def test_assign_image_cells_accepted_override_bypasses_scoring():
+    tile = _tile_for_glyph(47)
+    image = Image.new("RGBA", (12, 6), (0, 0, 0, 0))
+    image.alpha_composite(tile, (0, 0))
+    image.alpha_composite(tile, (6, 0))
+
+    # Override cell (0,0) with glyph=92 (backslash) and accepted=True
+    overrides = {(0, 0): {"glyph": 92, "fg": [0, 0, 0], "bg": [180, 180, 180], "accepted": True}}
+    cells = assign_image_cells(image, _config(), overrides=overrides)
+
+    assert cells[0].x == 0
+    assert cells[0].chosen.glyph == 92
+    assert cells[0].needs_review is False
+    assert cells[0].confidence == pytest.approx(1.0)
+    # Cell (1,0) is unaffected — still scored normally as slash
+    assert cells[1].chosen.glyph == 47
+
+
+def test_assign_image_cells_accepted_override_ignores_semantic_bias():
+    """A cell with accepted=True is not altered by semantic bias on rerun."""
+    tile = _tile_for_glyph(47)
+    image = Image.new("RGBA", (12, 6), (0, 0, 0, 0))
+    image.alpha_composite(tile, (0, 0))
+    image.alpha_composite(tile, (6, 0))
+
+    overrides = {(0, 0): {"glyph": 92, "accepted": True}}
+    # Bias that would prefer glyph 47 over 92 — must not affect the override cell
+    config_with_bias = _config(
+        semantic_bias={"face": {47: 1.0}},
+        score_delta_threshold=1.0,
+        candidate_limit=10,
+    )
+    cells = assign_image_cells(image, config_with_bias, overrides=overrides)
+
+    assert cells[0].chosen.glyph == 92  # override preserved despite bias
+
+
+def test_assign_image_cells_override_none_path_runs_normally():
+    tile = _tile_for_glyph(47)
+    image = Image.new("RGBA", (6, 6), (0, 0, 0, 0))
+    image.alpha_composite(tile, (0, 0))
+
+    cells = assign_image_cells(image, _config(), overrides=None)
+
+    assert cells[0].chosen.glyph == 47
+
+
+# ---------------------------------------------------------------------------
+# U4 — compact artifact and sheet summary tests
+# ---------------------------------------------------------------------------
+
+def _make_groups(cells_needs_review_flags: list[bool]) -> list[dict]:
+    """Build a synthetic groups list for artifact tests."""
+    cells = []
+    for i, needs_review in enumerate(cells_needs_review_flags):
+        cells.append({
+            "x": i, "y": 0, "region": None,
+            "chosen": {"glyph": 219 if not needs_review else 47, "fg": [0, 0, 0], "bg": [255, 0, 255],
+                       "score": 0.9, "components": {"mask_iou": 0.9}, "reasons": ["test"]},
+            "alternatives": [{"glyph": 32, "fg": [0, 0, 0], "bg": [0, 0, 0],
+                               "score": 0.1, "components": {}, "reasons": []}],
+            "confidence": 0.8 if not needs_review else 0.05,
+            "needs_review": needs_review,
+        })
+    return [{"name": "civilian1", "family": "player", "cells": cells,
+             "low_confidence_cells": sum(cells_needs_review_flags)}]
+
+
+def test_write_suggestions_json_compact_strips_non_review_alternatives(tmp_path):
+    groups = _make_groups([False, True])
+    path = tmp_path / "suggestions.json"
+
+    write_suggestions_json(path, groups, compact=True)
+
+    data = json.loads(path.read_text())
+    cells = data["groups"][0]["cells"]
+    # needs_review=False cell has no alternatives
+    assert "alternatives" not in cells[0]
+    assert "components" not in cells[0]["chosen"]
+    assert "reasons" not in cells[0]["chosen"]
+    # needs_review=True cell retains all fields
+    assert "alternatives" in cells[1]
+    assert "components" in cells[1]["chosen"]
+
+
+def test_write_suggestions_json_default_mode_is_not_compact(tmp_path):
+    groups = _make_groups([False])
+    path = tmp_path / "suggestions.json"
+
+    write_suggestions_json(path, groups)
+
+    data = json.loads(path.read_text())
+    cells = data["groups"][0]["cells"]
+    # Default keeps alternatives and components
+    assert "alternatives" in cells[0]
+    assert "components" in cells[0]["chosen"]
+
+
+def test_write_suggestions_compact_convenience_wrapper(tmp_path):
+    groups = _make_groups([False, False])
+    path = tmp_path / "compact.json"
+
+    write_suggestions_compact(path, groups)
+
+    data = json.loads(path.read_text())
+    for cell in data["groups"][0]["cells"]:
+        assert "alternatives" not in cell
+
+
+def test_write_suggestions_json_all_needs_review_same_as_full(tmp_path):
+    groups = _make_groups([True, True])
+    full_path = tmp_path / "full.json"
+    compact_path = tmp_path / "compact.json"
+
+    write_suggestions_json(full_path, groups)
+    write_suggestions_compact(compact_path, groups)
+
+    # When all cells need review, compact == full structurally
+    full_data = json.loads(full_path.read_text())
+    compact_data = json.loads(compact_path.read_text())
+    assert full_data == compact_data
+
+
+def test_write_suggestions_json_empty_groups(tmp_path):
+    path = tmp_path / "empty.json"
+
+    write_suggestions_json(path, [], compact=True)
+
+    data = json.loads(path.read_text())
+    assert data == {"groups": []}
+
+
+def test_write_sheet_summary_has_required_fields(tmp_path):
+    groups = _make_groups([False, False, True])
+    path = tmp_path / "summary.json"
+
+    write_sheet_summary(path, groups)
+
+    data = json.loads(path.read_text())
+    assert len(data["groups"]) == 1
+    entry = data["groups"][0]
+    assert entry["name"] == "civilian1"
+    assert entry["family"] == "player"
+    assert entry["total_cells"] == 3
+    assert entry["low_confidence_cells"] == 1
+    assert entry["needs_review_cells"] == 1
+    assert isinstance(entry["top_5_glyphs"], list)
+    assert "confidence_p50" in entry
+    assert "confidence_p90" in entry
+
+
+def test_write_sheet_summary_empty_groups(tmp_path):
+    path = tmp_path / "summary.json"
+
+    write_sheet_summary(path, [])
+
+    data = json.loads(path.read_text())
+    assert data == {"groups": []}
+
+
+def test_write_sheet_summary_empty_cells(tmp_path):
+    groups = [{"name": "x", "family": "player", "cells": [], "low_confidence_cells": 0}]
+    path = tmp_path / "summary.json"
+
+    write_sheet_summary(path, groups)
+
+    data = json.loads(path.read_text())
+    assert data["groups"][0]["total_cells"] == 0
+    assert data["groups"][0]["confidence_p50"] == 0.0
+
+
+def test_compact_file_smaller_than_full_when_majority_high_confidence(tmp_path):
+    # 10 high-confidence cells, 1 low-confidence
+    groups = _make_groups([False] * 10 + [True])
+    full_path = tmp_path / "full.json"
+    compact_path = tmp_path / "compact.json"
+
+    write_suggestions_json(full_path, groups)
+    write_suggestions_compact(compact_path, groups)
+
+    assert compact_path.stat().st_size < full_path.stat().st_size

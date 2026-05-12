@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dc_replace
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -18,7 +18,11 @@ from glyph_assignment import (
     GlyphAssignmentConfig,
     assign_image_cells,
     cell_to_json,
+    load_optional_semantic_bias,
+    load_overrides,
     write_contact_sheet,
+    write_sheet_summary,
+    write_suggestions_compact,
     write_suggestions_json,
 )
 from glyph_assignment.matcher import default_font_path
@@ -26,6 +30,8 @@ from glyph_assignment.matcher import default_font_path
 
 SOURCE_DIR = ROOT / "output" / "24px-mini-characters" / "source_sheets"
 OUT_DIR = ROOT / "output" / "24px-mini-characters-template-2x"
+MAP_ROOT = ROOT / "docs" / "research" / "ascii" / "semantic_maps"
+OVERRIDE_PATH = OUT_DIR / "glyph_review_overrides.json"
 TILE_PX = 52
 ANGLES = 8
 MAGENTA = (255, 0, 255)
@@ -44,6 +50,106 @@ FAMILIES = {
     "attack": FamilySpec((8,), 18, 20),
     "plydie": FamilySpec((5,), 22, 22),
 }
+
+# Per-family base configs — semantic_bias is injected per-run from semantic maps.
+# Values follow the block extractor's candidate_limit=12 / score_delta_threshold=0.35
+# as the reference ceiling; these are intentionally lower since sprite cells are
+# more varied than block-face cells.
+_FAMILY_BASE_CONFIGS: dict[str, GlyphAssignmentConfig] = {}  # populated in main()
+
+
+def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
+    return {
+        "player": GlyphAssignmentConfig(
+            font_path=font_path,
+            font_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
+            target_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
+            candidate_limit=5,
+            score_delta_threshold=0.15,
+        ),
+        "attack": GlyphAssignmentConfig(
+            font_path=font_path,
+            font_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
+            target_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
+            candidate_limit=8,
+            score_delta_threshold=0.25,
+        ),
+        "plydie": GlyphAssignmentConfig(
+            font_path=font_path,
+            font_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
+            target_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
+            candidate_limit=4,
+            score_delta_threshold=0.20,
+        ),
+    }
+
+
+def build_regions_grid(
+    map_root: Path,
+    family: str,
+    spec: FamilySpec,
+) -> dict[tuple[int, int], str]:
+    """Build ``{(x, y): region_name}`` for the full assignment sheet.
+
+    Reads all semantic map JSON files matching ``{family}-*.json`` and maps
+    each region's bbox (1x cell coordinates) to the 2x cell grid used in the
+    assignment sheet, applying per-angle and per-frame offsets.
+
+    Files whose ``frame_w`` / ``frame_h`` do not divide evenly into
+    ``spec.cell_w_chars`` / ``spec.cell_h_chars`` are skipped — they belong
+    to a different sprite variant with a different 1x resolution.
+
+    The assignment sheet lays out angles vertically (angle_idx * cell_h_chars)
+    and animation frames horizontally (anim_index * cell_w_chars).  The
+    semantic map uses 1x cell dimensions; the sheet uses 2x, so each bbox cell
+    expands to a 2×2 block in the sheet grid.
+
+    Returns ``{}`` when no compatible map file exists (all cells get
+    ``region=None``).
+    """
+    regions_dict: dict[tuple[int, int], str] = {}
+
+    for map_path in sorted(map_root.glob(f"{family}-*.json")):
+        try:
+            data = json.loads(map_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        frame_w_1x: int = data.get("frame_w", 0)
+        frame_h_1x: int = data.get("frame_h", 0)
+        if (
+            frame_w_1x <= 0
+            or frame_h_1x <= 0
+            or spec.cell_w_chars % frame_w_1x != 0
+            or spec.cell_h_chars % frame_h_1x != 0
+        ):
+            continue  # incompatible sprite variant
+
+        scale_x = spec.cell_w_chars // frame_w_1x
+        scale_y = spec.cell_h_chars // frame_h_1x
+
+        for frame_data in data.get("frames", {}).values():
+            angle_idx: int = frame_data.get("angle", 0)
+            anim_index: int = frame_data.get("anim_index", 0)
+            y_offset = angle_idx * spec.cell_h_chars
+            x_offset = anim_index * spec.cell_w_chars
+
+            for region in frame_data.get("regions", []):
+                name: str = region.get("name", "")
+                bbox = region.get("bbox", [])
+                if not name or len(bbox) != 4:
+                    continue
+                x0, y0, x1, y1 = bbox
+                # Expand each 1x cell in the bbox to scale_x × scale_y cells
+                for bx in range(x0, x1 + 1):
+                    for by in range(y0, y1 + 1):
+                        for dx in range(scale_x):
+                            for dy in range(scale_y):
+                                ax = x_offset + bx * scale_x + dx
+                                ay = y_offset + by * scale_y + dy
+                                regions_dict[(ax, ay)] = name
+
+    return regions_dict
 
 
 def _cell(
@@ -109,8 +215,14 @@ def _assignment_sheet(source: Image.Image, frames: int, spec: FamilySpec) -> Ima
     return sheet
 
 
-def _image_to_cells(image: Image.Image, config: GlyphAssignmentConfig):
-    assigned = assign_image_cells(image, config)
+def _image_to_cells(
+    image: Image.Image,
+    config: GlyphAssignmentConfig,
+    *,
+    regions: dict[tuple[int, int], str] | None = None,
+    overrides: dict[tuple[int, int], dict] | None = None,
+):
+    assigned = assign_image_cells(image, config, regions=regions, overrides=overrides)
     cells = [_cell(cell.chosen.glyph, cell.chosen.fg, cell.chosen.bg) for cell in assigned]
     return cells, assigned
 
@@ -188,12 +300,7 @@ def main() -> None:
     suggestion_groups = []
     contact_items = []
     font_path = default_font_path(ROOT)
-    config = GlyphAssignmentConfig(
-        font_path=font_path,
-        font_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
-        target_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
-        candidate_limit=2,
-    )
+    family_configs = _build_family_configs(font_path)
 
     app = create_app()
     client = app.test_client()
@@ -216,10 +323,26 @@ def main() -> None:
                 f"{source_path} width {source.width} does not match {family} frames {sum(spec.anims)}"
             )
 
+        # Per-family config: inject semantic bias loaded from maps
+        bias_dict = load_optional_semantic_bias(MAP_ROOT, role=family)
+        config = dc_replace(family_configs[family], semantic_bias=bias_dict)
+
+        # Build regions grid from semantic map (empty dict if no map file)
+        regions = build_regions_grid(MAP_ROOT, family, spec)
+
+        # Load human overrides (empty dict if file absent or no matching records)
+        overrides = load_overrides(
+            OVERRIDE_PATH if OVERRIDE_PATH.exists() else None,
+            name,
+            family,
+        )
+
         visual = _visual_sheet(source, frames, spec)
         assignment = _assignment_sheet(source, frames, spec)
         width, height = visual.size
-        visual_cells, assigned = _image_to_cells(assignment, config)
+        visual_cells, assigned = _image_to_cells(
+            assignment, config, regions=regions, overrides=overrides
+        )
         summary = _glyph_summary(assigned)
         layers = [
             _metadata_layer(width, height, spec.anims),
@@ -290,6 +413,8 @@ def main() -> None:
         )
 
     write_suggestions_json(OUT_DIR / "glyph_suggestions.json", suggestion_groups)
+    write_suggestions_compact(OUT_DIR / "glyph_suggestions_compact.json", suggestion_groups)
+    write_sheet_summary(OUT_DIR / "glyph_suggestions_summary.json", suggestion_groups)
     write_contact_sheet(OUT_DIR / "glyph_review_contact.png", contact_items)
     (OUT_DIR / "conversion_manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n"

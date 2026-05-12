@@ -31,8 +31,97 @@ def _candidate_to_json(candidate) -> dict:
     }
 
 
-def write_suggestions_json(path: Path, groups: list[dict]) -> None:
-    path.write_text(json.dumps({"groups": groups}, indent=2) + "\n")
+def _strip_cell_for_compact(cell_dict: dict) -> dict:
+    """Return a copy of *cell_dict* with non-essential fields removed.
+
+    For cells where ``needs_review`` is ``False``, ``alternatives`` and the
+    ``chosen`` sub-fields ``components`` and ``reasons`` are dropped to reduce
+    artifact size.  Cells where ``needs_review`` is ``True`` are returned
+    unchanged so human reviewers retain all scoring context.
+    """
+    if cell_dict.get("needs_review"):
+        return cell_dict
+    stripped = dict(cell_dict)
+    stripped.pop("alternatives", None)
+    if "chosen" in stripped:
+        chosen = dict(stripped["chosen"])
+        chosen.pop("components", None)
+        chosen.pop("reasons", None)
+        stripped["chosen"] = chosen
+    return stripped
+
+
+def write_suggestions_json(path: Path, groups: list[dict], *, compact: bool = False) -> None:
+    """Write *groups* to *path* as ``{"groups": [...]}`` JSON.
+
+    When *compact* is ``True``, cells where ``needs_review=False`` are written
+    without ``alternatives`` and without the ``chosen.components`` /
+    ``chosen.reasons`` fields.  Cells where ``needs_review=True`` are always
+    written in full so reviewers have all scoring context available.
+    The default (``compact=False``) is backward-compatible with callers that
+    relied on the previous single-argument signature.
+    """
+    if compact:
+        out_groups = []
+        for group in groups:
+            g = dict(group)
+            g["cells"] = [_strip_cell_for_compact(c) for c in g.get("cells", [])]
+            out_groups.append(g)
+    else:
+        out_groups = groups
+    path.write_text(json.dumps({"groups": out_groups}, indent=2) + "\n")
+
+
+def write_suggestions_compact(path: Path, groups: list[dict]) -> None:
+    """Convenience wrapper: write a compact review artifact to *path*."""
+    write_suggestions_json(path, groups, compact=True)
+
+
+def write_sheet_summary(path: Path, groups: list[dict]) -> None:
+    """Write a lightweight per-sheet statistics file to *path*.
+
+    Each group produces one entry with aggregate counts and confidence
+    percentiles.  No per-cell data is included.
+
+    Fields per entry:
+      name, family, total_cells, low_confidence_cells, needs_review_cells,
+      top_5_glyphs [{glyph, count}], confidence_p50, confidence_p90
+    """
+    summary_groups = []
+    for group in groups:
+        cells = group.get("cells", [])
+        total = len(cells)
+        low_conf = sum(1 for c in cells if c.get("needs_review"))
+        confidences = [c.get("confidence", 0.0) for c in cells]
+        glyph_counts: dict[int, int] = {}
+        for c in cells:
+            glyph = c.get("chosen", {}).get("glyph")
+            if glyph is not None:
+                glyph_counts[glyph] = glyph_counts.get(glyph, 0) + 1
+        top_5 = sorted(glyph_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:5]
+
+        if confidences:
+            sorted_conf = sorted(confidences)
+            n = len(sorted_conf)
+            p50_idx = max(0, int(n * 0.50) - 1)
+            p90_idx = max(0, int(n * 0.90) - 1)
+            conf_p50 = round(sorted_conf[p50_idx], 4)
+            conf_p90 = round(sorted_conf[p90_idx], 4)
+        else:
+            conf_p50 = conf_p90 = 0.0
+
+        summary_groups.append({
+            "name": group.get("name", ""),
+            "family": group.get("family", ""),
+            "total_cells": total,
+            "low_confidence_cells": low_conf,
+            "needs_review_cells": low_conf,
+            "top_5_glyphs": [{"glyph": g, "count": c} for g, c in top_5],
+            "confidence_p50": conf_p50,
+            "confidence_p90": conf_p90,
+        })
+
+    path.write_text(json.dumps({"groups": summary_groups}, indent=2) + "\n")
 
 
 def write_contact_sheet(path: Path, items: list[tuple[str, Image.Image]], *, cols: int = 4) -> None:

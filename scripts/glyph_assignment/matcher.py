@@ -168,12 +168,40 @@ def assign_cell(
     return AssignedCell(x, y, region, chosen, alternatives, confidence, needs_review)
 
 
+def _cell_from_override(x: int, y: int, record: dict) -> AssignedCell | None:
+    """Build a synthetic AssignedCell from an accepted override record.
+
+    Returns ``None`` when the record is missing the required ``glyph`` field.
+    The resulting cell has ``confidence=1.0``, ``needs_review=False``, and an
+    empty alternatives tuple — it bypasses scoring entirely.
+    """
+    glyph = record.get("glyph")
+    if not isinstance(glyph, int):
+        return None
+    raw_fg = record.get("fg", [0, 0, 0])
+    raw_bg = record.get("bg", list(TRANSPARENT_BG))
+    fg: Color = (int(raw_fg[0]), int(raw_fg[1]), int(raw_fg[2]))
+    bg: Color = (int(raw_bg[0]), int(raw_bg[1]), int(raw_bg[2]))
+    region: str | None = record.get("region")
+    chosen = GlyphCandidate(glyph, fg, bg, 1.0, {"override": 1.0}, ["human override accepted"])
+    return AssignedCell(x, y, region, chosen, (chosen,), 1.0, False)
+
+
 def assign_image_cells(
     image: Image.Image,
     config: GlyphAssignmentConfig,
     *,
     regions: dict[tuple[int, int], str] | None = None,
+    overrides: dict[tuple[int, int], dict] | None = None,
 ) -> list[AssignedCell]:
+    """Assign CP437 glyphs to every cell in *image*.
+
+    *regions* maps ``(x, y)`` to a region name string used for semantic bias.
+    *overrides* maps ``(x, y)`` to a human-authored override record; records
+    with ``accepted=True`` bypass scoring entirely and are returned as-is.
+    Override consumption happens before the tile cache and before semantic
+    bias — human choices are always authoritative.
+    """
     masks = load_glyph_masks(config.font_path, config.target_cell_size)
     rgba = image.convert("RGBA")
     target_w, target_h = config.target_cell_size
@@ -183,6 +211,15 @@ def assign_image_cells(
     cache: dict[tuple[bytes, str | None], AssignedCell] = {}
     for y in range(rows):
         for x in range(cols):
+            # Override pre-pass: accepted cells bypass scoring and cache
+            if overrides:
+                record = overrides.get((x, y))
+                if record is not None and record.get("accepted"):
+                    synthetic = _cell_from_override(x, y, record)
+                    if synthetic is not None:
+                        cells.append(synthetic)
+                        continue
+
             tile = rgba.crop((x * target_w, y * target_h, (x + 1) * target_w, (y + 1) * target_h))
             region = regions.get((x, y)) if regions else None
             key = (tile.tobytes(), region)
