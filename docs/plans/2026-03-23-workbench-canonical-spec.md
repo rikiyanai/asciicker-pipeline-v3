@@ -1423,6 +1423,15 @@ Section 2 is not allowed to own the image/session root. It may only:
 
 ### 2.1 Engine Truth: `skin_family`, Legacy Combo Sheets, Direct Overlays, And AHSW Naming
 
+> **⚠ DELETION TARGET (2026-05-12, §2.15):** This section documents the
+> current Y9-2 runtime visual-resolution architecture — selector-driven bundles,
+> family fallback chains, `LookupPresentationSprite()`, combo-sheet matrices,
+> `bundle_layer_resolver`, and `ActorAppearanceBundleCache`. This system is the
+> deletion target specified in §2.15.1. It describes what exists today, not what
+> is correct tomorrow. The replacement is an exact `RenderPlanTable` lookup with
+> no runtime resolution. Read §2.15 before treating anything in this section as
+> the target architecture.
+
 The main game no longer treats player appearance as a presentation-state-only
 lookup. The canonical runtime dispatch is now:
 
@@ -1911,6 +1920,15 @@ regression before it is treated as a UI problem.
 
 #### 2.3.8 Porting Precondition - Semantic Runtime Parity, Not Just Action Tabs
 
+> **⚠ PARTIALLY SUPERSEDED (2026-05-12, §2.15):** This section describes the
+> Y9-2 selector-driven bundle system as the parity target. The server-side
+> identity contract (`appearance_profile_id`, `skin_definition_id`, etc.) and
+> the compile-time coverage obligation remain accurate. However, the *runtime*
+> interpretation layer — selectors, semantic tables, conditional row lookup — is
+> now the deletion target per §2.15.0. The porting precondition is restated:
+> pipeline-v3 must emit compiler-validated `RenderPlan` rows keyed by
+> `ServerVisualKey`, not just prove semantic coverage in the old selector model.
+
 The active Y9-2 runtime contract is no longer narrow "three action tabs"
 truth. The current game repo (`/Users/r/Downloads/asciicker-Y9-2` on
 `main @ 0ef8d327`, dirty worktree) now consumes generalized bundle identity and
@@ -2256,6 +2274,11 @@ The live wrapper architecture is still misaligned in these exact ways after the
 | Y9-2 bundle wizard not wired as launcher sub-action | `Y9-2 scripts/launcher.py`, `Y9-2 scripts/pipeline/bundle_wizard/main.py` | The current bundle-wizard client exists, but `[3] ASSET PIPELINE` is still absent from the launcher rather than wired to the shared owner contract. Tracked as Y9-2 DESIGN OPEN B-13. |
 | **GAP: No wearable or item templates, and no backend parity runner for wearable slot/style contracts** | `config/template_registry.json`, `scripts/xp_fidelity_test/`, `tests/` | Pipeline-v2 has no wearable/item authoring surface, and there is no structural-contract runner that proves the local schema matches Y9-2 slot/style truth. That means gold/dark/default wearable semantics are still only partially covered by ad hoc runtime or engine-side knowledge. Tracked as S2-FAM-04. |
 | **GAP: Runtime identity is live, but semantic-runtime proof still lacks mounted/item runtime evidence** | `scripts/xp_fidelity_test/bundle_contract.mjs`, `scripts/xp_fidelity_test/run_semantic_runtime_contract_test.mjs`, `tests/xp_fidelity_test/semantic_runtime_contract.test.mjs`, `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs`, `scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs`, `config/template_registry.json`, `config/runtime_identity_registry.json`, `Y9-2 server/network.h`, `Y9-2 engine/inventory.h`, `Y9-2 scripts/pipeline/staging/appearance_bundle/phase2-positive/appearance_bundle.json` | Pipeline-v3 now has live `skin_definition_id` / `presentation_kind_id` / `layer_definition_id` ownership. Generalized bundle-port readiness remains false because item/world/inventory rows are still explicit blockers and mounted runtime proof still needs `mounted_authoring_e2e` evidence. |
+| **GAP: Y9-2 runtime still resolves visual meaning at runtime — bundle compiler output not yet `RenderPlanTable`** | `Y9-2 engine/bundle_layer_resolver.cpp`, `Y9-2 engine/bundle_runtime_admission_validator.cpp`, `Y9-2 engine/mounted_compose_runtime.h`, `Y9-2 engine/ActorAppearanceBundleCache`, `Y9-2 scripts/pipeline/appearance_bundle.py` | The Y9-2 runtime still resolves conditional body/item layers, mounted admission tables, fallback chains, selector masks, attachment order, default head/body insertion, and slot-order inference at runtime. This means compiler and runtime can disagree on any new content axis. The compiler must enumerate every server-authorable `ServerVisualKey` and emit a flat ordered `RenderPlan` row for each key — missing key is a hard compiler rejection with no runtime fallback. Pipeline-v3 compiler output obligations extend to include `render_plans.json` once §2.15 transition is active. Tracked as `UQ-R15`. FL-3861. |
+| **GAP: `ActorVisualProfile` authored data structure not defined in pipeline-v3** | `config/runtime_identity_registry.json`, `src/pipeline_v2/service.py::resolve_blueprint_targets()` | No data structure captures the full visual profile as an authored object: `skin_id`, `presentation_kind`, `variation` (e.g. `crossbow_attack`), body layer assignment, wearable slot layer assignments (head/chest/weapon/shield with explicit XP refs), mount rear/rider/front layer split, or future rig/bone/socket data. `runtime_identity_registry.json` captures IDs; `resolve_blueprint_targets()` captures geometry — neither captures authored content ownership or variation/mount slot assignments. Without this object, the pipeline cannot produce a structured authoring artifact or compile RenderPlan rows from authored content. FL-3863. |
+| **GAP: Structured authoring artifact (Step 7) missing semantic map refs, variation, slot/layer assignments** | `src/pipeline_v2/service.py::workbench_export_bundle()`, `src/pipeline_v2/service.py::workbench_web_skin_bundle_payload()` | Current export produces per-action XP paths + runtime identity IDs. Missing: semantic map refs, `variation` field, explicit slot/layer assignments (which XP covers which slot), mount rear/front separation, mount composition data, quality gate summary per slot. This is the pipeline-v3 side of Step 7 of the content authoring workflow. FL-3863. |
+| **GAP: Runtime Parser Gate absent from `verify-current` and `build-web.sh`** | `asciicker-Y9-2/scripts/build-web.sh:129`, `asciicker-Y9-2/scripts/pipeline/appearance_bundle.py::verify_current()` | `build-web.sh` runs Python-only bundle validation before WASM compilation. The actual C++ runtime parser is never invoked. A bundle can pass all Python gates and still be rejected by the C++ parser. The parser gate is mandatory before any RenderPlanTable claim is provable: emitted plan must be accepted by exact C++ runtime, not Python validator. FL-3862. |
+| **GAP: Bundle System Guide in Y9-2 launcher documents old selector-driven architecture** | `asciicker-Y9-2/scripts/launcher.py::_show_bundle_system_guide()` (~lines 5851–5906) | The user-facing Bundle System Guide accessible from the launcher explains the old XP→bundle→server→client chain with selector IDs. It does not explain: ActorVisualProfile, RenderPlanTable, ServerVisualKey, or why crossbow/mounted are not special cases. Content authors will learn the wrong model. FL-3864. |
 
 #### 2.5.1 Exact Live Gap Inventory By Surface
 
@@ -2677,6 +2700,24 @@ that authors bundle contributions rather than standalone per-action assets. Brow
 CLI, launcher, MCP, and CI are thin clients over that flow. Section 1 remains
 the root XP editor; Section 2 adds the bundle-authoring wrapper around it.
 
+**Refactor note (2026-05-12):** The command semantics below were written against
+the old selector-driven bundle model. Under the §2.15 replacement architecture,
+`compile-skin-request` must emit `render_plans.json` / `RenderPlanTable` rows,
+not just `appearance_bundle.json`. The Y9-2 launcher Bundle Mods menu labels
+(`New Bundle Item`, `Import Assets`, `Draft Manifest`, `Compile Bundle`,
+`Preview`, `Verify`) map to the new operations as follows:
+
+| Old launcher label | New operation under §2.15 |
+|--------------------|--------------------------|
+| Import Assets | import content artifact + validate content DB entry |
+| Draft Manifest | author `ActorVisualProfile` fields (skin/variation/slot assignments) |
+| Compile Bundle | compile `RenderPlan` rows → emit `render_plans.json` |
+| Preview | preview exact `RenderPlan` layer stack (body/wearables/mount) |
+| Verify | verify runtime parser accepts `RenderPlanTable` (C++ parser gate, FL-3862) |
+
+These labels have not been renamed in live code. `UQ-R15` and FL-3864 track
+the guide and launcher label updates.
+
 **Required shared headless surface:** the product must converge on one
 authoritative CLI/API contract with at least these command semantics:
 
@@ -2687,9 +2728,10 @@ authoritative CLI/API contract with at least these command semantics:
 | `validate-skin-intake` | validate source PNG geometry/coverage for the skin lane | no | `planned_only` - no route exists |
 | `convert-skin-request` | convert walk/attack/death PNG inputs into staged XP and update the request artifact | yes | `planned_only` - no route exists |
 | `register-skin-request` | dry-run or perform canonical registration into bundle source + sprite destinations | yes | `planned_only` - no route exists |
-| `compile-skin-request` | compile canonical bundle outputs from a registered request | yes | `planned_only` - no route exists |
+| `compile-skin-request` | compile canonical bundle outputs from a registered request — must include `render_plans.json` under §2.15 | yes | `planned_only` - no route exists |
 | `validate-xp` | run XP-only G7-G12 validation without requiring bundle/session context | no | `planned_only` - no route exists |
 | `status` | inspect request artifact state, blockers, next steps, and provenance | no | `planned_only` - no route exists |
+| `verify-cpp-parser` | invoke C++ runtime parser against emitted `render_plans.json` and confirm acceptance — mandatory gate per FL-3862 | no | `planned_only` - does not exist |
 
 The API naming may differ from the CLI verb spelling, but the semantics and
 validation rules must be identical. There must not be a browser-only, MCP-only,
@@ -4168,6 +4210,196 @@ authoring surface to the generalized bundle identity model is the core open work
 
 ---
 
+## Section 2.15 — Y9-2 Runtime System Deletion And Replacement Contract
+
+**Added 2026-05-12. Source: FL-3912 architectural diagnosis.**
+
+This section establishes what must be deleted from the Y9-2 game runtime, what
+replaces it, and how pipeline-v3 compiler output obligations change to support
+the replacement owner. It is canon law for all subsequent Y9-2 bundle work and
+for pipeline-v3 compile targets. It may not be treated as a suggestion or a
+future-milestone deferral.
+
+### 2.15.0 Governing Law
+
+The Y9-2 runtime may not resolve visual meaning. It may only:
+
+1. load a compiler-emitted `RenderPlanTable`
+2. perform an exact `ServerVisualKey` lookup
+3. load sprite assets for the returned ordered layer list
+4. compose layers bottom-up
+5. cache the composed sprite keyed by `hash(ServerVisualKey + bundle_hash)`
+
+Any missing `ServerVisualKey` is a hard compile-time rejection. The runtime
+must not search selectors, walk fallback chains, infer attachment order,
+special-case mounted compose, insert default body/head layers, validate
+admission tables, resolve conditional layer searches, or perform slot-order
+inference at runtime. If the compiler did not emit a plan for a given key, the
+runtime produces no output for that key and reports a missing-plan error.
+
+The governing equation is:
+
+```
+server-owned AppearanceStateV2  →  ServerVisualKey  →  exact RenderPlanTable lookup  →  ordered layer composition
+```
+
+Nothing else is permitted in the gameplay render path.
+
+### 2.15.1 Deletion List — Y9-2 Runtime Visual-Resolution System
+
+The following components must be deleted from the Y9-2 runtime gameplay path.
+This is a **deletion list, not a migration list**. Patching or wrapping these
+components is not acceptable; they are the architectural bug.
+
+| Component | File / Symbol | Why it must be deleted |
+|-----------|--------------|------------------------|
+| Runtime layer resolver | `engine/bundle_layer_resolver.cpp` | Resolves conditional body layers, conditional item layers, conditional mounted admissions, fallback bits, attachment order, default head behavior, and mount-specific admission/body/item lookup at runtime. Compiler and runtime can disagree on any axis. |
+| Runtime admission validator | `engine/bundle_runtime_admission_validator.cpp` | Performs admission/index validation for mounted rows, body rows, item rows, duplicate detection, satisfiable contract records, and mount-index lookup at runtime. Runtime validation compensating for the compiler not emitting a sealed render plan. |
+| Mounted compose runtime | `engine/mounted_compose_runtime.h` and all special mounted admission logic | Runs mounted-specific composition, front/rear selection, parity records, and rider-overlay gap decisions at runtime. Mounted is not a special case; it is layer order `[mount_rear, body, wearables, mount_front]` emitted by the compiler. |
+| Resolved-layer cache | `engine/ActorAppearanceBundleCache` entries for selectors, layers, slot kinds, items, mounted admissions, admitted mount body layers, admitted mount item layers, attachment orders, death playback, mounted contract records, mount indexes, composed cache entries | This cache is a runtime database plus resolver, not a flat compiled render table. The replacement is `composed_sprite_cache.cpp` keyed by `hash(ServerVisualKey + bundle_hash)` only. |
+| Selector mask interpretation | All code converting presentation/life/locomotion/combat/mount masks into render decisions | Mask-to-selector conversion is compiler work. The runtime receives an already-resolved ordered list; it does not interpret masks. |
+| Runtime fallback chains | All `LookupPresentationSprite()` fallback walks and family-fallback-chain resolution for gameplay render | Fallback is a compile-time error surface, not a runtime recovery strategy. Missing compile-time coverage is a compiler rejection, not a silent fallback. |
+| Body-slot skip logic | Any runtime code that inserts or skips default body/head/item layers based on runtime slot state | Layer insertion is compiler work. The compiler emits every layer; the runtime pastes them in order. |
+| Mounted special compose path | `FillActorBundleRenderArrays` pre-step runtime search that produces the `[rear, body, item layers, front]` stack dynamically | The final stack shape is correct. The runtime search that produces it is not. The compiler must emit the stack directly. |
+| Watchdog/analyzer visual compatibility truth | Any watchdog or analyzer shim that serves as a render authority or fallback source during gameplay | Watchdog is observational only (Law 4). It may not be a runtime visual owner or fallback source. |
+
+Components listed above may temporarily remain behind a **test-only comparison
+harness** during migration. They must not be in the gameplay render path after
+the `RenderPlanTable` path passes proof.
+
+### 2.15.2 Replacement List — New Y9-2 Runtime Modules
+
+The replacement runtime is four modules only:
+
+| Module | Purpose |
+|--------|---------|
+| `compiled_bundle_loader.cpp` | Parse compact JSON or binary `render_plans` block into `RenderPlanTable` in memory |
+| `render_plan_lookup.cpp` | Hash `ServerVisualKey`, return pointer to `RenderPlan` or null (never infer) |
+| `sprite_compositor.cpp` | Paste ordered layers bottom-up per `RenderPlan.layers[]` |
+| `composed_sprite_cache.cpp` | Cache composed sprites keyed by `hash(ServerVisualKey + bundle_hash)` |
+
+The runtime lookup call must be:
+
+```cpp
+RenderPlan* plan = bundle.lookup(server_visual_key);
+if (!plan) fail_hard_no_plan(server_visual_key);
+Sprite* sprite = compose(plan->layers);
+```
+
+No other runtime visual-resolution code may exist in the gameplay path.
+
+### 2.15.3 Compiler Output Obligation — `render_plans.json`
+
+The Y9-2 appearance bundle compiler (`scripts/pipeline/appearance_bundle.py`)
+must emit a `render_plans.json` output in addition to the current
+`appearance_bundle.json`. This is the compiler's primary deliverable under
+the new architecture.
+
+**Required `render_plans.json` schema:**
+
+```json
+{
+  "bundle_hash": "<hash>",
+  "schema_version": 1,
+  "asset_table": {},
+  "slot_table": {},
+  "presentation_table": {},
+  "render_plans": [
+    {
+      "key": {
+        "entity_kind": "character",
+        "skin": "<skin_id>",
+        "presentation": "<presentation_kind>",
+        "variation": "<variation or null>",
+        "mount": "<mount_id or null>",
+        "equipped": {
+          "<slot_name>": "<item_id or null>"
+        }
+      },
+      "layers": [
+        {
+          "role": "<mount_rear|body|wearable|mount_front|effect>",
+          "asset": "<relative asset path>",
+          "slot": "<slot name>",
+          "z": 0,
+          "offset": [0, 0]
+        }
+      ],
+      "frame_contract": {
+        "angles": 8,
+        "projs": 2,
+        "anims": [8],
+        "frame_size": [168, 108]
+      },
+      "rig_contract": null
+    }
+  ]
+}
+```
+
+**Compiler completeness law:** The compiler must enumerate every
+server-authorable visual key combination:
+
+- `skin` × `presentation_kind` × `variation` × `equipped slot combinations` × `mount_state`
+
+For each combination, the compiler must either emit exactly one `RenderPlan`
+with a fully ordered layer list, or reject the bundle with an explicit
+missing-plan error that names the missing key and the layers needed to satisfy
+it. No combination may be silently absent.
+
+**Layer ordering law:** Every emitted plan must order layers as:
+
+1. `mount_rear` (if mounted)
+2. `body`
+3. wearable slots in compiled slot order
+4. `mount_front` (if mounted)
+5. effects (future)
+
+No runtime-side ordering, insertion, or conditional pruning is permitted.
+
+**Crossbow and mounted are not exceptions:** `crossbow_attack` is a `variation`
+key. `wolf_mount` is a `mount` key. They produce normal `RenderPlan` rows.
+There is no C++ special case, no mounted-compose branch, and no weapon
+exception in the replacement architecture.
+
+### 2.15.4 Pipeline-V3 Authoring Implication
+
+Pipeline-v3 does not own the Y9-2 runtime replacement. That work lives in
+the Y9-2 game repo. However, pipeline-v3's compiler output obligations change
+once `render_plans.json` becomes the authoritative compiled artifact:
+
+1. **XP authoring obligation** (unchanged): help an author produce XP files
+   that pass structural gates G10-G12.
+2. **Manifest declaration obligation** (unchanged): help declare
+   `layer_definition` rows in `positive.bundle.json`.
+3. **Compiled bundle obligation** (extended): produce both `appearance_bundle.json`
+   (current) and `render_plans.json` (new target) from a registered
+   full-coverage request.
+4. **Key-space completeness obligation** (new): the compiler must be able to
+   enumerate the full server-authorable visual key space from registry truth
+   and reject the bundle if any key lacks a plan. Pipeline-v3 must expose
+   this as a verifiable compile gate, not a post-hoc runtime gap.
+
+The pipeline-v3 authoring surface does not need to change its XP editing
+workflow. The change is in what the compiler emits and what it validates.
+`render_plans.json` is produced by the same `appearance_bundle.py` compiler
+that already produces `appearance_bundle.json`. It is a new output from an
+existing compile step, not a new product surface.
+
+### 2.15.5 Impact On Queue And Gates
+
+| Item | Change |
+|------|--------|
+| `UQ-R15` (new) | Owns the `render_plans.json` compiler output and the `RenderPlanTable` runtime replacement path in Y9-2. Blocked until §2.15.1 deletion components are removed from gameplay path and one mounted crossbow attack key renders through `render_plans.json` with no call into deleted components. |
+| `UQ-008` mounted parity | Additionally blocked on `UQ-R15`. `mounted_authoring_e2e` runtime proof requires the replacement runtime path, not the old resolver. The old resolver proving mounted rows is not acceptable evidence. |
+| Blocking gate (new, §2.15) | `render_plans.json` emitted by compiler — OPEN |
+| Blocking gate (new, §2.15) | One mounted crossbow attack `ServerVisualKey` renders through `RenderPlanTable` with no deleted component in call path — OPEN |
+
+The existing blocking gates for `UQ-008` and generalized bundle-port readiness
+remain open. They are now also gated on `UQ-R15` completion.
+
+---
+
 
 
 **Added 2026-04-22. Tracks what must be true before a V3 migration is declared ready.**
@@ -4185,10 +4417,14 @@ not a task plan - it is a gate list. Migration is ready when all blocking gates 
 | UQ-005 export/web-skin quality contract fully enforced | §Unified Queue `UQ-005` | CLOSED — export/web-skin paths share live G7-G12 enforcement. Canonical `/api/workbench/validate-xp` route + MCP `validate_xp` tool added. G8/G9 threshold policy locked in `gates.py` with named policy constants. |
 | UQ-006 manifest-backed source authoring no longer JSON-first | §Unified Queue `UQ-006` | OPEN |
 | UQ-007 runtime identity layer landed | §Unified Queue `UQ-007` | CLOSED - `config/runtime_identity_registry.json` owns live `skin_definition_id` / `presentation_kind_id` / `layer_definition_id` values and backend/helper/export/payload surfaces emit them |
-| UQ-008 mounted-family parity for `wolfie` / `wolack` proven | §Unified Queue `UQ-008` | PROOF BLOCKED - native builders, authorable registry state, and browser/backend artifact surfaces exist; `mounted_authoring_e2e` runtime proof still must prove generated rows and no legacy fallback |
+| UQ-008 mounted-family parity for `wolfie` / `wolack` proven | §Unified Queue `UQ-008` | PROOF BLOCKED - native builders, authorable registry state, and browser/backend artifact surfaces exist; `mounted_authoring_e2e` runtime proof still must prove generated rows and no legacy fallback. Additionally blocked on `UQ-R15` — old resolver proving mounted rows is not acceptable evidence. |
 | UQ-009 current-scope Section 3 signoff + contract runners current | §Unified Queue `UQ-009` | PARTIAL |
 | UQ-010 Y9-2 wizard / launcher gateway wired to shared bundle-authoring contract | §Unified Queue `UQ-010` | OPEN |
 | UQ-011 cutover support gates ready (`§2.11`, `§2.12`) | §Unified Queue `UQ-011` | OPEN |
+| UQ-R15 Y9-2 runtime visual-resolution system deleted and replaced by `RenderPlanTable` | §2.15 | OPEN — §2.15.1 deletion list components still present in gameplay path; `render_plans.json` not yet emitted by compiler; no proof that one mounted crossbow attack `ServerVisualKey` renders through replacement path with no call into deleted components. FL-3861. |
+| FL-3862 Runtime Parser Gate — `verify-current` and `build-web.sh` must invoke C++ parser | §2.10 / §2.15 | OPEN — build-web.sh line 129 runs Python-only validation; C++ runtime parser never called; mandatory before any `RenderPlanTable` proof claim. |
+| FL-3863 `ActorVisualProfile` authored object — pipeline-v3 missing data structure | §2.5 | OPEN — no structure captures skin_id, variation, body/wearable/mount layer assignments; `runtime_identity_registry.json` covers IDs only. |
+| FL-3864 Bundle System Guide rewrite — must explain Content DB → RenderPlanTable | §2.10 / §2.15 | OPEN — launcher guide at `_show_bundle_system_guide()` documents old selector architecture; content authors will learn wrong model. |
 
 ### Non-Blocking Gaps (required for full parity, not migration gate)
 
@@ -4199,6 +4435,11 @@ not a task plan - it is a gate list. Migration is ready when all blocking gates 
 | M2 E2E proof run (PNG→WS→export, committed headed run) | §Milestone 2 | PARTIAL |
 | UQ-013 small-screen layout and persistence | §Unified Queue `UQ-013` | OPEN |
 | Whole-sheet browse-model split implementation | §1.8 / §2 boundary | DECISION FIXED - browse opens XP/root-editor documents first, layer 0 is editable in principle, and template metadata compatibility is a later wrapper concern; implementation remains intentionally sequenced after grid contrast, expanded grid presets, grid-scoped replace semantics, and their proof updates |
+| FL-3861 `render_plans.json` compiler output | §2.15 | OPEN — non-blocking only if UQ-R15 is treated as a Y9-2-first deliverable; becomes blocking once pipeline-v3 owns the compile step |
+| RenderPlan preview surface (Step 11 of content authoring flow) | §2.10 | OPEN — no surface exists to inspect ordered layer stacks before activation |
+| Structured authoring artifact completeness (Step 7 of content authoring flow) | §2.5 | OPEN — export-bundle missing semantic map refs, variation field, slot/layer assignments, mount rear/front separation |
+| Bundle Mods E2E smoke automation (FL-3602) | §2.10 | PARTIAL — menu items exist in launcher, no tmux-driven automation of full Status→Package→Rollback sequence |
+| Promote-to-current render-plan identity check (Step 16) | §2.10 | OPEN — `promote_candidate_to_current.py` checks manifest mismatch but not `render_plans.json` hash parity |
 
 ### Gate Maintenance Rule
 

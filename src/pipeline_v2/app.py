@@ -61,6 +61,10 @@ from .service import (
     validate_xp_single,
     compute_mounted_rider_calibration,
     compute_mounted_semantic_proposals,
+    workbench_source_manifest_get,
+    workbench_source_manifest_put,
+    workbench_create_actor_visual_profile,
+    workbench_export_actor_visual_profile,
 )
 
 
@@ -815,6 +819,46 @@ def create_app() -> Flask:
         except ApiError as e:
             return _err(e)
 
+    # ── UQ-006 source-manifest canonical owner ──
+
+    @bp.get("/api/workbench/source-manifest")
+    def api_wb_source_manifest_get():
+        req_id = str(uuid.uuid4())
+        try:
+            source_path = request.args.get("source_path", "").strip() or None
+            session_id = request.args.get("session_id", "").strip() or None
+            validate = _as_bool(request.args.get("validate"))
+            materialize = _as_bool(request.args.get("materialize"))
+            return jsonify(workbench_source_manifest_get(
+                source_path=source_path,
+                session_id=session_id,
+                validate=validate,
+                materialize=materialize,
+                req_id=req_id,
+            )), 200
+        except ApiError as e:
+            return _err(e)
+
+    @bp.put("/api/workbench/source-manifest")
+    def api_wb_source_manifest_put():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            source_path = str(payload.get("source_path", "")).strip()
+            manifest = payload.get("manifest")
+            ack_stale_sha = _as_bool(payload.get("ack_stale_sha", False))
+            if not source_path:
+                raise ApiError("source_path is required", "missing_source_path", "workbench", req_id, 400)
+            if not isinstance(manifest, dict):
+                raise ApiError("manifest must be an object", "invalid_manifest", "workbench", req_id, 422)
+            return jsonify(workbench_source_manifest_put(
+                source_path, manifest,
+                ack_stale_sha=ack_stale_sha,
+                req_id=req_id,
+            )), 200
+        except ApiError as e:
+            return _err(e)
+
     @bp.post("/api/workbench/mounted-calibration/compute")
     def api_wb_mounted_calibration_compute():
         req_id = str(uuid.uuid4())
@@ -909,6 +953,54 @@ def create_app() -> Flask:
                     command_template=command_template,
                     timeout_sec=timeout_sec,
                     dry_run=dry_run,
+                )
+            ), 200
+        except ApiError as e:
+            return _err(e)
+
+    @bp.post("/api/workbench/actor-visual-profile/create")
+    def api_wb_create_actor_visual_profile():
+        """Create ActorVisualProfile from current session (Phase 2, Task 2)."""
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            session_id = str(payload.get("session_id", "")).strip()
+            if not session_id:
+                raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
+            domain = str(payload.get("domain", "skin")).strip()
+            presentation_kind = str(payload.get("presentation_kind", "idle_walk")).strip()
+            variation = str(payload.get("variation", "default")).strip()
+            return jsonify(
+                workbench_create_actor_visual_profile(
+                    session_id=session_id,
+                    domain=domain,
+                    presentation_kind=presentation_kind,
+                    variation=variation,
+                    req_id=req_id,
+                )
+            ), 200
+        except ApiError as e:
+            return _err(e)
+
+    @bp.post("/api/workbench/actor-visual-profile/export")
+    def api_wb_export_actor_visual_profile():
+        """Export ActorVisualProfile as authoring artifact (Phase 2, Task 3)."""
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            session_id = str(payload.get("session_id", "")).strip()
+            if not session_id:
+                raise ApiError("session_id is required", "missing_session_id", "workbench", req_id, 400)
+            domain = str(payload.get("domain", "skin")).strip()
+            presentation_kind = str(payload.get("presentation_kind", "idle_walk")).strip()
+            variation = str(payload.get("variation", "default")).strip()
+            return jsonify(
+                workbench_export_actor_visual_profile(
+                    session_id=session_id,
+                    domain=domain,
+                    presentation_kind=presentation_kind,
+                    variation=variation,
+                    req_id=req_id,
                 )
             ), 200
         except ApiError as e:

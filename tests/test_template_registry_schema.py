@@ -6,6 +6,7 @@ from pathlib import Path
 
 from pipeline_v2.service import (
     _action_override_names,
+    _normalize_frames_count,
     _normalize_template_action_spec,
     _normalize_template_registry,
     _reset_template_registry_cache,
@@ -14,6 +15,8 @@ from pipeline_v2.service import (
     is_action_authorized,
     is_prefix_authorized,
     load_template_registry,
+    resolve_blueprint_angles_frames_projs,
+    resolve_blueprint_targets,
     runtime_identity_for_action,
 )
 
@@ -599,6 +602,188 @@ def test_termpp_skin_override_names_empty_registry():
     """Empty registry produces no names."""
     names = _termpp_skin_override_names({})
     assert names == []
+
+
+# ── UQ-006 blueprint bridge tests ──────────────────────────────────────────
+
+
+def test_normalize_frames_count_with_range():
+    """frames: [1, 8] → 8"""
+    assert _normalize_frames_count([1, 8]) == 8
+
+
+def test_normalize_frames_count_with_single():
+    """frames: [8] → 8"""
+    assert _normalize_frames_count([8]) == 8
+
+
+def test_normalize_frames_count_with_int():
+    assert _normalize_frames_count(5) == 5
+
+
+def test_normalize_frames_count_with_empty():
+    assert _normalize_frames_count([]) == 0
+
+
+def test_normalize_frames_count_with_none():
+    assert _normalize_frames_count(None) == 0
+
+
+def test_resolve_blueprint_targets_player_native_full():
+    """All three action targets resolved with required hierarchy fields."""
+    targets = resolve_blueprint_targets("player_native_full")
+    assert len(targets) == 3
+
+    action_keys = {t["action_key"] for t in targets}
+    assert action_keys == {"idle", "attack", "death"}
+
+    for t in targets:
+        assert t["entity_key"] == "player_actor"
+        assert t["character_key"] == "human_player"
+        assert t["layer_owner_kind"] == "skin"
+        assert t["slot"] == "body"
+        assert t["presentation_kind"] in ("idle_walk", "attack", "plydie")
+        assert t["template_set_key"] == "player_native_full"
+        assert isinstance(t["angles"], int) and t["angles"] == 8
+        assert isinstance(t["frames"], int) and t["frames"] > 0
+        assert isinstance(t["source_projs"], int) and t["source_projs"] == 1
+        assert isinstance(t["projs"], int) and t["projs"] == 2
+        assert isinstance(t["cell_w"], int) and t["cell_w"] > 0
+        assert isinstance(t["cell_h"], int) and t["cell_h"] > 0
+        assert isinstance(t["xp_dims"], list) and len(t["xp_dims"]) == 2
+        assert "presentation_target_key" in t
+        # Flattened-owner guard: must carry identity IDs
+        assert "skin_definition_id" in t
+        assert "presentation_kind_id" in t
+        assert "layer_definition_id" in t
+
+    # Verify specific targets
+    idle = next(t for t in targets if t["action_key"] == "idle")
+    assert idle["presentation_kind"] == "idle_walk"
+    assert idle["frames"] == 8
+    assert idle["cell_w"] == 7
+    assert idle["cell_h"] == 10
+
+    attack = next(t for t in targets if t["action_key"] == "attack")
+    assert attack["presentation_kind"] == "attack"
+    assert attack["frames"] == 8
+
+    death = next(t for t in targets if t["action_key"] == "death")
+    assert death["presentation_kind"] == "plydie"
+    assert death["frames"] == 5
+
+
+def test_resolve_blueprint_targets_player_idle_only():
+    """idle-only blueprint produces one target."""
+    targets = resolve_blueprint_targets("player_native_idle_only")
+    assert len(targets) == 1
+    t = targets[0]
+    assert t["action_key"] == "idle"
+    assert t["entity_key"] == "player_actor"
+    assert t["presentation_kind"] == "idle_walk"
+    assert t["slot"] == "body"
+
+
+def test_resolve_blueprint_targets_mounted_full():
+    """Mounted blueprint produces mount-owner targets with blocker text."""
+    targets = resolve_blueprint_targets("mounted_native_full")
+    assert len(targets) == 2
+
+    action_keys = {t["action_key"] for t in targets}
+    assert action_keys == {"mounted_idle", "mounted_attack"}
+
+    for t in targets:
+        assert t["entity_key"] == "mounted_actor"
+        assert t["character_key"] == "human_player"
+        assert t["layer_owner_kind"] == "mount"
+        assert t["slot"] == "mount_composite"
+        assert "_blocker" in t
+        assert "mount_rear" in t["_blocker"] or "mount_rear/mount_front" in t["_blocker"]
+        assert "UQ-010" in t["_blocker"]
+
+    mounted_idle = next(t for t in targets if t["action_key"] == "mounted_idle")
+    assert mounted_idle["presentation_kind"] == "idle_walk"
+    assert mounted_idle["presentation_kind_id"] == 600
+
+
+def test_resolve_blueprint_targets_unknown_key_raises():
+    with pytest.raises(ValueError, match="Unknown bundle_blueprint_key"):
+        resolve_blueprint_targets("nonexistent_blueprint")
+
+
+def test_resolve_blueprint_targets_unknown_action_key_raises():
+    """If a template set has an action key with no presentation-kind mapping, raise."""
+    registry = load_template_registry()
+    registry["template_sets"]["player_native_full"]["actions"]["unknown_action"] = {
+        "filename_prefix": "unknown",
+        "skin_family": "human",
+        "angles": 8,
+        "frames": [1],
+        "source_projs": 1,
+        "projs": 2,
+        "cell_w": 7,
+        "cell_h": 10,
+        "xp_dims": [100, 80],
+        "preview_xp": "sprites/player-0001.xp",
+        "preview_xp_sha256": "911fcad889478799ed7e6e1c7a59b6c056795ce3877f4567eda84969c51a1d96",
+        "l0_ref": "sprites/player-0100.xp",
+        "l0_ref_sha256": "073bd74099536d9b2f0b1bab074a485060e2f135a1f309ec759d9a94f15c7e9c",
+    }
+    with pytest.raises(ValueError, match="unknown_action"):
+        resolve_blueprint_targets("player_native_full")
+
+
+def test_resolve_blueprint_targets_missing_geometry_raises():
+    """Blueprint action without cell_w/cell_h raises — cannot materialize."""
+    registry = load_template_registry()
+    # Temporarily remove geometry from idle
+    original_cell_w = registry["template_sets"]["player_native_full"]["actions"]["idle"]["cell_w"]
+    registry["template_sets"]["player_native_full"]["actions"]["idle"]["cell_w"] = 0
+    try:
+        with pytest.raises(ValueError, match="missing cell_w"):
+            resolve_blueprint_targets("player_native_full")
+    finally:
+        registry["template_sets"]["player_native_full"]["actions"]["idle"]["cell_w"] = original_cell_w
+
+
+def test_resolve_blueprint_angles_frames_projs():
+    """Fast-path geometry resolver returns correct values."""
+    geo = resolve_blueprint_angles_frames_projs("player_native_full", "idle")
+    assert geo["angles"] == 8
+    assert geo["frames"] == 8
+    assert geo["source_projs"] == 1
+    assert geo["projs"] == 2
+    assert geo["cell_w"] == 7
+    assert geo["cell_h"] == 10
+    assert geo["xp_dims"] == [126, 80]
+
+
+def test_resolve_blueprint_angles_frames_projs_attack():
+    geo = resolve_blueprint_angles_frames_projs("player_native_full", "attack")
+    assert geo["angles"] == 8
+    assert geo["frames"] == 8
+    assert geo["cell_w"] == 9
+    assert geo["cell_h"] == 10
+    assert geo["xp_dims"] == [144, 80]
+
+
+def test_resolve_blueprint_angles_frames_projs_death():
+    geo = resolve_blueprint_angles_frames_projs("player_native_full", "death")
+    assert geo["angles"] == 8
+    assert geo["frames"] == 5
+    assert geo["cell_w"] == 11
+    assert geo["cell_h"] == 11
+    assert geo["xp_dims"] == [110, 88]
+
+
+def test_resolve_blueprint_angles_frames_projs_unknown_blueprint():
+    with pytest.raises(ValueError, match="Unknown bundle_blueprint_key"):
+        resolve_blueprint_angles_frames_projs("nope", "idle")
+
+
+def test_resolve_blueprint_angles_frames_projs_unknown_action():
+    with pytest.raises(ValueError, match="Unknown action_key"):
+        resolve_blueprint_angles_frames_projs("player_native_full", "nope")
 
 
 def test_normalizer_catches_ahsw_range_drift():

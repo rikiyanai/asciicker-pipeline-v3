@@ -43,6 +43,15 @@ from .gates import (
 )
 from .models import ApiError, RunConfig, JobRecord, WorkbenchSession, BundleSession, BundleActionState
 from .renderer import render_preview_png
+from .source_manifest import (
+    MANIFEST_VERSION,
+    create_migration_manifest,
+    load_manifest,
+    manifest_path_for_source,
+    materialize_manifest,
+    save_manifest,
+    validate_manifest,
+)
 from .storage import save_json, load_json
 from .xp_codec import write_xp, read_xp
 
@@ -1318,6 +1327,205 @@ def runtime_identity_for_action(
         "skin_definition_id": skin_definition_id,
         "presentation_kind_id": presentation_kind_id,
         "layer_definition_id": layer_definition_id,
+    }
+
+
+# ── UQ-006 blueprint bridge: bundle_blueprint_key → target descriptors ──
+
+# Action-key → presentation-kind normalization (plan §2.3.2)
+_ACTION_KEY_TO_PRESENTATION_KIND: dict[str, str] = {
+    "idle": "idle_walk",
+    "mounted_idle": "idle_walk",
+    "attack": "attack",
+    "mounted_attack": "attack",
+    "death": "plydie",
+}
+
+
+def _normalize_frames_count(frames_raw: Any) -> int:
+    """Convert frames from template_registry format to a single count.
+
+    Registry format: [min, max] or [count] or int.
+    Returns the frame count (max when range, single value when scalar).
+    """
+    if isinstance(frames_raw, list):
+        if len(frames_raw) == 0:
+            return 0
+        if len(frames_raw) == 1:
+            return int(frames_raw[0])
+        return int(frames_raw[1])  # [min, max]
+    if isinstance(frames_raw, (int, float)):
+        return int(frames_raw)
+    return 0
+
+
+def _action_key_to_layer_owner_kind(action_key: str) -> str:
+    """Derive layer_owner_kind from action key."""
+    if action_key.startswith("mounted_"):
+        return "mount"
+    return "skin"
+
+
+def _action_key_to_slot(action_key: str) -> str:
+    """Derive slot from action key.
+
+    Mount actions are composite (rear+front) in the current model;
+    later Section-2 rows will split into mount_rear / mount_front.
+    """
+    if action_key.startswith("mounted_"):
+        return "mount_composite"
+    return "body"
+
+
+def _blueprint_entity_key(bundle_blueprint_key: str) -> str:
+    """Derive entity key from blueprint key."""
+    if "mounted" in bundle_blueprint_key:
+        return "mounted_actor"
+    return "player_actor"
+
+
+def _blueprint_character_key(skin_family: str) -> str:
+    """Derive character key from skin family."""
+    return f"{skin_family}_player"
+
+
+def resolve_blueprint_targets(bundle_blueprint_key: str) -> list[dict[str, Any]]:
+    """Resolve a bundle_blueprint_key into presentation target descriptors.
+
+    The bundle_blueprint_key is a template_set_key in the current registry.
+    Each action in the template set becomes a target descriptor with the full
+    appearance hierarchy fields needed for source manifest region assignment.
+
+    Returns a list of target descriptors, each with:
+      entity_key, character_key, presentation_kind, layer_owner_kind,
+      slot, presentation_target_key, angles, frames, source_projs,
+      projs, cell_w, cell_h, xp_dims, plus runtime identity IDs
+      (skin_definition_id, presentation_kind_id, layer_definition_id).
+
+    Raises ValueError if the blueprint key is unknown or geometry is missing.
+    """
+    reg = load_template_registry()
+    ts = reg.get("template_sets", {}).get(bundle_blueprint_key)
+    if not isinstance(ts, dict):
+        raise ValueError(
+            f"Unknown bundle_blueprint_key: {bundle_blueprint_key!r}. "
+            f"Known keys: {sorted(reg.get('template_sets', {}).keys())}"
+        )
+
+    skin_family_scope = ts.get("skin_family_scope", [])
+    primary_family = skin_family_scope[0] if skin_family_scope else "human"
+
+    entity_key = _blueprint_entity_key(bundle_blueprint_key)
+    character_key = _blueprint_character_key(primary_family)
+
+    targets: list[dict[str, Any]] = []
+    for action_key, action_spec in ts.get("actions", {}).items():
+        if not isinstance(action_spec, dict):
+            continue
+
+        presentation_kind = _ACTION_KEY_TO_PRESENTATION_KIND.get(action_key)
+        if presentation_kind is None:
+            raise ValueError(
+                f"Unknown action_key {action_key!r} in blueprint "
+                f"{bundle_blueprint_key!r} — no presentation_kind mapping"
+            )
+
+        layer_owner_kind = _action_key_to_layer_owner_kind(action_key)
+        slot = _action_key_to_slot(action_key)
+        filename_prefix = str(action_spec.get("filename_prefix", ""))
+        presentation_target_key = f"{filename_prefix}_{action_key}_{slot}"
+
+        # Resolve runtime identity for the stable V2 IDs
+        try:
+            identity = runtime_identity_for_action(bundle_blueprint_key, action_key, action_spec)
+        except ValueError:
+            identity = None
+
+        angles_val = action_spec.get("angles", 8)
+        frames_val = _normalize_frames_count(action_spec.get("frames", 1))
+        source_projs_val = action_spec.get("source_projs", 1)
+        projs_val = action_spec.get("projs", 2)
+        cell_w_val = action_spec.get("cell_w", 0)
+        cell_h_val = action_spec.get("cell_h", 0)
+        xp_dims_val = action_spec.get("xp_dims", [0, 0])
+
+        # Geometry gate: materialize_manifest() needs these
+        if not cell_w_val or not cell_h_val:
+            raise ValueError(
+                f"Blueprint {bundle_blueprint_key!r} action {action_key!r} "
+                f"is missing cell_w/cell_h geometry — cannot materialize"
+            )
+
+        desc: dict[str, Any] = {
+            "entity_key": entity_key,
+            "character_key": character_key,
+            "presentation_kind": presentation_kind,
+            "layer_owner_kind": layer_owner_kind,
+            "slot": slot,
+            "presentation_target_key": presentation_target_key,
+            "template_set_key": bundle_blueprint_key,
+            "action_key": action_key,
+            "angles": int(angles_val),
+            "frames": int(frames_val),
+            "source_projs": int(source_projs_val),
+            "projs": int(projs_val),
+            "cell_w": int(cell_w_val),
+            "cell_h": int(cell_h_val),
+            "xp_dims": [int(xp_dims_val[0]), int(xp_dims_val[1])] if isinstance(xp_dims_val, list) and len(xp_dims_val) >= 2 else [0, 0],
+        }
+
+        if identity:
+            desc["skin_definition_id"] = int(identity["skin_definition_id"])
+            desc["presentation_kind_id"] = int(identity["presentation_kind_id"])
+            desc["layer_definition_id"] = int(identity["layer_definition_id"])
+
+        # Blocker text for future rows (plan §2.3.2 appearance ownership model)
+        if layer_owner_kind == "mount" and slot == "mount_composite":
+            desc["_blocker"] = (
+                "Mount composite slot (mount_rear + mount_front combined) must be "
+                "split into explicit mount_rear/mount_front slots by a later "
+                "Section-2 row (UQ-010). UQ-006 only validates that mount targets "
+                "do not flatten into character body owners."
+            )
+
+        targets.append(desc)
+
+    if not targets:
+        raise ValueError(
+            f"Blueprint {bundle_blueprint_key!r} has no actions — "
+            f"cannot produce target descriptors"
+        )
+
+    return targets
+
+
+def resolve_blueprint_angles_frames_projs(bundle_blueprint_key: str, action_key: str) -> dict[str, Any]:
+    """Resolve geometry (angles, frames, source_projs, projs, cell_w, cell_h)
+    for a specific blueprint action.
+
+    This is the fast path used by materialize_manifest() when it already knows
+    the action_key from a region target.
+    """
+    reg = load_template_registry()
+    ts = reg.get("template_sets", {}).get(bundle_blueprint_key)
+    if not isinstance(ts, dict):
+        raise ValueError(f"Unknown bundle_blueprint_key: {bundle_blueprint_key!r}")
+    action_spec = ts.get("actions", {}).get(action_key)
+    if not isinstance(action_spec, dict):
+        raise ValueError(
+            f"Unknown action_key {action_key!r} in blueprint {bundle_blueprint_key!r}"
+        )
+    frames_val = _normalize_frames_count(action_spec.get("frames", 1))
+    return {
+        "angles": int(action_spec.get("angles", 8)),
+        "frames": int(frames_val),
+        "source_projs": int(action_spec.get("source_projs", 1)),
+        "projs": int(action_spec.get("projs", 2)),
+        "cell_w": int(action_spec.get("cell_w", 0)),
+        "cell_h": int(action_spec.get("cell_h", 0)),
+        "xp_dims": [int(action_spec["xp_dims"][0]), int(action_spec["xp_dims"][1])]
+        if isinstance(action_spec.get("xp_dims"), list) and len(action_spec["xp_dims"]) >= 2
+        else [0, 0],
     }
 
 
@@ -2797,6 +3005,33 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
     session_kind = _session_kind(sess_dict)
     metadata_status = _metadata_status(sess_dict)
     family, filename_prefix, skin_family = _resolve_session_identity_fields(sess_dict)
+
+    # UQ-006: Derive source arrays from manifest when source_path + manifest exist
+    _sp = str(sess_dict.get("source_path") or "").strip()
+    source_boxes = list(sess_dict.get("source_boxes") or [])
+    source_anchor_box = sess_dict.get("source_anchor_box")
+    source_draft_box = sess_dict.get("source_draft_box")
+    source_cuts_v = list(sess_dict.get("source_cuts_v") or [])
+    source_cuts_h = list(sess_dict.get("source_cuts_h") or [])
+    source_manifest_path: str | None = None
+    source_manifest_status: str | None = None
+
+    if _sp:
+        source_manifest_path = str(manifest_path_for_source(_sp))
+        existing = load_manifest(_sp)
+        if existing:
+            # Manifest is authority — derive mirror state
+            mirror = materialize_manifest(existing)
+            source_boxes = mirror["source_boxes"]
+            source_anchor_box = mirror["source_anchor_box"]
+            source_draft_box = mirror["source_draft_box"]
+            source_cuts_v = mirror["source_cuts_v"]
+            source_cuts_h = mirror["source_cuts_h"]
+            val = validate_manifest(existing, _sp)
+            source_manifest_status = val["status"]
+        else:
+            source_manifest_status = "none"
+
     return {
         "session_id": str(sess_dict["session_id"]),
         "job_id": str(sess_dict.get("job_id") or ""),
@@ -2830,11 +3065,14 @@ def _session_payload(sess_dict: dict[str, Any]) -> dict[str, Any]:
         "projs": projs,
         "frame_rows": frame_rows,
         "frame_cols": frame_cols,
-        "source_boxes": list(sess_dict.get("source_boxes") or []),
-        "source_anchor_box": sess_dict.get("source_anchor_box"),
-        "source_draft_box": sess_dict.get("source_draft_box"),
-        "source_cuts_v": list(sess_dict.get("source_cuts_v") or []),
-        "source_cuts_h": list(sess_dict.get("source_cuts_h") or []),
+        "source_boxes": source_boxes,
+        "source_anchor_box": source_anchor_box,
+        "source_draft_box": source_draft_box,
+        "source_cuts_v": source_cuts_v,
+        "source_cuts_h": source_cuts_h,
+        "source_path": _sp or None,
+        "source_manifest_path": source_manifest_path,
+        "source_manifest_status": source_manifest_status,
         "cells": list(sess_dict.get("cells") or []),
         "layers": list(sess_dict.get("layers") or []),
         "family": family,
@@ -3419,6 +3657,22 @@ def bundle_action_run(bundle_id: str, action_key: str, source_path: str, req_id:
     action_state.status = "converted"
     action_state.runtime_identity = runtime_identity_for_action(bundle.template_set_key, action_key, action_spec)
     save_bundle(bundle)
+
+    # UQ-006: Store source_path on the session so manifest can be derived
+    sess_p = _session_path(session_id)
+    if sess_p.exists():
+        sess = load_json(sess_p)
+        sess["source_path"] = source_path
+        # If a manifest exists for this source, derive initial mirror state
+        existing_manifest = load_manifest(source_path)
+        if existing_manifest:
+            mirror = materialize_manifest(existing_manifest)
+            sess["source_boxes"] = mirror["source_boxes"]
+            sess["source_anchor_box"] = mirror["source_anchor_box"]
+            sess["source_draft_box"] = mirror["source_draft_box"]
+            sess["source_cuts_v"] = mirror["source_cuts_v"]
+            sess["source_cuts_h"] = mirror["source_cuts_h"]
+        _save_session_json(sess_p, sess)
 
     return {
         "bundle_id": bundle_id,
@@ -4298,6 +4552,204 @@ def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, 
     }
 
 
+def _merge_box_drafts_into_manifest(manifest: dict[str, Any], raw_boxes: list[dict[str, Any]]) -> None:
+    """Merge browser-sent boxes into manifest guides/regions.
+
+    Boxes with labels matching known presentation_target_key values go
+    into regions[]; unlabeled boxes go into guides.detected_boxes.
+    """
+    if not raw_boxes:
+        return
+    guides = manifest.setdefault("guides", {})
+    detected = list(guides.get("detected_boxes", []))
+    regions = list(manifest.get("regions", []))
+
+    # Collect existing region IDs to avoid duplicate auto-assign
+    existing_target_keys = {
+        (r.get("target", {}).get("presentation_target_key", ""))
+        for r in regions
+        if isinstance(r, dict)
+    }
+
+    rid_counter = len(regions) + 1
+    for box in raw_boxes:
+        if not isinstance(box, dict):
+            continue
+        label = str(box.get("label", "")).strip()
+        source_type = str(box.get("source", "")).strip()
+        rect = [
+            int(box.get("x", 0)),
+            int(box.get("y", 0)),
+            int(box.get("w", 0)),
+            int(box.get("h", 0)),
+        ]
+
+        # Boxes from manifest regions already have source="manifest_region" — skip re-adding
+        if source_type == "manifest_region":
+            continue
+
+        # Boxes with target assignments
+        target = box.get("target")
+        if isinstance(target, dict) and target.get("presentation_target_key"):
+            ptk = target["presentation_target_key"]
+            if ptk not in existing_target_keys:
+                regions.append({
+                    "id": f"r{rid_counter}",
+                    "source_rect": rect,
+                    "target": {
+                        "entity_key": str(target.get("entity_key", "player_actor")),
+                        "character_key": str(target.get("character_key", "human_player")),
+                        "presentation_kind": str(target.get("presentation_kind", "")),
+                        "layer_owner_kind": str(target.get("layer_owner_kind", "skin")),
+                        "slot": str(target.get("slot", "body")),
+                        "presentation_target_key": ptk,
+                        "angle": int(target.get("angle", 0)),
+                        "frame": int(target.get("frame", 0)),
+                        "projection": int(target.get("projection", 0)),
+                    },
+                    "notes": "",
+                    "tags": [],
+                    "confidence": 1.0,
+                })
+                existing_target_keys.add(ptk)
+                rid_counter += 1
+                continue
+
+        # Otherwise, add to detected boxes (guides only)
+        if source_type != "guide_detected" and label:
+            detected.append({
+                "x": rect[0],
+                "y": rect[1],
+                "w": rect[2],
+                "h": rect[3],
+                "label": label,
+            })
+
+    if detected:
+        guides["detected_boxes"] = detected
+    manifest["regions"] = regions
+
+
+def workbench_source_manifest_get(
+    source_path: str | None = None,
+    session_id: str | None = None,
+    *,
+    validate: bool = False,
+    materialize: bool = False,
+    req_id: str = "",
+) -> dict[str, Any]:
+    """Get manifest metadata and optional validation/materialization.
+
+    Accepts either source_path or session_id (loads source_path from session).
+    """
+    sp: str | None = source_path
+    if not sp and session_id:
+        sess_p = _session_path(session_id)
+        if sess_p.exists():
+            sess = load_json(sess_p)
+            sp = str(sess.get("source_path") or "").strip() or None
+
+    if not sp:
+        raise ApiError(
+            "source_path or session_id with source_path is required",
+            "missing_source_path", "workbench", req_id, 400,
+        )
+
+    mp = manifest_path_for_source(sp)
+    exists = mp.exists()
+    response: dict[str, Any] = {
+        "source_path": sp,
+        "manifest_path": str(mp),
+        "exists": exists,
+    }
+
+    if not exists:
+        return response
+
+    manifest = load_manifest(sp)
+    if manifest is None:
+        return response
+
+    response["version"] = manifest.get("version")
+    response["bundle_blueprint_key"] = manifest.get("bundle_blueprint_key", "")
+    response["layout_mode"] = manifest.get("layout_mode", "")
+    response["region_count"] = len(manifest.get("regions", []))
+    response["last_modified"] = datetime.fromtimestamp(
+        mp.stat().st_mtime, tz=UTC
+    ).isoformat() if exists else None
+
+    if validate:
+        val = validate_manifest(manifest, sp)
+        response["validation"] = val
+
+    if materialize:
+        mirror = materialize_manifest(manifest)
+        response["materialized"] = {
+            "source_boxes": mirror["source_boxes"],
+            "source_cuts_v": mirror["source_cuts_v"],
+            "source_cuts_h": mirror["source_cuts_h"],
+            "source_anchor_box": mirror["source_anchor_box"],
+        }
+
+    return response
+
+
+def workbench_source_manifest_put(
+    source_path: str,
+    manifest: dict[str, Any],
+    *,
+    ack_stale_sha: bool = False,
+    req_id: str = "",
+) -> dict[str, Any]:
+    """Write a full manifest to the sidecar.
+
+    Validates before writing. Returns validation + materialized state.
+    """
+    if not source_path:
+        raise ApiError(
+            "source_path is required",
+            "missing_source_path", "workbench", req_id, 400,
+        )
+
+    # Validate first
+    val = validate_manifest(manifest, source_path, ack_stale_sha=ack_stale_sha)
+
+    if val["status"] == "FAIL" and not ack_stale_sha:
+        # Check if the only error is SHA mismatch (which can be acknowledged)
+        sha_errors = [e for e in val["errors"] if "SHA256" in e]
+        non_sha_errors = [e for e in val["errors"] if "SHA256" not in e]
+        if sha_errors and not non_sha_errors and val["sha256"]["stored"] and val["sha256"]["current"]:
+            raise ApiError(
+                f"Source SHA256 mismatch. Use ack_stale_sha=true to overwrite, "
+                f"or recreate the manifest. Stored: {val['sha256']['stored'][:16]}..., "
+                f"Current: {val['sha256']['current'][:16]}...",
+                "manifest_sha_mismatch", "workbench", req_id, 409,
+            )
+        if non_sha_errors:
+            raise ApiError(
+                f"Manifest validation FAILED: {'; '.join(non_sha_errors[:3])}"
+                + (f" (+{len(non_sha_errors) - 3} more)" if len(non_sha_errors) > 3 else ""),
+                "manifest_validation_failed", "workbench", req_id, 422,
+            )
+
+    # Write
+    saved = save_manifest(source_path, manifest, ack_stale_sha=ack_stale_sha)
+
+    # Materialize
+    mirror = materialize_manifest(saved)
+
+    return {
+        "status": val["status"],
+        "validation": val,
+        "materialized": {
+            "source_boxes": mirror["source_boxes"],
+            "source_cuts_v": mirror["source_cuts_v"],
+            "source_cuts_h": mirror["source_cuts_h"],
+            "source_anchor_box": mirror["source_anchor_box"],
+        },
+    }
+
+
 def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str) -> dict[str, Any]:
     p = _session_path(session_id)
     if not p.exists():
@@ -4455,31 +4907,102 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
         if not isinstance(frame_groups, list):
             raise ApiError("frame_groups must be list", "invalid_frame_groups", "workbench", req_id, 422)
         sess["frame_groups"] = frame_groups
-    if "source_boxes" in payload:
-        source_boxes = payload.get("source_boxes")
-        if not isinstance(source_boxes, list):
-            raise ApiError("source_boxes must be list", "invalid_source_boxes", "workbench", req_id, 422)
-        sess["source_boxes"] = source_boxes
-    if "source_anchor_box" in payload:
-        source_anchor_box = payload.get("source_anchor_box")
-        if source_anchor_box is not None and not isinstance(source_anchor_box, dict):
-            raise ApiError("source_anchor_box must be object|null", "invalid_source_anchor_box", "workbench", req_id, 422)
-        sess["source_anchor_box"] = source_anchor_box
-    if "source_draft_box" in payload:
-        source_draft_box = payload.get("source_draft_box")
-        if source_draft_box is not None and not isinstance(source_draft_box, dict):
-            raise ApiError("source_draft_box must be object|null", "invalid_source_draft_box", "workbench", req_id, 422)
-        sess["source_draft_box"] = source_draft_box
-    if "source_cuts_v" in payload:
-        source_cuts_v = payload.get("source_cuts_v")
-        if not isinstance(source_cuts_v, list):
-            raise ApiError("source_cuts_v must be list", "invalid_source_cuts_v", "workbench", req_id, 422)
-        sess["source_cuts_v"] = source_cuts_v
-    if "source_cuts_h" in payload:
-        source_cuts_h = payload.get("source_cuts_h")
-        if not isinstance(source_cuts_h, list):
-            raise ApiError("source_cuts_h must be list", "invalid_source_cuts_h", "workbench", req_id, 422)
-        sess["source_cuts_h"] = source_cuts_h
+    if "source_path" in payload:
+        source_path = str(payload.get("source_path", "")).strip()
+        sess["source_path"] = source_path if source_path else None
+
+    # UQ-006: When source_path is set, source arrays are manifest-derived mirrors.
+    # Browser sends them as draft mutations — flush to sidecar first, then re-derive.
+    _source_path = str(sess.get("source_path") or "").strip()
+    _has_source_payload = any(k in payload for k in (
+        "source_boxes", "source_anchor_box", "source_draft_box",
+        "source_cuts_v", "source_cuts_h",
+    ))
+
+    if _source_path and _has_source_payload:
+        # Collect browser-sent source state
+        raw_boxes = payload.get("source_boxes")
+        raw_anchor = payload.get("source_anchor_box")
+        raw_draft = payload.get("source_draft_box")
+        raw_cuts_v = payload.get("source_cuts_v")
+        raw_cuts_h = payload.get("source_cuts_h")
+
+        # Try to load existing manifest
+        existing = load_manifest(_source_path)
+        if existing:
+            # Merge draft mutations into manifest
+            if isinstance(raw_boxes, list):
+                _merge_box_drafts_into_manifest(existing, raw_boxes)
+            if isinstance(raw_anchor, dict) or raw_anchor is None:
+                existing.setdefault("guides", {})["anchor_rect"] = (
+                    [raw_anchor["x"], raw_anchor["y"], raw_anchor["w"], raw_anchor["h"]]
+                    if isinstance(raw_anchor, dict)
+                    else None
+                )
+            if isinstance(raw_cuts_v, list):
+                existing.setdefault("guides", {})["cuts_v"] = [
+                    {"id": c.get("id", f"c{v}"), "x": int(c.get("x", 0))}
+                    if isinstance(c, dict) else {"id": f"c{v}", "x": int(c)}
+                    for v, c in enumerate(raw_cuts_v, 1)
+                ]
+            if isinstance(raw_cuts_h, list):
+                existing.setdefault("guides", {})["cuts_h"] = [
+                    {"id": c.get("id", f"c{v}"), "y": int(c.get("y", 0))}
+                    if isinstance(c, dict) else {"id": f"c{v}", "y": int(c)}
+                    for v, c in enumerate(raw_cuts_h, 1)
+                ]
+            save_manifest(_source_path, existing, ack_stale_sha=True)
+        else:
+            # Create migration manifest from browser-sent arrays
+            temp_sess = dict(sess)
+            if isinstance(raw_boxes, list):
+                temp_sess["source_boxes"] = raw_boxes
+            if isinstance(raw_cuts_v, list):
+                temp_sess["source_cuts_v"] = raw_cuts_v
+            if isinstance(raw_cuts_h, list):
+                temp_sess["source_cuts_h"] = raw_cuts_h
+            bp_key = str(sess.get("template_set_key") or "").strip()
+            new_manifest = create_migration_manifest(
+                temp_sess, _source_path, blueprint_key=bp_key
+            )
+            save_manifest(_source_path, new_manifest)
+
+        # Re-derive mirror state from manifest
+        updated = load_manifest(_source_path)
+        if updated:
+            mirror = materialize_manifest(updated)
+            sess["source_boxes"] = mirror["source_boxes"]
+            sess["source_anchor_box"] = mirror["source_anchor_box"]
+            sess["source_draft_box"] = mirror["source_draft_box"]
+            sess["source_cuts_v"] = mirror["source_cuts_v"]
+            sess["source_cuts_h"] = mirror["source_cuts_h"]
+    else:
+        # No source_path: legacy save path (direct session persistence)
+        if "source_boxes" in payload:
+            source_boxes = payload.get("source_boxes")
+            if not isinstance(source_boxes, list):
+                raise ApiError("source_boxes must be list", "invalid_source_boxes", "workbench", req_id, 422)
+            sess["source_boxes"] = source_boxes
+        if "source_anchor_box" in payload:
+            source_anchor_box = payload.get("source_anchor_box")
+            if source_anchor_box is not None and not isinstance(source_anchor_box, dict):
+                raise ApiError("source_anchor_box must be object|null", "invalid_source_anchor_box", "workbench", req_id, 422)
+            sess["source_anchor_box"] = source_anchor_box
+        if "source_draft_box" in payload:
+            source_draft_box = payload.get("source_draft_box")
+            if source_draft_box is not None and not isinstance(source_draft_box, dict):
+                raise ApiError("source_draft_box must be object|null", "invalid_source_draft_box", "workbench", req_id, 422)
+            sess["source_draft_box"] = source_draft_box
+        if "source_cuts_v" in payload:
+            source_cuts_v = payload.get("source_cuts_v")
+            if not isinstance(source_cuts_v, list):
+                raise ApiError("source_cuts_v must be list", "invalid_source_cuts_v", "workbench", req_id, 422)
+            sess["source_cuts_v"] = source_cuts_v
+        if "source_cuts_h" in payload:
+            source_cuts_h = payload.get("source_cuts_h")
+            if not isinstance(source_cuts_h, list):
+                raise ApiError("source_cuts_h must be list", "invalid_source_cuts_h", "workbench", req_id, 422)
+            sess["source_cuts_h"] = source_cuts_h
     if "mounted_rider_calibration" in payload:
         mrc = payload.get("mounted_rider_calibration")
         if mrc is not None and not isinstance(mrc, dict):
@@ -4510,6 +5033,18 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
     response = _session_payload(sess)
     response["cell_count"] = len(sess["cells"])
     response["source_boxes"] = len(sess.get("source_boxes", [])) if isinstance(sess.get("source_boxes"), list) else 0
+    # Include manifest status when source_path is set
+    _sp = str(sess.get("source_path") or "").strip()
+    if _sp:
+        response["source_manifest_path"] = str(manifest_path_for_source(_sp))
+        existing = load_manifest(_sp)
+        if existing:
+            val = validate_manifest(existing, _sp)
+            response["source_manifest_status"] = val["status"]
+            response["source_manifest_warnings"] = val["warnings"]
+            response["source_manifest_errors"] = val["errors"]
+        else:
+            response["source_manifest_status"] = "none"
     return response
 
 
@@ -4732,4 +5267,209 @@ def compute_mounted_semantic_proposals(session_id: str, req_id: str) -> dict[str
         "calibration_ref_confirmed_at": calibration.get("confirmed_at"),
         "layer_used": layer_index,
         "per_angle": per_angle_results,
+    }
+
+
+def workbench_create_actor_visual_profile(
+    session_id: str,
+    domain: str,
+    presentation_kind: str,
+    variation: str,
+    req_id: str,
+) -> dict[str, Any]:
+    """Create ActorVisualProfile from current session (Phase 2, Task 2).
+    
+    This function:
+    1. Loads the session's XP data
+    2. Extracts layer assignments from the session geometry
+    3. Creates an ActorVisualProfile with the specified (domain, presentation_kind, variation)
+    4. Saves the profile to config/actor_visual_profiles/
+    5. Returns the profile path and ID
+    """
+    from .actor_visual_profile import (
+        ActorVisualProfile,
+        LayerAssignment,
+        Region,
+        Domain,
+        PresentationKind,
+    )
+    from .config import ROOT
+    
+    # Validate domain
+    valid_domains = ["skin", "wearable", "weapon", "shield", "mount"]
+    if domain not in valid_domains:
+        raise ApiError(f"Invalid domain: {domain}. Must be one of: {valid_domains}", "invalid_domain", "workbench", req_id, 400)
+    
+    # Validate presentation_kind
+    valid_kinds = ["idle_walk", "attack", "plydie"]
+    if presentation_kind not in valid_kinds:
+        raise ApiError(f"Invalid presentation_kind: {presentation_kind}. Must be one of: {valid_kinds}", "invalid_presentation_kind", "workbench", req_id, 400)
+    
+    # Load session
+    session_path = EXPORT_DIR / session_id / "session.json"
+    if not session_path.exists():
+        raise ApiError(f"Session not found: {session_id}", "session_not_found", "workbench", req_id, 404)
+    
+    try:
+        session_data = json.loads(session_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        raise ApiError(f"Failed to load session: {e}", "session_load_error", "workbench", req_id, 500)
+    
+    # Extract session metadata
+    grid_cols = int(session_data.get("grid_cols", 8))
+    grid_rows = int(session_data.get("grid_rows", 8))
+    angles = int(session_data.get("angles", 8))
+    anims = session_data.get("anims", "9")
+    source_projs = int(session_data.get("source_projs", 1))
+    cell_w = int(session_data.get("cell_w", 7))
+    cell_h = int(session_data.get("cell_h", 10))
+    
+    # Generate profile_id from session and key dimensions
+    profile_id = f"{session_id}_{domain}_{presentation_kind}_{variation}"
+    
+    # Determine skin_definition_id (use session_id hash or default)
+    skin_definition_id = abs(hash(session_id)) % 1000 + 100  # Range 100-1099
+    
+    # Create layer assignment from session XP
+    xp_filename = f"{session_id}.xp"
+    xp_path = EXPORT_DIR / session_id / xp_filename
+    
+    if not xp_path.exists():
+        raise ApiError(f"XP file not found for session: {xp_path}", "xp_not_found", "workbench", req_id, 404)
+    
+    # Determine slot based on domain
+    slot_map = {
+        "skin": "body",
+        "wearable": "chest",
+        "weapon": "weapon",
+        "shield": "shield",
+        "mount": "mount_rear",
+    }
+    slot = slot_map.get(domain, "body")
+    
+    # Create layer assignment
+    layer = LayerAssignment(
+        slot=slot,  # type: ignore
+        layer_definition_id=700,  # Default layer def ID
+        xp_ref=f"assets/sprites/{xp_filename}",
+        visual_style_id=1,  # Default visual style
+        region=Region(x=0, y=0, w=grid_cols, h=grid_rows),
+    )
+    
+    # Create ActorVisualProfile
+    profile = ActorVisualProfile(
+        profile_id=profile_id,
+        skin_definition_id=skin_definition_id,
+        presentation_kind=presentation_kind,  # type: ignore
+        domain=domain,  # type: ignore
+        layers=[layer],
+        variation=variation if variation != "default" else None,
+    )
+    
+    # Save profile
+    profile_dir = ROOT / "config" / "actor_visual_profiles"
+    profile_path = profile_dir / f"{profile_id}.json"
+    
+    try:
+        profile.to_file(profile_path)
+    except OSError as e:
+        raise ApiError(f"Failed to save profile: {e}", "profile_save_error", "workbench", req_id, 500)
+    
+    return {
+        "profile_id": profile_id,
+        "profile_path": str(profile_path.relative_to(ROOT)),
+        "domain": domain,
+        "presentation_kind": presentation_kind,
+        "variation": variation,
+        "skin_definition_id": skin_definition_id,
+        "layers_count": len(profile.layers),
+        "session_id": session_id,
+    }
+
+
+def workbench_export_actor_visual_profile(
+    session_id: str,
+    domain: str,
+    presentation_kind: str,
+    variation: str,
+    req_id: str,
+) -> dict[str, Any]:
+    """Export ActorVisualProfile as authoring artifact (Phase 2, Task 3).
+    
+    This function:
+    1. Creates or loads an ActorVisualProfile
+    2. Adds source refs (XP/PNG paths)
+    3. Adds quality gate results (if available)
+    4. Adds calibration artifacts (for mounted)
+    5. Returns structured artifact JSON for download
+    """
+    from .actor_visual_profile import (
+        ActorVisualProfile,
+        LayerAssignment,
+        Region,
+        SourceRefs,
+        QualityGates,
+    )
+    from .config import ROOT
+    
+    # First, create the profile (or load if exists)
+    base_result = workbench_create_actor_visual_profile(
+        session_id=session_id,
+        domain=domain,
+        presentation_kind=presentation_kind,
+        variation=variation,
+        req_id=req_id,
+    )
+    
+    # Load session for additional metadata
+    session_path = EXPORT_DIR / session_id / "session.json"
+    session_data = json.loads(session_path.read_text(encoding="utf-8"))
+    
+    # Build source refs
+    xp_path = EXPORT_DIR / session_id / f"{session_id}.xp"
+    png_path = EXPORT_DIR / session_id / f"{session_id}_source.png"  # If exists
+    
+    source_refs = SourceRefs(
+        xp_file=str(xp_path.relative_to(ROOT)) if xp_path.exists() else None,
+        png_file=str(png_path.relative_to(ROOT)) if png_path.exists() else None,
+        semantic_map=None,  # Would be populated if semantic map review was done
+        calibration_artifact=None,  # Would be populated for mounted domain
+    )
+    
+    # Build quality gates (placeholder - would be populated from verification runs)
+    quality_gates = QualityGates(
+        G7_cell_density=None,
+        G8_glyph_coverage=None,
+        G9_semantic_completeness=None,
+        mounted_alignment=None,
+        timestamp=datetime.now(UTC).isoformat(),
+    )
+    
+    # Load the profile and enhance it
+    profile_dir = ROOT / "config" / "actor_visual_profiles"
+    profile_path = profile_dir / f"{base_result['profile_id']}.json"
+    profile = ActorVisualProfile.from_file(profile_path)
+    profile.source_refs = source_refs
+    profile.quality_gates = quality_gates
+    profile.metadata = {
+        "exported_at": datetime.now(UTC).isoformat(),
+        "exported_by": "workbench_export_actor_visual_profile",
+        "session_geometry": {
+            "grid_cols": session_data.get("grid_cols"),
+            "grid_rows": session_data.get("grid_rows"),
+            "angles": session_data.get("angles"),
+            "anims": session_data.get("anims"),
+            "cell_w": session_data.get("cell_w"),
+            "cell_h": session_data.get("cell_h"),
+        },
+    }
+    
+    # Save enhanced profile
+    profile.to_file(profile_path)
+    
+    return {
+        "profile_id": base_result["profile_id"],
+        "profile_path": str(profile_path.relative_to(ROOT)),
+        "artifact": profile.to_dict(),
+        "download_ready": True,
     }

@@ -88,6 +88,56 @@
     </div>
   </div>
 
+  <div class="panel" id="domainVariationPanel" data-panel-number="4b domain-variation">
+    <h3>Domain + Variation Chooser (RenderPlanTable)</h3>
+    <div class="row" style="align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        <label for="domainSelect">Domain</label>
+        <select id="domainSelect">
+          <option value="skin">Skin (body family)</option>
+          <option value="wearable">Wearable (armor/clothing)</option>
+          <option value="weapon">Weapon (held item)</option>
+          <option value="shield">Shield (off-hand)</option>
+          <option value="mount">Mount (rideable)</option>
+        </select>
+      </div>
+      <div>
+        <label for="presentationKindSelect">Presentation Kind</label>
+        <select id="presentationKindSelect">
+          <option value="idle_walk">Idle / Walk</option>
+          <option value="attack">Attack</option>
+          <option value="plydie">Death</option>
+        </select>
+      </div>
+      <div>
+        <label for="variationSelect">Variation</label>
+        <select id="variationSelect">
+          <option value="default">Default</option>
+          <option value="crossbow_attack">Crossbow Attack</option>
+          <option value="sword_attack">Sword Attack</option>
+          <option value="shield_bash">Shield Bash</option>
+          <option value="mounted_idle">Mounted Idle</option>
+          <option value="mounted_attack">Mounted Attack</option>
+        </select>
+      </div>
+      <div style="align-self:flex-end;">
+        <button id="createProfileBtn" class="primary">Create ActorVisualProfile</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <div class="small" style="flex:1; min-width:300px;">
+        <strong>What this does:</strong> Creates an ActorVisualProfile JSON that defines which layers belong to which slots for this specific (domain, presentation_kind, variation) combination. This profile is then compiled into a RenderPlan row by the RenderPlanTable compiler.
+      </div>
+    </div>
+    <div id="domainVariationGuide" class="small" style="margin-top:6px; color:var(--muted);">
+      <strong>Domain:</strong> What kind of visual object you're authoring (skin, wearable, weapon, shield, mount).<br>
+      <strong>Presentation Kind:</strong> What the actor is DOING (idle_walk, attack, plydie).<br>
+      <strong>Variation:</strong> Specific geometry/state variant (default, crossbow_attack, mounted_idle, etc.).<br>
+      <span style="color:var(--accent);">Crossbow and mounted are NOT special cases — they're explicit variation dimensions.</span>
+    </div>
+    <div id="profileCreationStatus" class="small hidden" style="margin-top:6px;"></div>
+  </div>
+
   <div class="panel" data-panel-number="5 session-ops">
     <h3>Session Ops</h3>
     <div class="row">
@@ -471,9 +521,13 @@
   <div class="panel" data-panel-number="17 export-tools">
     <h3>Export</h3>
     <div class="small">Export always writes current edited state.</div>
-    <div class="row">
+    <div class="row" style="margin-top:8px;">
       <button id="openXpToolBtn" disabled>Launch Desktop XP Tool (Optional)</button>
       <span id="xpToolCommandHint" class="small">Export an `.xp` for optional desktop inspection.</span>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <button id="exportArtifactBtn" class="primary">Export Authoring Artifact</button>
+      <span class="small">Export structured JSON with ActorVisualProfile, source refs, quality gates.</span>
     </div>
     <pre id="exportOut"></pre>
   </div>

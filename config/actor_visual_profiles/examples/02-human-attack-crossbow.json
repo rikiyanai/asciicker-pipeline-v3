@@ -1,0 +1,42 @@
+{
+  "$schema": "../actor_visual_profile_schema.json",
+  "schema_version": 1,
+  "profile_id": "human_attack_crossbow",
+  "skin_definition_id": 100,
+  "presentation_kind": "attack",
+  "variation": "crossbow_attack",
+  "domain": "skin",
+  "layers": [
+    {
+      "slot": "body",
+      "layer_definition_id": 701,
+      "xp_ref": "assets/sprites/player_native_full.xp",
+      "visual_style_id": 1,
+      "region": { "x": 0, "y": 8, "w": 8, "h": 8 }
+    },
+    {
+      "slot": "weapon",
+      "layer_definition_id": 750,
+      "xp_ref": "assets/sprites/player_native_full.xp",
+      "visual_style_id": 1,
+      "item_definition_id": 2001,
+      "region": { "x": 8, "y": 8, "w": 8, "h": 8 }
+    }
+  ],
+  "source_refs": {
+    "xp_file": "assets/sprites/player_native_full.xp",
+    "semantic_map": "human_attack.json"
+  },
+  "quality_gates": {
+    "G7_cell_density": true,
+    "G8_glyph_coverage": true,
+    "G9_semantic_completeness": true,
+    "mounted_alignment": null,
+    "timestamp": "2026-05-12T00:00:00Z"
+  },
+  "metadata": {
+    "author": "pipeline-v3",
+    "created_at": "2026-05-12T00:00:00Z",
+    "notes": "Example: Human attack with crossbow - variation is crossbow_attack (NOT a special case, just a variation dimension)"
+  }
+}

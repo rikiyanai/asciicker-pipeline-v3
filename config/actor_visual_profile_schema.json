@@ -1,0 +1,287 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://asciicker.local/schemas/actor_visual_profile_v1.json",
+  "title": "ActorVisualProfile",
+  "description": "Bridge object between authored XP content and compiled RenderPlan rows. Defines what layers exist, what slots they fill, and what visual key dimensions (variation, mount state) they cover.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "profile_id",
+    "skin_definition_id",
+    "presentation_kind",
+    "domain",
+    "layers"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version for forward compatibility"
+    },
+    "profile_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Unique identifier for this ActorVisualProfile (e.g., 'human_idle_default', 'wolf_mounted_crossbow_attack')"
+    },
+    "skin_definition_id": {
+      "type": "integer",
+      "description": "Reference to runtime_identity_registry.json -> skin_definitions (e.g., 100 for 'human')"
+    },
+    "presentation_kind": {
+      "type": "string",
+      "enum": ["idle_walk", "attack", "plydie"],
+      "description": "What the actor is DOING (not an outfit, not a camera angle)"
+    },
+    "variation": {
+      "type": "string",
+      "description": "Geometry/variant tuple (e.g., 'default', 'crossbow_attack', 'full_height'). NOT sent over network — derived at render time from runtime state masks."
+    },
+    "domain": {
+      "type": "string",
+      "enum": ["skin", "wearable", "weapon", "shield", "mount"],
+      "description": "What type of content this profile represents"
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Ordered list of layer assignments. Order matters: body first, then wearables, then mount layers.",
+      "items": {
+        "$ref": "#/definitions/layer_assignment"
+      }
+    },
+    "mount_composition": {
+      "type": "object",
+      "description": "If this profile involves mounted presentation, defines the rear/rider/front layer split",
+      "properties": {
+        "mount_definition_id": {
+          "type": "integer",
+          "description": "Mount family identity from runtime registry"
+        },
+        "rear_layer_index": {
+          "type": "integer",
+          "description": "Index into layers[] array for mount rear layer"
+        },
+        "rider_layer_index": {
+          "type": "integer",
+          "description": "Index into layers[] array for rider/body layer"
+        },
+        "front_layer_index": {
+          "type": "integer",
+          "description": "Index into layers[] array for mount front layer (e.g., weapon)"
+        }
+      },
+      "required": ["rear_layer_index", "rider_layer_index"]
+    },
+    "rig_data": {
+      "type": "object",
+      "description": "Future: bone/socket/rig metadata for animation retargeting",
+      "properties": {
+        "bone_count": { "type": "integer" },
+        "root_bone": { "type": "string" },
+        "sockets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "bone": { "type": "string" },
+              "offset": {
+                "type": "object",
+                "properties": {
+                  "x": { "type": "number" },
+                  "y": { "type": "number" },
+                  "z": { "type": "number" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "source_refs": {
+      "type": "object",
+      "description": "References to source XP/PNG assets and semantic maps",
+      "properties": {
+        "xp_file": {
+          "type": "string",
+          "description": "Path to source .xp file relative to repo root"
+        },
+        "png_file": {
+          "type": "string",
+          "description": "Path to source .png file relative to repo root"
+        },
+        "semantic_map": {
+          "type": "string",
+          "description": "Path to semantic map JSON relative to docs/research/ascii/semantic_maps/"
+        },
+        "calibration_artifact": {
+          "type": "string",
+          "description": "Path to mounted calibration artifact if applicable"
+        }
+      }
+    },
+    "quality_gates": {
+      "type": "object",
+      "description": "Quality gate results from pipeline-v3 validation",
+      "properties": {
+        "G7_cell_density": { "type": "boolean" },
+        "G8_glyph_coverage": { "type": "boolean" },
+        "G9_semantic_completeness": { "type": "boolean" },
+        "mounted_alignment": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Authoring metadata",
+      "properties": {
+        "author": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" }
+      }
+    }
+  },
+  "definitions": {
+    "layer_assignment": {
+      "type": "object",
+      "required": [
+        "slot",
+        "layer_definition_id",
+        "xp_ref"
+      ],
+      "properties": {
+        "slot": {
+          "type": "string",
+          "enum": ["body", "head", "chest", "weapon", "shield", "mount_rear", "mount_rider", "mount_front", "armor"],
+          "description": "Attachment lane (slot_kind_id semantic)"
+        },
+        "layer_definition_id": {
+          "type": "integer",
+          "description": "Reference to runtime_identity_registry.json -> layer_definitions"
+        },
+        "xp_ref": {
+          "type": "string",
+          "description": "Path to XP file for this layer (can be same as profile source_refs.xp_file for single-sheet profiles)"
+        },
+        "visual_style_id": {
+          "type": "integer",
+          "description": "Color lane (default/gold/dark), NOT geometry"
+        },
+        "item_definition_id": {
+          "type": "integer",
+          "description": "If wearable/weapon: which equipped item and its render owner"
+        },
+        "region": {
+          "type": "object",
+          "description": "Cell region within the XP sheet for this layer",
+          "properties": {
+            "x": { "type": "integer", "description": "Left cell coordinate" },
+            "y": { "type": "integer", "description": "Top cell coordinate" },
+            "w": { "type": "integer", "description": "Width in cells" },
+            "h": { "type": "integer", "description": "Height in cells" }
+          },
+          "required": ["x", "y", "w", "h"]
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "schema_version": 1,
+      "profile_id": "human_idle_default",
+      "skin_definition_id": 100,
+      "presentation_kind": "idle_walk",
+      "variation": "default",
+      "domain": "skin",
+      "layers": [
+        {
+          "slot": "body",
+          "layer_definition_id": 700,
+          "xp_ref": "assets/sprites/player_native_idle_only.xp",
+          "visual_style_id": 1,
+          "region": { "x": 0, "y": 0, "w": 8, "h": 8 }
+        }
+      ],
+      "source_refs": {
+        "xp_file": "assets/sprites/player_native_idle_only.xp",
+        "semantic_map": "human_idle_walk.json"
+      },
+      "quality_gates": {
+        "G7_cell_density": true,
+        "G8_glyph_coverage": true,
+        "G9_semantic_completeness": true,
+        "mounted_alignment": null,
+        "timestamp": "2026-05-12T00:00:00Z"
+      }
+    },
+    {
+      "schema_version": 1,
+      "profile_id": "human_attack_crossbow",
+      "skin_definition_id": 100,
+      "presentation_kind": "attack",
+      "variation": "crossbow_attack",
+      "domain": "skin",
+      "layers": [
+        {
+          "slot": "body",
+          "layer_definition_id": 701,
+          "xp_ref": "assets/sprites/player_native_full.xp",
+          "visual_style_id": 1,
+          "region": { "x": 0, "y": 8, "w": 8, "h": 8 }
+        },
+        {
+          "slot": "weapon",
+          "layer_definition_id": 750,
+          "xp_ref": "assets/sprites/player_native_full.xp",
+          "visual_style_id": 1,
+          "item_definition_id": 2001,
+          "region": { "x": 8, "y": 8, "w": 8, "h": 8 }
+        }
+      ],
+      "source_refs": {
+        "xp_file": "assets/sprites/player_native_full.xp",
+        "semantic_map": "human_attack.json"
+      }
+    },
+    {
+      "schema_version": 1,
+      "profile_id": "wolf_mounted_idle",
+      "skin_definition_id": 100,
+      "presentation_kind": "idle_walk",
+      "variation": "default",
+      "domain": "mount",
+      "layers": [
+        {
+          "slot": "mount_rear",
+          "layer_definition_id": 760,
+          "xp_ref": "assets/sprites/mounted_native_full.xp",
+          "region": { "x": 0, "y": 0, "w": 16, "h": 8 }
+        },
+        {
+          "slot": "mount_rider",
+          "layer_definition_id": 761,
+          "xp_ref": "assets/sprites/mounted_native_full.xp",
+          "region": { "x": 16, "y": 0, "w": 8, "h": 8 }
+        },
+        {
+          "slot": "mount_front",
+          "layer_definition_id": 762,
+          "xp_ref": "assets/sprites/mounted_native_full.xp",
+          "item_definition_id": 2001,
+          "region": { "x": 24, "y": 0, "w": 8, "h": 8 }
+        }
+      ],
+      "mount_composition": {
+        "mount_definition_id": 300,
+        "rear_layer_index": 0,
+        "rider_layer_index": 1,
+        "front_layer_index": 2
+      },
+      "source_refs": {
+        "xp_file": "assets/sprites/mounted_native_full.xp",
+        "calibration_artifact": "output/mounted/wolf_calibration.json"
+      }
+    }
+  ]
+}

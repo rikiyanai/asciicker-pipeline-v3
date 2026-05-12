@@ -1958,6 +1958,52 @@
     }
   }
 
+  async function exportAuthoringArtifact() {
+    if (!state.sessionId) {
+      status("Create or load a session first", "err");
+      return;
+    }
+    
+    const domain = $("domainSelect")?.value || "skin";
+    const presentationKind = $("presentationKindSelect")?.value || "idle_walk";
+    const variation = $("variationSelect")?.value || "default";
+    
+    status("Exporting authoring artifact...", "warn");
+    
+    try {
+      const r = await fetch(bp("/api/workbench/actor-visual-profile/export"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: state.sessionId,
+          domain: domain,
+          presentation_kind: presentationKind,
+          variation: variation,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        status(`Export failed: ${j.error || "unknown"}`, "err");
+        return;
+      }
+      
+      // Display export result
+      $("exportOut").textContent = JSON.stringify(j, null, 2);
+      status(`Authoring artifact exported: ${j.profile_id}`, "ok");
+      
+      // Auto-download the JSON file
+      const blob = new Blob([JSON.stringify(j, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${j.profile_id}_artifact.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      status(`Export error: ${e}`, "err");
+    }
+  }
+
   function deepCloneCells(cells) {
     return cells.map((c) => ({
       idx: Number(c.idx),
@@ -7858,6 +7904,55 @@
     }
   }
 
+  async function createActorVisualProfile() {
+    const domain = $("domainSelect")?.value || "skin";
+    const presentationKind = $("presentationKindSelect")?.value || "idle_walk";
+    const variation = $("variationSelect")?.value || "default";
+    const statusEl = $("profileCreationStatus");
+    
+    if (!state.sessionId) {
+      statusEl.textContent = "Error: Create or load a session first (domain/variation chooser requires an active XP session).";
+      statusEl.classList.remove("hidden");
+      status("Create session first", "err");
+      return;
+    }
+    
+    statusEl.textContent = `Creating ActorVisualProfile for domain=${domain}, presentation_kind=${presentationKind}, variation=${variation}...`;
+    statusEl.classList.remove("hidden");
+    status("Creating ActorVisualProfile...", "warn");
+    
+    try {
+      const r = await fetch(bp("/api/workbench/actor-visual-profile/create"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: state.sessionId,
+          domain: domain,
+          presentation_kind: presentationKind,
+          variation: variation,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        statusEl.textContent = `Error: ${j.error || "unknown"}`;
+        status(`Profile creation failed: ${j.error || "unknown"}`, "err");
+        return;
+      }
+      
+      statusEl.innerHTML = `<span style="color:var(--success);">✓ ActorVisualProfile created: ${j.profile_path}</span>`;
+      status(`ActorVisualProfile created: ${j.profile_id}`, "ok");
+      
+      // Auto-open the created profile in a new tab
+      if (j.profile_path) {
+        const viewUrl = `${BASE_PATH}/workbench?session_id=${state.sessionId}&view_profile=${encodeURIComponent(j.profile_path)}`;
+        statusEl.innerHTML += ` <a href="${viewUrl}" target="_blank" style="margin-left:8px;">[View]</a>`;
+      }
+    } catch (e) {
+      statusEl.textContent = `Error: ${e}`;
+      status(`Profile creation error: ${e}`, "err");
+    }
+  }
+
   async function wbRun() {
     if (!state.sourcePath) return;
     // Bundle mode: route through action-grid/apply
@@ -8278,6 +8373,7 @@
     // Open File is always available (doesn't require active session)
     if ($("btnOpenFile")) $("btnOpenFile").disabled = false;
     $("openXpToolBtn").addEventListener("click", openInXpTool);
+    $("exportArtifactBtn")?.addEventListener("click", exportAuthoringArtifact);
     $("webbuildOpenBtn").addEventListener("click", openWebbuild);
     $("webbuildReloadBtn").addEventListener("click", reloadWebbuild);
     $("webbuildApplySkinBtn").addEventListener("click", applyCurrentXpAsWebSkin);
@@ -8338,6 +8434,7 @@
     $("redoBtn").addEventListener("click", redo);
 
     $("templateApplyBtn")?.addEventListener("click", applyTemplate);
+    $("createProfileBtn")?.addEventListener("click", createActorVisualProfile);
     $("wbUpload").addEventListener("click", wbUpload);
     $("wbRun").addEventListener("click", wbRun);
     $("classicGeomAutoPlanBtn")?.addEventListener("click", applyClassicGeometryAutoPlan);

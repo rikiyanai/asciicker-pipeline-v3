@@ -83,6 +83,27 @@ def _post_json(path: str, payload: dict | None = None) -> dict:
         return _api_error(e)
 
 
+def _put_json(path: str, payload: dict | None = None) -> dict:
+    try:
+        with _client() as c:
+            r = c.put(_url(path), json=payload or {})
+            r.raise_for_status()
+            return r.json()
+    except (httpx.ConnectError, httpx.HTTPStatusError, httpx.TimeoutException) as e:
+        return _api_error(e)
+
+
+def _get_qs(path: str, params: dict[str, str] | None = None) -> dict:
+    """GET with query-string params."""
+    try:
+        with _client() as c:
+            r = c.get(_url(path), params=params or {})
+            r.raise_for_status()
+            return r.json()
+    except (httpx.ConnectError, httpx.HTTPStatusError, httpx.TimeoutException) as e:
+        return _api_error(e)
+
+
 def _post_file(path: str, file_path: str, field: str = "file") -> dict:
     p = Path(file_path).expanduser().resolve()
     if not p.exists():
@@ -728,6 +749,116 @@ def accept_mounted_cell_proposals(
     if "error" in result:
         return {"ok": False, **result}
     return {"ok": True, **result}
+
+
+# ===================================================================
+# UQ-006: Source Manifest Tools (shared headless surface)
+# ===================================================================
+
+
+@mcp.tool()
+def source_manifest_status(source_path: str) -> dict:
+    """Get source manifest metadata and status.
+
+    Args:
+        source_path: Path to the source PNG image.
+
+    Returns:
+        Manifest metadata: exists, version, region_count, last_modified,
+        SHA256 match status, bundle_blueprint_key, layout_mode.
+    """
+    return _get_qs("/api/workbench/source-manifest", {
+        "source_path": source_path,
+        "validate": "true",
+    })
+
+
+@mcp.tool()
+def source_manifest_read(
+    source_path: str,
+    validate: bool = False,
+    materialize: bool = False,
+) -> dict:
+    """Read a source manifest with optional validation and materialization.
+
+    Args:
+        source_path: Path to the source PNG image.
+        validate: If true, run full validation and return errors/warnings.
+        materialize: If true, return derived source_boxes/cuts mirror state.
+
+    Returns:
+        Manifest metadata + optional validation report + optional materialized state.
+    """
+    params: dict[str, str] = {"source_path": source_path}
+    if validate:
+        params["validate"] = "true"
+    if materialize:
+        params["materialize"] = "true"
+    return _get_qs("/api/workbench/source-manifest", params)
+
+
+@mcp.tool()
+def source_manifest_write(
+    source_path: str,
+    manifest: dict,
+    ack_stale_sha: bool = False,
+) -> dict:
+    """Write a full source manifest (atomic, validated).
+
+    Returns 409 on SHA256 mismatch unless ack_stale_sha=True.
+    Returns 422 on validation failures (duplicate targets, OOB regions, etc.).
+
+    Args:
+        source_path: Path to the source PNG image.
+        manifest: Full manifest dict per §2.3.2 contract.
+        ack_stale_sha: If true, overwrite even when source SHA256 mismatches.
+
+    Returns:
+        status, validation report, and materialized mirror state.
+    """
+    return _put_json("/api/workbench/source-manifest", {
+        "source_path": source_path,
+        "manifest": manifest,
+        "ack_stale_sha": ack_stale_sha,
+    })
+
+
+@mcp.tool()
+def source_manifest_validate(source_path: str) -> dict:
+    """Validate a source manifest and return errors/warnings.
+
+    Convenience alias for source_manifest_read with validate=True.
+
+    Args:
+        source_path: Path to the source PNG image.
+
+    Returns:
+        Manifest metadata + validation report with status (PASS/WARN/FAIL),
+        errors list, warnings list, and SHA256 match info.
+    """
+    return _get_qs("/api/workbench/source-manifest", {
+        "source_path": source_path,
+        "validate": "true",
+    })
+
+
+@mcp.tool()
+def source_manifest_materialize(source_path: str) -> dict:
+    """Materialize manifest regions into source_boxes/cuts mirror state.
+
+    Convenience alias for source_manifest_read with materialize=True.
+
+    Args:
+        source_path: Path to the source PNG image.
+
+    Returns:
+        Manifest metadata + materialized source_boxes, source_cuts_v,
+        source_cuts_h, and source_anchor_box.
+    """
+    return _get_qs("/api/workbench/source-manifest", {
+        "source_path": source_path,
+        "materialize": "true",
+    })
 
 
 # ===================================================================

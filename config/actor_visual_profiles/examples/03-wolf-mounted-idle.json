@@ -1,0 +1,52 @@
+{
+  "$schema": "../actor_visual_profile_schema.json",
+  "schema_version": 1,
+  "profile_id": "wolf_mounted_idle",
+  "skin_definition_id": 100,
+  "presentation_kind": "idle_walk",
+  "variation": "default",
+  "domain": "mount",
+  "layers": [
+    {
+      "slot": "mount_rear",
+      "layer_definition_id": 760,
+      "xp_ref": "assets/sprites/mounted_native_full.xp",
+      "region": { "x": 0, "y": 0, "w": 16, "h": 8 }
+    },
+    {
+      "slot": "mount_rider",
+      "layer_definition_id": 761,
+      "xp_ref": "assets/sprites/mounted_native_full.xp",
+      "region": { "x": 16, "y": 0, "w": 8, "h": 8 }
+    },
+    {
+      "slot": "mount_front",
+      "layer_definition_id": 762,
+      "xp_ref": "assets/sprites/mounted_native_full.xp",
+      "item_definition_id": 2001,
+      "region": { "x": 24, "y": 0, "w": 8, "h": 8 }
+    }
+  ],
+  "mount_composition": {
+    "mount_definition_id": 300,
+    "rear_layer_index": 0,
+    "rider_layer_index": 1,
+    "front_layer_index": 2
+  },
+  "source_refs": {
+    "xp_file": "assets/sprites/mounted_native_full.xp",
+    "calibration_artifact": "output/mounted/wolf_calibration.json"
+  },
+  "quality_gates": {
+    "G7_cell_density": true,
+    "G8_glyph_coverage": true,
+    "G9_semantic_completeness": true,
+    "mounted_alignment": true,
+    "timestamp": "2026-05-12T00:00:00Z"
+  },
+  "metadata": {
+    "author": "pipeline-v3",
+    "created_at": "2026-05-12T00:00:00Z",
+    "notes": "Example: Wolf mounted idle - mount is a domain dimension (NOT a special case), layers split into rear/rider/front"
+  }
+}
