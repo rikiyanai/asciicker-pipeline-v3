@@ -1991,14 +1991,16 @@
       $("exportOut").textContent = JSON.stringify(j, null, 2);
       status(`Authoring artifact exported: ${j.profile_id}`, "ok");
       
-      // Auto-download the JSON file
+      // Auto-download the JSON file (cross-browser compatible)
       const blob = new Blob([JSON.stringify(j, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `${j.profile_id}_artifact.json`;
+      document.body.appendChild(a);  // Required for Firefox/Safari
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);  // Clean up
+      setTimeout(() => URL.revokeObjectURL(url), 100);  // Delay to allow download to start
     } catch (e) {
       status(`Export error: ${e}`, "err");
     }

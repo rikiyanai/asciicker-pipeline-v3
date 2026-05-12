@@ -213,6 +213,21 @@ class ActorVisualProfile:
             raise ValueError(f"Unsupported schema_version: {self.schema_version}")
         if not self.layers:
             raise ValueError("At least one layer is required")
+        
+        # P2: Enforce Literal type constraints at runtime
+        valid_domains = {"skin", "wearable", "weapon", "shield", "mount"}
+        if self.domain not in valid_domains:
+            raise ValueError(f"Invalid domain: {self.domain!r}. Must be one of: {sorted(valid_domains)}")
+        
+        valid_kinds = {"idle_walk", "attack", "plydie"}
+        if self.presentation_kind not in valid_kinds:
+            raise ValueError(f"Invalid presentation_kind: {self.presentation_kind!r}. Must be one of: {sorted(valid_kinds)}")
+        
+        # Validate layer slots
+        valid_slots = {"body", "head", "chest", "weapon", "shield", "mount_rear", "mount_rider", "mount_front", "armor"}
+        for i, layer in enumerate(self.layers):
+            if layer.slot not in valid_slots:
+                raise ValueError(f"Invalid slot in layer {i}: {layer.slot!r}. Must be one of: {sorted(valid_slots)}")
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to JSON-compatible dict."""
