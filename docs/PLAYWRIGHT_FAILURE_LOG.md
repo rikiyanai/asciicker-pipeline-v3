@@ -8,6 +8,117 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Assessment — 24px Template-2x Conversion Run After c37ee10 Fixes (2026-05-12)
+
+### Context
+
+Post-fix run of `python3 scripts/convert_24px_mini_template_2x.py` on branch `main` at
+commit `c37ee10`. This is the first full conversion after the glyph-assignment quality-pass
+correctness fixes (mirror projection coverage, override fg/bg fall-through, non-dict override
+skip, `total_cells` → `cells_listed` field rename).
+
+### Command and output
+
+```
+python3 scripts/convert_24px_mini_template_2x.py
+# wrote 27 2x-template XP files to output/24px-mini-characters-template-2x
+# real 67.28s
+```
+
+### Visual files inspected
+
+- `output/24px-mini-characters-template-2x/glyph_review_contact.png` — full 27-sheet source/chosen
+  contact grid
+- `output/24px-mini-characters-template-2x/previews/civilian1-player.png`
+- `output/24px-mini-characters-template-2x/previews/civilian1-attack.png`
+- `output/24px-mini-characters-template-2x/previews/civilian1-plydie.png`
+- `output/24px-mini-characters-template-2x/previews/knight1-player.png`
+- `output/24px-mini-characters-template-2x/previews/knight1-attack.png`
+
+### Positive findings
+
+- **No all-219 collapse**: civilian1-player 12.6%, civilian1-attack 16.3%, civilian1-plydie
+  21.4%, knight1-player 20.2%, knight1-attack 35.5% glyph-219 on layer 2. Unique glyph counts
+  21–66 per sheet.
+- **No magenta bleed**: all inspected previews and XP layer 2 cells are free of (255,0,255)
+  background in non-transparent cells.
+- **No blank/missing frames**: all 27 sheets present with content on all angle rows.
+- **Mirror projection coverage balanced**: smoke test (--limit 1, civilian1-attack) showed
+  source half 192 labeled cells, mirror half 190 labeled cells — mirror fix confirmed working.
+- **Layer 2 shaped glyphs with color**: XP layer 2 sample cells show correct glyph/fg/bg
+  encoding (e.g., glyph=221 fg=(50,53,58) bg=(86,89,96) on civilian1-player).
+- **cells_listed metric honest**: summary field correctly named; 94,144 total cells_listed
+  across 27 sheets matches expected.
+
+### Metrics vs prior partial verdict
+
+| Metric | Prior (c720568 run) | This run (c37ee10) |
+|--------|--------------------|--------------------|
+| Total cells_listed | 94,144 | 94,144 |
+| needs_review_cells | 48,264 (51.3%) | 62,315 (66.2%) |
+| #1 low-conf sheet | civilian1-weapon1-attack 2,442 | civilian1-weapon1-attack 3,184 |
+| #2 low-conf sheet | civilian1-black-weapon1-attack 2,384 | civilian1-black-weapon1-attack 3,096 |
+| #3 low-conf sheet | knight1-attack 2,276 | knight1-attack 2,918 |
+
+### Regression analysis
+
+Needs_review went up 29% (48,264 → 62,315). Source and mirror halves have nearly identical
+needs_review rates (66.8% vs 67.2% on civilian1-weapon1-attack), ruling out the mirror
+projection fix as the sole cause. Semantic bias values and confidence thresholds are unchanged
+between c720568 and c37ee10. Most likely cause: the semantic maps (`docs/research/ascii/semantic_maps/`)
+are symlinked from Y9-2 and updated independently; the attack-0001.json and other maps
+show timestamps of 2026-05-05 19:17–19:20, which may differ from the maps used in the
+c720568 run. This cannot be confirmed retroactively since symlinked files are not tracked
+in pipeline-v3 git history.
+
+### Verdict
+
+**PARTIAL, NEEDS ANOTHER MATCHER/BIAS PASS**
+
+Rationale: metrics regressed vs prior partial verdict; attack/weapon sheets still dominate
+low-confidence; needs_review regression root cause not fully confirmed. No catastrophic
+failures. All c37ee10 correctness fixes verified in code and tests. Generated XP files are
+NOT promoted by this entry.
+
+Not claimed:
+- Generated XP output is NOT committed or promoted. Verdict is PARTIAL.
+- `sprites/blocks_idle_redone/` is not affected by this lane.
+
+---
+
+## Assessment — Block Authoring Lane Decision (2026-05-12)
+
+### Context
+
+Block semantic slices in `output/block-face-semantic-slices-v2/` were promoted and accepted
+as ACCEPTABLE FOR NEXT LANE in the "Fix Attempt — Block Face Semantic Slice V2 Promotion After
+Bias Review (2026-05-11)" entry below. This entry records the next-step decision required by
+Task A: whether to assemble a gameplay block sprite set, and whether the semantic slice
+inventory maps to the `sprites/blocks_idle_redone/` inventory.
+
+### Finding: inventories are distinct, no assembly spec exists
+
+`output/block-face-semantic-slices-v2/` contains 42 semantic face slices in 3 families:
+- `middle_block_faces` (24 slices, upper/lower/middle roles)
+- `top_pillar_faces` (12 slices)
+- `tiny_vertical_faces` (6 slices)
+
+`sprites/blocks_idle_redone/` contains 65 files: `block_01_idle.xp` through `block_65_idle.xp`
+with a `previews/` subdirectory. These use generic gameplay block IDs (`block_NN`), not
+semantic face names. No manifest exists mapping 42 semantic faces to gameplay block IDs or
+vice versa.
+
+### Blocker
+
+> **Block semantic slices are authored; gameplay block assembly needs explicit mapping from
+> 42 semantic faces to target block IDs.**
+
+No new XP files are created or promoted by this entry. `sprites/blocks_idle_redone/` is not
+overwritten or modified. Proceed only when a gameplay block assembly spec exists with an
+explicit manifest mapping: source semantic slice → gameplay block id/name → facing/role → XP path.
+
+---
+
 ## Fix Attempt — Glyph Assignment Quality Pass Review Findings (2026-05-11)
 
 Follow-up to commit c720568 (glyph assignment quality pass — semantic bias,
