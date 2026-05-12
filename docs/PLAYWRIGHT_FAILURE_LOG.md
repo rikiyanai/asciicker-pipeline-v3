@@ -52,33 +52,53 @@ python3 scripts/convert_24px_mini_template_2x.py
 
 ### Metrics vs prior partial verdict
 
-| Metric | Prior (c720568 run) | This run (c37ee10) |
-|--------|--------------------|--------------------|
+| Metric | Prior (old-threshold run) | This run (c37ee10) |
+|--------|---------------------------|--------------------|
 | Total cells_listed | 94,144 | 94,144 |
-| needs_review_cells | 48,264 (51.3%) | 62,315 (66.2%) |
-| #1 low-conf sheet | civilian1-weapon1-attack 2,442 | civilian1-weapon1-attack 3,184 |
-| #2 low-conf sheet | civilian1-black-weapon1-attack 2,384 | civilian1-black-weapon1-attack 3,096 |
-| #3 low-conf sheet | knight1-attack 2,276 | knight1-attack 2,918 |
+| needs_review_cells | ~48,264 (~51%) | 62,315 (66.2%) |
+| #1 low-conf sheet | civilian1-weapon1-attack ~2,442 | civilian1-weapon1-attack 3,184 |
+| #2 low-conf sheet | civilian1-black-weapon1-attack ~2,384 | civilian1-black-weapon1-attack 3,096 |
+| #3 low-conf sheet | knight1-attack ~2,276 | knight1-attack 2,918 |
 
-### Regression analysis
+### Regression analysis — RESOLVED: not a regression
 
-Needs_review went up 29% (48,264 → 62,315). Source and mirror halves have nearly identical
-needs_review rates (66.8% vs 67.2% on civilian1-weapon1-attack), ruling out the mirror
-projection fix as the sole cause. Semantic bias values and confidence thresholds are unchanged
-between c720568 and c37ee10. Most likely cause: the semantic maps (`docs/research/ascii/semantic_maps/`)
-are symlinked from Y9-2 and updated independently; the attack-0001.json and other maps
-show timestamps of 2026-05-05 19:17–19:20, which may differ from the maps used in the
-c720568 run. This cannot be confirmed retroactively since symlinked files are not tracked
-in pipeline-v3 git history.
+Root cause confirmed by threshold back-calculation. The prior "~48,264 / ~51%" figure was
+from a run where `score_delta_threshold=0.10` (the default in commit `0fcb0bc`, before the
+c720568 quality pass raised it to `0.15`/`0.20`/`0.25` per family). Recounting the current
+suggestions at threshold=0.10 yields **46,717 cells (49.6%)** — closely matching the prior
+observation. The comparison was apples-to-oranges.
+
+Additional evidence that there is no regression:
+- XP output files (layer 2 glyph assignments) are byte-identical between c720568-era
+  committed files (`ad14419`) and this c37ee10 run. Same chosen glyphs, same colors.
+- Source half and mirror half have nearly identical needs_review rates (66.8% vs 67.2%
+  on civilian1-weapon1-attack), confirming the mirror projection fix did not cause an increase.
+- Cells WITH region labels: 56.4% needs_review. Cells WITHOUT: 67.5%. Semantic bias helps.
+
+The current 66.2% needs_review is the **accurate measurement** under the deliberate
+0.15/0.20/0.25 thresholds introduced in c720568. This higher bar flags genuinely ambiguous
+cells for human review — it is the intended behavior.
+
+### Actual quality picture
+
+- Only 12.2% of cells (11,455 / 94,144) have semantic region labels.
+- The 87.8% of cells with no region coverage have 67.5% needs_review.
+- Attack/weapon sheets are hard to match: complex weapon shapes, few semantic map frames
+  (attack-0001.json covers only anim_index=0 across 8 angles; 7 of 8 attack frames have no
+  region coverage).
+- The matcher/bias pass should focus on: (1) expanding semantic map coverage to more
+  attack animation frames, (2) better bias weights for weapon-class glyphs, (3) potentially
+  reducing the attack threshold from 0.25 to something justified by visual review.
 
 ### Verdict
 
 **PARTIAL, NEEDS ANOTHER MATCHER/BIAS PASS**
 
-Rationale: metrics regressed vs prior partial verdict; attack/weapon sheets still dominate
-low-confidence; needs_review regression root cause not fully confirmed. No catastrophic
-failures. All c37ee10 correctness fixes verified in code and tests. Generated XP files are
-NOT promoted by this entry.
+Rationale: 66.2% of cells flagged for review is not a regression but is the real current
+baseline — genuine difficulty of attack/weapon matching at the current confidence threshold.
+No catastrophic failures. Attack/weapon sheets dominate low-confidence; next pass should
+expand semantic map coverage and tune bias. All c37ee10 correctness fixes verified.
+Generated XP files are NOT promoted by this entry.
 
 Not claimed:
 - Generated XP output is NOT committed or promoted. Verdict is PARTIAL.
