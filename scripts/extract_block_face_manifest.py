@@ -20,7 +20,8 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from png2xp2png import BdfFont, _CP437_TO_UNI  # noqa: E402
+from glyph_assignment import GlyphAssignmentConfig, assign_cell, cell_to_json, load_glyph_masks, write_suggestions_json  # noqa: E402
+from glyph_assignment.matcher import default_font_path  # noqa: E402
 from xp_core import XPFile, XPLayer  # noqa: E402
 
 MAGENTA = (255, 0, 255)
@@ -219,72 +220,28 @@ def tiny_specs(image: Image.Image) -> list[SliceSpec]:
     return specs
 
 
-def pack_bool_mask(mask: np.ndarray) -> int:
-    packed = 0
-    for bit in mask.reshape(-1).astype(bool):
-        packed = (packed << 1) | int(bit)
-    return packed
+def load_masks(font_path: Path) -> tuple[GlyphAssignmentConfig, list]:
+    config = GlyphAssignmentConfig(
+        font_path=font_path,
+        font_cell_size=(CELL, CELL),
+        target_cell_size=(CELL, CELL),
+        candidate_limit=3,
+    )
+    return config, load_glyph_masks(font_path, config.target_cell_size)
 
 
-def load_masks(font_path: Path) -> list[tuple[int, int, int]]:
-    font = BdfFont(str(font_path))
-    masks = []
-    for glyph in range(256):
-        mask = font.get_mask(_CP437_TO_UNI.get(glyph, glyph))
-        if mask is None:
-            continue
-        shaped = np.array(mask, dtype=bool).reshape(font.cell_h, font.cell_w)
-        masks.append((glyph, pack_bool_mask(shaped), int(shaped.sum())))
-    return masks
+def infer_tile_cell(tile: np.ndarray, masks: tuple[GlyphAssignmentConfig, list]) -> tuple[int, tuple[int, int, int], tuple[int, int, int], int]:
+    assigned = infer_assigned_cell(tile, masks)
+    score = int(round(assigned.chosen.score * tile[:, :, 3].size))
+    return assigned.chosen.glyph, assigned.chosen.fg, assigned.chosen.bg, score
 
 
-def best_glyph(tile_alpha: np.ndarray, masks: list[tuple[int, int, int]]) -> tuple[int, int]:
-    packed = pack_bool_mask(tile_alpha)
-    on_bits = int(tile_alpha.sum())
-    if on_bits <= 1:
-        return 0, tile_alpha.size
-    best = (0, -1)
-    total_bits = tile_alpha.size
-    for glyph, mask, _mask_bits in masks:
-        score = total_bits - (packed ^ mask).bit_count()
-        if score > best[1]:
-            best = (glyph, score)
-    return best
+def infer_assigned_cell(tile: np.ndarray, masks: tuple[GlyphAssignmentConfig, list], *, x: int = 0, y: int = 0):
+    config, glyph_masks = masks
+    return assign_cell(tile, config, glyph_masks, x=x, y=y)
 
 
-def infer_tile_cell(tile: np.ndarray, masks: list[tuple[int, int, int]]) -> tuple[int, tuple[int, int, int], tuple[int, int, int], int]:
-    alpha = tile[:, :, 3] > 0
-    alpha_count = int(alpha.sum())
-    if alpha_count <= 1:
-        return 0, (0, 0, 0), MAGENTA, tile[:, :, 3].size
-
-    rgb_pixels = tile[:, :, :3][alpha]
-    colors, counts = np.unique(rgb_pixels.reshape(-1, 3), axis=0, return_counts=True)
-    dominant_idx = int(np.argmax(counts))
-    bg = tuple(int(v) for v in colors[dominant_idx])
-
-    if len(colors) == 1:
-        mask = alpha
-        glyph, score = 219, int(alpha.sum())
-        return glyph, bg, MAGENTA, score
-
-    rgb = tile[:, :, :3].astype(np.int16)
-    bg_arr = np.array(bg, dtype=np.int16)
-    color_delta = np.abs(rgb - bg_arr).max(axis=2)
-    ink = alpha & (color_delta > 18)
-    if int(ink.sum()) <= 1:
-        if alpha_count >= tile[:, :, 3].size // 2:
-            return 219, bg, MAGENTA, alpha_count
-        return 0, (0, 0, 0), MAGENTA, tile[:, :, 3].size
-
-    glyph, score = best_glyph(ink, masks)
-    fg_pixels = tile[:, :, :3][ink]
-    fg_colors, fg_counts = np.unique(fg_pixels.reshape(-1, 3), axis=0, return_counts=True)
-    fg = tuple(int(v) for v in fg_colors[int(np.argmax(fg_counts))])
-    return glyph, fg, bg, score
-
-
-def ocr_image(image: Image.Image, masks: list[tuple[int, int, int]], cell: int = CELL):
+def ocr_image(image: Image.Image, masks: tuple[GlyphAssignmentConfig, list], cell: int = CELL):
     rgba = np.array(image.convert("RGBA"))
     best = None
     for oy in range(cell):
@@ -295,23 +252,32 @@ def ocr_image(image: Image.Image, masks: list[tuple[int, int, int]], cell: int =
                 continue
             score = nonzero = 0
             cells = []
+            assigned_cells = []
             for row in range(max_rows):
                 out_row = []
+                assigned_row = []
                 for col in range(max_cols):
                     tile = rgba[oy + row * cell : oy + (row + 1) * cell, ox + col * cell : ox + (col + 1) * cell]
-                    glyph, fg, bg, glyph_score = infer_tile_cell(tile, masks)
+                    assigned = infer_assigned_cell(tile, masks, x=col, y=row)
+                    glyph = assigned.chosen.glyph
+                    fg = assigned.chosen.fg
+                    bg = assigned.chosen.bg
+                    glyph_score = int(round(assigned.chosen.score * tile[:, :, 3].size))
                     if glyph:
                         nonzero += 1
                     score += glyph_score
                     out_row.append((glyph, fg, bg))
+                    assigned_row.append(assigned)
                 cells.append(out_row)
-            candidate = (score, nonzero, ox, oy, cells)
+                assigned_cells.append(assigned_row)
+            candidate = (score, nonzero, ox, oy, cells, assigned_cells)
             if best is None or candidate[:2] > best[:2]:
                 best = candidate
     if best is None:
-        return 0, 0, [[(0, (0, 0, 0), MAGENTA)]]
-    _score, _nonzero, ox, oy, cells = best
-    return ox, oy, trim_cells(cells)
+        return 0, 0, [[(0, (0, 0, 0), MAGENTA)]], []
+    _score, _nonzero, ox, oy, cells, assigned_cells = best
+    trimmed_cells, trimmed_assigned = trim_cells_with_assigned(cells, assigned_cells)
+    return ox, oy, trimmed_cells, trimmed_assigned
 
 
 def trim_cells(cells):
@@ -323,6 +289,24 @@ def trim_cells(cells):
     min_y = min(y for _x, y in used)
     max_y = max(y for _x, y in used)
     return [row[min_x : max_x + 1] for row in cells[min_y : max_y + 1]]
+
+
+def trim_cells_with_assigned(cells, assigned_cells):
+    used = [(x, y) for y, row in enumerate(cells) for x, cell in enumerate(row) if cell[0]]
+    if not used:
+        return [[(0, (0, 0, 0), MAGENTA)]], []
+    min_x = min(x for x, _y in used)
+    max_x = max(x for x, _y in used)
+    min_y = min(y for _x, y in used)
+    max_y = max(y for _x, y in used)
+    trimmed_cells = [row[min_x : max_x + 1] for row in cells[min_y : max_y + 1]]
+    trimmed_assigned = [
+        cell
+        for y, row in enumerate(assigned_cells[min_y : max_y + 1])
+        for x, cell in enumerate(row[min_x : max_x + 1])
+        if trimmed_cells[y][x][0] != 0 or cell.needs_review
+    ]
+    return trimmed_cells, trimmed_assigned
 
 
 def transparent_layer(width: int, height: int) -> XPLayer:
@@ -382,7 +366,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--review-root", type=Path, default=Path("/private/tmp/xp_block_source_review"))
     parser.add_argument("--out", type=Path, default=Path("/private/tmp/xp_block_source_review/semantic_slices_v2"))
-    parser.add_argument("--font", type=Path, default=ROOT / "runtime/termpp-skin-lab-static/termpp-web-flat/fonts/cp437_6x6.png.bdf")
+    parser.add_argument("--font", type=Path, default=default_font_path(ROOT))
     parser.add_argument("--padding", type=int, default=8)
     args = parser.parse_args()
 
@@ -403,8 +387,12 @@ def main() -> int:
     specs.extend(tiny_specs(source_images["source_tiny_block_faces.png"]))
     masks = load_masks(args.font)
 
+    suggestion_groups = []
     manifest = {
         "source_authority": "user-cleaned RGBA source strips in /private/tmp/xp_block_source_review",
+        "glyph_assignment_mode": "dominant-bg-cp437-mask-v1",
+        "font_path": str(args.font),
+        "target_cell_size": [CELL, CELL],
         "discarded_contact_blocks": [
             {"id": "block_354", "reason": "top-left amalgamation / multiple things"},
             {"id": "block_1895", "reason": "top-left amalgamation / multiple things"},
@@ -434,10 +422,24 @@ def main() -> int:
         slice_path = slices_dir / spec.family / f"{spec.name}.png"
         slice_path.parent.mkdir(exist_ok=True)
         crop.save(slice_path)
-        ox, oy, cells = ocr_image(crop, masks, CELL)
+        ox, oy, cells, assigned = ocr_image(crop, masks, CELL)
         xp_path = xp_dir / spec.family / f"{spec.name}_idle.xp"
         xp_path.parent.mkdir(exist_ok=True)
         xp_meta = write_idle_xp(xp_path, cells)
+        suggestion_groups.append(
+            {
+                "name": spec.name,
+                "family": spec.family,
+                "xp": str(xp_path),
+                "font_path": str(args.font),
+                "target_cell_size": [CELL, CELL],
+                "cells": [
+                    cell_to_json(cell)
+                    for cell in assigned
+                    if cell.chosen.glyph != 0 or cell.needs_review
+                ],
+            }
+        )
         entry = {
             "family": spec.family,
             "name": spec.name,
@@ -450,6 +452,7 @@ def main() -> int:
             "slice_png": str(slice_path),
             "provisional_xp": str(xp_path),
             "ocr_grid_offset": [ox, oy],
+            "glyph_assignment_mode": "dominant-bg-cp437-mask-v1",
             **xp_meta,
         }
         manifest["slices"].append(entry)
@@ -459,6 +462,7 @@ def main() -> int:
 
     for family, items in contacts.items():
         contact_sheet(items, args.out / f"{family}_contact.png")
+    write_suggestions_json(args.out / "glyph_suggestions.json", suggestion_groups)
     (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps({"out": str(args.out), "slices": len(manifest["slices"]), "families": manifest["families"]}, indent=2))
     return 0

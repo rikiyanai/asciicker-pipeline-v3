@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 
 from scripts.extract_block_face_manifest import infer_tile_cell, load_masks
-from scripts.png2xp2png import BdfFont, _CP437_TO_UNI
+from scripts.png2xp2png import BdfFont, CP437_TO_UNI
 
 
 FONT_PATH = Path("runtime/termpp-skin-lab-static/termpp-web-flat/fonts/cp437_6x6.png.bdf")
@@ -11,7 +11,7 @@ FONT_PATH = Path("runtime/termpp-skin-lab-static/termpp-web-flat/fonts/cp437_6x6
 
 def _tile_for_glyph(glyph, fg=(0, 0, 0), bg=(180, 180, 180)):
     font = BdfFont(str(FONT_PATH))
-    mask = np.array(font.get_mask(_CP437_TO_UNI[glyph]), dtype=bool).reshape(6, 6)
+    mask = np.array(font.get_mask(CP437_TO_UNI[glyph]), dtype=bool).reshape(6, 6)
     tile = np.zeros((6, 6, 4), dtype=np.uint8)
     tile[:, :, :3] = bg
     tile[:, :, 3] = 255
