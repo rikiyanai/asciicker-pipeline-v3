@@ -24,8 +24,28 @@ _HB: dict[int, float] = {220: 0.6, 221: 0.6, 222: 0.6, 223: 0.6}
 _SH: dict[int, float] = {176: 0.3, 177: 0.4, 178: 0.5}
 _SK: dict[int, float] = {47: 0.5, 92: 0.5, 179: 0.3, 196: 0.3}
 
+# Default bias applied to ALL cells regardless of region, including those with no
+# semantic label.  Stored under the reserved key ``"_default"`` in each role table.
+#
+# Purpose: at the 6×6 px cell size, half-block glyphs (220–223) and shade glyphs
+# (176–178) routinely tie with text look-alikes (95=_, 254=■, 34=", 55=7, etc.)
+# because their ink coverage is similar at low resolution.  A weak preference for
+# geometric sprite-appropriate glyphs breaks these ties without overriding regions
+# that carry stronger domain-specific weights.
+_SPRITE_DEFAULT: dict[int, float] = {
+    # Half-blocks: strongly preferred over text/punctuation look-alikes
+    220: 0.6, 221: 0.6, 222: 0.6, 223: 0.6,
+    # Shade glyphs: preferred for textured sprite areas
+    176: 0.3, 177: 0.4, 178: 0.5,
+    # Diagonal strokes: preferred for sprite outlines and limbs
+    47: 0.3, 92: 0.3,
+    # Full block: fallback when a cell is nearly solid but not solid-classified
+    219: 0.2,
+}
+
 BUILT_IN_ROLE_TABLES: dict[str, dict[str, dict[int, float]]] = {
     "player": {
+        "_default":     _SPRITE_DEFAULT,
         "hair":         {**_HB},
         "face":         {34: 0.8, 118: 0.8, 223: 0.5, 46: 0.4, 111: 0.4, **_HB},
         "shirt":        {**_HB, **_SH},
@@ -35,6 +55,7 @@ BUILT_IN_ROLE_TABLES: dict[str, dict[str, dict[int, float]]] = {
         "subcell_fill": {**_HB},
     },
     "attack": {
+        "_default":     _SPRITE_DEFAULT,
         "weapon":       {47: 0.9, 92: 0.9, **_HB, **_SK, **_SH},
         "face":         {34: 0.8, 118: 0.8, **_HB},
         "shirt":        {**_HB, **_SH},
@@ -44,6 +65,7 @@ BUILT_IN_ROLE_TABLES: dict[str, dict[str, dict[int, float]]] = {
         "subcell_fill": {**_HB},
     },
     "plydie": {
+        "_default":     _SPRITE_DEFAULT,
         "body":  {219: 0.7, **_HB, **_SH},
         "arms":  {**_HB, **_SH},
         "shirt": {**_HB, **_SH},
@@ -102,8 +124,15 @@ def apply_semantic_bias(
     semantic_bias: dict[str, dict[int, float]],
     score_delta_threshold: float,
 ) -> list[GlyphCandidate]:
-    if not candidates or not region or region not in semantic_bias:
+    if not candidates:
         return candidates
+    # Resolve effective region: use labelled region if present in the bias table,
+    # otherwise fall back to the reserved ``"_default"`` key so that unregioned
+    # cells still receive the global sprite-glyph preference.
+    effective_region = region if (region and region in semantic_bias) else "_default"
+    if effective_region not in semantic_bias:
+        return candidates
+    region = effective_region
     top_score = candidates[0].score
     weights = semantic_bias[region]
     if not weights:

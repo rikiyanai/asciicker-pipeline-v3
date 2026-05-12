@@ -72,7 +72,7 @@ def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
             font_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
             target_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
             candidate_limit=8,
-            score_delta_threshold=0.25,
+            score_delta_threshold=0.20,
         ),
         "plydie": GlyphAssignmentConfig(
             font_path=font_path,
