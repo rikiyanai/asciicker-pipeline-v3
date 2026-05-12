@@ -8,6 +8,54 @@
 - If the tree is already dirty with unrelated files, stage and commit only the intended slice. Do not use that as an excuse to skip the checkpoint commit.
 - Failing to checkpoint-commit before continuing is a process failure. Log it and correct it immediately.
 
+## Fix Attempt — Block Face Semantic Slice V2 Promotion After Bias Review (2026-05-11)
+
+Follow-up to the block-face extraction/glyph-assignment detour. The shared
+matcher adapter was accepted structurally, but the first block review found
+text-character intrusion on stone edges (`H`, `7`, `,`, `]`). This pass records
+the bias fix and the promoted reviewed artifact directory.
+
+Patch:
+
+- `scripts/extract_block_face_manifest.py` now passes block family names as
+  semantic regions into shared glyph assignment.
+- Block regions bias toward CP437 block, line, box-drawing, and shading glyphs
+  and away from text/punctuation intrusions reported in visual review.
+- `tests/test_extract_block_face_manifest.py` asserts the block bias contract.
+- Promoted the reviewed biased artifact set to
+  `output/block-face-semantic-slices-v2/`.
+
+Generated promoted artifacts:
+
+- `output/block-face-semantic-slices-v2/manifest.json`
+- `output/block-face-semantic-slices-v2/glyph_suggestions.json`
+- `output/block-face-semantic-slices-v2/*_contact.png`
+- `output/block-face-semantic-slices-v2/slices/`
+- `output/block-face-semantic-slices-v2/xp/`
+
+Verification:
+
+- `python3 -m pytest tests/test_extract_block_face_manifest.py tests/glyph_assignment/test_matcher.py -q`
+  -> PASS, 13 tests.
+- `python3 -m compileall -q scripts/extract_block_face_manifest.py scripts/glyph_assignment`
+  -> PASS.
+- `python3 scripts/extract_block_face_manifest.py --out /private/tmp/xp_block_source_review/semantic_slices_v2_biased`
+  -> generated 42 slices in about 180 seconds.
+- Measured glyph intrusions in generated block XP layer 2:
+  `H`: 5360 -> 0, `7`: 2096 -> 0, `,`: 1120 -> 0, `]`: 720 -> 0.
+- Human/lower-agent visual review of the biased XP layers reported
+  `ACCEPTABLE FOR NEXT LANE`; residual `"` cells are limited to near-invisible
+  dark-green boundary corners from the source strips.
+
+Not claimed:
+
+- This does not replace `sprites/blocks_idle_redone/`; that older gameplay-style
+  block set uses a different 65-file inventory and generic `block_NN_idle`
+  naming. The promoted directory is the reviewed semantic-slice output for the
+  block-face lane.
+- 24px Mini template-2x output remains `PARTIAL, NEEDS MATCHER/BIAS PASS` from
+  visual review and is not promoted by this entry.
+
 ## Audit — UQ-004 Review-Finding Fixes For Termpp Skin Lab Registry Paths (2026-04-29)
 
 This is a code/doc-state correction entry for the post-closeout review findings.
