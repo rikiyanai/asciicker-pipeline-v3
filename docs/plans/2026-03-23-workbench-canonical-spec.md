@@ -1549,8 +1549,8 @@ animated prefix groups are:
 | `player-green` | `green` | on-foot idle/walk | `player-green-0001.xp` | runtime/proof-only |
 | `attack-green` | `green` | on-foot attack | `attack-green-0001.xp` | runtime/proof-only |
 | `plydie-green` | `green` | on-foot fall/death | `plydie-green-0001.xp` | runtime/proof-only |
-| `wolfie` | `human` (green falls back here today) | mounted idle/walk | `wolfie-0001.xp` | engine-real; authorable after UQ-007 identity + mounted builder landing; proof-blocked on `mounted_authoring_e2e` |
-| `wolack` | `human` (green falls back here today) | mounted attack | `wolack-0001.xp` | engine-real; authorable after UQ-007 identity + mounted builder landing; proof-blocked on `mounted_authoring_e2e` |
+| `wolfie` | `human` (green falls back here today) | mounted idle/walk | `wolfie-0001.xp` | engine-real; **authorable: true** — UQ-007 identity CLOSED, mounted builder landed. Proof-blocked on `mounted_authoring_e2e` AND `UQ-R15` (selector/fallback logic still in gameplay path per FL-3865; old resolver proving mounted rows is not acceptable evidence). |
+| `wolack` | `human` (green falls back here today) | mounted attack | `wolack-0001.xp` | engine-real; **authorable: true** — UQ-007 identity CLOSED, mounted builder landed. Proof-blocked on `mounted_authoring_e2e` AND `UQ-R15` (selector/fallback logic still in gameplay path per FL-3865; old resolver proving mounted rows is not acceptable evidence). |
 | `bigbee` | `human` | bee-mount / NPC path | `bigbee-0001.xp` | runtime-real, not authorable |
 
 `player-nude.xp` remains a special runtime file, but it is not the canonical
@@ -4245,6 +4245,33 @@ server-owned AppearanceStateV2  →  ServerVisualKey  →  exact RenderPlanTable
 
 Nothing else is permitted in the gameplay render path.
 
+### 2.15.0.1 Rig Seam Definition
+
+**Added 2026-05-12. Source: Y9-2 multiplayer-canonical-spec update.**
+
+A `rig_definition_id` integer is **not** a complete 2D rig seam. A
+conventional, addable rig seam means authored, stable attachment contracts
+that future sprite assets can plug into without C++ branches:
+
+- Named sockets/anchors/semantic regions: `rider_pelvis`, `mount_saddle`,
+  `weapon_grip`, `mount_rear_occlusion`, `mount_front_occlusion`
+- Angle-aware x/y transforms and visibility/flip rules per attachment point
+- Explicit layer-order relationships for rear mount, rider body, wearables,
+  weapon, and front occluder
+- Compiler owns this math and emits final RenderPlan rows; runtime only
+  presents the ordered layers
+
+`rig_definition_id` is a **selector dimension** — a routing hook that lets
+the compiler pick between authored rig contracts. It is the minimum required
+ID field, not the contract itself.
+
+**Current state (2026-05-12):** `rig_definition_id` is an authored selector
+dimension in the Y9-2 spec, but: (a) it is absent from all engine code and
+pipeline-v3 surfaces (FL-3867); (b) no authored socket/anchor/layer-order
+contract data exists in any bundle schema; (c) mounted wolf + crossbow
+alignment has not passed live human visual proof. The rig seam cannot be
+called complete until (a)–(c) are satisfied.
+
 ### 2.15.1 Deletion List — Y9-2 Runtime Visual-Resolution System
 
 The following components must be deleted from the Y9-2 runtime gameplay path.
@@ -4391,9 +4418,10 @@ existing compile step, not a new product surface.
 | Item | Change |
 |------|--------|
 | `UQ-R15` (new) | Owns the `render_plans.json` compiler output and the `RenderPlanTable` runtime replacement path in Y9-2. Blocked until §2.15.1 deletion components are removed from gameplay path and one mounted crossbow attack key renders through `render_plans.json` with no call into deleted components. |
-| `UQ-008` mounted parity | Additionally blocked on `UQ-R15`. `mounted_authoring_e2e` runtime proof requires the replacement runtime path, not the old resolver. The old resolver proving mounted rows is not acceptable evidence. |
-| Blocking gate (new, §2.15) | `render_plans.json` emitted by compiler — OPEN |
-| Blocking gate (new, §2.15) | One mounted crossbow attack `ServerVisualKey` renders through `RenderPlanTable` with no deleted component in call path — OPEN |
+| `UQ-008` mounted parity | Additionally blocked on `UQ-R15` and FL-3917 residual. `mounted_authoring_e2e` runtime proof requires the replacement runtime path, not the old resolver. The old resolver proving mounted rows is not acceptable evidence. FL-3867 (`rig_definition_id` absent from all surfaces) and authored socket/anchor contracts are required before rig seam closure is claimable. |
+| Blocking gate (new, §2.15) | `render_plans.json` emitted by compiler — OPEN (FL-3866: `render_plan_table.py` disconnected from compile action) |
+| Blocking gate (new, §2.15) | One mounted crossbow attack `ServerVisualKey` renders through `RenderPlanTable` with no deleted component in call path — OPEN (FL-3865: 4 §2.15.1 targets still in gameplay path) |
+| Deletion progress (2026-05-12) | FL-3912: first deletion pass `0bd90fae` removed 6 of 8 §2.15.1 targets. 4 remain in gameplay path — see FL-3865 for exact component list. ProofState: IMPLEMENTED-UNPROVEN. |
 
 The existing blocking gates for `UQ-008` and generalized bundle-port readiness
 remain open. They are now also gated on `UQ-R15` completion.
@@ -4417,14 +4445,18 @@ not a task plan - it is a gate list. Migration is ready when all blocking gates 
 | UQ-005 export/web-skin quality contract fully enforced | §Unified Queue `UQ-005` | CLOSED — export/web-skin paths share live G7-G12 enforcement. Canonical `/api/workbench/validate-xp` route + MCP `validate_xp` tool added. G8/G9 threshold policy locked in `gates.py` with named policy constants. |
 | UQ-006 manifest-backed source authoring no longer JSON-first | §Unified Queue `UQ-006` | OPEN |
 | UQ-007 runtime identity layer landed | §Unified Queue `UQ-007` | CLOSED - `config/runtime_identity_registry.json` owns live `skin_definition_id` / `presentation_kind_id` / `layer_definition_id` values and backend/helper/export/payload surfaces emit them |
-| UQ-008 mounted-family parity for `wolfie` / `wolack` proven | §Unified Queue `UQ-008` | PROOF BLOCKED - native builders, authorable registry state, and browser/backend artifact surfaces exist; `mounted_authoring_e2e` runtime proof still must prove generated rows and no legacy fallback. Additionally blocked on `UQ-R15` — old resolver proving mounted rows is not acceptable evidence. |
+| UQ-008 mounted-family parity for `wolfie` / `wolack` proven | §Unified Queue `UQ-008` | PROOF BLOCKED - native builders, authorable registry state, and browser/backend artifact surfaces exist; `mounted_authoring_e2e` runtime proof still must prove generated rows and no legacy fallback. Additionally blocked on: `UQ-R15` (old resolver still in gameplay path, FL-3865); FL-3917 residual (`rig_definition_id` absent from all surfaces, FL-3867 — authored socket/anchor contracts not yet specified, mounted wolf + crossbow alignment unproven via human visual proof). Old resolver proving mounted rows is not acceptable evidence. |
 | UQ-009 current-scope Section 3 signoff + contract runners current | §Unified Queue `UQ-009` | PARTIAL |
 | UQ-010 Y9-2 wizard / launcher gateway wired to shared bundle-authoring contract | §Unified Queue `UQ-010` | OPEN |
 | UQ-011 cutover support gates ready (`§2.11`, `§2.12`) | §Unified Queue `UQ-011` | OPEN |
-| UQ-R15 Y9-2 runtime visual-resolution system deleted and replaced by `RenderPlanTable` | §2.15 | OPEN — §2.15.1 deletion list components still present in gameplay path; `render_plans.json` not yet emitted by compiler; no proof that one mounted crossbow attack `ServerVisualKey` renders through replacement path with no call into deleted components. FL-3861. |
+| UQ-R15 Y9-2 runtime visual-resolution system deleted and replaced by `RenderPlanTable` | §2.15 | IMPLEMENTED-UNPROVEN — FL-3912: first deletion pass (commit `0bd90fae`) removed 6 of 8 §2.15.1 targets. **4 still in gameplay path** (FL-3865): `ActorAppearanceBundleCache` resolver fields in `bundle_runtime.h/.cpp` + `bundle_cache_queries.h/.cpp`; selector mask interpretation in `bundle_presentation_resolver.cpp:70–94` (`FindActorBundleSelectorForRuntime()`); `ACTOR_BUNDLE_FALLBACK_BODY_BIT` fallback logic; `FillActorBundleRenderArrays` in `bundle_render_stack_builder.cpp`. `render_plans.json` not yet emitted by compiler (`render_plan_table.py` disconnected from compile action — FL-3866). No proof that one mounted crossbow attack `ServerVisualKey` renders through replacement path with no call into deleted components. |
 | FL-3862 Runtime Parser Gate — `verify-current` and `build-web.sh` must invoke C++ parser | §2.10 / §2.15 | OPEN — build-web.sh line 129 runs Python-only validation; C++ runtime parser never called; mandatory before any `RenderPlanTable` proof claim. |
 | FL-3863 `ActorVisualProfile` authored object — pipeline-v3 missing data structure | §2.5 | OPEN — no structure captures skin_id, variation, body/wearable/mount layer assignments; `runtime_identity_registry.json` covers IDs only. |
 | FL-3864 Bundle System Guide rewrite — must explain Content DB → RenderPlanTable | §2.10 / §2.15 | OPEN — launcher guide at `_show_bundle_system_guide()` documents old selector architecture; content authors will learn wrong model. |
+| FL-3865 Four §2.15.1 deletion targets still in Y9-2 gameplay path | §2.15.1 | OPEN — `ActorAppearanceBundleCache` resolver fields (`bundle_runtime.h/.cpp`, `bundle_cache_queries.h/.cpp`); selector mask interpretation (`bundle_presentation_resolver.cpp:70–94`); `ACTOR_BUNDLE_FALLBACK_BODY_BIT` fallback logic; `FillActorBundleRenderArrays` (`bundle_render_stack_builder.cpp`). Blocks UQ-R15 proof. |
+| FL-3866 `render_plan_table.py` disconnected from `bundle_mods.py compile` | §2.15.3 | OPEN — module exists but not invoked by compile action; `render_plans.json` never emitted on compile; §2.15.3 output obligation cannot be gated. Blocks UQ-R15. |
+| FL-3867 `rig_definition_id` absent from all Y9-2 engine code and pipeline-v3 surfaces | §2.15 / §2.5 | OPEN — absent from `appearance_bundle.py`, `render_plan_table.py`, all engine C++, `app.py`, `service.py`, `runtime_identity_registry.json`, `workbench_mcp_server.py`. Spec defines it as authored selector dimension; code has no implementation. Blocks UQ-008 rig-seam residual. |
+| FL-3868 pipeline-v3 `workbench_create_actor_visual_profile()` not wired to any bundle workflow | §2.5 / §2.15.4 | OPEN — function exists in `service.py` but not called from any REST route, MCP tool, or workflow path. Zero authored `ActorVisualProfile` JSON files exist. `compile-skin-request`/`register-skin-request` are CLI-only in Y9-2's `bundle_wizard/main.py`. Step 6 of content authoring flow has no functional path. Blocks FL-3863 closure. |
 
 ### Non-Blocking Gaps (required for full parity, not migration gate)
 
@@ -4436,7 +4468,7 @@ not a task plan - it is a gate list. Migration is ready when all blocking gates 
 | UQ-013 small-screen layout and persistence | §Unified Queue `UQ-013` | OPEN |
 | Whole-sheet browse-model split implementation | §1.8 / §2 boundary | DECISION FIXED - browse opens XP/root-editor documents first, layer 0 is editable in principle, and template metadata compatibility is a later wrapper concern; implementation remains intentionally sequenced after grid contrast, expanded grid presets, grid-scoped replace semantics, and their proof updates |
 | FL-3861 `render_plans.json` compiler output | §2.15 | OPEN — non-blocking only if UQ-R15 is treated as a Y9-2-first deliverable; becomes blocking once pipeline-v3 owns the compile step |
-| RenderPlan preview surface (Step 11 of content authoring flow) | §2.10 | OPEN — no surface exists to inspect ordered layer stacks before activation |
+| RenderPlan preview surface (Step 11 of content authoring flow) — FL-3919 | §2.10 | OPEN — no surface exists to inspect ordered layer stacks before activation; FL-3919 confirmed: no `inspect_render_plan` or equivalent agent-callable RenderPlan inspector in `workbench_mcp_server.py`. |
 | Structured authoring artifact completeness (Step 7 of content authoring flow) | §2.5 | OPEN — export-bundle missing semantic map refs, variation field, slot/layer assignments, mount rear/front separation |
 | Bundle Mods E2E smoke automation (FL-3602) | §2.10 | PARTIAL — menu items exist in launcher, no tmux-driven automation of full Status→Package→Rollback sequence |
 | Promote-to-current render-plan identity check (Step 16) | §2.10 | OPEN — `promote_candidate_to_current.py` checks manifest mismatch but not `render_plans.json` hash parity |
