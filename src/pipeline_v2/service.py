@@ -1318,6 +1318,7 @@ def runtime_identity_for_action(
     skin_definition_id = int(skin_spec["skin_definition_id"])
     presentation_kind_id = int(presentation_spec["presentation_kind_id"])
     layer_definition_id = int(layer_spec["layer_definition_id"])
+    rig_definition_id: str | None = layer_spec.get("rig_definition_id") or None
     return {
         "schema_version": 1,
         "template_set_key": template_set_key,
@@ -1327,6 +1328,7 @@ def runtime_identity_for_action(
         "skin_definition_id": skin_definition_id,
         "presentation_kind_id": presentation_kind_id,
         "layer_definition_id": layer_definition_id,
+        "rig_definition_id": rig_definition_id,
     }
 
 
@@ -1478,6 +1480,7 @@ def resolve_blueprint_targets(bundle_blueprint_key: str) -> list[dict[str, Any]]
             desc["skin_definition_id"] = int(identity["skin_definition_id"])
             desc["presentation_kind_id"] = int(identity["presentation_kind_id"])
             desc["layer_definition_id"] = int(identity["layer_definition_id"])
+            desc["rig_definition_id"] = identity.get("rig_definition_id")
 
         # Blocker text for future rows (plan §2.3.2 appearance ownership model)
         if layer_owner_kind == "mount" and slot == "mount_composite":
@@ -5276,6 +5279,7 @@ def workbench_create_actor_visual_profile(
     presentation_kind: str,
     variation: str,
     req_id: str,
+    rig_definition_id: str | None = None,
 ) -> dict[str, Any]:
     """Create ActorVisualProfile from current session (Phase 2, Task 2).
     
@@ -5364,6 +5368,7 @@ def workbench_create_actor_visual_profile(
         domain=domain,  # type: ignore
         layers=[layer],
         variation=variation if variation != "default" else None,
+        rig_definition_id=rig_definition_id or None,
     )
     
     # Save profile
@@ -5382,6 +5387,7 @@ def workbench_create_actor_visual_profile(
         "presentation_kind": presentation_kind,
         "variation": variation,
         "skin_definition_id": skin_definition_id,
+        "rig_definition_id": rig_definition_id,
         "layers_count": len(profile.layers),
         "session_id": session_id,
     }

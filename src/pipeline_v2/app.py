@@ -970,12 +970,14 @@ def create_app() -> Flask:
             domain = str(payload.get("domain", "skin")).strip()
             presentation_kind = str(payload.get("presentation_kind", "idle_walk")).strip()
             variation = str(payload.get("variation", "default")).strip()
+            rig_definition_id = payload.get("rig_definition_id") or None
             return jsonify(
                 workbench_create_actor_visual_profile(
                     session_id=session_id,
                     domain=domain,
                     presentation_kind=presentation_kind,
                     variation=variation,
+                    rig_definition_id=rig_definition_id,
                     req_id=req_id,
                 )
             ), 200

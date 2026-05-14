@@ -11,10 +11,18 @@ Test scenarios:
 """
 
 import json
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
+
+# Append Y9-2 root so scripts.pipeline resolves to the vendored copy.
+# Using append (not insert) keeps pipeline-v3's scripts/ first in the
+# namespace package, preventing conflicts with pipeline-v3 modules.
+_Y9_2_ROOT = Path(__file__).resolve().parents[1] / "asciicker-Y9-2"
+if str(_Y9_2_ROOT) not in sys.path:
+    sys.path.append(str(_Y9_2_ROOT))
 
 # Import from Y9-2 pipeline
 from scripts.pipeline.appearance_bundle import compile_bundle, write_bundle_outputs, verify_compiled_outputs

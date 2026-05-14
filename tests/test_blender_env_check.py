@@ -15,24 +15,17 @@ from pathlib import Path
 
 import pytest
 
-# Add repo root to path for imports
+# Load blender_env_check via direct file path to avoid polluting the 'scripts'
+# namespace package (which would shadow Y9-2's scripts.pipeline in other tests).
 REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-# Import from scripts - handle both direct run and pytest run
-try:
-    from scripts.blender_env_check import detect_blender, parse_blender_version, version_is_ok
-except ImportError:
-    # Fallback for when running with different PYTHONPATH
-    spec = importlib.util.spec_from_file_location(
-        "blender_env_check", REPO_ROOT / "scripts" / "blender_env_check.py"
-    )
-    blender_env_check = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(blender_env_check)
-    detect_blender = blender_env_check.detect_blender
-    parse_blender_version = blender_env_check.parse_blender_version
-    version_is_ok = blender_env_check.version_is_ok
+_bec_spec = importlib.util.spec_from_file_location(
+    "blender_env_check", REPO_ROOT / "scripts" / "blender_env_check.py"
+)
+_bec = importlib.util.module_from_spec(_bec_spec)
+_bec_spec.loader.exec_module(_bec)
+detect_blender = _bec.detect_blender
+parse_blender_version = _bec.parse_blender_version
+version_is_ok = _bec.version_is_ok
 
 
 class TestParseBlenderVersion:
