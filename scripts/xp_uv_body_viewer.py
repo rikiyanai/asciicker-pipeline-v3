@@ -1968,15 +1968,20 @@ def _anchor_compose_screen(
 ) -> str:
     """Compose the full terminal output for anchor review mode.
 
-    Layout depends on whether a body map is loaded:
+    Layout depends on active mode:
 
-    Body map loaded (show_body_map=True):
-        [body map band (left)] | [sprite+tint (centre)] | [region-only (right)]
+    Region grid (show_region_grid=True):
+        [full-screen region grid across angles × frames]
+    Composite (show_composite=True):
+        [sprite+tint | composite result | skin selector]
+    Body map (show_body_map=True):
+        [body map band | sprite+tint | region-only]
+    Classic (default, UV data available):
+        [sprite+tint | region-only | UV map]
         [region info panel below]
-
-    No body map:
-        Row 1: [sprite+tint] | [region-only]
-        Row 2: [UV map]      | [region info]
+    Classic (no UV data):
+        [sprite+tint | region-only]
+        [region info panel below]
     """
     cols, rows = shutil.get_terminal_size(fallback=(120, 32))
 
@@ -2820,10 +2825,14 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
     if ref_path is not None:
         anchor_root = anchor_path.parent.resolve()
         sprite_root = sprite_dir.resolve()
-        ref_str = str(ref_path)
-        if not (ref_str.startswith(str(anchor_root)) or ref_str.startswith(str(sprite_root))):
-            print(f"reference_xp escapes trusted directories: {ref_xp}", file=sys.stderr)
-            return 1
+        try:
+            ref_path.relative_to(anchor_root)
+        except ValueError:
+            try:
+                ref_path.relative_to(sprite_root)
+            except ValueError:
+                print(f"reference_xp escapes trusted directories: {ref_xp}", file=sys.stderr)
+                return 1
 
     if ref_path is None or not ref_path.exists():
         print(f"reference XP not found: {ref_xp} (at: {ref_path})", file=sys.stderr)
