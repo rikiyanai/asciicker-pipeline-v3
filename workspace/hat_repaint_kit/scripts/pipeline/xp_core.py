@@ -156,6 +156,74 @@ except ModuleNotFoundError:
 # [DATA-CONTRACT:PALETTE] fg and bg are raw RGB uint8 triples -- no palette
 # indirection at this layer. Upstream stages handle palette mapping.
 
+# [DATA-CONTRACT:XP] Layer 0 background color used as the transparency key
+# for non-magenta sprites. Engine sprite.cpp compares each layer-2 cell's bg
+# against layer-0's bg at the same position — matching cells get
+# SPRITE_TRANSPARENT_INDEX. This constant is the conventional key used by
+# body atlases, overlays, and generated reference sheets.
+OVERLAY_KEY_RGB: tuple[int, int, int] = (1, 1, 1)
+
+# [DATA-CONTRACT:XP] Legacy monolithic sprites use bright yellow as layer-0 key.
+LEGACY_YELLOW_KEY_RGB: tuple[int, int, int] = (255, 255, 85)
+
+
+def encode_digit(value: int) -> int:
+    """Encode integer 0–35 as CP437 digit glyph ('0'–'9', 'A'–'Z').
+
+    Used for layer-0 metadata encoding (angle count, anim lengths, ref offsets).
+    """
+    if 0 <= value <= 9:
+        return ord("0") + value
+    if 10 <= value <= 35:
+        return ord("A") + (value - 10)
+    raise ValueError(f"value out of encodable range [0,35]: {value}")
+
+
+def rebase_visual_layer_transparency_keys(
+    visual_layer: "XPLayer",
+    source_key_layer: "XPLayer | None",
+    output_key_layer: "XPLayer",
+) -> None:
+    """Translate transparency-key colors in a visual layer after L0 replacement.
+
+    When a generated XP takes layer 0 from a reference (key A) but visual data
+    from a source (key B), cells that matched key B in the source will NOT match
+    key A in the output — the engine renders them as literal color instead of
+    transparent. This function rewrites those cells so the visual layer's
+    transparency-key colors match the output layer 0's key.
+
+    Also catches the legacy yellow (255,255,85) hardcoded fallback — any yellow
+    bg/fg is unconditionally rewritten to the output key, since no authored
+    sprite intentionally uses bright yellow as a visible color.
+    """
+    yellow = LEGACY_YELLOW_KEY_RGB
+    for y, row in enumerate(visual_layer.data):
+        for x, cell in enumerate(row):
+            source_key_rgb: tuple[int, int, int] | None = None
+            if (
+                source_key_layer is not None
+                and y < source_key_layer.height
+                and x < source_key_layer.width
+            ):
+                source_key_rgb = tuple(source_key_layer.data[y][x][2])
+            if y >= output_key_layer.height or x >= output_key_layer.width:
+                continue
+            output_key_rgb = tuple(output_key_layer.data[y][x][2])
+            glyph, fg, bg = cell
+            fg_rgb = tuple(fg)
+            bg_rgb = tuple(bg)
+            if source_key_rgb is not None and fg_rgb == source_key_rgb:
+                fg_rgb = output_key_rgb
+            if source_key_rgb is not None and bg_rgb == source_key_rgb:
+                bg_rgb = output_key_rgb
+            if fg_rgb == yellow:
+                fg_rgb = output_key_rgb
+            if bg_rgb == yellow:
+                bg_rgb = output_key_rgb
+            if fg_rgb != tuple(fg) or bg_rgb != tuple(bg):
+                visual_layer.data[y][x] = (glyph, fg_rgb, bg_rgb)
+
+
 class XPLayer:
     """A single layer of an .xp file: a 2D grid of (glyph, fg_rgb, bg_rgb) cells.
 

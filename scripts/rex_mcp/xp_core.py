@@ -33,6 +33,48 @@ import io
 
 from sprite_errors import SpriteValidationError
 
+OVERLAY_KEY_RGB: tuple[int, int, int] = (1, 1, 1)
+LEGACY_YELLOW_KEY_RGB: tuple[int, int, int] = (255, 255, 85)
+
+
+def encode_digit(value: int) -> int:
+    """Encode integer 0-35 as CP437 digit glyph ('0'-'9', 'A'-'Z')."""
+    if 0 <= value <= 9:
+        return ord("0") + value
+    if 10 <= value <= 35:
+        return ord("A") + (value - 10)
+    raise ValueError(f"value out of encodable range [0,35]: {value}")
+
+
+def rebase_visual_layer_transparency_keys(
+    visual_layer: "XPLayer",
+    source_key_layer: "XPLayer | None",
+    output_key_layer: "XPLayer",
+) -> None:
+    """Translate transparency-key colors in a visual layer after L0 replacement."""
+    yellow = LEGACY_YELLOW_KEY_RGB
+    for y, row in enumerate(visual_layer.data):
+        for x, cell in enumerate(row):
+            source_key_rgb = None
+            if (source_key_layer is not None
+                    and y < source_key_layer.height and x < source_key_layer.width):
+                source_key_rgb = tuple(source_key_layer.data[y][x][2])
+            if y >= output_key_layer.height or x >= output_key_layer.width:
+                continue
+            output_key_rgb = tuple(output_key_layer.data[y][x][2])
+            glyph, fg, bg = cell
+            fg_rgb, bg_rgb = tuple(fg), tuple(bg)
+            if source_key_rgb is not None and fg_rgb == source_key_rgb:
+                fg_rgb = output_key_rgb
+            if source_key_rgb is not None and bg_rgb == source_key_rgb:
+                bg_rgb = output_key_rgb
+            if fg_rgb == yellow:
+                fg_rgb = output_key_rgb
+            if bg_rgb == yellow:
+                bg_rgb = output_key_rgb
+            if fg_rgb != tuple(fg) or bg_rgb != tuple(bg):
+                visual_layer.data[y][x] = (glyph, fg_rgb, bg_rgb)
+
 
 class XPLayer:
     """A single layer of an .xp file: a 2D grid of (glyph, fg_rgb, bg_rgb) cells.
