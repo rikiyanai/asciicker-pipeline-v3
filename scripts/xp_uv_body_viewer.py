@@ -1926,7 +1926,7 @@ def _anchor_help_lines() -> list[str]:
         "[arrows] move cursor  [a/d] angle  [w/s] anim  [,/.] frame  [x] toggle  [m] rect",
         "[1-9] assign region  [n] new region  [Backspace] unassign  [h] half-block mode",
         "[r/f] cycle region focus  [g] region grid (all angles×frames)  [b] body map  [p] autoplay",
-        "[c] composite  [j/k] skin  [v] proj  [Ctrl+S] save  [q] quit",
+        "[c] composite  [j/k] skin  [v] proj  [Ctrl+S/Ctrl+W] save  [q] quit",
         "Workflow: [r/f] focus region -> [g] grid check -> [m] rect or [e] select-all -> [1-9] assign -> [Ctrl+S] save",
         "Tip: [e] selects all cells in focused region for bulk reassign/unassign",
     ]
@@ -2132,7 +2132,9 @@ def _read_anchor_key(fd: int) -> str | None:
         return "LEFT"
     if data == "\x1b":
         return "ESCAPE"
-    if data == "\x13":
+    # Ctrl+S or Ctrl+W: check anywhere in data (may arrive concatenated with prior key)
+    # Ctrl+W is fallback for terminals that intercept Ctrl+S (macOS flow control)
+    if "\x13" in data or "\x17" in data:
         return "CTRL_S"
     if data in ("\x7f", "\x08"):
         return "BACKSPACE"
