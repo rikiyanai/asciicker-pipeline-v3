@@ -554,7 +554,7 @@ def _layout_preview_and_info(
         return preview_lines
 
     preview_width = max(_visible_len(line) for line in preview_lines)
-    info_width = max(len(line) for line in info_lines)
+    info_width = max(_visible_len(line) for line in info_lines)
     if preview_width + gap + info_width > terminal_cols:
         return preview_lines + [""] + info_lines
 
@@ -577,7 +577,7 @@ def _is_side_by_side_layout(
     if not preview_lines or not info_lines:
         return False
     preview_width = max(_visible_len(line) for line in preview_lines)
-    info_width = max(len(line) for line in info_lines)
+    info_width = max(_visible_len(line) for line in info_lines)
     return preview_width + gap + info_width <= terminal_cols
 
 
@@ -1338,14 +1338,22 @@ def _load_anchor_state(anchor_path: Path) -> AnchorReviewState:
 
     # Build cell_assignments from existing semantic_cells
     for frame_key, frame_data in data.get("frames", {}).items():
-        angle = frame_data.get("angle", int(frame_key))
+        try:
+            angle = frame_data.get("angle", int(frame_key))
+        except (ValueError, TypeError):
+            print(f"Error: frame key '{frame_key}' is not a valid integer", file=sys.stderr)
+            raise SystemExit(1)
         for ridx, region in enumerate(frame_data.get("regions", [])):
             for cell in region.get("semantic_cells", []):
                 st.cell_assignments[(angle, cell["x"], cell["y"])] = ridx
 
     # Build dual_assignments from existing fg_region/bg_region fields
     for frame_key, frame_data in data.get("frames", {}).items():
-        angle = frame_data.get("angle", int(frame_key))
+        try:
+            angle = frame_data.get("angle", int(frame_key))
+        except (ValueError, TypeError):
+            print(f"Error: frame key '{frame_key}' is not a valid integer", file=sys.stderr)
+            raise SystemExit(1)
         regions = frame_data.get("regions", [])
         # Map region name -> index for resolving fg_region/bg_region values
         region_name_to_idx: dict[str, int] = {}
@@ -1409,6 +1417,8 @@ def _style_anchor_cell(
         parts.append("\033[1;4;7m")  # bold + underline + inverted
     elif is_cursor:
         parts.append("\033[1;4m")  # bold + underline
+    elif is_selected and is_in_rect:
+        parts.append("\033[4;7m")  # underline + inverted (rect visible on selected)
     elif is_selected:
         parts.append("\033[7m")  # inverted
     elif is_in_rect:
@@ -1972,8 +1982,10 @@ def _anchor_compose_screen(
 
     help_lines = _anchor_help_lines()
     # Replace static header with metadata: semantic map, XP path, layer
-    ref_xp = st.anchor_data.get("reference_xp", "")
-    help_lines[0] = f"Anchor review: {st.anchor_path.name} -> {ref_xp} layer {layer_index}"
+    # Strip ANSI escapes from JSON-sourced strings to prevent injection (FL-4014)
+    ref_xp = _ANSI_RE.sub("", st.anchor_data.get("reference_xp", ""))
+    safe_name = _ANSI_RE.sub("", st.anchor_path.name)
+    help_lines[0] = f"Anchor review: {safe_name} -> {ref_xp} layer {layer_index}"
     status_lines = _anchor_status_bar(st)
 
     # Panel A: sprite + region tint overlay
@@ -2540,11 +2552,19 @@ def _handle_anchor_key(
         if st.region_focus is None:
             st.status = "Focus a region first (press r), then press e"
         else:
+            st.rect_start = None  # cancel any in-progress rect
             angle = st.current_angle
+            before = len(st.selected_cells)
             for (a, x, y), ridx in st.cell_assignments.items():
                 if a == angle and ridx == st.region_focus:
                     st.selected_cells.add((x, y))
-            st.status = f"Selected {len(st.selected_cells)} cells in region"
+            added = len(st.selected_cells) - before
+            regions = st.regions_at_angle()
+            rname = regions[st.region_focus]["name"] if st.region_focus < len(regions) else "?"
+            if added:
+                st.status = f"Selected {added} cells from region '{rname}' ({len(st.selected_cells)} total)"
+            else:
+                st.status = f"No cells to select — all {len(st.selected_cells)} already in region '{rname}'"
         st.quit_pending = False
         return True
 
@@ -2796,6 +2816,15 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
     else:
         ref_path = None
 
+    # Guard: reference_xp must resolve within the anchor's parent tree or sprite_dir (FL-4015)
+    if ref_path is not None:
+        anchor_root = anchor_path.parent.resolve()
+        sprite_root = sprite_dir.resolve()
+        ref_str = str(ref_path)
+        if not (ref_str.startswith(str(anchor_root)) or ref_str.startswith(str(sprite_root))):
+            print(f"reference_xp escapes trusted directories: {ref_xp}", file=sys.stderr)
+            return 1
+
     if ref_path is None or not ref_path.exists():
         print(f"reference XP not found: {ref_xp} (at: {ref_path})", file=sys.stderr)
         return 1
@@ -2884,18 +2913,29 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
                 prev_frame = st.current_frame
                 prev_proj = st.proj_idx
 
-            # Autoplay: advance angle on timer
+            # Autoplay: advance angle on timer (mirrors manual a/d guards)
             if st.autoplay:
                 now = time.monotonic()
                 if now - st.autoplay_last >= st.autoplay_interval:
                     st.current_angle = (st.current_angle + 1) % st.num_angles
                     st.autoplay_last = now
                     st.visited_angles.add(st.current_angle)
+                    st.selected_cells.clear()
+                    st.rect_start = None
                     redraw_pending[0] = True
 
             if redraw_pending[0] or st.autoplay:
                 redraw_pending[0] = False
-                sys.stdout.write(_anchor_compose_screen(st, cell_data, asset=asset, layer_index=layer_index))
+                try:
+                    screen = _anchor_compose_screen(st, cell_data, asset=asset, layer_index=layer_index)
+                    sys.stdout.write(screen)
+                except Exception:
+                    import traceback
+                    traceback.print_exc(file=sys.stderr)
+                    try:
+                        sys.stdout.write("\033[H\033[2JRender error — check stderr\r\n")
+                    except Exception:
+                        pass
                 sys.stdout.flush()
 
             key = _read_anchor_key(fd)
