@@ -1386,8 +1386,9 @@ def _style_anchor_cell(
     region_tint: tuple[int, int, int] | None,
     is_cursor: bool,
     is_selected: bool,
+    is_in_rect: bool = False,
 ) -> str:
-    """Render a single cell with optional region tint, cursor, and selection indicators."""
+    """Render a single cell with optional region tint, cursor, selection, and rect indicators."""
     parts: list[str] = []
 
     # Blend region tint into background
@@ -1410,6 +1411,8 @@ def _style_anchor_cell(
         parts.append("\033[1;4m")  # bold + underline
     elif is_selected:
         parts.append("\033[7m")  # inverted
+    elif is_in_rect:
+        parts.append("\033[2;4m")  # dim + underline
 
     parts.append(_cp437_char(glyph))
     parts.append("\033[0m")
@@ -1431,6 +1434,13 @@ def _anchor_render_frame(
     color_map = st.region_color_map
     angle = st.current_angle
 
+    # Precompute rect perimeter bounds if a rect selection is in progress
+    rect_bounds = None
+    if st.rect_start is not None:
+        rx0, ry0 = st.rect_start
+        rx1, ry1 = st.cursor_x, st.cursor_y
+        rect_bounds = (min(rx0, rx1), min(ry0, ry1), max(rx0, rx1), max(ry0, ry1))
+
     for y in range(st.frame_h):
         row_chars: list[str] = []
         for x in range(st.frame_w):
@@ -1439,11 +1449,18 @@ def _anchor_render_frame(
             tint = color_map.get(ridx) if ridx is not None else None
             is_cursor = (x == st.cursor_x and y == st.cursor_y)
             is_selected = (x, y) in st.selected_cells
+            in_rect = False
+            if rect_bounds is not None:
+                bx0, by0, bx1, by1 = rect_bounds
+                if bx0 <= x <= bx1 and by0 <= y <= by1:
+                    if x == bx0 or x == bx1 or y == by0 or y == by1:
+                        in_rect = True
             row_chars.append(_style_anchor_cell(
                 glyph, fg, bg,
                 region_tint=tint,
                 is_cursor=is_cursor,
                 is_selected=is_selected,
+                is_in_rect=in_rect,
             ))
         lines.append(f"{y:02d}  {''.join(row_chars)}")
     return lines
@@ -1900,6 +1917,8 @@ def _anchor_help_lines() -> list[str]:
         "[1-9] assign region  [n] new region  [Backspace] unassign  [h] half-block mode",
         "[r/f] cycle region focus  [g] region grid (all angles×frames)  [b] body map  [p] autoplay",
         "[c] composite  [j/k] skin  [v] proj  [Ctrl+S] save  [q] quit",
+        "Workflow: [r/f] focus region -> [g] grid check -> [m] rect or [e] select-all -> [1-9] assign -> [Ctrl+S] save",
+        "Tip: [e] selects all cells in focused region for bulk reassign/unassign",
     ]
 
 
@@ -1914,7 +1933,7 @@ def _layout_three(
     """Place three columns side-by-side, falling back to stacked if too wide."""
     lw = max((_visible_len(l) for l in left), default=0)
     mw = max((_visible_len(l) for l in mid), default=0)
-    rw = max((len(l) for l in right), default=0)
+    rw = max((_visible_len(l) for l in right), default=0)
     if lw + gap + mw + gap + rw <= terminal_cols:
         total = max(len(left), len(mid), len(right))
         result: list[str] = []
@@ -1952,6 +1971,9 @@ def _anchor_compose_screen(
     cols, rows = shutil.get_terminal_size(fallback=(120, 32))
 
     help_lines = _anchor_help_lines()
+    # Replace static header with metadata: semantic map, XP path, layer
+    ref_xp = st.anchor_data.get("reference_xp", "")
+    help_lines[0] = f"Anchor review: {st.anchor_path.name} -> {ref_xp} layer {layer_index}"
     status_lines = _anchor_status_bar(st)
 
     # Panel A: sprite + region tint overlay
@@ -1992,13 +2014,13 @@ def _anchor_compose_screen(
         top = _layout_three(box_body, box_sprite, box_region, terminal_cols=cols)
         visible = (help_lines + [""] + top + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
     else:
-        # Classic 2-row layout
-        row1 = _layout_preview_and_info(box_sprite, box_region, terminal_cols=cols)
+        # Classic layout: 3-panel horizontal when UV data available, else 2-panel
         if box_uv:
-            row2 = _layout_preview_and_info(box_uv, panel_lines, terminal_cols=cols)
+            top = _layout_three(box_sprite, box_region, box_uv, terminal_cols=cols)
+            visible = (help_lines + [""] + top + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
         else:
-            row2 = panel_lines
-        visible = (help_lines + [""] + row1 + [""] + row2 + [""] + status_lines)[:max(1, rows)]
+            row1 = _layout_preview_and_info(box_sprite, box_region, terminal_cols=cols)
+            visible = (help_lines + [""] + row1 + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
 
     return "\033[H\033[2J" + "\r\n".join(visible)
 
@@ -2510,6 +2532,19 @@ def _handle_anchor_key(
         else:
             st.region_focus = (st.region_focus - 1) % len(regions)
         st.status = f"Focus: {regions[st.region_focus]['name']}"
+        st.quit_pending = False
+        return True
+
+    # --- Select all cells in focused region (e) ---
+    if key in ("e", "E"):
+        if st.region_focus is None:
+            st.status = "Focus a region first (press r), then press e"
+        else:
+            angle = st.current_angle
+            for (a, x, y), ridx in st.cell_assignments.items():
+                if a == angle and ridx == st.region_focus:
+                    st.selected_cells.add((x, y))
+            st.status = f"Selected {len(st.selected_cells)} cells in region"
         st.quit_pending = False
         return True
 
