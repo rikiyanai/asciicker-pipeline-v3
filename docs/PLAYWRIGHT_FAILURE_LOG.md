@@ -1,5 +1,246 @@
 # Playwright Test Failure Log
 
+## Skin Dock — Bundle Injection Reaches Playable State With 2x Knight Bundle On Multiple Maps (2026-05-15, evening)
+
+### Status
+
+MONITORING. The Skin Dock injection path now compiles 2x authored XPs to native runtime payload, injects three per-action XP byte blobs, and the runtime advances to a playable state on both `minimal_2x2.a3d` and `game_map_y8_original_game_map.a3d`. The visible "frozen" symptom from the 2026-05-14 incident is no longer reproducible against the patched workbench. One remaining UX note: the iframe runtime's auto-newgame timer waits for the login overlay to hide, but solo mode does not auto-dismiss the overlay; a `StartGame()` invocation (equivalent to the PLAY button) is needed to nudge the engine past the menu.
+
+### End-state captured via CDP-driven live workbench
+
+Bundle adopted: `b-8da2c6e3-47fb-4fd1-9b82-5677d95adcac` (player_native_full, 3/3 actions converted to 2x knight upload sessions on disk).
+
+`POST /api/workbench/web-skin-bundle-payload` → 200 with all three actions present:
+
+| action | family | xp_size_bytes | override_names | presentation_kind_id | layer_definition_id |
+|--------|--------|--------------:|---------------:|---------------------:|--------------------:|
+| idle   | player |  1805 | 25 | 600 (idle_walk) | 700 |
+| attack | attack |  2580 | 16 | 601 (attack)    | 701 |
+| death  | plydie |   967 | 24 | 602 (plydie)    | 702 |
+
+`unmapped_families=[]`, `reload_player_name="player"`. No `structural_gate_failed` for any action.
+
+Frontend `injectBundleIntoWebbuild` timings reported via `#webbuildOut`:
+
+```
+prepare_ms:      614
+fetch_payload_ms: 2272
+inject_ms:         13
+total_ms:        2900
+```
+
+Runtime probe after StartGame() nudge on both maps:
+
+| Map | flatmap_applied | mainMenu | worldReady | renderStage | overlay |
+|---|---|---:|---:|---:|---|
+| minimal_2x2.a3d                    | 1778818360342 | 0 | 1 | 73 | hidden |
+| game_map_y8_original_game_map.a3d  | 1778818066688 / 1778818304051 | 0 | 1 | 73 | hidden |
+
+### Patches landed (this session)
+
+Frontend (`web/workbench.js`):
+
+- `4302-4310` — `applyLoadedSessionOwnership` now respects `preserveBundleContext` in the raw-XP branch (previously unconditionally cleared `state.bundleId` and `state.actionStates` for any non-template-owned session, killing bundle mode on first raw-XP upload inside an active action tab).
+- `4595-4604` — `importXp()` adopts the new upload session into the active bundle action and calls `loadSession` with `preserveBundleContext: true`. Without this, raw-XP import into a bundle action silently exited bundle mode and hid `#bundleActionTabs`.
+- `7596-7610` — `persistBundleActionStatus` sends the live session_id so the backend rebinds the bundle JSON's action entry.
+
+Backend (`src/pipeline_v2/app.py`, `src/pipeline_v2/service.py`):
+
+- `app.py:447-455` — `/api/workbench/bundle/action-status` accepts optional `session_id`.
+- `service.py:1860-1905` — `workbench_update_bundle_action_status` updates `action_state.session_id` on disk when supplied (with existence check). Required to keep the bundle JSON tracking which session each action owns after a raw-XP import.
+- `service.py:4499-4555 + 4622-4628` — `_downsample_xp_to_native()` helper added and wired into `workbench_web_skin_bundle_payload` before structural gates. Layer-aware:
+  - **L0/L1 metadata layers**: native-position slice (no stride). Preserves family codes ("818" for player, "88" for attack, "85" for plydie) and L1 anim-row metadata at the native (col, row) positions the runtime / G12 expect.
+  - **L2/L3 art layers**: stride-N nearest-neighbour. Visual content scales with cell_w/cell_h.
+  - **Layer count clamp**: extra layers beyond `action_spec.layers` are dropped (matches G11). Required because 2x knight plydie ships 4 layers but native death template wants 3.
+
+### Regression tests (`tests/test_bundle_2x_authoring_payload.py`)
+
+11 tests, all pass:
+
+- `test_2x_knight_downsamples_to_native_dims_and_layer_count[idle|attack|death]` — output dims = 126×80 / 144×80 / 110×88 and layer counts match (4/4/3).
+- `test_2x_knight_downsample_preserves_L0_family_marker[idle|attack|death]` — L0 row 0 head matches `_FAMILY_L0_COL0` per action (`["8","1","8"]`, `["8","8"]`, `["8","5"]`).
+- `test_2x_knight_downsampled_xp_clears_structural_gates[idle|attack|death]` — G7/G8/G9/G10/G11/G12 all return `THRESHOLD_MET`.
+- `test_downsampler_skips_native_dim_inputs` — when source already matches expected dims+layers, the input path is returned unchanged.
+- `test_downsampler_drops_extra_layers_to_match_expected` — 4-layer 2x plydie compiles to 3 layers per the death action_spec.
+
+### Outstanding UX note (NOT the Skin Dock freeze)
+
+In the bootstrap, `scheduleAutoNewGameAdvance` (`runtime/termpp-skin-lab-static/termpp-web-flat/flat_map_bootstrap.js:407-491`) gates Enter pulses on `overlayVisibleNow() === false`. The runtime's login overlay is only hidden by `_doStartGame()` (the PLAY button handler). In automation, the equivalent is `StartGame()`. When `autonewgame=1` URL param is set, the bootstrap's auto-newgame timer arms but waits indefinitely for an overlay-hide that never comes (eventually timing out at 45s with `auto-newgame timeout while waiting for overlay`). Manual users would click PLAY; automation needs an explicit `StartGame()` invocation. Not part of this fix slice; tracked as a separate UX issue.
+
+### Reproducer
+
+```
+# Server: PIPELINE_PORT=5073 PYTHONPATH=src python3 -m pipeline_v2.app
+# CDP exec helper: /tmp/claude-cdp-exec.js (connects via playwright connectOverCDP to a Chrome launched with --remote-debugging-port=9222)
+
+# 1. Live UI authoring (3/3 ready): /tmp/claude-priority2-rt3.js
+#    Headed Chrome may flake on whole-sheet remount for the 4-layer 220x176 death session.
+#    Fallback: drive each action via API (upload-xp + save-session + export-xp + bundle/action-status).
+
+# 2. Adopt bundle in workbench JS state: poke state.bundleId / actionStates.
+
+# 3. Click #webbuildQuickTestBtn; webbuildOut shows the injection summary with per-action file counts.
+
+# 4. After injection, call frame.contentWindow.StartGame() to dismiss the overlay (or wait
+#    for the bootstrap to time out — not currently auto-dismissed).
+```
+
+### TouchedFiles
+
+- `web/workbench.js`
+- `src/pipeline_v2/app.py`
+- `src/pipeline_v2/service.py`
+- `tests/test_bundle_2x_authoring_payload.py` (new)
+- `docs/PLAYWRIGHT_FAILURE_LOG.md`
+
+### Supersedes
+
+This entry supersedes the prior "Skin Dock — Bundle Injection Blocked At Structural Gate G12" entry (kept below for the diagnostic record) — that entry described the state after the first downsample landed but before the L0/L1 metadata-aware layer handling.
+
+---
+
+## Skin Dock — Bundle Injection Blocked At Structural Gate G12; Runtime Itself Is Reachable (2026-05-15)
+
+### Status
+
+PARTIAL. Blocker B (frontend bundle-context destruction during raw-XP import) is patched and the live-UI bundle authoring flow now reaches `Bundle: 3/3 actions ready` with 2x knight XPs. Backend bundle-action rebind is wired so the bundle JSON tracks the imported session. Blocker A (payload-time dim normalization) is partially patched: a downsample-to-native helper now compresses 2x authored geometry, which clears G7/G10, but **G12 (L0 metadata) still rejects** because the downsampler samples cells at `(col*N, row*N)` and the 2x XPs place L0 metadata codes (the "818" family marker etc.) at NATIVE column positions, not at scaled positions. Sampling at even-numbered cols drops the metadata cells.
+
+### Symptom captured in headed playwright probe (rt3)
+
+End-state of bundle authoring (HEADED, with all patches loaded):
+
+| Action | state dims while authoring | bundle.actions[k].session_id (post-export) | bundle status | Test Bundle Skin button |
+|---|---|---|---|---|
+| idle   | 252×160 (2x) | upload session at 252×160 raw_xp | converted | enabled |
+| attack | 288×160 (2x) | upload session at 288×160 raw_xp | converted | enabled |
+| death  | 220×176 (2x) | upload session at 220×176 raw_xp | converted | enabled |
+
+`bundleStatus = "Bundle: 3/3 actions ready"`. Test Bundle Skin button enabled.
+
+Then `#webbuildQuickTestBtn` clicked. Runtime iframe loaded:
+
+- t=2s: `wbState="Webbuild loading... Downloading data... 11%"`, `wasmReady=false`
+- t=4s: `wbState="Webbuild ready"`, `wasmReady=true`, `mainMenu=0`, `worldReady=0`, `renderStage=0`
+- t=6s onward: `#webbuildOut` shows `{"code":"structural_gate_failed","error":"action 'idle' failed structural gates: G12"}` — the per-action XP fetch from `/api/workbench/web-skin-bundle-payload` returned 422 with G12 failing. **No XP bytes injected into the runtime's emfs override slots.**
+- t=54s onward: `mainMenu=0`, `worldReady=1`, `renderStage=73`, `overlayVisible=false` — runtime fully advanced to playable state on its own, **with no skin injection**.
+
+### What this proves
+
+1. **The runtime itself is not the freeze owner.** Without skin injection, the workbench's iframe runtime reaches `worldReady=1` and renderStage advanced (73). Login overlay dismisses without user click in this build. Earlier audit "Diagnosis 1 — Runtime Freeze Owner" was misnamed: the only thing freezing the user was the failed skin payload step, not the runtime.
+2. **Bundle authoring with 2x XPs reaches 3/3 ready** via the supported UI path (`Apply Template → switch tab → upload XP → Export XP × 3`). The earlier "bundle context destroyed by raw-XP upload" blocker (B) is no longer reproducible.
+3. **Bundle payload still rejects 2x at structural gate G12.** The downsample to native passes G7 (cell count) and G10 (action_dims) but G12 (`gate_g12_l0_metadata`) checks specific characters at fixed column positions in L0 row 0. The 2x knight XPs encode `818...` at native cols 0/1/2 with magenta background; native expects the same chars at the same positions but with yellow `(255,255,85)` background. Downsampling at stride N=2 picks source cols 0, 2, 4, ... which gives `8, 8, null` — wrong L0 sequence.
+
+### Patches landed (this session)
+
+- `web/workbench.js:4302-4310` — `applyLoadedSessionOwnership` now respects `preserveBundleContext` in the raw-XP branch (previously unconditionally nuked `state.bundleId` / `state.actionStates` for any non-template-owned session).
+- `web/workbench.js:4595-4604` — `importXp()` adopts the new session into the active bundle action and passes `preserveBundleContext: true` to `loadSession` so the action tab strip survives the upload.
+- `web/workbench.js:7596-7607` — `persistBundleActionStatus` sends the live `session_id` so the backend rebinds the bundle JSON's action.
+- `src/pipeline_v2/app.py:447-455` — `/api/workbench/bundle/action-status` accepts optional `session_id`.
+- `src/pipeline_v2/service.py:1860-1905` — `workbench_update_bundle_action_status` updates `action_state.session_id` on disk when supplied, with existence check.
+- `src/pipeline_v2/service.py:4499-4555` — `_downsample_xp_to_native()` helper added and wired into `workbench_web_skin_bundle_payload` before structural gates; only triggers when authored dims are an integer multiple of `action_spec.xp_dims`.
+
+### Outstanding work (the actual remaining blocker)
+
+`gate_g12_l0_metadata` rejects after downsample. The downsampler must preserve native-positioned L0 metadata even when scaling other layers. Two viable approaches:
+
+1. **L0-aware downsampler**: for layer 0 specifically, slice cells at `(col, row)` (no stride) into the first `native_w * native_h` positions, instead of stride-N sampling. Preserve metadata bg color check (`(255,255,85)` per family).
+2. **Re-encode L0 in the downsampled output** from the action_spec's expected metadata before writing the native XP. This is what the conversion pipeline does for fresh XPs anyway — see `_FAMILY_L0_COL0` in `src/pipeline_v2/service.py` and surrounding L0 writer.
+
+Approach 1 is smaller. Approach 2 is more robust against authoring drift but requires plumbing the registry's L0 expectations into the downsampler. Either way, this is the next slice.
+
+### Reproducible
+
+- Script: `/tmp/claude-priority2-rt3.js`
+- Workbench: `http://127.0.0.1:5073/workbench?flatmap=minimal_2x2.a3d`
+- Input files: `output/24px-mini-characters-template-2x/xps/knight1-{player,attack,plydie}.xp`
+- HEADED required (per repo rule). The probe completes the bundle authoring flow in ~80s and then captures the runtime injection failure for ≥60s after click.
+
+### Live-UI evidence files
+
+- Captured logs: `/tmp/claude-rt3.log` (full sequence + final state), `/tmp/claude-wb-server.log` (server-side request trace).
+- Bundle JSON snapshot from this run: `data/bundles/b-b0c65a36-...` and earlier 3/3 bundles `b-2c09c1ae-...`, `b-4cb557e2-...`.
+
+### Hypothesis correction vs the 2026-05-14 audit doc
+
+The audit doc `docs/audit-2026-05-14-skin-dock-runtime-freeze.md` listed three hypotheses for the freeze (skin-injection-timing, map-bootstrap-conflict, overlay/menu-race). None match the actual owner observed here. The owner is **`/api/workbench/web-skin-bundle-payload` returning 422 (G12)** which means no skin bytes ever reach `injectBundleIntoWebbuild()`. The visible "frozen" UI is the iframe sitting on the login overlay because nothing kicks it forward — but if no skin is injected, the bootstrap kicks itself forward on `autonewgame=1` (proven at t=54s onward in the rt3 run).
+
+### TouchedFiles
+
+- `web/workbench.js`
+- `src/pipeline_v2/app.py`
+- `src/pipeline_v2/service.py`
+- `docs/PLAYWRIGHT_FAILURE_LOG.md`
+
+---
+
+## Blocker — Bundle Hydration Gap: Frontend Cannot Restore `state.bundleId` From URL Or Persisted Bundle Id (2026-05-15)
+
+### Symptom
+
+Opening `http://127.0.0.1:5073/workbench?bundle_id=b-12890330-8533-4ce3-a0fc-d2de24e53dfc&flatmap=minimal_2x2.a3d` (or any `?bundle_id=` URL) lands on an empty workbench:
+
+- `#bundleStatus` text: empty
+- `#sessionOut` text: empty
+- `#webbuildState` text: "Webbuild not loaded"
+- `#webbuildQuickTestBtn` disabled; title: "Disabled: load or create a session first"
+- One 404 in the browser console (resource not identified)
+
+The bundle JSON `data/bundles/b-12890330-...json` exists, three knight action sessions exist in `data/sessions/`, and `POST /api/workbench/web-skin-bundle-payload` returns a fully-shaped payload with three distinct `presentation_kind_id`s (600/601/602). But the workbench frontend has no path to surface any of that.
+
+### Source-truth verification
+
+Search performed: `rg -n "bundle_id|loadBundle|params.get|bundle/create" web/workbench.js src/pipeline_v2/app.py`.
+
+`web/workbench.js`:
+
+- Line 214: initial state literal `bundleId: null`
+- Line 7846: `state.bundleId = j.bundle_id;` — the **only** write to `state.bundleId` in the file (search returned 14 occurrences of `bundleId`; the others are reads, resets-to-null, or debug serializations)
+- Line 7836 (immediately preceding the write): `await fetch(bp("/api/workbench/bundle/create"), { method: "POST", ... })`
+- Line 7450: `function isBundleMode() { return !!state.bundleId; }`
+- No occurrence of `loadBundle` anywhere in the file.
+- URL-parsed params (line 6 onward): `job_id`, `flatmap`, `autonewgame`, `autoattack`, `overridemode`, `uirecord`. `bundle_id` is **not** parsed.
+
+`src/pipeline_v2/app.py`:
+
+- Imports `load_bundle` at line 55 but the symbol is **not** wired to any route.
+- Bundle-related HTTP surface is POST-only: `bundle/create` (line 410), `action-grid/apply` (422), `bundle/action-status` (440), `export-bundle` (458), `web-skin-bundle-payload` (470).
+- There is no GET handler for `/api/workbench/bundle/<id>` or equivalent.
+
+### Verdict
+
+`state.bundleId` can be set in exactly one supported way: a fresh `POST /api/workbench/bundle/create` call inside the live JS session, invoked by the template-set/authoring-bundle UI picker. There is no:
+
+1. URL parameter `bundle_id` parsing.
+2. Frontend `loadBundle(id)` function.
+3. Backend `GET /api/workbench/bundle/<id>` endpoint.
+4. Session-restore path that rehydrates `state.bundleId` from local storage or any other source.
+
+### Why this matters as a separate blocker
+
+- Reloading the workbench page mid-session loses bundle mode, even if the bundle JSON exists on disk.
+- External processes that create bundles via API (e.g. `POST /api/workbench/bundle/create` from a script) cannot hand off the resulting bundle to a browser session.
+- Any reproduction or proof that opens `?bundle_id=...` in the URL is operating in classic single-session mode, not bundle mode. Skin Dock evidence collected via that URL is **not** valid bundle-mode evidence.
+
+### CodeRefs
+
+- `web/workbench.js:6` (URL param parse site)
+- `web/workbench.js:214` (state.bundleId initial)
+- `web/workbench.js:7450` (isBundleMode)
+- `web/workbench.js:7836-7846` (the sole hydration site, via bundle/create POST response)
+- `src/pipeline_v2/app.py:55` (load_bundle imported but not wired)
+- `src/pipeline_v2/app.py:410-478` (bundle HTTP surface, POST-only)
+
+### Status
+
+OPEN. Hydration not implemented. Separate from but adjacent to the recurring Skin Dock runtime freeze family — this gap blocks any bundle-mode reproduction that doesn't go through the live UI path inside one session.
+
+### TouchedFiles
+
+- `docs/PLAYWRIGHT_FAILURE_LOG.md`
+- `docs/proof-run-2026-05-15-knight-bundle.md` (corrected with banner pointing here)
+
+---
+
 ## Commit Discipline (MANDATORY)
 
 - Commit at every meaningful checkpoint before continuing.

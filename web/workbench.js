@@ -4297,6 +4297,13 @@
         }
         return;
       }
+      // Raw / non-template session. When the caller asked to preserve bundle
+      // context (e.g. importXp adopted this raw upload into an active bundle
+      // action), keep state.bundleId/actionStates/templateSetKey/activeActionKey
+      // so the action tab strip and Test Bundle Skin gating survive.
+      if (preserveBundleContext && state.bundleId) {
+        return;
+      }
       state.bundleId = null;
       state.actionStates = {};
       state.templateSetKey = "";
@@ -4582,7 +4589,18 @@
         return;
       }
       state.jobId = j.job_id;
-      await loadSession(j.session_id, { reason: "Imported XP session ready..." });
+      // When imported inside an active bundle action tab, the new session
+      // takes over that action — keep bundle mode and rebind the action's
+      // sessionId so subsequent save/export/payload calls target it.
+      const inBundle = isBundleMode() && !!state.activeActionKey && !!state.actionStates[state.activeActionKey];
+      if (inBundle) {
+        state.actionStates[state.activeActionKey].sessionId = j.session_id;
+        state.actionStates[state.activeActionKey].status = "blank";
+      }
+      await loadSession(j.session_id, {
+        reason: "Imported XP session ready...",
+        preserveBundleContext: inBundle,
+      });
     } catch (e) {
       status("Import failed: " + String(e), "err");
       $("sessionOut").textContent = String(e);
@@ -7571,6 +7589,11 @@
 
   async function persistBundleActionStatus(actionKey, statusValue) {
     if (!isBundleMode() || !state.bundleId) return { ok: false, skipped: "not_bundle_mode" };
+    // Include the live session_id so the backend rebinds bundle.actions[key].session_id
+    // when an XP upload (or any session swap) changed which session this action owns.
+    // Without this, the bundle JSON keeps pointing at the original blank session and the
+    // web-skin-bundle-payload step emits empty content instead of the imported XP.
+    const liveSessionId = state.actionStates[actionKey]?.sessionId || state.sessionId || null;
     const r = await fetch(bp("/api/workbench/bundle/action-status"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -7578,6 +7601,7 @@
         bundle_id: state.bundleId,
         action_key: actionKey,
         status: statusValue,
+        session_id: liveSessionId,
       }),
     });
     const j = await r.json();

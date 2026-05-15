@@ -1,5 +1,7 @@
 # Audit — Skin Dock Runtime Freeze After 24px XP Injection (2026-05-14)
 
+> **Update 2026-05-15**: A proof run for Diagnosis 2 has been logged at `docs/proof-run-2026-05-15-knight-bundle.md`. Workbench bundle `b-12890330-8533-4ce3-a0fc-d2de24e53dfc` carries three knight presentation IDs (idle_walk / attack / plydie). The proof also surfaced that the `output/24px-mini-characters-template-2x/xps/` files are 2× native dims and are rejected by structural gates G7/G10 — the originally-referenced files. Native-dim variants live at `output/24px-mini-characters/xps/`. Diagnosis 1 (runtime freeze) remains OPEN.
+
 ## Executive Summary
 
 Two distinct blockers were identified:

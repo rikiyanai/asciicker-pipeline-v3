@@ -1857,7 +1857,13 @@ def save_bundle(bundle: BundleSession) -> None:
     save_json(_bundle_path(bundle.bundle_id), bundle.to_dict())
 
 
-def workbench_update_bundle_action_status(bundle_id: str, action_key: str, status_value: str, req_id: str) -> dict[str, Any]:
+def workbench_update_bundle_action_status(
+    bundle_id: str,
+    action_key: str,
+    status_value: str,
+    req_id: str,
+    session_id: str | None = None,
+) -> dict[str, Any]:
     bundle = load_bundle(bundle_id, req_id)
     allowed_statuses = {"empty", "blank", "saved", "converted"}
     next_status = str(status_value or "").strip()
@@ -1872,6 +1878,22 @@ def workbench_update_bundle_action_status(bundle_id: str, action_key: str, statu
     action_state = bundle.actions.get(action_key)
     if action_state is None:
         raise ApiError("bundle action not found", "bundle_action_not_found", "workbench", req_id, 404)
+    # Rebind the bundle action to a new session if one was supplied. This is the
+    # path used after a raw-XP import inside an active bundle action tab — the
+    # frontend swapped to a new session and the bundle JSON must catch up before
+    # web-skin-bundle-payload reads it.
+    if session_id:
+        sess_path = _session_path(session_id)
+        if not sess_path.exists():
+            raise ApiError(
+                f"session_id {session_id} not found on disk",
+                "session_not_found",
+                "workbench",
+                req_id,
+                404,
+            )
+        action_state.session_id = session_id
+        action_state.job_id = ""
     if next_status in {"saved", "converted"} and not action_state.session_id:
         raise ApiError(
             "bundle action has no session to mark ready",
@@ -4474,6 +4496,123 @@ def workbench_export_bundle(bundle_id: str, req_id: str) -> dict[str, Any]:
     }
 
 
+_BLANK_CELL: tuple[int, tuple[int, int, int], tuple[int, int, int]] = (0, (0, 0, 0), (255, 0, 255))
+
+
+def _cell_to_tuple(cell: Any) -> tuple[int, tuple[int, int, int], tuple[int, int, int]]:
+    """Coerce a (glyph, fg, bg) cell into the canonical tuple form."""
+    if cell is None:
+        return _BLANK_CELL
+    glyph, fg, bg = cell
+    fg_t = fg if isinstance(fg, tuple) else (int(fg[0]), int(fg[1]), int(fg[2]))
+    bg_t = bg if isinstance(bg, tuple) else (int(bg[0]), int(bg[1]), int(bg[2]))
+    return (int(glyph), fg_t, bg_t)
+
+
+def _downsample_layer_visual(
+    src_layer: list[Any],
+    src_w: int,
+    expected_w: int,
+    expected_h: int,
+    factor: int,
+) -> list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]:
+    """Stride-N nearest-neighbour sampler for art/visual layers (L2/L3).
+    Picks the top-left cell of each N×N source block.
+    """
+    out: list[tuple[int, tuple[int, int, int], tuple[int, int, int]]] = []
+    for r in range(expected_h):
+        sr = r * factor
+        for c in range(expected_w):
+            sc = c * factor
+            out.append(_cell_to_tuple(src_layer[sr * src_w + sc]))
+    return out
+
+
+def _downsample_layer_metadata(
+    src_layer: list[Any],
+    src_w: int,
+    expected_w: int,
+    expected_h: int,
+) -> list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]:
+    """Native-position slice for metadata layers (L0/L1). 2x and higher
+    authored XPs encode L0 family codes ("818", "88", "85") and L1 anim-row
+    countdowns at NATIVE column/row positions, not at scaled positions, with
+    the remainder zero-padded. Copying cells at (col, row) for col<native_w
+    and row<native_h preserves those metadata cells where G12/registry expect
+    them. Stride-N sampling would skip them (col=1 → source col 2 = wrong).
+    """
+    out: list[tuple[int, tuple[int, int, int], tuple[int, int, int]]] = []
+    for r in range(expected_h):
+        for c in range(expected_w):
+            out.append(_cell_to_tuple(src_layer[r * src_w + c]))
+    return out
+
+
+def _downsample_xp_to_native(
+    xp_path_in: Path,
+    expected_dims: tuple[int, int] | list[int],
+    expected_layers: int,
+    out_dir: Path,
+) -> Path:
+    """If an authored XP is an integer-N multiple of the expected runtime dims,
+    write a native-dim copy beside it and return the new path. Otherwise return
+    the input path unchanged.
+
+    Layer-aware behaviour:
+      - L0, L1 (metadata): native-position slice (col, row directly). 2x XPs
+        place family codes / anim-row markers at native positions with zero
+        padding, so stride sampling would drop them.
+      - L2, L3 (art/visual): stride-N nearest-neighbour. Visual content scales
+        with cell_w/cell_h.
+      - Extra layers beyond `expected_layers` (e.g. 2x plydie ships 4 layers
+        while the native death template wants 3) are dropped to match G11.
+    """
+    expected_w = int(expected_dims[0])
+    expected_h = int(expected_dims[1])
+    xp = read_xp(str(xp_path_in))
+    src_w = int(xp["width"])
+    src_h = int(xp["height"])
+    src_layer_count = len(xp["cells"])
+    target_layer_count = int(expected_layers) if expected_layers else src_layer_count
+
+    if expected_w <= 0 or expected_h <= 0:
+        return xp_path_in
+
+    dim_match = src_w == expected_w and src_h == expected_h
+    layer_match = src_layer_count == target_layer_count
+    if dim_match and layer_match:
+        return xp_path_in
+    if not dim_match:
+        if src_w % expected_w != 0 or src_h % expected_h != 0:
+            return xp_path_in
+        factor_x = src_w // expected_w
+        factor_y = src_h // expected_h
+        if factor_x != factor_y or factor_x < 2:
+            return xp_path_in
+        factor = factor_x
+    else:
+        factor = 1
+
+    new_layers: list[list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]] = []
+    for layer_idx in range(target_layer_count):
+        if layer_idx >= src_layer_count:
+            new_layers.append([_BLANK_CELL] * (expected_w * expected_h))
+            continue
+        src_layer = xp["cells"][layer_idx]
+        if factor == 1:
+            new_layers.append([_cell_to_tuple(c) for c in src_layer])
+            continue
+        if layer_idx in (0, 1):
+            new_layers.append(_downsample_layer_metadata(src_layer, src_w, expected_w, expected_h))
+        else:
+            new_layers.append(_downsample_layer_visual(src_layer, src_w, expected_w, expected_h, factor))
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{xp_path_in.stem}.native-{expected_w}x{expected_h}-L{target_layer_count}.xp"
+    write_xp(out_path, expected_w, expected_h, new_layers)
+    return out_path
+
+
 def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, Any]:
     """Build per-action XP bytes + target filenames for bundle WASM injection."""
     bundle = load_bundle(bundle_id, req_id)
@@ -4523,6 +4662,18 @@ def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, 
 
         export = workbench_export_xp(act_state.session_id, req_id)
         xp_path = Path(export["xp_path"]).expanduser().resolve()
+
+        # Authoring sessions may store geometry at an integer multiple (2x, 3x, ...)
+        # of the runtime template dims and may carry extra layers. Downsample
+        # to native here so the runtime receives canonical-size XP bytes and
+        # structural gates accept. L0/L1 metadata stays at native positions;
+        # L2/L3 art is stride-sampled; layer count is clamped to expected.
+        xp_path = _downsample_xp_to_native(
+            xp_path,
+            action_spec.get("xp_dims", [0, 0]),
+            int(action_spec.get("layers", 0)),
+            EXPORT_DIR,
+        )
 
         # Structural gates G7-G12
         gates = _run_structural_gates(str(xp_path), action_spec, req_id)

@@ -445,13 +445,14 @@ def create_app() -> Flask:
             bundle_id = str(payload.get("bundle_id", "")).strip()
             action_key = str(payload.get("action_key", "")).strip()
             status_value = str(payload.get("status", "")).strip()
+            session_id_override = str(payload.get("session_id", "") or "").strip() or None
             if not bundle_id:
                 raise ApiError("bundle_id is required", "missing_bundle_id", "workbench", req_id, 400)
             if not action_key:
                 raise ApiError("action_key is required", "missing_action_key", "workbench", req_id, 400)
             if not status_value:
                 raise ApiError("status is required", "missing_status", "workbench", req_id, 400)
-            return jsonify(workbench_update_bundle_action_status(bundle_id, action_key, status_value, req_id)), 200
+            return jsonify(workbench_update_bundle_action_status(bundle_id, action_key, status_value, req_id, session_id=session_id_override)), 200
         except ApiError as e:
             return _err(e)
 
