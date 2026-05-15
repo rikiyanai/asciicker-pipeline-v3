@@ -4553,6 +4553,7 @@ def _downsample_xp_to_native(
     expected_dims: tuple[int, int] | list[int],
     expected_layers: int,
     out_dir: Path,
+    l1_marker_glyph: int = 0,
 ) -> Path:
     """If an authored XP is an integer-N multiple of the expected runtime dims,
     write a native-dim copy beside it and return the new path. Otherwise return
@@ -4562,6 +4563,10 @@ def _downsample_xp_to_native(
       - L0, L1 (metadata): native-position slice (col, row directly). 2x XPs
         place family codes / anim-row markers at native positions with zero
         padding, so stride sampling would drop them.
+      - L0 post-process: zero-glyph cells replaced with space (32) using the
+        background colour from the first non-zero L0 cell (default yellow).
+      - L1 post-process: if all cells are zero (2x source had no L1 metadata),
+        fills with l1_marker_glyph on white background.
       - L2, L3 (art/visual): stride-N nearest-neighbour. Visual content scales
         with cell_w/cell_h.
       - Extra layers beyond `expected_layers` (e.g. 2x plydie ships 4 layers
@@ -4606,6 +4611,32 @@ def _downsample_xp_to_native(
             new_layers.append(_downsample_layer_metadata(src_layer, src_w, expected_w, expected_h))
         else:
             new_layers.append(_downsample_layer_visual(src_layer, src_w, expected_w, expected_h, factor))
+
+    # ── L0 post-process: fill zero-glyph cells with space (32) ──
+    # The 2x source may only have the family-marker cells (e.g. "818") non-zero
+    # in L0; all other cells are glyph=0. Working native XPs fill the rest with
+    # space characters on a consistent background (typically yellow 255,255,85).
+    if len(new_layers) > 0:
+        l0 = new_layers[0]
+        # Find first non-zero cell's background for the fill colour
+        l0_bg = (255, 255, 85)  # default yellow
+        for g, _fg, bg in l0:
+            if g != 0:
+                l0_bg = bg
+                break
+        for i, (g, fg, bg) in enumerate(l0):
+            if g == 0:
+                l0[i] = (32, (0, 0, 0), l0_bg)
+
+    # ── L1 post-process: fill empty L1 with anim-row marker ──
+    # 2x authored XPs often ship with L1 entirely zero. The engine requires L1
+    # to be fully populated with the anim-row marker glyph. Working native XPs
+    # use '9' (57) for player/attack and 'A' (65) for plydie/death.
+    if len(new_layers) > 1 and l1_marker_glyph > 0:
+        l1 = new_layers[1]
+        if all(g == 0 for g, _fg, _bg in l1):
+            for i in range(len(l1)):
+                l1[i] = (l1_marker_glyph, (0, 0, 0), (255, 255, 255))
 
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{xp_path_in.stem}.native-{expected_w}x{expected_h}-L{target_layer_count}.xp"
@@ -4663,6 +4694,15 @@ def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, 
         export = workbench_export_xp(act_state.session_id, req_id)
         xp_path = Path(export["xp_path"]).expanduser().resolve()
 
+        # Derive L1 anim-row marker glyph from action family.
+        # Working native XPs: player/attack use '9' (57), plydie/death use 'A' (65).
+        _L1_MARKER_BY_FAMILY: dict[str, int] = {
+            "player": 57,  # '9'
+            "attack": 57,  # '9'
+            "plydie": 65,  # 'A'
+        }
+        l1_marker = _L1_MARKER_BY_FAMILY.get(family, 57)
+
         # Authoring sessions may store geometry at an integer multiple (2x, 3x, ...)
         # of the runtime template dims and may carry extra layers. Downsample
         # to native here so the runtime receives canonical-size XP bytes and
@@ -4673,6 +4713,7 @@ def workbench_web_skin_bundle_payload(bundle_id: str, req_id: str) -> dict[str, 
             action_spec.get("xp_dims", [0, 0]),
             int(action_spec.get("layers", 0)),
             EXPORT_DIR,
+            l1_marker_glyph=l1_marker,
         )
 
         # Structural gates G7-G12

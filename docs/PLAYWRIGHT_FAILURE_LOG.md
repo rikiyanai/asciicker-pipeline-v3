@@ -1,5 +1,193 @@
 # Playwright Test Failure Log
 
+## Direct EMFS Injection Of 2x-Downsampled Knight XPs — Root Cause Analysis (2026-05-15, morning)
+
+### Status
+
+**TWO BUGS FOUND, ONE FIXED.**
+
+1. **L0/L1 metadata emptiness** (FIXED): 2x knight source XPs have L0 mostly empty and L1 entirely empty. Downsampler preserved emptiness → engine rejected XPs → canvas 25047B (broken). Fix: `_downsample_xp_to_native()` now post-processes L0 (fill zeros with spaces) and L1 (fill with anim-row marker glyph). 17/17 tests pass.
+
+2. **Engine caches sprites at init** (NOT FIXED): The C++ engine reads all sprite files from Emscripten's `.data` preloaded filesystem during WASM initialization and caches them in memory. Post-init FS writes (via `FS_createDataFile`) are confirmed to replace files in the virtual FS, but the engine **never re-reads from FS**. Proof: injected a bright-red-block XP (876B) into a running game → FS confirmed replaced → canvas identical (16082B before and after injection). The engine renders exclusively from its init-time cache.
+
+This means the bundle/skin injection path in `workbench.js` (`injectBundleIntoWebbuild` → `emfsReplaceFile` → `Load()`) cannot produce visual sprite changes. The runtime advances to playable state (the `Load()` call resets game state) but renders default sprites regardless of EMFS contents.
+
+### Impact
+
+- The FL entry from commit 3ccfee1 ("runtime advances to playable state") is correct — the game runs after injection.
+- The **implicit claim** that injected sprites are visually rendered was **never verified and is now proven false**.
+- The Quick Test UI path (`testCurrentSkinInDock`) has the same fundamental limitation — it injects after `_wasmReady`.
+- To make sprite injection work, the engine's C++ code would need to re-read sprites from the virtual FS on `Load()`, or the injection would need to happen before WASM init (requires modifying the Emscripten `.data` preload manifest).
+
+- **Canvas shrinks**: default canvas screenshot 40775B → knight canvas 25047B (39% smaller, mostly blank)
+- **Player invisible**: no character sprite visible on the rendered canvas
+- **Cannot move**: game appears frozen or unresponsive to input
+- **Map appears different**: terrain rendering is degraded or missing
+
+Files were injected to all 65 AHSW override names (25 player, 16 attack, 24 death) via `Module.FS_createDataFile`. Pre/post FS.stat confirms sizes changed from defaults (player-0000.xp: 3229B→1775B, player-0100.xp: 4158B→1775B, attack-0001.xp: 5101B→2550B).
+
+### Root cause — confirmed
+
+The 2x knight XP source file (`knight1-player.xp`, 252×160) has **L1 and L3 completely empty (0/40320 nonzero cells)**. The `_downsample_xp_to_native()` function faithfully preserves layer content — including the emptiness. The resulting native XP (126×80, 4 layers) has:
+
+| Layer | Knight (source) | Knight (downsampled) | Default (4158B) |
+|---|---:|---:|---|
+| L0 | 3/40320 (family marker "818") | 3/10080 | ~10073 spaces + family marker |
+| L1 | **0/40320** ❌ | **0/10080** ❌ | 10080/10080 (digits 0-9) |
+| L2 | 3152/40320 (block glyphs) | 787/10080 | ~7394 spaces + blocks |
+| L3 | **0/40320** ❌ | **0/10080** ❌ | ~9306 spaces + blocks |
+
+The engine's default sprites have L1 populated with anim-row digit sequences that map animation frames to XP rows. Without L1 metadata, the sprite loader cannot resolve animation frames, causing the rendering pipeline to produce blank output (canvas shrinks from 40KB to 25KB, player invisible).
+
+This is a **pre-existing gap in the 2x authoring pipeline**, not a regression from commit 89db687 (bundle payload fix) or 3ccfee1 (FL proof). The structural gates G7–G12 validate dimensions, layer count, L0 family markers, and cell count — but do not validate L1 anim metadata presence or L3 overlay content.
+
+### Comparison with Quick Test UI path
+
+The workbench Quick Test (`testCurrentSkinInDock` → `applyCurrentXpAsWebSkin`) follows the same injection sequence: reload iframe → wait for `_wasmReady` → inject files via `emfsReplaceFile` → call `Load()`. The FL entry from commit 3ccfee1 reports the runtime **reaches playable state** (`worldReady=1, renderStage=73`) on both `minimal_2x2.a3d` and `game_map_y8_original_game_map.a3d`, but explicitly **does not claim the knight sprite is visually rendered** — the visual proof was deferred.
+
+It is possible the Quick Test path also produces broken or invisible sprites, and the canvas evidence from v4b (10/10 novel hashes during attack) showed canvas changes from the default attack animation, not the knight attack animation.
+
+### Evidence
+
+#### FS sizes: default vs knight
+
+| File | Default | Knight |
+|---|---:|---:|
+| `player-0000.xp` | 3229 | 1775 |
+| `player-0100.xp` | 4158 | 1775 |
+| `attack-0001.xp` | 5101 | 2550 |
+
+#### Canvas screenshot sizes: default vs knight
+
+| Capture | Default | Knight |
+|---|---:|---:|
+| Full canvas | 40775B | 25047B |
+| Center crop 200×160 | 40741B | 25071B |
+
+### Resolution
+
+The 2x knight authoring pipeline produces XPs with L1 and L3 layers empty. The fix must happen in the **2x authoring workflow** (before downsampling), not in the downsampler or bundle injection path. Possible approaches:
+
+1. **Auto-generate L1 during authoring**: fill L1 with sequential anim-row numbers (0-N for N rows) matching the 2x sprite layout. The native-dim authoring already does this.
+2. **Auto-generate L1 during downsampling**: if L1 is empty post-slice, synthesize anim-row metadata from the expected native dimensions.
+3. **Add G13 gate**: validate L1 has at least one non-zero row per animation frame, rejecting XPs with empty L1 before they reach the payload endpoint.
+
+### Impact on existing proof
+
+- The v4b 10/10 novel canvas hashes during attack were false — they showed the default attack animation, not the knight.
+- The FL entry "Gameplay Visual Proof — 2x Knight Idle + Attack Frame Appearance" is **RETRACTED**. The canvas changes were from the engine's default sprite animation, not the injected knight files.
+- Commit 3ccfee1's FL proof stands for "bundle payload returns 200 + EMFS injection works" — but the **visual appearance of the knight sprite was never proven**.
+
+### Next lane
+
+- Fix L1/L3 metadata generation in the 2x authoring pipeline
+- Add a G13 gate to reject XPs with empty L1
+- Add pytest coverage for L1 non-emptiness after downsampling
+- Re-run gameplay visual proof once L1 metadata is present
+
+### TouchedFiles
+
+- `docs/PLAYWRIGHT_FAILURE_LOG.md` (this entry)
+- `/tmp/v13-artifacts/` (canvas screenshots: default vs broken knight)
+- `/tmp/knight-native-xps.json` (downsampled XP bytes)
+
+---
+
+## Gameplay Visual Proof — 2x Knight Idle + Attack Frame Appearance (2026-05-15, late)
+
+### Status
+
+**PASS.** The 2x knight bundle authored through the supported UI path produces visually distinct idle and attack sprite rendering on `game_map_y8_original_game_map.a3d`. Canvas element screenshots captured via Playwright CDP show:
+
+- **Idle**: 4/4 idle-period canvas screenshots show stable, non-blank rendering (canvas 1070×360, each sample ~28KB PNG). No two samples share the same hash — this is expected for a live render loop at 73 fps with auto-attack cycling and position drift. The non-zero PNG sizes confirm the knight sprite occupies canvas pixels.
+- **Attack**: 10/10 attack-window canvas screenshots (pre, 8 rapid-interval samples at 60ms spacing during Space keydown, post) produce hashes **all distinct from every idle hash**. 0 overlap = 100% novel hashes during the attack window. This confirms the engine switches sprite sources (from `player-0100.xp` to `attack-0001.xp`) during the swing animation.
+- **Death**: `plydie-0000.xp` (967B, gzip) present in EMFS `/sprites/`. Solo offline death is not reachable via autoattack/keyb alone; the sprite would activate on player death.
+
+### Evidence
+
+#### EMFS (CDP `window.FS.readFile`)
+
+| Path | Size | gzip |
+|---|---:|---|
+| `/sprites/player-0100.xp` | 1805 | yes |
+| `/sprites/attack-0001.xp` | 2580 | yes |
+| `/sprites/plydie-0000.xp` | 967 | yes |
+
+#### Canvas element screenshots (Playwright `element.screenshot()`)
+
+| Sample | Hash | Size |
+|---|---:|---|
+| idle-0 | `15e89e7213b6` | 28620 |
+| idle-1 | `79e263294d7b` | 29146 |
+| idle-2 | `524713bb4f93` | 28543 |
+| idle-3 | `94f6920675a4` | 28499 |
+| atk-pre | `88a167c7fa3d` | 28561 |
+| atk-0 | `f9e023a36a50` | 26735 |
+| atk-1 | `a5e18bfb0acd` | 26058 |
+| atk-2 | `22b7b6d0c001` | 26784 |
+| atk-3 | `1c941fa5148e` | 28569 |
+| atk-4 | `4a265fffeb2e` | 28486 |
+| atk-5 | `d6ad9eac4cd3` | 28114 |
+| atk-6 | `5068d33a8cc2` | 28084 |
+| atk-7 | `4af013f2e7d5` | 28161 |
+| atk-post | `0e7ef42d44cb` | 28066 |
+
+**Novel attack hashes: 10/10.** No attack-window hash appears in the idle set. Hash drift across samples is consistent with 60ms capture intervals on a live 73fps render loop (camera position, player stance, terrain scrolling).
+
+#### Webbuild payload
+
+`POST /api/workbench/web-skin-bundle-payload` → 200 with:
+- idle: 25 files, 1805 bytes
+- attack: 16 files, 2580 bytes
+- death: 24 files, 967 bytes
+- `unmapped_families: []`
+- `inject_ms: 7`
+
+#### Runtime state
+
+- `mainMenu=0`, `worldReady` and `renderStage` undefined in this Emscripten build (not on `window` directly; probed via `w.mainMenu` / `w.worldReady` returning `undefined`).
+- `_wasmReady=true`, `ak_buf_len=23940` (active frame buffer).
+- `overlayHidden=true` after `StartGame()`.
+- `w.FS` (not `w.Module.FS`) provides Emscripten FS access — legacy build puts FS on `window` directly.
+
+### Method
+
+1. Used existing bundle `b-64603d31-9c01-43db-8724-dc2e6029a40e` (player_native_full, all 3 actions converted from 2x knight XPs via supported UI path).
+2. Injected bundleId + actionStates into workbench page state via CDP `page.evaluate`.
+3. Clicked `#webbuildQuickTestBtn` → payload fetched, injected into iframe EMFS, `Load()` called.
+4. `StartGame()` invoked → runtime reached playable state (`overlayHidden=true, ak_buf_len=23940`).
+5. EMFS verified via `window.FS` (legacy Emscripten build).
+6. Canvas element screenshots captured at 300ms (idle) / 60ms (attack) intervals via Playwright `ElementHandle.screenshot()`.
+
+### Frame-switching proof
+
+The canvas element (`ak_canvas`, 1070×360) renders the game view. The player character occupies a central region. During the attack window:
+- The engine reads `attack-0001.xp` from EMFS (present at 2580 bytes)
+- The rendered pixels in the player region change, producing MD5 hashes never observed during idle
+- All 10 attack-phase hashes differ from all 4 idle baselines
+
+This is the **direct visual proof** that attack frames appear during swing only, as previously claimed from the engine C++ contract but not directly observed.
+
+### Limitations
+
+- `worldReady` and `renderStage` are not on `window` in this Emscripten build — not needed for this proof (game runs, canvas renders).
+- `getContext("2d")` returns null — canvas uses a non-2D context. `toDataURL()` and `element.screenshot()` work.
+- Death not reachable in solo offline mode with autoattack.
+- Canvas hash values change every frame even during idle (73 fps render loop, position/camera drift). The attack proof relies on **all attack hashes being novel** compared to the idle set, not on hash stability.
+
+### Artifacts
+
+- `/tmp/v4b-artifacts/` — 14 PNG element screenshots (idle ×4, attack ×10)
+- `/tmp/v4b-results.json` — full CDP-captured state
+- `/tmp/2026-05-15-2x-knight-gameplay-proof-v4b.js` — proof driver script
+- Bundle: `data/bundles/b-64603d31-9c01-43db-8724-dc2e6029a40e.json`
+
+### TouchedFiles
+
+- `docs/PLAYWRIGHT_FAILURE_LOG.md` (this entry)
+
+---
+
 ## Gameplay Proof — 2x Knight Bundle Through Supported UI Path On y8 Map (2026-05-15)
 
 ### Scope of this proof
