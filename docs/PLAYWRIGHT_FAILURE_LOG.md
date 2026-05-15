@@ -1,5 +1,140 @@
 # Playwright Test Failure Log
 
+## Gameplay Proof — 2x Knight Bundle Through Supported UI Path On y8 Map (2026-05-15)
+
+### Scope of this proof
+
+This run drives the **supported workbench UI path** end-to-end on
+`game_map_y8_original_game_map.a3d` (the normal map from the 2026-05-14
+incident). It does NOT touch the bundle JSON externally, does NOT use the
+`?bundle_id=` URL gap, and does NOT swap to native-dim XPs.
+
+### Sequence + CDP-captured state
+
+1. Headed Chrome with `--remote-debugging-port=9222`. Workbench at
+   `http://127.0.0.1:5073/workbench?flatmap=game_map_y8_original_game_map.a3d`.
+2. UI `#templateSelect=player_native_full` → `#templateApplyBtn` click →
+   `bundleStatus="Bundle: 0/3 actions ready"`, three blank action sessions
+   created.
+3. Per action via the UI tab strip (`#bundleActionTabs` button click →
+   `#xpImportFile` setInputFiles → `#xpImportBtn` → `#btnExport`):
+
+   | action | input file | state after upload | bundle JSON session_id swap | export status |
+   |--------|------------|---:|---|---|
+   | idle   | `output/24px-mini-characters-template-2x/xps/knight1-player.xp` (252×160, 4L) | `gridCols=252, gridRows=160, sessionId=73474ead-…` | yes (via persistBundleActionStatus with session_id) | `converted` (1/3) |
+   | attack | `output/24px-mini-characters-template-2x/xps/knight1-attack.xp` (288×160, 4L) | `gridCols=288, gridRows=160, sessionId=8038f95e-…` | yes | `converted` (2/3) |
+   | death  | `output/24px-mini-characters-template-2x/xps/knight1-plydie.xp` (220×176, 4L) | `gridCols=220, gridRows=176, sessionId=17cf419e-…` | yes | `converted` (3/3) |
+
+   Final `bundleStatus="Bundle: 3/3 actions ready"`, `qtBtnDisabled=false`.
+
+4. `#webbuildQuickTestBtn` click. `#webbuildOut` JSON timings:
+
+   ```
+   prepare_ms=468  save_session_ms=1055  fetch_payload_ms=2322
+   inject_ms=13   total_ms=3858
+   payload.actions: { attack: {files:16, bytes:2580}, death: {files:24, …}, idle: {files:25, …} }
+   ```
+
+5. `frame.contentWindow.StartGame()` invoked (overlay-dismiss workaround; the
+   solo-mode auto-overlay-dismiss is a separate UX gap, see below).
+
+6. Runtime probe at +10s after StartGame:
+
+   ```
+   mainMenu=0  worldReady=1  renderStage=73  ak_w_h=[133, 45]
+   overlay.display="none"  Module.calledRun=true  _wasmReady=true
+   ```
+
+### EMFS verification (CDP `Module.FS` / `iframe.contentWindow.FS`)
+
+`FS.readdir("/sprites")` lists the runtime sprite directory (>200 files
+including bigbee-*, character.xp, etc.). The bundle injection wrote the
+three per-action knight XPs into that directory:
+
+| Path | Size | Head bytes | Matches payload? |
+|---|---:|---|---|
+| `/sprites/player-0100.xp` | 1805 | `[0x1f, 0x8b, 0x08, 0x08, 0x5e, 0xa1, 0x06, 0x6a]` | yes (idle.xp_size_bytes=1805) |
+| `/sprites/attack-0001.xp` | 2580 | `[0x1f, 0x8b, 0x08, 0x08, 0x5f, 0xa1, 0x06, 0x6a]` | yes (attack.xp_size_bytes=2580) |
+| `/sprites/plydie-0000.xp` | 967  | `[0x1f, 0x8b, 0x08, 0x08, 0x60, 0xa1, 0x06, 0x6a]` | yes (death.xp_size_bytes=967) |
+
+Head bytes `1F 8B 08 08` = gzip magic; confirms valid gzipped XP encoding.
+File sizes match the bytes reported in the `/api/workbench/web-skin-bundle-payload`
+response exactly (1805/2580/967). Per-action override coverage as reported by
+`#webbuildOut`: idle=25 files (player-* including nude), attack=16 files
+(weapon_gte_1), death=24 files. Total 65 per-AHSW override files written.
+
+`/assets/sprites/<name>.xp` does NOT exist — only `/sprites/` is the runtime
+read path for the bundle-skin injection. (`/assets/sprites/` is the FL-1736
+asset path patched for the separate `termpp_skin_lab.js` debug surface; not
+the same code path as the bundle dock.)
+
+### Visual reference (supplementary, not the proof)
+
+Screenshot at `artifacts/2026-05-15-skin-dock-proof/runtime-y8-knight.png`:
+the y8 terrain renders, ASCII map visible, header reads
+`OFF LINE : 73.0 fps`, position telemetry `yaw 45.0 zm 1.00 x0.1 y15.1 z131.6`,
+PLAYERS panel + minimap visible. Engine in offline (solo) mode, rendering at
+73 fps.
+
+### What this proof does NOT cover (separate gaps to track)
+
+1. **Direct per-anim sprite verification via runtime API**. `w.ak.getAction()`,
+   `w.ak.getPos()`, `w.ak.getWater()`, `w.ak.isGrounded()` all throw
+   `TypeError: Cannot read properties of undefined (reading '5437594')` after
+   StartGame()-driven solo entry — the local player struct is not hydrated.
+   `w.ak.getName()` returns `"player"` (URL param echo) and `w.ak_joined=false`.
+   The engine is rendering (renderStage=73, ak_buf 23940 bytes update every
+   frame) but the local entity exposed via the `ak` namespace is null. So
+   "attack frames only during swing" cannot be directly observed via the
+   `ak` getters in this proof. Implicit proof remains the EMFS file presence
+   at the correct AHSW override paths — the engine's existing C++ contract
+   reads attack-* when in attack anim and player-* otherwise. Logged as
+   separate gap: **solo mode local entity hydration**.
+
+2. **End-to-end attack/death animation visual verification**. Sending
+   `w.Keyb(0,6)` / `w.Keyb(1,6)` (Space attack) changes `ak_buf` between
+   samples, but ak_buf changes every render frame regardless of input, so the
+   checksum delta is not specific evidence of attack-anim activation. A real
+   visual diff (canvas pixel patch comparison before/during/after attack)
+   would close this, but is out of scope for the bundle-payload fix.
+
+3. **PLAY-button auto-dismiss in solo mode**. The bootstrap's
+   `scheduleAutoNewGameAdvance` waits for `overlayVisibleNow() === false`, but
+   nothing in solo dismisses the login overlay automatically — only
+   `_doStartGame()` (PLAY click) or `StartGame()` does. CDP must invoke
+   `StartGame()`; a regular user must click PLAY. Not the Skin Dock freeze.
+
+### Claim scope (per CDP evidence, no broader)
+
+- `/api/workbench/web-skin-bundle-payload` returns 200 for the 2x knight
+  bundle authored through the supported UI path.
+- 2x authored knight player/attack/plydie XPs compile to native runtime
+  payload (G7/G10/G11/G12 all THRESHOLD_MET, per
+  `tests/test_bundle_2x_authoring_payload.py`).
+- Runtime injection writes per-action override files to EMFS `/sprites/`
+  with sizes that match the payload byte-for-byte.
+- Runtime advances on both `minimal_2x2.a3d` and
+  `game_map_y8_original_game_map.a3d` (worldReady=1, renderStage=73, overlay
+  dismissed) — both probed in this session.
+- The 2026-05-14 "Skin Dock Runtime Freeze" (`mainMenu=1 worldReady=0
+  renderStage=0` with no skin bytes in EMFS) is not reproducible against
+  commit `89db687`.
+
+### Artifacts
+
+- `artifacts/2026-05-15-skin-dock-proof/runtime-y8-knight.png`
+- `artifacts/2026-05-15-skin-dock-proof/workbench-full.png`
+- Bundle JSON in this run: `data/bundles/b-67b559c6-30d1-499f-bcfe-42184c57bd5f.json`
+  with sessions `73474ead-…` / `8038f95e-…` / `17cf419e-…`.
+- Driver scripts: `/tmp/claude-cdp-exec.js`, `/tmp/claude-cdp-action.js`.
+
+### TouchedFiles
+
+- `docs/PLAYWRIGHT_FAILURE_LOG.md` (this entry)
+- `artifacts/2026-05-15-skin-dock-proof/` (visual references)
+
+---
+
 ## Skin Dock — Bundle Injection Reaches Playable State With 2x Knight Bundle On Multiple Maps (2026-05-15, evening)
 
 ### Status
