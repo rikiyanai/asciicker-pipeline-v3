@@ -1,4 +1,5 @@
 from .candidate import AssignedCell, GlyphAssignmentConfig, GlyphCandidate
+from .edge_detection import CellEdgeInfo, EdgeMap, compute_edge_map
 from .font_atlas import GlyphMask, load_glyph_masks
 from .matcher import assign_cell, assign_image_cells
 from .overrides import load_overrides

@@ -59,6 +59,14 @@ _FAMILY_BASE_CONFIGS: dict[str, GlyphAssignmentConfig] = {}  # populated in main
 
 
 def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
+    # FL-4095: edge_aware enabled across all 24px families. Sobel/DoG runs
+    # the stroke pre-pass; bias scope reduces to non-stroke cells.
+    common_edge_kwargs = {
+        "edge_aware": True,
+        "edge_magnitude_threshold": 80.0,
+        "edge_use_dog": True,
+        "edge_grid_shift_search_px": 2,
+    }
     return {
         "player": GlyphAssignmentConfig(
             font_path=font_path,
@@ -66,6 +74,7 @@ def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
             target_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
             candidate_limit=5,
             score_delta_threshold=0.15,
+            **common_edge_kwargs,
         ),
         "attack": GlyphAssignmentConfig(
             font_path=font_path,
@@ -73,6 +82,7 @@ def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
             target_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
             candidate_limit=8,
             score_delta_threshold=0.25,
+            **common_edge_kwargs,
         ),
         "plydie": GlyphAssignmentConfig(
             font_path=font_path,
@@ -80,6 +90,7 @@ def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
             target_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
             candidate_limit=4,
             score_delta_threshold=0.20,
+            **common_edge_kwargs,
         ),
     }
 

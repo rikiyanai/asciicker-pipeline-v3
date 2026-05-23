@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image
 
 from .candidate import AssignedCell, Color, GlyphAssignmentConfig, GlyphCandidate
+from .edge_detection import CellEdgeInfo, EdgeMap, best_grid_offset, compute_edge_map
 from .font_atlas import GlyphMask, load_glyph_masks
 from .semantic_bias import apply_semantic_bias
 
@@ -196,6 +197,29 @@ def _cell_from_override(x: int, y: int, record: dict) -> AssignedCell | None:
     return AssignedCell(x, y, region, chosen, (chosen,), 1.0, False)
 
 
+def _cell_from_edge_info(
+    edge: CellEdgeInfo, region: str | None
+) -> AssignedCell:
+    """Build a synthetic AssignedCell directly from a stroke edge classification.
+
+    FL-4095: stroke cells bypass the per-cell IoU candidate ranking and
+    receive an orientation-mapped CP437 glyph. confidence=1.0 (the orientation
+    decision is deterministic from the gradient angle), needs_review=False.
+    """
+    chosen = GlyphCandidate(
+        edge.suggested_glyph,
+        edge.suggested_fg,
+        edge.suggested_bg,
+        1.0,
+        {
+            "edge_magnitude": edge.magnitude,
+            "edge_orientation_rad": edge.orientation_rad or 0.0,
+        },
+        ["edge-aware stroke from Sobel orientation"],
+    )
+    return AssignedCell(edge.cx, edge.cy, region, chosen, (chosen,), 1.0, False)
+
+
 def assign_image_cells(
     image: Image.Image,
     config: GlyphAssignmentConfig,
@@ -210,17 +234,54 @@ def assign_image_cells(
     with ``accepted=True`` bypass scoring entirely and are returned as-is.
     Override consumption happens before the tile cache and before semantic
     bias — human choices are always authoritative.
+
+    FL-4095: when ``config.edge_aware`` is True, a Sobel/DoG pre-pass runs
+    first. Cells flagged as strokes (gradient magnitude over the configured
+    threshold) bypass the per-cell IoU ranking and receive an orientation-
+    mapped CP437 glyph directly. Non-stroke cells go through the standard
+    tone-based scoring path. Overrides still take precedence over both.
     """
     masks = load_glyph_masks(config.font_path, config.target_cell_size)
     rgba = image.convert("RGBA")
     target_w, target_h = config.target_cell_size
+
+    # FL-4095 CUHK feature-aware grid shift — optional sub-cell alignment.
+    shift_dx, shift_dy = 0, 0
+    if config.edge_aware and config.edge_grid_shift_search_px > 0:
+        shift_dx, shift_dy = best_grid_offset(
+            rgba,
+            (target_w, target_h),
+            search_radius_px=config.edge_grid_shift_search_px,
+            magnitude_threshold=config.edge_magnitude_threshold,
+        )
+    if shift_dx != 0 or shift_dy != 0:
+        shifted = Image.new("RGBA", rgba.size, (0, 0, 0, 0))
+        shifted.paste(rgba, (-shift_dx, -shift_dy))
+        rgba = shifted
+
     cols = rgba.width // target_w
     rows = rgba.height // target_h
+
+    # FL-4095 edge pre-pass.
+    edge_lookup: dict[tuple[int, int], CellEdgeInfo] = {}
+    if config.edge_aware:
+        edge_map = compute_edge_map(
+            rgba,
+            (target_w, target_h),
+            magnitude_threshold=config.edge_magnitude_threshold,
+            use_dog=config.edge_use_dog,
+            dog_sigma_narrow=config.edge_dog_sigma_narrow,
+            dog_sigma_wide=config.edge_dog_sigma_wide,
+        )
+        edge_lookup = {(c.cx, c.cy): c for c in edge_map.cells}
+
     cells: list[AssignedCell] = []
     cache: dict[tuple[bytes, str | None], AssignedCell] = {}
     for y in range(rows):
         for x in range(cols):
-            # Override pre-pass: accepted cells bypass scoring and cache
+            region = regions.get((x, y)) if regions else None
+
+            # 1. Overrides always win.
             if overrides:
                 record = overrides.get((x, y))
                 if record is not None and record.get("accepted"):
@@ -228,15 +289,23 @@ def assign_image_cells(
                     if synthetic is not None:
                         cells.append(synthetic)
                         continue
-                    # accepted override missing fg/bg — fall through to scoring
                     warnings.warn(
                         f"accepted override at ({x},{y}) missing fg or bg; falling through to scoring",
                         RuntimeWarning,
                         stacklevel=2,
                     )
 
-            tile = rgba.crop((x * target_w, y * target_h, (x + 1) * target_w, (y + 1) * target_h))
-            region = regions.get((x, y)) if regions else None
+            # 2. FL-4095 edge-aware stroke pre-pass.
+            if config.edge_aware:
+                edge = edge_lookup.get((x, y))
+                if edge is not None and edge.is_stroke:
+                    cells.append(_cell_from_edge_info(edge, region))
+                    continue
+
+            # 3. Standard tone-based matcher + semantic_bias.
+            tile = rgba.crop(
+                (x * target_w, y * target_h, (x + 1) * target_w, (y + 1) * target_h)
+            )
             key = (tile.tobytes(), region)
             cached = cache.get(key)
             if cached is None:
