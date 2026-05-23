@@ -80,9 +80,16 @@ def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
     # FL-4097 (1+2+3): SSIM glyph picker, multi-scale edges, skeleton/polyline.
     common_edge_kwargs = {
         "edge_aware": False,
-        "edge_magnitude_threshold": 80.0,
+        # FL-4100: threshold bumped 80 → 200 (override with GLYPH_EDGE_THRESHOLD).
+        # Drops low-amplitude shading transitions that previously survived as
+        # false strokes.
+        "edge_magnitude_threshold": float(_os.environ.get("GLYPH_EDGE_THRESHOLD", "200")),
         "edge_use_dog": True,
         "edge_grid_shift_search_px": 2,
+        # FL-4100: alpha-channel edge detection. Sobel on the alpha layer
+        # detects only the silhouette boundary (body interior alpha is
+        # uniform, no gradient). True outline-only stroke detection.
+        "edge_use_alpha_channel": _os.environ.get("GLYPH_ALPHA_EDGES", "1") == "1",
         "ssim_for_strokes": True,
         "ssim_candidate_filter_by_orientation": True,
         "multi_scale_edges": True,

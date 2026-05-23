@@ -353,6 +353,7 @@ def compute_edge_map(
     nms_low_ratio: float = 0.4,
     nms_high_ratio: float = 1.0,
     min_chain_pixels_per_cell: int = 2,
+    use_alpha_channel: bool = False,
 ) -> EdgeMap:
     """Compute the per-cell stroke map for an image.
 
@@ -400,13 +401,20 @@ def compute_edge_map(
     grid_w = rgba.shape[1] // cell_w
     grid_h = rgba.shape[0] // cell_h
 
-    luminance = _luminance_from_rgba(rgba)
+    # FL-4100: alpha-channel mode uses the source alpha as the Sobel input.
+    # Body interior alpha is uniform 255, background is 0; only the silhouette
+    # boundary has gradient. Eliminates internal-body shading edges.
+    if use_alpha_channel:
+        sobel_source = rgba[:, :, 3].astype(np.float32)
+    else:
+        sobel_source = _luminance_from_rgba(rgba)
+
     if use_dog:
-        dog = difference_of_gaussians(luminance, dog_sigma_narrow, dog_sigma_wide)
+        dog = difference_of_gaussians(sobel_source, dog_sigma_narrow, dog_sigma_wide)
         sobel_input = np.abs(dog).astype(np.float32)
     else:
         dog = None
-        sobel_input = luminance
+        sobel_input = sobel_source
 
     gx, gy = sobel_gradient(sobel_input)
     magnitude = np.sqrt(gx * gx + gy * gy)

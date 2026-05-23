@@ -32,6 +32,12 @@ class GlyphAssignmentConfig:
     edge_dog_sigma_narrow: float = 0.8
     edge_dog_sigma_wide: float = 2.0
     edge_grid_shift_search_px: int = 2  # 0 disables CUHK iterative alignment
+    # FL-4100: alpha-channel edge detection. When True, compute_edge_map runs
+    # Sobel/DoG on the source ALPHA channel instead of RGB luminance. Body
+    # interior alpha is uniform 255, background alpha is 0; only the
+    # silhouette boundary has an alpha gradient. Used with silhouette_only
+    # this produces true outline-only output with no body shading.
+    edge_use_alpha_channel: bool = False
     # FL-4097: structure-based ASCII iteration 2 — SSIM, multi-scale, skeleton.
     # When ssim_for_strokes is True, stroke cells pick their glyph by SSIM
     # against the source pixels (instead of orientation→glyph hardcode).

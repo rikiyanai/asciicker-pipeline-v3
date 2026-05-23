@@ -80,6 +80,7 @@ def compute_multi_scale_edge_map(
         use_dog=config.edge_use_dog,
         dog_sigma_narrow=config.edge_dog_sigma_narrow,
         dog_sigma_wide=config.edge_dog_sigma_wide,
+        use_alpha_channel=config.edge_use_alpha_channel,
     )
     if factor == 1:
         return MultiScaleEdgeMap(base=base_map, fine=base_map, fine_factor=1, cells=base_map.cells)
@@ -91,6 +92,7 @@ def compute_multi_scale_edge_map(
         use_dog=config.edge_use_dog,
         dog_sigma_narrow=config.edge_dog_sigma_narrow,
         dog_sigma_wide=config.edge_dog_sigma_wide,
+        use_alpha_channel=config.edge_use_alpha_channel,
     )
 
     merged: list[CellEdgeInfo] = []

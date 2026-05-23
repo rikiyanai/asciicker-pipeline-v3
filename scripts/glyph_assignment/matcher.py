@@ -369,6 +369,7 @@ def assign_image_cells(
                 use_dog=config.edge_use_dog,
                 dog_sigma_narrow=config.edge_dog_sigma_narrow,
                 dog_sigma_wide=config.edge_dog_sigma_wide,
+                use_alpha_channel=config.edge_use_alpha_channel,
             )
             edge_lookup = {(c.cx, c.cy): c for c in edge_map.cells}
 
