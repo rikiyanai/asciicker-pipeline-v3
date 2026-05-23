@@ -10,7 +10,11 @@ from PIL import Image
 from .candidate import AssignedCell, Color, GlyphAssignmentConfig, GlyphCandidate
 from .edge_detection import CellEdgeInfo, EdgeMap, best_grid_offset, compute_edge_map
 from .font_atlas import GlyphMask, load_glyph_masks
+from .edge_detection import orientation_to_glyph as _orientation_to_glyph
+from .multiscale import compute_multi_scale_edge_map
 from .semantic_bias import apply_semantic_bias
+from .skeleton import skeleton_polyline_cells
+from .ssim import best_glyph_by_ssim
 
 TRANSPARENT_BG: Color = (255, 0, 255)
 
@@ -197,10 +201,38 @@ def _cell_from_override(x: int, y: int, record: dict) -> AssignedCell | None:
     return AssignedCell(x, y, region, chosen, (chosen,), 1.0, False)
 
 
+def _orientation_family(angle_rad: float | None) -> list[int]:
+    """CP437 glyph candidates for a given edge orientation family.
+
+    Wider sets than the single-glyph orientation table so the SSIM picker
+    has curves/joints/terminators available within the same broad family.
+    Returns a list of glyph codes to be SSIM-scored.
+    """
+    if angle_rad is None:
+        return []
+    import math as _m
+    a = ((_m.degrees(angle_rad) + 180.0) % 180.0)
+    # 0/180 (vertical edge)            : | ! : ; ( ) [ ] { } ‖ │
+    # 45     (\ edge, gradient +45°)   : \ /  ' , . ` _ \ ` ⌐
+    # 90     (horizontal edge)         : _ - = ~ — ‾ . , ' `
+    # 135    (/ edge, gradient -45°)   : / \ ` ' . , _ ⌐
+    if a < 22.5 or a >= 157.5:
+        return [124, 33, 58, 59, 40, 41, 91, 93, 123, 125, 73, 105, 108, 84, 116]
+    if a < 67.5:
+        return [92, 47, 96, 39, 44, 46, 95, 41, 76, 122, 110, 109, 169, 196]
+    if a < 112.5:
+        return [95, 45, 61, 126, 196, 205, 46, 44, 39, 96, 175, 176]
+    return [47, 92, 96, 39, 46, 44, 95, 40, 76, 122, 110, 109, 169, 196]
+
+
 def _cell_from_edge_overlay(
     edge: CellEdgeInfo,
     tone_cell: AssignedCell,
     region: str | None,
+    *,
+    config: GlyphAssignmentConfig | None = None,
+    source_tile_rgb: np.ndarray | None = None,
+    masks: list[GlyphMask] | None = None,
 ) -> AssignedCell:
     """Build a stroke-cell AssignedCell that OVERLAYS the orientation glyph
     on the tone path's already-picked fg/bg.
@@ -213,23 +245,59 @@ def _cell_from_edge_overlay(
     we get the correct stick-figure overlay: body color stays, edge glyph
     appears in the outline color on top.
 
-    The glyph itself is the orientation-mapped stroke from the Sobel pass;
-    only fg/bg come from the tone path.
+    The glyph comes from:
+      - SSIM picker (FL-4097 component 1) when config.ssim_for_strokes is True
+        and source_tile_rgb + masks are provided.
+      - Sobel orientation map otherwise (FL-4095 behavior).
+    Only fg/bg come from the tone path either way.
     """
+    glyph = edge.suggested_glyph
+    ssim_score: float | None = None
+    reasons = [
+        "FL-4096 (A) stroke overlay: glyph from Sobel orientation, "
+        "fg/bg inherited from tone path"
+    ]
+
+    if (
+        config is not None
+        and config.ssim_for_strokes
+        and source_tile_rgb is not None
+        and masks is not None
+    ):
+        candidate_filter = None
+        if config.ssim_candidate_filter_by_orientation:
+            candidate_filter = _orientation_family(edge.orientation_rad)
+            if not candidate_filter:
+                candidate_filter = None
+        ssim_glyph, ssim_score_value = best_glyph_by_ssim(
+            source_tile_rgb,
+            tone_cell.chosen.fg,
+            tone_cell.chosen.bg,
+            masks,
+            candidate_glyphs=candidate_filter,
+        )
+        if ssim_glyph != 0 and ssim_score_value >= config.ssim_score_floor:
+            glyph = ssim_glyph
+            ssim_score = ssim_score_value
+            reasons = [
+                "FL-4097 (1) SSIM-picked stroke glyph; fg/bg from tone path"
+            ]
+
+    components = {
+        "edge_magnitude": edge.magnitude,
+        "edge_orientation_rad": edge.orientation_rad or 0.0,
+        "tone_glyph": tone_cell.chosen.glyph,
+    }
+    if ssim_score is not None:
+        components["ssim_score"] = ssim_score
+
     chosen = GlyphCandidate(
-        edge.suggested_glyph,
+        glyph,
         tone_cell.chosen.fg,
         tone_cell.chosen.bg,
         1.0,
-        {
-            "edge_magnitude": edge.magnitude,
-            "edge_orientation_rad": edge.orientation_rad or 0.0,
-            "tone_glyph": tone_cell.chosen.glyph,
-        },
-        [
-            "FL-4096 (A) stroke overlay: glyph from Sobel orientation, "
-            "fg/bg inherited from tone path"
-        ],
+        components,
+        reasons,
     )
     return AssignedCell(edge.cx, edge.cy, region, chosen, (chosen,), 1.0, False)
 
@@ -276,18 +344,58 @@ def assign_image_cells(
     cols = rgba.width // target_w
     rows = rgba.height // target_h
 
-    # FL-4095 edge pre-pass.
+    # FL-4095 edge pre-pass. FL-4097 (2) multi-scale runs base + fine and
+    # merges per base cell. Single-scale path preserved for ablation.
     edge_lookup: dict[tuple[int, int], CellEdgeInfo] = {}
     if config.edge_aware:
-        edge_map = compute_edge_map(
+        if config.multi_scale_edges:
+            ms_map = compute_multi_scale_edge_map(
+                rgba, (target_w, target_h), config
+            )
+            edge_lookup = {(c.cx, c.cy): c for c in ms_map.cells}
+        else:
+            edge_map = compute_edge_map(
+                rgba,
+                (target_w, target_h),
+                magnitude_threshold=config.edge_magnitude_threshold,
+                use_dog=config.edge_use_dog,
+                dog_sigma_narrow=config.edge_dog_sigma_narrow,
+                dog_sigma_wide=config.edge_dog_sigma_wide,
+            )
+            edge_lookup = {(c.cx, c.cy): c for c in edge_map.cells}
+
+    # FL-4097 (3) skeleton/polyline overrides edge orientation with the
+    # polyline tangent — adjacent cells on the same chain get COHERENT
+    # orientation by construction. Cells touched by a polyline but not
+    # flagged as stroke by Sobel are promoted to stroke.
+    polyline_lookup = {}
+    if config.edge_aware and config.use_skeleton_polyline:
+        polyline_lookup = skeleton_polyline_cells(
             rgba,
             (target_w, target_h),
-            magnitude_threshold=config.edge_magnitude_threshold,
-            use_dog=config.edge_use_dog,
-            dog_sigma_narrow=config.edge_dog_sigma_narrow,
-            dog_sigma_wide=config.edge_dog_sigma_wide,
+            dp_epsilon=config.skeleton_dp_epsilon,
         )
-        edge_lookup = {(c.cx, c.cy): c for c in edge_map.cells}
+        # Promote / refine edge_lookup entries from polyline data
+        for key, hit in polyline_lookup.items():
+            existing = edge_lookup.get(key)
+            ori = hit.tangent_rad
+            glyph = _orientation_to_glyph(ori)
+            from .edge_detection import _dominant_visible_color
+            cx, cy = key
+            x0, y0 = cx * target_w, cy * target_h
+            rgba_arr = np.array(rgba)
+            fg = _dominant_visible_color(rgba_arr, x0, y0, target_w, target_h)
+            refined = CellEdgeInfo(
+                cx=cx,
+                cy=cy,
+                is_stroke=True,
+                magnitude=existing.magnitude if existing else 999.0,
+                orientation_rad=ori,
+                suggested_glyph=glyph,
+                suggested_fg=fg,
+                suggested_bg=(255, 0, 255),
+            )
+            edge_lookup[key] = refined
 
     cells: list[AssignedCell] = []
     cache: dict[tuple[bytes, str | None], AssignedCell] = {}
@@ -324,10 +432,26 @@ def assign_image_cells(
 
             # 3. FL-4095 edge-aware stroke overlay — keep tone's fg/bg,
             #    swap only the glyph for the orientation-mapped stroke.
+            #    FL-4097 (1): when ssim_for_strokes=True, SSIM picks the
+            #    glyph instead of the orientation→glyph hardcoded table.
             if config.edge_aware:
                 edge = edge_lookup.get((x, y))
                 if edge is not None and edge.is_stroke:
-                    cells.append(_cell_from_edge_overlay(edge, tone_cell, region))
+                    src_rgb = (
+                        np.array(tile.convert("RGB"))
+                        if config.ssim_for_strokes
+                        else None
+                    )
+                    cells.append(
+                        _cell_from_edge_overlay(
+                            edge,
+                            tone_cell,
+                            region,
+                            config=config,
+                            source_tile_rgb=src_rgb,
+                            masks=masks,
+                        )
+                    )
                     continue
 
             cells.append(tone_cell)

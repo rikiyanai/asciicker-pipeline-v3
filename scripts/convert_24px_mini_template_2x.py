@@ -61,11 +61,17 @@ _FAMILY_BASE_CONFIGS: dict[str, GlyphAssignmentConfig] = {}  # populated in main
 def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
     # FL-4095: edge_aware enabled across all 24px families. Sobel/DoG runs
     # the stroke pre-pass; bias scope reduces to non-stroke cells.
+    # FL-4096 (A+B): tone overlay + Canny NMS/hysteresis.
+    # FL-4097 (1+2+3): SSIM glyph picker, multi-scale edges, skeleton/polyline.
     common_edge_kwargs = {
         "edge_aware": True,
         "edge_magnitude_threshold": 80.0,
         "edge_use_dog": True,
         "edge_grid_shift_search_px": 2,
+        "ssim_for_strokes": True,
+        "ssim_candidate_filter_by_orientation": True,
+        "multi_scale_edges": True,
+        "use_skeleton_polyline": True,
     }
     return {
         "player": GlyphAssignmentConfig(
