@@ -24,6 +24,39 @@ _HB: dict[int, float] = {220: 0.6, 221: 0.6, 222: 0.6, 223: 0.6}
 _SH: dict[int, float] = {176: 0.3, 177: 0.4, 178: 0.5}
 _SK: dict[int, float] = {47: 0.5, 92: 0.5, 179: 0.3, 196: 0.3}
 
+# Canonical region keys produced by final_json_ingest.canonicalize().
+# Listed here as empty entries so apply_semantic_bias finds the region key
+# even before semantic_maps/ JSONs are loaded — the JSON-derived weights from
+# load_optional_semantic_bias() merge into these via _merge_hints().
+_CANONICAL_REGION_KEYS: tuple[str, ...] = (
+    "mount.bigbee",
+    "mount.wolf",
+    "rider.torso_limbless",
+    "rider.torso_with_sword",
+    "rider.torso_with_shield",
+    "weapon.sword",
+    "weapon.crossbow.body",
+    "weapon.crossbow.arrow",
+    "weapon.crossbow.string",
+    "weapon.swoosh",
+    "armor.body",
+    "helmet",
+    "shield",
+    "body.player",
+    "body.plydie",
+    "composite",
+)
+
+
+def _seed_canonical_regions() -> dict[str, dict[int, float]]:
+    """Return canonical region keys with empty weight dicts.
+
+    The empty entries make `apply_semantic_bias` find the region by name even
+    before semantic_maps/{role}-*.json files populate the actual weights.
+    """
+    return {region: {} for region in _CANONICAL_REGION_KEYS}
+
+
 BUILT_IN_ROLE_TABLES: dict[str, dict[str, dict[int, float]]] = {
     "player": {
         "hair":         {**_HB},
@@ -33,6 +66,7 @@ BUILT_IN_ROLE_TABLES: dict[str, dict[str, dict[int, float]]] = {
         "boots":        {**_HB, 178: 0.6},
         "arms":         {**_HB},
         "subcell_fill": {**_HB},
+        **_seed_canonical_regions(),
     },
     "attack": {
         "weapon":       {47: 0.9, 92: 0.9, **_HB, **_SK, **_SH},
@@ -42,6 +76,7 @@ BUILT_IN_ROLE_TABLES: dict[str, dict[str, dict[int, float]]] = {
         "boots":        {**_HB, 178: 0.6},
         "arms":         {**_HB, **_SK},
         "subcell_fill": {**_HB},
+        **_seed_canonical_regions(),
     },
     "plydie": {
         "body":  {219: 0.7, **_HB, **_SH},
@@ -49,7 +84,11 @@ BUILT_IN_ROLE_TABLES: dict[str, dict[str, dict[int, float]]] = {
         "shirt": {**_HB, **_SH},
         "pants": {**_HB, **_SH},
         "boots": {**_HB, 178: 0.6},
+        **_seed_canonical_regions(),
     },
+    "wolfie": _seed_canonical_regions(),
+    "bigbee": _seed_canonical_regions(),
+    "wolack": _seed_canonical_regions(),
 }
 
 
