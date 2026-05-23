@@ -197,25 +197,39 @@ def _cell_from_override(x: int, y: int, record: dict) -> AssignedCell | None:
     return AssignedCell(x, y, region, chosen, (chosen,), 1.0, False)
 
 
-def _cell_from_edge_info(
-    edge: CellEdgeInfo, region: str | None
+def _cell_from_edge_overlay(
+    edge: CellEdgeInfo,
+    tone_cell: AssignedCell,
+    region: str | None,
 ) -> AssignedCell:
-    """Build a synthetic AssignedCell directly from a stroke edge classification.
+    """Build a stroke-cell AssignedCell that OVERLAYS the orientation glyph
+    on the tone path's already-picked fg/bg.
 
-    FL-4095: stroke cells bypass the per-cell IoU candidate ranking and
-    receive an orientation-mapped CP437 glyph. confidence=1.0 (the orientation
-    decision is deterministic from the gradient angle), needs_review=False.
+    FL-4096 (A): the previous version hardcoded bg=(255,0,255) transparent
+    sentinel, which punched holes through the body fill on every stroke cell
+    and visibly darkened the sprite. By inheriting bg from the tone match
+    (which is the cell's dominant visible color = body fill) and fg from the
+    tone match (which is the cell's dominant ink color = outline/edge color),
+    we get the correct stick-figure overlay: body color stays, edge glyph
+    appears in the outline color on top.
+
+    The glyph itself is the orientation-mapped stroke from the Sobel pass;
+    only fg/bg come from the tone path.
     """
     chosen = GlyphCandidate(
         edge.suggested_glyph,
-        edge.suggested_fg,
-        edge.suggested_bg,
+        tone_cell.chosen.fg,
+        tone_cell.chosen.bg,
         1.0,
         {
             "edge_magnitude": edge.magnitude,
             "edge_orientation_rad": edge.orientation_rad or 0.0,
+            "tone_glyph": tone_cell.chosen.glyph,
         },
-        ["edge-aware stroke from Sobel orientation"],
+        [
+            "FL-4096 (A) stroke overlay: glyph from Sobel orientation, "
+            "fg/bg inherited from tone path"
+        ],
     )
     return AssignedCell(edge.cx, edge.cy, region, chosen, (chosen,), 1.0, False)
 
@@ -295,14 +309,9 @@ def assign_image_cells(
                         stacklevel=2,
                     )
 
-            # 2. FL-4095 edge-aware stroke pre-pass.
-            if config.edge_aware:
-                edge = edge_lookup.get((x, y))
-                if edge is not None and edge.is_stroke:
-                    cells.append(_cell_from_edge_info(edge, region))
-                    continue
-
-            # 3. Standard tone-based matcher + semantic_bias.
+            # 2. Always run tone-based matcher first to get fg/bg even on
+            #    stroke cells (FL-4096 A — stroke must overlay, not replace,
+            #    the body fill).
             tile = rgba.crop(
                 (x * target_w, y * target_h, (x + 1) * target_w, (y + 1) * target_h)
             )
@@ -311,7 +320,17 @@ def assign_image_cells(
             if cached is None:
                 cached = assign_cell(tile, config, masks, x=0, y=0, region=region)
                 cache[key] = cached
-            cells.append(replace(cached, x=x, y=y))
+            tone_cell = replace(cached, x=x, y=y)
+
+            # 3. FL-4095 edge-aware stroke overlay — keep tone's fg/bg,
+            #    swap only the glyph for the orientation-mapped stroke.
+            if config.edge_aware:
+                edge = edge_lookup.get((x, y))
+                if edge is not None and edge.is_stroke:
+                    cells.append(_cell_from_edge_overlay(edge, tone_cell, region))
+                    continue
+
+            cells.append(tone_cell)
     return cells
 
 

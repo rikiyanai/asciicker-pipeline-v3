@@ -136,6 +136,131 @@ def sobel_gradient(luminance: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 # --------------------------------------------------------------------------- #
+# Canny stages 3-5: NMS + double threshold + hysteresis (FL-4096 B)
+# --------------------------------------------------------------------------- #
+
+
+def non_maximum_suppression(
+    magnitude: np.ndarray, orientation: np.ndarray
+) -> np.ndarray:
+    """Thin each edge to 1-pixel wide along the gradient direction.
+
+    For each pixel, compare magnitude against the two neighbors along the
+    gradient direction (quantized to one of 4 cardinal/diagonal pairs). If
+    the pixel is not a local maximum, suppress it (set to 0).
+
+    Returns a magnitude array with non-maxima zeroed out. Same shape as
+    input.
+
+    FL-4096 (B): this is the missing Canny stage that turns per-cell edge
+    detection into edge-CHAIN extraction. Adjacent cells on the same actual
+    contour see the same thin 1-px chain instead of independent fat gradients.
+    """
+    h, w = magnitude.shape
+    # Quantize orientation to [0, 180) in degrees, then to 4 buckets:
+    #   0 = horizontal gradient → vertical edge, check left/right neighbors
+    #   1 = 45° gradient        → diag / edge,   check ↗ and ↙ neighbors
+    #   2 = vertical gradient   → horizontal edge, check up/down neighbors
+    #   3 = 135° gradient       → diag \ edge,   check ↖ and ↘ neighbors
+    angle_deg = np.degrees(orientation)
+    angle_deg = (angle_deg + 180.0) % 180.0
+    direction = np.zeros((h, w), dtype=np.int8)
+    direction[(angle_deg >= 22.5) & (angle_deg < 67.5)] = 1
+    direction[(angle_deg >= 67.5) & (angle_deg < 112.5)] = 2
+    direction[(angle_deg >= 112.5) & (angle_deg < 157.5)] = 3
+
+    # Per-direction neighbor magnitudes via np.roll.
+    # Roll convention: positive shift moves values in positive direction.
+    out = np.zeros_like(magnitude)
+
+    # direction 0: compare to left (x-1) and right (x+1)
+    left = np.roll(magnitude, 1, axis=1)
+    right = np.roll(magnitude, -1, axis=1)
+    mask0 = direction == 0
+    cond0 = (magnitude >= left) & (magnitude >= right)
+    out[mask0 & cond0] = magnitude[mask0 & cond0]
+
+    # direction 1: compare to (y-1, x+1) and (y+1, x-1) — diagonal ↗ ↙
+    ne = np.roll(np.roll(magnitude, 1, axis=0), -1, axis=1)
+    sw = np.roll(np.roll(magnitude, -1, axis=0), 1, axis=1)
+    mask1 = direction == 1
+    cond1 = (magnitude >= ne) & (magnitude >= sw)
+    out[mask1 & cond1] = magnitude[mask1 & cond1]
+
+    # direction 2: compare to up (y-1) and down (y+1)
+    up = np.roll(magnitude, 1, axis=0)
+    down = np.roll(magnitude, -1, axis=0)
+    mask2 = direction == 2
+    cond2 = (magnitude >= up) & (magnitude >= down)
+    out[mask2 & cond2] = magnitude[mask2 & cond2]
+
+    # direction 3: compare to (y-1, x-1) and (y+1, x+1) — diagonal ↖ ↘
+    nw = np.roll(np.roll(magnitude, 1, axis=0), 1, axis=1)
+    se = np.roll(np.roll(magnitude, -1, axis=0), -1, axis=1)
+    mask3 = direction == 3
+    cond3 = (magnitude >= nw) & (magnitude >= se)
+    out[mask3 & cond3] = magnitude[mask3 & cond3]
+
+    # Zero the border (rolls wrap around and produce garbage there)
+    out[0, :] = 0
+    out[-1, :] = 0
+    out[:, 0] = 0
+    out[:, -1] = 0
+
+    return out
+
+
+def hysteresis_threshold(
+    nms: np.ndarray, low: float, high: float, *, max_iter: int = 64
+) -> np.ndarray:
+    """Double-threshold + hysteresis tracking.
+
+    Pixels above ``high`` are strong (always kept). Pixels in ``[low, high)``
+    are weak. Weak pixels are kept only if connected (8-way) to a strong
+    pixel, directly or transitively. Returns a bool array of surviving edge
+    pixels.
+
+    FL-4096 (B): this removes the isolated weak fragments that produce the
+    "jumbled" appearance — only pixels on real chains survive.
+    """
+    strong = nms >= high
+    weak = (nms >= low) & ~strong
+    keep = strong.copy()
+
+    for _ in range(max_iter):
+        # 8-way dilation of keep, intersect with weak to find new survivors.
+        dilated = (
+            keep
+            | np.roll(keep, 1, axis=0)
+            | np.roll(keep, -1, axis=0)
+            | np.roll(keep, 1, axis=1)
+            | np.roll(keep, -1, axis=1)
+            | np.roll(np.roll(keep, 1, axis=0), 1, axis=1)
+            | np.roll(np.roll(keep, 1, axis=0), -1, axis=1)
+            | np.roll(np.roll(keep, -1, axis=0), 1, axis=1)
+            | np.roll(np.roll(keep, -1, axis=0), -1, axis=1)
+        )
+        new_keeps = weak & dilated & ~keep
+        if not new_keeps.any():
+            break
+        keep |= new_keeps
+
+    return keep
+
+
+def _circular_mean(angles: np.ndarray) -> float:
+    """Circular mean of a set of angles (in radians).
+
+    Plain mean fails because π and -π are the same point; circular mean
+    averages on the unit circle (sin/cos) instead. Used to aggregate
+    per-pixel orientations within a single cell.
+    """
+    if angles.size == 0:
+        return 0.0
+    return float(math.atan2(float(np.sin(angles).mean()), float(np.cos(angles).mean())))
+
+
+# --------------------------------------------------------------------------- #
 # Orientation → CP437 glyph mapping
 # --------------------------------------------------------------------------- #
 
@@ -224,20 +349,44 @@ def compute_edge_map(
     dog_sigma_narrow: float = 0.8,
     dog_sigma_wide: float = 2.0,
     cell_alpha_fraction_required: float = 0.10,
+    use_nms_hysteresis: bool = True,
+    nms_low_ratio: float = 0.4,
+    nms_high_ratio: float = 1.0,
+    min_chain_pixels_per_cell: int = 2,
 ) -> EdgeMap:
     """Compute the per-cell stroke map for an image.
+
+    FL-4096 (B): when ``use_nms_hysteresis`` is True (default), the pipeline
+    runs the full Canny edge-chain extraction:
+
+        DoG (optional) → Sobel → non-maximum suppression → double threshold
+                       → hysteresis tracking → per-cell aggregation
+
+    Per cell, the orientation is the CIRCULAR MEAN of surviving chain
+    pixels' orientations (consistent across adjacent cells on the same
+    chain), and a cell only fires as a stroke when it contains at least
+    ``min_chain_pixels_per_cell`` surviving chain pixels — eliminating
+    isolated single-pixel fragments that produced the "jumbled" output.
 
     Args:
         image: source image (RGBA preferred).
         cell_size: (width, height) of one cell in pixels.
-        magnitude_threshold: per-pixel Sobel magnitude required for a cell to
-            be considered a stroke. Tuned for 6×6 cells with int-pixel data
-            in [0, 255]. Higher = fewer strokes.
+        magnitude_threshold: per-pixel Sobel magnitude HIGH threshold (used
+            as the strong-edge gate). Tuned for 6×6 cells with luminance in
+            [0, 255]. Higher = fewer strokes.
         use_dog: when True, run DoG before Sobel to suppress flat-fill noise.
         dog_sigma_narrow / dog_sigma_wide: σ values for the DoG band-pass.
-        cell_alpha_fraction_required: a cell with fewer than this fraction of
-            non-transparent pixels never becomes a stroke (transparent
-            background and sparse anti-alias halos shouldn't fire).
+        cell_alpha_fraction_required: cells with fewer than this fraction of
+            non-transparent pixels are never strokes.
+        use_nms_hysteresis: enable Canny NMS + hysteresis chain extraction
+            (FL-4096 B). When False, falls back to the FL-4095 v1 behavior
+            of per-cell magnitude peak (kept for ablation testing only).
+        nms_low_ratio / nms_high_ratio: hysteresis double-threshold values
+            expressed as multipliers of ``magnitude_threshold``. low must be
+            < high. Defaults: low = 0.4×threshold, high = 1.0×threshold.
+        min_chain_pixels_per_cell: a cell must contain at least this many
+            surviving chain pixels to fire as a stroke. Filters out cells
+            grazed by long thin chains that happen to clip one pixel.
 
     Returns:
         EdgeMap with per-cell CellEdgeInfo plus the raw gradient maps for
@@ -254,7 +403,6 @@ def compute_edge_map(
     luminance = _luminance_from_rgba(rgba)
     if use_dog:
         dog = difference_of_gaussians(luminance, dog_sigma_narrow, dog_sigma_wide)
-        # Feed |DoG| into Sobel — strengthens edges, suppresses flat regions.
         sobel_input = np.abs(dog).astype(np.float32)
     else:
         dog = None
@@ -264,37 +412,56 @@ def compute_edge_map(
     magnitude = np.sqrt(gx * gx + gy * gy)
     orientation = np.arctan2(gy, gx)
 
+    if use_nms_hysteresis:
+        # FL-4096 (B): full Canny chain extraction.
+        nms_mag = non_maximum_suppression(magnitude, orientation)
+        chain_mask = hysteresis_threshold(
+            nms_mag,
+            low=magnitude_threshold * nms_low_ratio,
+            high=magnitude_threshold * nms_high_ratio,
+        )
+        # Surviving chain magnitude — zero outside the chain.
+        chain_mag = np.where(chain_mask, nms_mag, 0.0)
+    else:
+        chain_mask = magnitude >= magnitude_threshold
+        chain_mag = np.where(chain_mask, magnitude, 0.0)
+
     cells: list[CellEdgeInfo] = []
     for cy in range(grid_h):
         for cx in range(grid_w):
             x0 = cx * cell_w
             y0 = cy * cell_h
-            tile_mag = magnitude[y0 : y0 + cell_h, x0 : x0 + cell_w]
-            tile_ori = orientation[y0 : y0 + cell_h, x0 : x0 + cell_w]
             tile_alpha = rgba[y0 : y0 + cell_h, x0 : x0 + cell_w, 3]
             alpha_frac = float((tile_alpha > 0).sum()) / max(1, cell_w * cell_h)
-            peak_mag = float(tile_mag.max())
-            if (
+            tile_mask = chain_mask[y0 : y0 + cell_h, x0 : x0 + cell_w]
+            survivors = int(tile_mask.sum())
+            peak_mag = float(magnitude[y0 : y0 + cell_h, x0 : x0 + cell_w].max())
+
+            is_stroke = (
                 alpha_frac >= cell_alpha_fraction_required
-                and peak_mag >= magnitude_threshold
-            ):
-                # Take the orientation at the magnitude-peak pixel — that's
-                # the most-confident gradient direction in this cell.
-                idx = int(np.argmax(tile_mag))
-                peak_y, peak_x = divmod(idx, tile_mag.shape[1])
-                peak_ori = float(tile_ori[peak_y, peak_x])
-                glyph = orientation_to_glyph(peak_ori)
+                and survivors >= min_chain_pixels_per_cell
+            )
+
+            if is_stroke:
+                # FL-4096 (B): orientation = circular mean of chain pixels
+                # in this cell, not the peak gradient. Adjacent cells on
+                # the same chain get coherent orientation.
+                tile_ori = orientation[y0 : y0 + cell_h, x0 : x0 + cell_w][tile_mask]
+                mean_ori = _circular_mean(tile_ori)
+                tile_chain_mag = chain_mag[y0 : y0 + cell_h, x0 : x0 + cell_w]
+                rep_mag = float(tile_chain_mag.max())
+                glyph = orientation_to_glyph(mean_ori)
                 fg = _dominant_visible_color(rgba, x0, y0, cell_w, cell_h)
                 cells.append(
                     CellEdgeInfo(
                         cx=cx,
                         cy=cy,
                         is_stroke=True,
-                        magnitude=peak_mag,
-                        orientation_rad=peak_ori,
+                        magnitude=rep_mag,
+                        orientation_rad=mean_ori,
                         suggested_glyph=glyph,
                         suggested_fg=fg,
-                        suggested_bg=(255, 0, 255),  # transparent background
+                        suggested_bg=(255, 0, 255),
                     )
                 )
             else:
@@ -382,6 +549,8 @@ __all__ = [
     "compute_edge_map",
     "difference_of_gaussians",
     "sobel_gradient",
+    "non_maximum_suppression",
+    "hysteresis_threshold",
     "orientation_to_glyph",
     "best_grid_offset",
 ]
