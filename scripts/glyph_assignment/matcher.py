@@ -165,7 +165,13 @@ def assign_cell(
         seen.add(candidate.glyph)
         if len(deduped) >= max(2, config.candidate_limit):
             break
-    ranked = apply_semantic_bias(deduped, region, config.semantic_bias, config.score_delta_threshold)
+    ranked = apply_semantic_bias(
+        deduped,
+        region,
+        config.semantic_bias,
+        config.score_delta_threshold,
+        anti_fill_in_body=config.anti_fill_in_body,
+    )
     alternatives = tuple(ranked[: max(2, config.candidate_limit)])
     chosen = alternatives[0]
     second_score = alternatives[1].score if len(alternatives) > 1 else 0.0
@@ -432,43 +438,78 @@ def assign_image_cells(
                 cache[key] = cached
             tone_cell = replace(cached, x=x, y=y)
 
+            # FL-4099 stick-figure mode dispatch. Precedence:
+            #   silhouette_only > polyline_primary > edge-aware overlay
+            polyline_hit = polyline_lookup.get((x, y))
+            edge = edge_lookup.get((x, y)) if config.edge_aware else None
+            is_polyline_cell = polyline_hit is not None
+            is_stroke_cell = edge is not None and edge.is_stroke
+
+            # FL-4099 (2) silhouette_only: only stroke / polyline cells are
+            # drawn; everything else gets an empty (transparent) glyph.
+            if config.silhouette_only and not is_polyline_cell and not is_stroke_cell:
+                empty = GlyphCandidate(
+                    0, (0, 0, 0), (255, 0, 255), 1.0,
+                    {"silhouette_only": 1.0},
+                    ["FL-4099 (2) silhouette_only: non-contour cell"],
+                )
+                cells.append(AssignedCell(x, y, region, empty, (empty,), 1.0, False))
+                continue
+
+            # FL-4099 (3) polyline_primary: cells on a polyline get the
+            # tangent glyph as FINAL choice — SSIM and edge overlay are
+            # both bypassed.
+            if config.polyline_primary and is_polyline_cell:
+                glyph_code = _orientation_to_glyph(polyline_hit.tangent_rad)
+                chosen = GlyphCandidate(
+                    glyph_code,
+                    tone_cell.chosen.fg,
+                    tone_cell.chosen.bg,
+                    1.0,
+                    {
+                        "polyline_tangent_rad": polyline_hit.tangent_rad,
+                        "tone_glyph": tone_cell.chosen.glyph,
+                    },
+                    ["FL-4099 (3) polyline_primary: tangent glyph"],
+                )
+                cells.append(AssignedCell(x, y, region, chosen, (chosen,), 1.0, False))
+                continue
+
             # 3. FL-4095 edge-aware stroke overlay — keep tone's fg/bg,
             #    swap only the glyph for the orientation-mapped stroke.
             #    FL-4097 (1): when ssim_for_strokes=True, SSIM picks the
             #    glyph instead of the orientation→glyph hardcoded table.
             #    FL-4098 (3): pass already-decided neighbors (top-left,
             #    top, top-right, left) to bias toward family continuity.
-            if config.edge_aware:
-                edge = edge_lookup.get((x, y))
-                if edge is not None and edge.is_stroke:
-                    src_rgb = (
-                        np.array(tile.convert("RGB"))
-                        if config.ssim_for_strokes
-                        else None
+            if is_stroke_cell:
+                src_rgb = (
+                    np.array(tile.convert("RGB"))
+                    if config.ssim_for_strokes
+                    else None
+                )
+                neighbors: list[int] = []
+                if config.ssim_for_strokes:
+                    # cells is row-major; (x, y-1), (x-1, y) etc. live
+                    # at the absolute indices below if in-bounds.
+                    for nx_off, ny_off in ((0, -1), (-1, -1), (1, -1), (-1, 0)):
+                        ny = y + ny_off
+                        nx = x + nx_off
+                        if 0 <= ny < y or (ny == y and nx < x):
+                            idx = ny * cols + nx
+                            if 0 <= idx < len(cells):
+                                neighbors.append(cells[idx].chosen.glyph)
+                cells.append(
+                    _cell_from_edge_overlay(
+                        edge,
+                        tone_cell,
+                        region,
+                        config=config,
+                        source_tile_rgb=src_rgb,
+                        masks=masks,
+                        neighbor_glyphs=neighbors,
                     )
-                    neighbors: list[int] = []
-                    if config.ssim_for_strokes:
-                        # cells is row-major; (x, y-1), (x-1, y) etc. live
-                        # at the absolute indices below if in-bounds.
-                        for nx_off, ny_off in ((0, -1), (-1, -1), (1, -1), (-1, 0)):
-                            ny = y + ny_off
-                            nx = x + nx_off
-                            if 0 <= ny < y or (ny == y and nx < x):
-                                idx = ny * cols + nx
-                                if 0 <= idx < len(cells):
-                                    neighbors.append(cells[idx].chosen.glyph)
-                    cells.append(
-                        _cell_from_edge_overlay(
-                            edge,
-                            tone_cell,
-                            region,
-                            config=config,
-                            source_tile_rgb=src_rgb,
-                            masks=masks,
-                            neighbor_glyphs=neighbors,
-                        )
-                    )
-                    continue
+                )
+                continue
 
             cells.append(tone_cell)
     return cells

@@ -79,7 +79,7 @@ def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
     # FL-4096 (A+B): tone overlay + Canny NMS/hysteresis.
     # FL-4097 (1+2+3): SSIM glyph picker, multi-scale edges, skeleton/polyline.
     common_edge_kwargs = {
-        "edge_aware": True,
+        "edge_aware": False,
         "edge_magnitude_threshold": 80.0,
         "edge_use_dog": True,
         "edge_grid_shift_search_px": 2,
@@ -87,6 +87,13 @@ def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
         "ssim_candidate_filter_by_orientation": True,
         "multi_scale_edges": True,
         "use_skeleton_polyline": True,
+        # FL-4099 stick-figure modes — env-controlled per-feature toggles.
+        #   GLYPH_ANTI_FILL=1 → anti-fill bias in body.*/armor.* regions (default ON)
+        #   GLYPH_POLYLINE_PRIMARY=1 → polyline cells use tangent glyph (default ON)
+        #   GLYPH_SILHOUETTE_ONLY=1 → only stroke/polyline cells drawn (default OFF)
+        "anti_fill_in_body": _os.environ.get("GLYPH_ANTI_FILL", "1") == "1",
+        "polyline_primary": _os.environ.get("GLYPH_POLYLINE_PRIMARY", "1") == "1",
+        "silhouette_only": _os.environ.get("GLYPH_SILHOUETTE_ONLY", "0") == "1",
     }
     return {
         "player": GlyphAssignmentConfig(
@@ -328,6 +335,11 @@ def _upload_session(client, xp_path: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="convert only the first N source sheets")
+    parser.add_argument(
+        "--name-filter",
+        default=None,
+        help="only convert source sheets whose stem starts with this prefix (e.g. knight1)",
+    )
     args = parser.parse_args()
 
     xps_dir = OUT_DIR / "xps"
@@ -345,6 +357,8 @@ def main() -> None:
     client = app.test_client()
 
     source_paths = sorted(SOURCE_DIR.glob("*-source.png"))
+    if args.name_filter is not None:
+        source_paths = [p for p in source_paths if p.name.startswith(args.name_filter)]
     if args.limit is not None:
         source_paths = source_paths[: args.limit]
 

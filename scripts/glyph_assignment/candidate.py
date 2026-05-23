@@ -54,6 +54,17 @@ class GlyphAssignmentConfig:
     # strokes by the Sobel pass get promoted to stroke.
     use_skeleton_polyline: bool = False
     skeleton_dp_epsilon: float = 1.5
+    # FL-4099 stick-figure modes (composable). Defaults preserve FL-4098.
+    #   anti_fill_in_body: penalize fill glyphs in body.*/armor.* regions
+    #     (mild — body cells get thinner/striped glyphs)
+    #   polyline_primary: cells on a polyline get tangent glyph as FINAL
+    #     decision; SSIM is bypassed for those cells (surgical)
+    #   silhouette_only: non-stroke / non-polyline cells emit empty glyph;
+    #     true line-art output, body interior is background (most extreme)
+    # Precedence: silhouette_only > polyline_primary > anti_fill_in_body.
+    anti_fill_in_body: bool = False
+    polyline_primary: bool = False
+    silhouette_only: bool = False
 
 
 @dataclass(frozen=True)

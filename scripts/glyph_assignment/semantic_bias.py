@@ -135,30 +135,65 @@ def _merge_hints(
     return result
 
 
+# FL-4099 (1): fill-family glyphs that get penalized when anti_fill_in_body
+# fires in body.*/armor.* regions. The penalty is structural — these glyphs
+# carry no contour information, only tone, so a stick-figure rendering
+# explicitly does NOT want them.
+_ANTI_FILL_GLYPHS: frozenset[int] = frozenset({
+    219,  # █ full block
+    178,  # ▓ heavy shade
+    177,  # ▒ medium shade
+    176,  # ░ light shade
+    220,  # ▄ lower half block
+    221,  # ▌ left half block
+    222,  # ▐ right half block
+    223,  # ▀ upper half block
+})
+
+
+def _is_body_region(region: str | None) -> bool:
+    return bool(region) and (region.startswith("body.") or region.startswith("armor."))
+
+
 def apply_semantic_bias(
     candidates: list[GlyphCandidate],
     region: str | None,
     semantic_bias: dict[str, dict[int, float]],
     score_delta_threshold: float,
+    *,
+    anti_fill_in_body: bool = False,
 ) -> list[GlyphCandidate]:
-    if not candidates or not region or region not in semantic_bias:
+    # FL-4099 (1) anti-fill penalty: even if no positive-bias entry exists
+    # for the region, body cells should rerank fill glyphs DOWN.
+    apply_anti_fill = anti_fill_in_body and _is_body_region(region)
+    if not apply_anti_fill and (
+        not candidates or not region or region not in semantic_bias
+    ):
         return candidates
-    top_score = candidates[0].score
-    weights = semantic_bias[region]
-    if not weights:
+    top_score = candidates[0].score if candidates else 0.0
+    weights = semantic_bias.get(region, {}) if region else {}
+    if not weights and not apply_anti_fill:
         return candidates
-    max_weight = max(abs(value) for value in weights.values()) or 1.0
+    max_weight = max((abs(v) for v in weights.values()), default=1.0) or 1.0
     adjusted: list[GlyphCandidate] = []
     for candidate in candidates:
         close = top_score - candidate.score <= score_delta_threshold
-        weight = weights.get(candidate.glyph, 0.0) / max_weight
-        if not close or weight == 0:
+        weight = weights.get(candidate.glyph, 0.0) / max_weight if weights else 0.0
+        # FL-4099 (1): anti-fill penalty composes with the normal bias.
+        anti_fill_penalty = 0.0
+        if apply_anti_fill and candidate.glyph in _ANTI_FILL_GLYPHS:
+            anti_fill_penalty = -score_delta_threshold * 1.5
+        if (not close or weight == 0) and anti_fill_penalty == 0.0:
             adjusted.append(candidate)
             continue
-        bonus = score_delta_threshold * weight
+        bonus = score_delta_threshold * weight + anti_fill_penalty
         components = dict(candidate.components)
         components["semantic_bias"] = bonus
-        reasons = [*candidate.reasons, f"semantic bias for {region}"]
+        reasons = [*candidate.reasons]
+        if weight != 0:
+            reasons.append(f"semantic bias for {region}")
+        if anti_fill_penalty != 0:
+            reasons.append(f"FL-4099 (1) anti-fill penalty in {region}")
         adjusted.append(
             GlyphCandidate(
                 candidate.glyph,
