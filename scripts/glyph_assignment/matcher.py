@@ -233,6 +233,7 @@ def _cell_from_edge_overlay(
     config: GlyphAssignmentConfig | None = None,
     source_tile_rgb: np.ndarray | None = None,
     masks: list[GlyphMask] | None = None,
+    neighbor_glyphs: list[int] | None = None,
 ) -> AssignedCell:
     """Build a stroke-cell AssignedCell that OVERLAYS the orientation glyph
     on the tone path's already-picked fg/bg.
@@ -275,6 +276,7 @@ def _cell_from_edge_overlay(
             tone_cell.chosen.bg,
             masks,
             candidate_glyphs=candidate_filter,
+            neighbor_glyphs=neighbor_glyphs,
         )
         if ssim_glyph != 0 and ssim_score_value >= config.ssim_score_floor:
             glyph = ssim_glyph
@@ -434,6 +436,8 @@ def assign_image_cells(
             #    swap only the glyph for the orientation-mapped stroke.
             #    FL-4097 (1): when ssim_for_strokes=True, SSIM picks the
             #    glyph instead of the orientation→glyph hardcoded table.
+            #    FL-4098 (3): pass already-decided neighbors (top-left,
+            #    top, top-right, left) to bias toward family continuity.
             if config.edge_aware:
                 edge = edge_lookup.get((x, y))
                 if edge is not None and edge.is_stroke:
@@ -442,6 +446,17 @@ def assign_image_cells(
                         if config.ssim_for_strokes
                         else None
                     )
+                    neighbors: list[int] = []
+                    if config.ssim_for_strokes:
+                        # cells is row-major; (x, y-1), (x-1, y) etc. live
+                        # at the absolute indices below if in-bounds.
+                        for nx_off, ny_off in ((0, -1), (-1, -1), (1, -1), (-1, 0)):
+                            ny = y + ny_off
+                            nx = x + nx_off
+                            if 0 <= ny < y or (ny == y and nx < x):
+                                idx = ny * cols + nx
+                                if 0 <= idx < len(cells):
+                                    neighbors.append(cells[idx].chosen.glyph)
                     cells.append(
                         _cell_from_edge_overlay(
                             edge,
@@ -450,6 +465,7 @@ def assign_image_cells(
                             config=config,
                             source_tile_rgb=src_rgb,
                             masks=masks,
+                            neighbor_glyphs=neighbors,
                         )
                     )
                     continue

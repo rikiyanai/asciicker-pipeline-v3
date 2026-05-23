@@ -45,11 +45,26 @@ class FamilySpec:
     cell_h_chars: int
 
 
-FAMILIES = {
-    "player": FamilySpec((1, 8), 14, 20),
-    "attack": FamilySpec((8,), 18, 20),
-    "plydie": FamilySpec((5,), 22, 22),
-}
+import os as _os
+
+# FL-4098 (1): hires FAMILIES doubles char dimensions per frame.
+# Source TILE_PX (52) is unchanged; each char cell now consumes ~1.4 source
+# pixels (was ~2.9) so SSIM has 4x more cells to work with per figure.
+# Toggle: env GLYPH_HIRES=1 (default ON for the FL-4098 smoke test).
+_HIRES = _os.environ.get("GLYPH_HIRES", "1") == "1"
+
+if _HIRES:
+    FAMILIES = {
+        "player": FamilySpec((1, 8), 28, 40),
+        "attack": FamilySpec((8,), 36, 40),
+        "plydie": FamilySpec((5,), 44, 44),
+    }
+else:
+    FAMILIES = {
+        "player": FamilySpec((1, 8), 14, 20),
+        "attack": FamilySpec((8,), 18, 20),
+        "plydie": FamilySpec((5,), 22, 22),
+    }
 
 # Per-family base configs — semantic_bias is injected per-run from semantic maps.
 # Values follow the block extractor's candidate_limit=12 / score_delta_threshold=0.35

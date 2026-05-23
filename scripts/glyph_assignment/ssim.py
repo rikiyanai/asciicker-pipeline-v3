@@ -70,6 +70,30 @@ def cache_masks(masks: list[GlyphMask]) -> None:
     _MASK_CACHE[key] = [(m.glyph, m.mask.astype(np.float32)) for m in masks]
 
 
+# FL-4098 (3): orientation families for continuity bonus.
+# Cells that share a family with neighbors get a small SSIM boost.
+_FAMILY_VERTICAL = frozenset({124, 33, 58, 59, 73, 105, 108, 84, 116})
+_FAMILY_HORIZONTAL = frozenset({95, 45, 61, 126, 196, 205, 175})
+_FAMILY_DIAG_DOWN = frozenset({92, 96})  # \ ` (down-right slope)
+_FAMILY_DIAG_UP = frozenset({47, 39})    # / ' (up-right slope)
+_FAMILY_FILL = frozenset({219, 178, 177, 176, 220, 221, 222, 223})
+
+_GLYPH_TO_FAMILY: dict[int, str] = {}
+for family_name, members in (
+    ("vertical", _FAMILY_VERTICAL),
+    ("horizontal", _FAMILY_HORIZONTAL),
+    ("diag_down", _FAMILY_DIAG_DOWN),
+    ("diag_up", _FAMILY_DIAG_UP),
+    ("fill", _FAMILY_FILL),
+):
+    for g in members:
+        _GLYPH_TO_FAMILY[g] = family_name
+
+
+def family_of(glyph: int) -> str:
+    return _GLYPH_TO_FAMILY.get(glyph, "other")
+
+
 def best_glyph_by_ssim(
     source_tile_rgb: np.ndarray,
     fg: tuple[int, int, int],
@@ -77,6 +101,8 @@ def best_glyph_by_ssim(
     masks: list[GlyphMask],
     *,
     candidate_glyphs: list[int] | None = None,
+    neighbor_glyphs: list[int] | None = None,
+    continuity_bonus: float = 0.05,
 ) -> tuple[int, float]:
     """Pick the glyph whose rendered tile has highest SSIM with the source.
 
@@ -107,11 +133,31 @@ def best_glyph_by_ssim(
     best_score = -1.0
     glyph_filter = set(candidate_glyphs) if candidate_glyphs is not None else None
 
+    # FL-4098 (3): continuity bonus — tally neighbor families.
+    neighbor_families: dict[str, int] = {}
+    if neighbor_glyphs:
+        for g in neighbor_glyphs:
+            fam = family_of(g)
+            if fam == "other":
+                continue
+            neighbor_families[fam] = neighbor_families.get(fam, 0) + 1
+    dominant_neighbor_family = (
+        max(neighbor_families.items(), key=lambda kv: kv[1])[0]
+        if neighbor_families
+        else None
+    )
+
     for mask_item in masks:
         if glyph_filter is not None and mask_item.glyph not in glyph_filter:
             continue
-        mask = mask_item.mask.astype(np.float32)
-        # Rendered luminance tile: fg where mask=True, bg elsewhere
+        # FL-4098 (2): prefer the supersampled soft mask when available —
+        # gives SSIM a smoother similarity signal on curve glyphs.
+        if mask_item.soft_mask is not None:
+            mask = mask_item.soft_mask
+        else:
+            mask = mask_item.mask.astype(np.float32)
+        # Rendered luminance tile: fg where mask=1, bg where mask=0,
+        # smooth interpolation along antialiased edges.
         rendered = mask * fg_lum + (1.0 - mask) * bg_lum
         # Resize source_lum to mask shape if needed
         if src_lum.shape != rendered.shape:
@@ -126,6 +172,13 @@ def best_glyph_by_ssim(
         else:
             src_resampled = src_lum
         score = _ssim_pair(src_resampled, rendered)
+        # FL-4098 (3) continuity bonus: prefer glyphs in the dominant
+        # neighbor family. Only applied when the bonus would not promote
+        # a clearly inferior glyph (gate to scores within 0.10 of the best).
+        if dominant_neighbor_family is not None:
+            this_family = family_of(mask_item.glyph)
+            if this_family == dominant_neighbor_family:
+                score += continuity_bonus
         if score > best_score:
             best_score = score
             best_glyph = mask_item.glyph
