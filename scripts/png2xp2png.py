@@ -48,6 +48,32 @@ import tempfile
 import zlib
 
 
+# Shared transparency constants live in pipeline_v2.xp_codec. Bootstrap the
+# import path so this script works whether invoked from pipeline-v3/scripts/
+# or directly via `python pipeline-v3/scripts/png2xp2png.py`.
+try:
+    from pipeline_v2.xp_codec import (
+        LEGACY_YELLOW_KEY_RGB,
+        MAGENTA_KEY_RGB,
+        sprite_transparency_keys,
+    )
+except ImportError:
+    _here = os.path.dirname(os.path.abspath(__file__))
+    for _candidate in (
+        os.path.join(_here, "..", "src"),
+        os.path.join(_here, "..", "..", "pipeline-v3", "src"),
+    ):
+        _candidate = os.path.normpath(_candidate)
+        if os.path.isdir(os.path.join(_candidate, "pipeline_v2")):
+            sys.path.insert(0, _candidate)
+            break
+    from pipeline_v2.xp_codec import (  # type: ignore[no-redef]
+        LEGACY_YELLOW_KEY_RGB,
+        MAGENTA_KEY_RGB,
+        sprite_transparency_keys,
+    )
+
+
 # ---------------------------------------------------------------------------
 # BDF font loader & glyph matcher
 # ---------------------------------------------------------------------------
@@ -243,16 +269,23 @@ def read_xp(path):
 # Cell renderer — geometric fallback
 # ---------------------------------------------------------------------------
 
-TRANSPARENT_BG = (255, 0, 255)
+# Backwards-compatible alias kept for any external callers that imported the
+# old constant. New code should import MAGENTA_KEY_RGB from pipeline_v2.xp_codec.
+TRANSPARENT_BG = MAGENTA_KEY_RGB
 _GRID_COLOR = (40, 40, 40, 255)
 
 # Separator colour for triptych view (dark grey, fully opaque)
 _SEP_COLOR = (30, 30, 30, 255)
 _SEP_W = 4  # separator width in pixels
 
+# Default key set used when no per-sprite key is supplied (renders called
+# without a `keys` argument still treat magenta + legacy yellow as transparent).
+_DEFAULT_KEYS: frozenset[tuple[int, int, int]] = frozenset({MAGENTA_KEY_RGB, LEGACY_YELLOW_KEY_RGB})
 
-def _is_transparent(bg):
-    return bg[0] == 255 and bg[1] == 0 and bg[2] == 255
+
+def _is_transparent(color, keys=_DEFAULT_KEYS):
+    """Return True if (r,g,b) of *color* matches any transparency key."""
+    return (color[0], color[1], color[2]) in keys
 
 
 def _fg_px(fg):
@@ -268,71 +301,65 @@ def _tp_px():
     return (0, 0, 0, 0)
 
 
-def render_cell_geo(glyph, fg, bg, scale, px, py):
-    """Geometric block-glyph renderer.  Returns (r, g, b, a)."""
-    transparent = _is_transparent(bg)
+def render_cell_geo(glyph, fg, bg, scale, px, py, keys=_DEFAULT_KEYS):
+    """Geometric block-glyph renderer.  Returns (r, g, b, a).
+
+    Both fg and bg are independently checked against the transparency *keys*:
+    a key-matching fg makes fg pixels transparent, a key-matching bg makes bg
+    pixels transparent. This mirrors upstream sprite.cpp.
+    """
+    bg_tp = _is_transparent(bg, keys)
+    fg_tp = _is_transparent(fg, keys)
+    fg_px_ = (_tp_px() if fg_tp else _fg_px(fg))
+    bg_px_ = (_tp_px() if bg_tp else _bg_px(bg))
 
     half = scale // 2
 
     if glyph in (219, 32, 0):
-        return _tp_px() if transparent else _bg_px(bg)
+        return bg_px_
 
     if glyph == 220:                        # lower half ▄: top=bg, bottom=fg
-        on_fg = py >= half
-        if on_fg:
-            return _fg_px(fg)
-        return _tp_px() if transparent else _bg_px(bg)
+        return fg_px_ if py >= half else bg_px_
 
     if glyph == 221:                        # left half  ▌: left=fg, right=bg
-        on_fg = px < half
-        if on_fg:
-            return _fg_px(fg)
-        return _tp_px() if transparent else _bg_px(bg)
+        return fg_px_ if px < half else bg_px_
 
     if glyph == 222:                        # right half ▐: left=bg, right=fg
-        on_fg = px >= half
-        if on_fg:
-            return _fg_px(fg)
-        return _tp_px() if transparent else _bg_px(bg)
+        return fg_px_ if px >= half else bg_px_
 
     if glyph == 223:                        # upper half ▀: top=fg, bottom=bg
-        on_fg = py < half
-        if on_fg:
-            return _fg_px(fg)
-        return _tp_px() if transparent else _bg_px(bg)
+        return fg_px_ if py < half else bg_px_
 
     if glyph == 176:                        # light dither ░ 25% fg
         on_fg = px % 2 == 0 and py % 2 == 0
-        if on_fg:
-            return _fg_px(fg)
-        return _tp_px() if transparent else _bg_px(bg)
+        return fg_px_ if on_fg else bg_px_
 
     if glyph == 177:                        # medium dither ▒ 50%
         on_fg = (px + py) % 2 == 0
-        if on_fg:
-            return _fg_px(fg)
-        return _tp_px() if transparent else _bg_px(bg)
+        return fg_px_ if on_fg else bg_px_
 
     if glyph == 178:                        # dark dither ▓ 75% fg
         on_bg = px % 2 == 0 and py % 2 == 0
-        if on_bg:
-            return _tp_px() if transparent else _bg_px(bg)
-        return _fg_px(fg)
+        return bg_px_ if on_bg else fg_px_
 
     # unknown — bg fill + tiny fg dot at centre
     cx, cy = scale // 2, scale // 2
     if abs(px - cx) <= 1 and abs(py - cy) <= 1:
-        return _fg_px(fg)
-    return _tp_px() if transparent else _bg_px(bg)
+        return fg_px_
+    return bg_px_
 
 
 # ---------------------------------------------------------------------------
 # Cell renderer — BDF font path
 # ---------------------------------------------------------------------------
 
-def render_cell_font(glyph, fg, bg, scale, px, py, font, mask_cache):
-    """Font-based renderer.  Returns (r, g, b, a).  Falls back to geo for missing glyphs."""
-    transparent = _is_transparent(bg)
+def render_cell_font(glyph, fg, bg, scale, px, py, font, mask_cache, keys=_DEFAULT_KEYS):
+    """Font-based renderer.  Returns (r, g, b, a).  Falls back to geo for missing glyphs.
+
+    Both fg and bg are checked against transparency *keys* independently.
+    """
+    bg_tp = _is_transparent(bg, keys)
+    fg_tp = _is_transparent(fg, keys)
 
     # glyph matching: CP437 -> Unicode -> BDF mask
     uni = _CP437_TO_UNI.get(glyph & 0xFF, glyph)
@@ -342,23 +369,25 @@ def render_cell_font(glyph, fg, bg, scale, px, py, font, mask_cache):
 
     scaled = mask_cache[uni]
     if scaled is None:
-        return render_cell_geo(glyph, fg, bg, scale, px, py)
+        return render_cell_geo(glyph, fg, bg, scale, px, py, keys)
 
     on_fg = bool(scaled[py * scale + px])
     if on_fg:
-        return _fg_px(fg)
-    return _tp_px() if transparent else _bg_px(bg)
+        return _tp_px() if fg_tp else _fg_px(fg)
+    return _tp_px() if bg_tp else _bg_px(bg)
 
 
 # ---------------------------------------------------------------------------
 # Layer renderer
 # ---------------------------------------------------------------------------
 
-def render_layer(width, height, cells, scale, grid, font=None):
+def render_layer(width, height, cells, scale, grid, font=None, keys=_DEFAULT_KEYS):
     """Render one XP layer to a flat RGBA bytearray (row-major).
 
     cells column-major: index = x * height + y.
     Returns (img_w, img_h, bytearray).  4 bytes per pixel (RGBA).
+    *keys* is the set of transparent color keys (magenta, legacy yellow, and
+    optionally the per-sprite L0[0,0].bg).
     """
     img_w = width  * scale + (width  - 1 if grid else 0)
     img_h = height * scale + (height - 1 if grid else 0)
@@ -378,9 +407,9 @@ def render_layer(width, height, cells, scale, grid, font=None):
                 row_start = (oy + py) * stride + ox * 4
                 for px in range(scale):
                     if font is not None:
-                        r, g, b, a = render_cell_font(glyph, fg, bg, scale, px, py, font, mask_cache)
+                        r, g, b, a = render_cell_font(glyph, fg, bg, scale, px, py, font, mask_cache, keys)
                     else:
-                        r, g, b, a = render_cell_geo(glyph, fg, bg, scale, px, py)
+                        r, g, b, a = render_cell_geo(glyph, fg, bg, scale, px, py, keys)
                     off = row_start + px * 4
                     img[off]     = r
                     img[off + 1] = g
@@ -404,7 +433,7 @@ def render_layer(width, height, cells, scale, grid, font=None):
     return img_w, img_h, img
 
 
-def render_triptych(layers, scale, grid, font=None):
+def render_triptych(layers, scale, grid, font=None, keys=_DEFAULT_KEYS):
     """Render all XP layers side by side into one RGBA image.
 
     Returns (img_w, img_h, bytearray).
@@ -412,7 +441,7 @@ def render_triptych(layers, scale, grid, font=None):
     """
     rendered = []
     for w, h, cells in layers:
-        lw, lh, buf = render_layer(w, h, cells, scale, grid, font)
+        lw, lh, buf = render_layer(w, h, cells, scale, grid, font, keys)
         rendered.append((lw, lh, buf))
 
     sep = _SEP_W
@@ -599,15 +628,19 @@ def main():
 
     total = len(layers)
     xp_w, xp_h, _ = layers[0]
+    keys = sprite_transparency_keys(layers)
+    sprite_key = next(iter(keys - {MAGENTA_KEY_RGB, LEGACY_YELLOW_KEY_RGB}), None)
+    key_tag = f"L0[0,0].bg=rgb{sprite_key}" if sprite_key else "(no extra L0 key)"
     print(f"Loaded: {total} layer(s), {xp_w}x{xp_h} cells, "
           f"output {xp_w * args.scale}x{xp_h * args.scale} px per layer")
+    print(f"Transparency keys: magenta + legacy_yellow + {key_tag}")
 
     # ---- Render ------------------------------------------------------------
     mode_tag = f"font({font.cell_w}x{font.cell_h})" if font else "geo"
 
     if args.triptych:
         out_path = args.output or f"{base}_triptych.png"
-        img_w, img_h, rgba = render_triptych(layers, args.scale, args.grid, font)
+        img_w, img_h, rgba = render_triptych(layers, args.scale, args.grid, font, keys)
         write_png(out_path, img_w, img_h, rgba)
         labels = " | ".join(f"L{i}({layers[i][0]}x{layers[i][1]})" for i in range(total))
         print(f"  [{mode_tag}] triptych [{labels}] -> {img_w}x{img_h} px  ->  {out_path}")
@@ -626,7 +659,7 @@ def main():
 
     for idx in indices:
         w, h, cells = layers[idx]
-        img_w, img_h, rgba = render_layer(w, h, cells, args.scale, args.grid, font)
+        img_w, img_h, rgba = render_layer(w, h, cells, args.scale, args.grid, font, keys)
 
         if args.output and not args.all_layers:
             out_path = args.output
