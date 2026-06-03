@@ -62,6 +62,10 @@ _SCRIPTS_DIR = str(ROOT / "scripts")
 if _SCRIPTS_DIR not in _sys.path:
     _sys.path.insert(0, _SCRIPTS_DIR)
 
+# Rich glyph assignment (FL-4095+ CP437 font-mask matcher)
+from glyph_assignment import GlyphAssignmentConfig, assign_image_cells
+from glyph_assignment.matcher import default_font_path
+
 MAGENTA_BG = (255, 0, 255)
 
 # Native player skin contract: the WASM engine expects exactly these dimensions.
@@ -2667,6 +2671,63 @@ def _cell_from_patch(
     return (223, t_rgb, b_rgb)
 
 
+# ---------------------------------------------------------------------------
+# Rich glyph assignment helpers (FL-4095+ CP437 font-mask matcher)
+# ---------------------------------------------------------------------------
+
+
+def _make_rich_config(font_path: Path) -> GlyphAssignmentConfig:
+    """Create a FL-4095 baseline GlyphAssignmentConfig for generic sprite conversion."""
+    return GlyphAssignmentConfig(
+        font_path=font_path,
+        font_cell_size=(6, 6),
+        target_cell_size=(6, 6),
+        candidate_limit=5,
+        score_delta_threshold=0.15,
+        edge_aware=True,
+        edge_magnitude_threshold=80.0,
+        edge_use_dog=True,
+        edge_grid_shift_search_px=2,
+        ssim_for_strokes=True,
+        ssim_candidate_filter_by_orientation=True,
+        multi_scale_edges=True,
+        use_skeleton_polyline=True,
+        anti_fill_in_body=True,
+        polyline_primary=True,
+    )
+
+
+_RICH_CELL_PX = 6
+
+
+def _rich_cells_from_tile(
+    im: Image.Image,
+    font_path: Path,
+    out_w: int,
+    out_h: int,
+) -> list[list[Cell]]:
+    """Convert a source tile to a grid of Cells using the rich CP437 matcher.
+
+    Resizes *im* to (out_w * _RICH_CELL_PX) x (out_h * _RICH_CELL_PX) pixels,
+    then runs ``assign_image_cells`` which matches each 6x6 block against all
+    256 BDF font masks using IoU + edge detection + SSIM.
+    """
+    sheet = im.convert("RGBA").resize(
+        (out_w * _RICH_CELL_PX, out_h * _RICH_CELL_PX),
+        Image.Resampling.NEAREST,
+    )
+    config = _make_rich_config(font_path)
+    assigned = assign_image_cells(sheet, config)
+    cells: list[list[Cell]] = []
+    for y in range(out_h):
+        row: list[Cell] = []
+        for x in range(out_w):
+            ac = assigned[y * out_w + x]
+            row.append((ac.chosen.glyph, ac.chosen.fg, ac.chosen.bg))
+        cells.append(row)
+    return cells
+
+
 def _tile_to_cells(
     im: Image.Image,
     bg_rgb: tuple[int, int, int],
@@ -2803,7 +2864,11 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
                 scaled_w = max(1, int(src_w * scale))
                 scaled_h = max(1, int(src_h * scale))
                 scaled_im = im.resize((scaled_w, scaled_h), Image.LANCZOS)
-                raw_cells = _tile_to_cells(scaled_im, bg_rgb, scaled_w, scaled_h, signal_mode=signal_mode)
+                if cfg.assignment_mode == "rich":
+                    font_path = default_font_path(ROOT)
+                    raw_cells = _rich_cells_from_tile(scaled_im, font_path, scaled_w, scaled_h)
+                else:
+                    raw_cells = _tile_to_cells(scaled_im, bg_rgb, scaled_w, scaled_h, signal_mode=signal_mode)
                 transparent = _transparent_cell()
                 flat: list[Cell] = [transparent] * (fb_cols * fb_rows)
                 for ty in range(scaled_h):
@@ -2900,13 +2965,17 @@ def run_pipeline(cfg: RunConfig, req_id: str) -> dict[str, Any]:
                             fg_tile = tile
                             inner_w = max(1, cell_w_chars)
                             inner_h = max(1, cell_h_chars)
-                            inner_cells = _tile_to_cells(
-                                fg_tile,
-                                bg_rgb,
-                                inner_w,
-                                inner_h,
-                                signal_mode=signal_mode,
-                            )
+                            if cfg.assignment_mode == "rich":
+                                font_path = default_font_path(ROOT)
+                                inner_cells = _rich_cells_from_tile(fg_tile, font_path, inner_w, inner_h)
+                            else:
+                                inner_cells = _tile_to_cells(
+                                    fg_tile,
+                                    bg_rgb,
+                                    inner_w,
+                                    inner_h,
+                                    signal_mode=signal_mode,
+                                )
                             tile_cells = [[_transparent_cell() for _ in range(cell_w_chars)] for _ in range(cell_h_chars)]
                             off_x = max(0, (cell_w_chars - inner_w) // 2)
                             off_y = max(0, cell_h_chars - inner_h)

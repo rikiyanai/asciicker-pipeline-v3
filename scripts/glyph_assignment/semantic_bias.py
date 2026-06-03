@@ -24,28 +24,41 @@ _HB: dict[int, float] = {220: 0.6, 221: 0.6, 222: 0.6, 223: 0.6}
 _SH: dict[int, float] = {176: 0.3, 177: 0.4, 178: 0.5}
 _SK: dict[int, float] = {47: 0.5, 92: 0.5, 179: 0.3, 196: 0.3}
 
-# Default bias applied to ALL cells regardless of region, including those with no
-# semantic label.  Stored under the reserved key ``"_default"`` in each role table.
-#
-# Purpose: at the 6×6 px cell size, half-block glyphs (220–223) and shade glyphs
-# (176–178) routinely tie with text look-alikes (95=_, 254=■, 34=", 55=7, etc.)
-# because their ink coverage is similar at low resolution.  A weak preference for
-# geometric sprite-appropriate glyphs breaks these ties without overriding regions
-# that carry stronger domain-specific weights.
-_SPRITE_DEFAULT: dict[int, float] = {
-    # Half-blocks: strongly preferred over text/punctuation look-alikes
-    220: 0.6, 221: 0.6, 222: 0.6, 223: 0.6,
-    # Shade glyphs: preferred for textured sprite areas
-    176: 0.3, 177: 0.4, 178: 0.5,
-    # Diagonal strokes: preferred for sprite outlines and limbs
-    47: 0.3, 92: 0.3,
-    # Full block: fallback when a cell is nearly solid but not solid-classified
-    219: 0.2,
-}
+# Canonical region keys produced by final_json_ingest.canonicalize().
+# Listed here as empty entries so apply_semantic_bias finds the region key
+# even before semantic_maps/ JSONs are loaded — the JSON-derived weights from
+# load_optional_semantic_bias() merge into these via _merge_hints().
+_CANONICAL_REGION_KEYS: tuple[str, ...] = (
+    "mount.bigbee",
+    "mount.wolf",
+    "rider.torso_limbless",
+    "rider.torso_with_sword",
+    "rider.torso_with_shield",
+    "weapon.sword",
+    "weapon.crossbow.body",
+    "weapon.crossbow.arrow",
+    "weapon.crossbow.string",
+    "weapon.swoosh",
+    "armor.body",
+    "helmet",
+    "shield",
+    "body.player",
+    "body.plydie",
+    "composite",
+)
+
+
+def _seed_canonical_regions() -> dict[str, dict[int, float]]:
+    """Return canonical region keys with empty weight dicts.
+
+    The empty entries make `apply_semantic_bias` find the region by name even
+    before semantic_maps/{role}-*.json files populate the actual weights.
+    """
+    return {region: {} for region in _CANONICAL_REGION_KEYS}
+
 
 BUILT_IN_ROLE_TABLES: dict[str, dict[str, dict[int, float]]] = {
     "player": {
-        "_default":     _SPRITE_DEFAULT,
         "hair":         {**_HB},
         "face":         {34: 0.8, 118: 0.8, 223: 0.5, 46: 0.4, 111: 0.4, **_HB},
         "shirt":        {**_HB, **_SH},
@@ -53,9 +66,9 @@ BUILT_IN_ROLE_TABLES: dict[str, dict[str, dict[int, float]]] = {
         "boots":        {**_HB, 178: 0.6},
         "arms":         {**_HB},
         "subcell_fill": {**_HB},
+        **_seed_canonical_regions(),
     },
     "attack": {
-        "_default":     _SPRITE_DEFAULT,
         "weapon":       {47: 0.9, 92: 0.9, **_HB, **_SK, **_SH},
         "face":         {34: 0.8, 118: 0.8, **_HB},
         "shirt":        {**_HB, **_SH},
@@ -63,15 +76,19 @@ BUILT_IN_ROLE_TABLES: dict[str, dict[str, dict[int, float]]] = {
         "boots":        {**_HB, 178: 0.6},
         "arms":         {**_HB, **_SK},
         "subcell_fill": {**_HB},
+        **_seed_canonical_regions(),
     },
     "plydie": {
-        "_default":     _SPRITE_DEFAULT,
         "body":  {219: 0.7, **_HB, **_SH},
         "arms":  {**_HB, **_SH},
         "shirt": {**_HB, **_SH},
         "pants": {**_HB, **_SH},
         "boots": {**_HB, 178: 0.6},
+        **_seed_canonical_regions(),
     },
+    "wolfie": _seed_canonical_regions(),
+    "bigbee": _seed_canonical_regions(),
+    "wolack": _seed_canonical_regions(),
 }
 
 
@@ -118,37 +135,65 @@ def _merge_hints(
     return result
 
 
+# FL-4099 (1): fill-family glyphs that get penalized when anti_fill_in_body
+# fires in body.*/armor.* regions. The penalty is structural — these glyphs
+# carry no contour information, only tone, so a stick-figure rendering
+# explicitly does NOT want them.
+_ANTI_FILL_GLYPHS: frozenset[int] = frozenset({
+    219,  # █ full block
+    178,  # ▓ heavy shade
+    177,  # ▒ medium shade
+    176,  # ░ light shade
+    220,  # ▄ lower half block
+    221,  # ▌ left half block
+    222,  # ▐ right half block
+    223,  # ▀ upper half block
+})
+
+
+def _is_body_region(region: str | None) -> bool:
+    return bool(region) and (region.startswith("body.") or region.startswith("armor."))
+
+
 def apply_semantic_bias(
     candidates: list[GlyphCandidate],
     region: str | None,
     semantic_bias: dict[str, dict[int, float]],
     score_delta_threshold: float,
+    *,
+    anti_fill_in_body: bool = False,
 ) -> list[GlyphCandidate]:
-    if not candidates:
+    # FL-4099 (1) anti-fill penalty: even if no positive-bias entry exists
+    # for the region, body cells should rerank fill glyphs DOWN.
+    apply_anti_fill = anti_fill_in_body and _is_body_region(region)
+    if not apply_anti_fill and (
+        not candidates or not region or region not in semantic_bias
+    ):
         return candidates
-    # Resolve effective region: use labelled region if present in the bias table,
-    # otherwise fall back to the reserved ``"_default"`` key so that unregioned
-    # cells still receive the global sprite-glyph preference.
-    effective_region = region if (region and region in semantic_bias) else "_default"
-    if effective_region not in semantic_bias:
+    top_score = candidates[0].score if candidates else 0.0
+    weights = semantic_bias.get(region, {}) if region else {}
+    if not weights and not apply_anti_fill:
         return candidates
-    region = effective_region
-    top_score = candidates[0].score
-    weights = semantic_bias[region]
-    if not weights:
-        return candidates
-    max_weight = max(abs(value) for value in weights.values()) or 1.0
+    max_weight = max((abs(v) for v in weights.values()), default=1.0) or 1.0
     adjusted: list[GlyphCandidate] = []
     for candidate in candidates:
         close = top_score - candidate.score <= score_delta_threshold
-        weight = weights.get(candidate.glyph, 0.0) / max_weight
-        if not close or weight == 0:
+        weight = weights.get(candidate.glyph, 0.0) / max_weight if weights else 0.0
+        # FL-4099 (1): anti-fill penalty composes with the normal bias.
+        anti_fill_penalty = 0.0
+        if apply_anti_fill and candidate.glyph in _ANTI_FILL_GLYPHS:
+            anti_fill_penalty = -score_delta_threshold * 1.5
+        if (not close or weight == 0) and anti_fill_penalty == 0.0:
             adjusted.append(candidate)
             continue
-        bonus = score_delta_threshold * weight
+        bonus = score_delta_threshold * weight + anti_fill_penalty
         components = dict(candidate.components)
         components["semantic_bias"] = bonus
-        reasons = [*candidate.reasons, f"semantic bias for {region}"]
+        reasons = [*candidate.reasons]
+        if weight != 0:
+            reasons.append(f"semantic bias for {region}")
+        if anti_fill_penalty != 0:
+            reasons.append(f"FL-4099 (1) anti-fill penalty in {region}")
         adjusted.append(
             GlyphCandidate(
                 candidate.glyph,

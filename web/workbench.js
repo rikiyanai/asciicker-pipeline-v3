@@ -118,6 +118,7 @@
     cellHChars: 1,
     frameWChars: 1,
     frameHChars: 1,
+    assignmentMode: "geometric",
     selectedFrames: new Set(),
     selectionAnchor: null,
     selectionFocus: null,
@@ -8064,6 +8065,7 @@
       target_cols: Math.max(1, Number(state.gridCols || 1)),
       target_rows: Math.max(1, Number(state.gridRows || 1)),
       native_compat: false,
+      assignment_mode: state.assignmentMode || "geometric",
     };
     const r = await fetch(bp("/api/run"), {
       method: "POST",
@@ -8519,6 +8521,9 @@
     ["classicGeomAngles", "classicGeomFrames", "classicGeomSourceProjs", "classicGeomCellW", "classicGeomCellH"].forEach((id) => {
       $(id)?.addEventListener("input", updateClassicGeometryHint);
       $(id)?.addEventListener("change", updateClassicGeometryHint);
+    });
+    $("wbAssignmentMode")?.addEventListener("change", (e) => {
+      state.assignmentMode = e.target.value;
     });
     $("wbFile").addEventListener("change", () => {
       const f = $("wbFile").files[0];

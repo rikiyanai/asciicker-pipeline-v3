@@ -516,6 +516,8 @@ def create_app() -> Flask:
                 native_compat=_as_bool(payload.get("native_compat"), default=True),
                 target_cols=(int(payload.get("target_cols")) if payload.get("target_cols") is not None else None),
                 target_rows=(int(payload.get("target_rows")) if payload.get("target_rows") is not None else None),
+                family=str(payload.get("family", "player")),
+                assignment_mode=str(payload.get("assignment_mode", "geometric")),
             )
             return jsonify(run_pipeline(cfg, req_id)), 200
         except ApiError as e:

@@ -206,6 +206,13 @@
     </div>
     <div class="row">
       <div><label>Name</label><input id="wbName" value="wb_sprite"></div>
+      <div>
+        <label>Glyph Mode</label>
+        <select id="wbAssignmentMode">
+          <option value="geometric">Geometric (fast, half-blocks)</option>
+          <option value="rich">Rich (CP437 font-mask matching)</option>
+        </select>
+      </div>
       <div style="min-width:280px;">
         <label>Auto Plan</label>
         <div id="wbAutoPlan" class="small muted">Derived automatically from the uploaded PNG at convert time.</div>
