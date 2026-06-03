@@ -13559,3 +13559,105 @@ Review correction:
 - Operational thresholds now define `solid`, `close`, and `ambiguous`:
   `solid_bg_threshold`, `solid_feature_max_ratio`, and
   `score_delta_threshold`.
+
+### Bug — EraseTool sets bg=BLACK instead of MAGENTA-transparent (2026-06-01)
+
+**File:** `web/whole-sheet-init.js:186`
+**Problem:** `EraseTool._erase` calls `canvas.setCell(x, y, 0, [255,255,255], [0,0,0])`. The bg `[0,0,0]` is opaque BLACK. REXPaint / asciicker convention treats `[255,0,255]` MAGENTA as the transparent color (it is what every wolfie/wallace/player-body sprite uses for outside-silhouette cells, and what XPFile preserves on save). After erase the cell renders as a solid black square, so lower layers stop showing through and the user reads it as "the erase tool went through to other layers and painted them black".
+**Active-layer scoping:** correct — `canvas.setCell` (canvas.js:533) writes only to `layerStack.getActiveLayer()`. The bug is purely the bg color choice.
+**Reproduction:** Wallace/Gromit workbench tab → switch to Erase tool (E) → click any cell on the visual layer → cell renders black on cream.
+**Reviewers:** correctness (P2)
+**State:** PASS — patched bg to `[255,0,255]` (2026-06-01)
+
+---
+
+## Code Review — 4 workbench UX fixes, test regression uncovered (2026-06-03)
+
+### Commits reviewed
+
+| Commit | Subject |
+|---|---|
+| `af1e799` | Erase → MAG transparent (not black); Delete clears to transparent; no-op on already-transparent |
+| `90e374b` | Sticky paste — paste stays armed after each stamp; Paste button toggles |
+| `2501a47` | Swap F/B: ⇄ button + X keyboard shortcut |
+| `1db7052` | Hide IDs: frame labels hidden by default; IDs toggle button |
+
+### Findings from CE code review
+
+#### 1. 🔴 BUG — Test not updated for MAG bg change
+
+**File:** `tests/web/whole-sheet-cell-ops.test.mjs:10`
+**Problem:** Commit `af1e799` changed `buildClearedEditorCell` to write `bg: [255,0,255]` (MAG) instead of preserving the input cell's bg. The test `"buildClearedEditorCell preserves existing background color"` was not updated and asserted the old behavior (`bg: [90,91,92]`).
+
+**State:** FIXED — test renamed to `"buildClearedEditorCell writes MAG ([255,0,255]) background for cleared cells"` and assertion updated.
+
+#### 2. 🟡 FAILING TEST — Regex brittleness after mount refactoring
+
+**File:** `tests/web/whole-sheet-history-ownership.test.mjs:36`
+**Problem:** Commit `1db7052` refactored `hydrateWholeSheetEditor()` in workbench.js, splitting `wsEditor.mount({...}).then(...)` into separate statements (`const mountPromise = wsEditor.mount({...}); const tracked = mountPromise.then(...)`). The test's regex `/wsEditor\\.mount\\(\\{[\\s\\S]*?\\}\\)\\.then/` no longer matched the mount call, producing `mountBlock = null` → `assert.ok(null)` failed.
+
+**State:** FIXED — regex updated to find the object literal independently of `.then` chaining.
+
+#### 3. 🟡 PROCESS — Commit `1db7052` bundles 3 unrelated changes
+
+**File:** `web/workbench.js` (3 independent regions: focusFrame URL param, hydrateWholeSheetEditor re-entrancy guard + mount refactoring, IDs toggle button)
+**Problem:** The commit message only describes "hide frame IDs" but the diff includes two other unrelated feature changes. This violates the commitment discipline rule in this log.
+
+**State:** NOTED — no rework done; future commits should use separate checkpoints.
+
+#### 4. ❓ QUESTION — `pasteClipboard` public API contract change to toggle
+
+**File:** `web/whole-sheet-init.js:4350`
+**Problem:** `pasteClipboard` (alias for `_enterPasteMode`) now has toggle semantics: calling it while paste mode is active *cancels* paste mode. Before, it was a no-op. Callers checked: `workbench.js:9809` is the sole external caller — it fires when the toolbar paste button is clicked, so toggle behavior is the expected UX.
+
+**State:** RESOLVED — no action needed; toggle matches UX expectation.
+
+#### 5. ⚪ MINOR — `_swapFgBg` lacks guard against partial mutation
+
+**File:** `web/whole-sheet-init.js:1793`
+**Problem:** State is mutated before rendering functions are called. If `_renderGlyphPicker()`, `_renderPaletteGrid()`, or `_updateInfoDrawState()` throws, the DOM is inconsistent with the already-swapped state.
+
+**State:** FIXED — wrapped render calls in try/catch.
+
+### Verification
+
+21/21 whole-sheet tests pass after fixes.
+
+## Workbench UX Gap Log — 2026-06-03
+
+User-reported gaps + claimed-fix audit. Source: chat session 2026-06-03 (gromit/wallace sprites in tree).
+
+Plan: log all gaps (this section), drive workbench via CDP/Playwright headed to audit each claim, then fix one-at-a-time with commit + verify between. Headless is forbidden per global rule.
+
+### A. Audit of recent "fix" commits
+
+| # | Commit | Claim | User report | Suspected root cause | Audit status |
+|---|---|---|---|---|---|
+| A1 | `90e374b` sticky paste | Paste mode stays armed after each paste; toggle off via Paste button / Escape / tool switch | "Should proceed beyond one paste … green plus button that pastes until more than once until I toggle paste to turn off or something else. Paste is weird — guessing it pastes from top-left corner of copied selection (anchors)" | Two separate gaps: (1) paste behavior may match code on paper but lacks visible "green +" affordance the user expects; (2) anchor is top-left of selection bbox, not cursor-relative — user expects either visual ghost preview or cursor-centered stamp | CDP TODO |
+| A2 | `af1e799` erase MAG | Erase fills bg=MAG (transparent), no-op on already-MAG cell | "Erase still erases to black, not just the layer (should be magenta when I erase painted cell, should do nothing if I erase the magenta since that is nothing on active layer)" | Possible: (a) erase tool path bypasses EraseTool._erase (Delete key? right-click menu? batch ops?); (b) canvas.js change is in rexpaint-editor/canvas.js but whole-sheet editor uses a different renderer; (c) L2 black bleed-through from lower layer being mistaken for "erase didn't work" | CDP TODO |
+| A3 | `2501a47` swap F/B + X | `⇄` button + X key swaps drawFg/drawBg | Acknowledged shipped; no complaint. Cross-listed under B7 (recents). | CDP TODO (smoke only) |
+| A4 | `1db7052` hide IDs | Frame IDs hidden by default; IDs button toggles | Acknowledged shipped; user reaffirms ("ALSO hide IDs by default"). | CDP TODO (smoke only) |
+
+### B. Open feature gaps (not yet implemented)
+
+| # | Title | Spec | Acceptance |
+|---|---|---|---|
+| B1 | Magenta semantics doc + UI | Document: FG/BG `(255,0,255)` = "transparent at this layer". Secondary transparent key (Y9-2 engine = yellow `(255,255,0)`). Currently ambiguous: does picking MAG mean "render as magenta" or "make invisible"? | Tooltip on color swatches + a short doc section `docs/workbench/transparent-keys.md`. Color picker shows "MAG (transparent)" and "YEL (secondary transparent)" labels. |
+| B2 | Color picker MAG / 2nd-transparent affordance | Currently user thinks they're picking the canonical MAG for halfblock but get a near-magenta that isn't `(255,0,255)`. Add explicit "Transparent" + "Transparent 2" buttons that pin to canonical values. | Two dedicated buttons in color picker that always pin to the canonical MAG / YEL regardless of palette. |
+| B3 | Recently-used colors as context menu | Right-click on FG or BG swatch → small popup of last N used colors. | Right-click context menu shows MRU colors; click applies to that channel. |
+| B4 | Recently-used subpalette section | Dedicated section in palette UI showing most-recent N colors (separate from B3 contextual menu). | Visible row of recent swatches; updates on every paint. |
+| B5 | Frequent-FBG-combo subpalette | Prefilled subpalette of most-frequent FBG triplets, sourced from y9-2 `2026-05-21 final json` cell identifiers. | New "Common cells" section in palette renders top-K most-common (glyph, fg, bg) triplets from reference json. Clicking applies all three. |
+| B6 | Paste anchor strategy | A1 — anchor is currently top-left of selection bbox. Decide: cursor = top-left (current), or cursor = center, or render ghost preview before commit. | Either a setting toggle or a ghost-preview that follows cursor showing where the stamp will land. |
+| B7 | Promote knight-style PNG→XP glyphify to "Upload PNG" button | Existing path: `Upload PNG` button (workbench.html:204 `#wbUpload`) currently just uploads the source file then `Convert to XP` runs `/api/run` (pipeline_v2 app). The user wants the ASCII-glyphify pipeline used for the knight conversion (`scripts/convert_24px_mini_template_2x.py` + `scripts/glyph_assignment/`) to be invocable from this button — i.e., the same code that produced `output/24px-mini-characters/xps/knight1-*.xp` on 2026-05-11. | Add a mode selector or a separate button "Glyphify PNG (knight-style)" that wires `glyph_assignment.assign_image_cells` to the upload result and returns an XP that loads into the editor. |
+
+### C. Investigation plan
+
+Order: B1 (doc, no code risk) → A1/A2 CDP audit → B6 paste anchor decision → A1/A2 fix if broken → B2 → B3 → B4 → B5 → B7.
+
+Each step: commit narrowly, run `tests/web/whole-sheet-*` if applicable, headed CDP screenshot proof appended to this section, do not advance until previous step green.
+
+### D. CDP audit results (pending)
+
+(Filled in as each audit completes.)
+
+
