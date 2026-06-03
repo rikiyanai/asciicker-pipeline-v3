@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.target_ref || 'master' }}
-          submodules: true
+          submodules: false  # Y9-2 is private; deploy runtime does not need it (FL-2026-06-03)
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -121,7 +121,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: false  # Y9-2 is private; deploy runtime does not need it (FL-2026-06-03)
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
