@@ -564,20 +564,25 @@ export class Canvas {
         }
         // Get cell from this layer
         const cell = layer.getCell(x, y);
-        if (cell && cell.glyph !== 0) {
-          // Return first visible layer with non-transparent glyph
-          return {
-            glyph: cell.glyph,
-            fg: [...cell.fg],
-            bg: [...cell.bg],
-          };
-        }
+        if (!cell) continue;
+        // A cell is "truly empty" only when glyph=0 AND bg is BLACK.
+        // glyph=0 with bg=MAG = explicit transparent paint (af1e799 erase semantics) — must surface.
+        // glyph=0 with any non-black bg = bg-only paint — must surface.
+        const isTrulyEmpty = cell.glyph === 0
+          && cell.bg[0] === 0 && cell.bg[1] === 0 && cell.bg[2] === 0;
+        if (isTrulyEmpty) continue;
+        return {
+          glyph: cell.glyph,
+          fg: [...cell.fg],
+          bg: [...cell.bg],
+        };
       }
-      // No visible layer had content, return transparent cell
+      // No visible layer had content — surface MAG so the author sees explicit
+      // transparency (matches the canonical transparent-key value).
       return {
         glyph: 0,
         fg: [255, 255, 255],
-        bg: [0, 0, 0],
+        bg: [255, 0, 255],
       };
     }
 
