@@ -1142,14 +1142,16 @@ function _cutSelection() {
  * Escape or tool switch cancels.
  * @returns {boolean} true if paste mode entered
  */
+const _PASTE_CURSOR_SVG = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'><path d='M10 3v14M3 10h14' stroke='%232ecc71' stroke-width='3' stroke-linecap='round'/></svg>\") 10 10, copy";
+
 function _enterPasteMode() {
   if (editorState.pasteMode) { _cancelPasteMode(); return false; }
   if (!editorState.clipboard || countClipboardCells(editorState.clipboard) === 0) return false;
   editorState.pasteMode = true;
   const canvasEl = editorState.canvas && editorState.canvas.canvasElement;
-  if (canvasEl) canvasEl.style.cursor = 'copy';
+  if (canvasEl) canvasEl.style.cursor = _PASTE_CURSOR_SVG;
   const btn = document.getElementById('wsPasteSelection');
-  if (btn) btn.classList.add('ws-tool-active');
+  if (btn) { btn.classList.add('ws-tool-active'); btn.classList.add('ws-paste-armed'); }
   return true;
 }
 
@@ -1159,7 +1161,7 @@ function _cancelPasteMode() {
   const canvasEl = editorState.canvas && editorState.canvas.canvasElement;
   if (canvasEl) canvasEl.style.cursor = 'crosshair';
   const btn = document.getElementById('wsPasteSelection');
-  if (btn) btn.classList.remove('ws-tool-active');
+  if (btn) { btn.classList.remove('ws-tool-active'); btn.classList.remove('ws-paste-armed'); }
 }
 
 /**
