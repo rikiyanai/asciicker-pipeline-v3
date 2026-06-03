@@ -1144,6 +1144,43 @@ function _cutSelection() {
  */
 const _PASTE_CURSOR_SVG = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'><path d='M10 3v14M3 10h14' stroke='%232ecc71' stroke-width='3' stroke-linecap='round'/></svg>\") 10 10, copy";
 
+function _ensurePasteGhost() {
+  let el = document.getElementById('wsPasteGhost');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'wsPasteGhost';
+    el.className = 'ws-paste-ghost';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function _hidePasteGhost() {
+  const el = document.getElementById('wsPasteGhost');
+  if (el) el.style.display = 'none';
+}
+
+function _updatePasteGhost(cx, cy) {
+  if (!editorState.pasteMode) { _hidePasteGhost(); return; }
+  const clip = editorState.clipboard;
+  if (!clip) { _hidePasteGhost(); return; }
+  const clipW = Math.max(0, Number(clip.bounds?.w) || 0);
+  const clipH = Math.max(0, Number(clip.bounds?.h) || 0);
+  if (!clipW || !clipH) { _hidePasteGhost(); return; }
+  const canvas = editorState.canvas;
+  const canvasEl = canvas && canvas.canvasElement;
+  if (!canvasEl) { _hidePasteGhost(); return; }
+  const rect = canvasEl.getBoundingClientRect();
+  if (rect.width <= 0 || canvasEl.width <= 0) { _hidePasteGhost(); return; }
+  const pixelsPerCell = (rect.width / canvasEl.width) * CELL_SIZE;
+  const el = _ensurePasteGhost();
+  el.style.display = 'block';
+  el.style.left = (rect.left + cx * pixelsPerCell) + 'px';
+  el.style.top = (rect.top + cy * pixelsPerCell) + 'px';
+  el.style.width = (clipW * pixelsPerCell) + 'px';
+  el.style.height = (clipH * pixelsPerCell) + 'px';
+}
+
 let _wsStatusTimer = null;
 function _showWorkbenchStatus(message, ms = 2500) {
   let el = document.getElementById('wsStatusToast');
@@ -1181,6 +1218,7 @@ function _cancelPasteMode() {
   if (canvasEl) canvasEl.style.cursor = 'crosshair';
   const btn = document.getElementById('wsPasteSelection');
   if (btn) { btn.classList.remove('ws-tool-active'); btn.classList.remove('ws-paste-armed'); }
+  _hidePasteGhost();
 }
 
 /**
@@ -3817,6 +3855,7 @@ function _onCanvasPointerLeave() {
   _cancelTapHold();
   _dismissTapHoldInspect();
   if (editorState.activeTool !== 'text') _onStrokeEnd();
+  _hidePasteGhost();
   const posEl = document.getElementById('wsPos');
   if (posEl) posEl.textContent = '-,-';
   // U6: reset mobile cursor position
@@ -4039,6 +4078,8 @@ function _onCanvasPointerMove(e) {
   // U6: update mobile cursor position
   const mobilePosEl = document.getElementById('mobileCursorPos');
   if (mobilePosEl) mobilePosEl.textContent = cx + ',' + cy;
+  // B6: paste ghost preview tracks cursor while paste mode is armed.
+  if (editorState.pasteMode) _updatePasteGhost(cx, cy);
 
   const { canvas, layerStack, gridCols, gridRows } = editorState;
   if (canvas && cx >= 0 && cx < gridCols && cy >= 0 && cy < gridRows) {

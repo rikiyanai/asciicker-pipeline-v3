@@ -792,6 +792,17 @@ label.inline {
 .ws-status-toast.ws-status-toast-show {
   opacity: 1;
 }
+/* Paste ghost preview — shows clipboard bbox under cursor while paste mode
+   is armed. Top-left anchored to cursor cell. (B6, FL-2026-06-03) */
+.ws-paste-ghost {
+  position: fixed;
+  display: none;
+  box-sizing: border-box;
+  border: 2px dashed #2ecc71;
+  background: rgba(46, 204, 113, 0.10);
+  pointer-events: none;
+  z-index: 999;
+}
 /* Dedicated transparent-key buttons (FL-2026-06-03): pin to canonical
    (255,0,255) and (255,255,0) so users can pick the exact transparent
    key. Right-click sets BG; left-click sets FG. */
