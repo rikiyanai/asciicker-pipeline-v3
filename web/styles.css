@@ -820,6 +820,36 @@ label.inline {
   width: 100%;
   flex: 1 1 50%;
 }
+/* Recents subpalette — auto-tracks last fg + bg selections.
+   (B4, FL-2026-06-03) */
+.ws-recents-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+}
+.ws-recents-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 16px;
+}
+.ws-recents-label {
+  width: 14px;
+  font-size: 10px;
+  color: #9aa3b2;
+  text-transform: uppercase;
+}
+.ws-recent-swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid #2a2f3a;
+  cursor: pointer;
+}
+.ws-recent-swatch:hover {
+  border-color: #4b91ff;
+}
 /* Paste ghost preview — shows clipboard bbox under cursor while paste mode
    is armed. Top-left anchored to cursor cell. (B6, FL-2026-06-03) */
 .ws-paste-ghost {

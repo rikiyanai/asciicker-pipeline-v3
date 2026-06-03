@@ -336,6 +336,9 @@ let editorState = {
   drawGlyph: 64,
   drawFg: [255, 255, 255],
   drawBg: [0, 0, 0],
+  // B3/B4 recents — last-used colors per channel (LRU, max 8 each).
+  recentFg: [],
+  recentBg: [],
   applyGlyph: true,
   applyFg: true,
   applyBg: true,
@@ -1000,6 +1003,7 @@ async function mount({
   _updateToolUI();
   _renderGlyphPicker();
   _renderPaletteGrid();
+  _renderRecentsRow();
   _updateInfoDrawState();
   _updateInfoApplyModes();
   _applyModeUI();
@@ -1143,6 +1147,71 @@ function _cutSelection() {
  * @returns {boolean} true if paste mode entered
  */
 const _PASTE_CURSOR_SVG = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'><path d='M10 3v14M3 10h14' stroke='%232ecc71' stroke-width='3' stroke-linecap='round'/></svg>\") 10 10, copy";
+
+const _RECENTS_MAX = 8;
+
+function _pushRecentColor(channel, rgb) {
+  if (!Array.isArray(rgb) || rgb.length !== 3) return;
+  const key = `${rgb[0]},${rgb[1]},${rgb[2]}`;
+  const list = channel === 'bg' ? editorState.recentBg : editorState.recentFg;
+  const idx = list.findIndex((c) => `${c[0]},${c[1]},${c[2]}` === key);
+  if (idx >= 0) list.splice(idx, 1);
+  list.unshift([rgb[0], rgb[1], rgb[2]]);
+  if (list.length > _RECENTS_MAX) list.length = _RECENTS_MAX;
+  _renderRecentsRow();
+}
+
+function _renderRecentsRow() {
+  const host = document.getElementById('wsRecentsRow');
+  if (!host) return;
+  host.innerHTML = '';
+  const _mkSwatch = (rgb, channel) => {
+    const s = document.createElement('button');
+    s.type = 'button';
+    s.className = 'ws-recent-swatch';
+    s.style.background = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+    s.title = `recent ${channel}: rgb(${rgb.join(',')}). LMB = apply to ${channel}; RMB = apply to ${channel === 'fg' ? 'bg' : 'fg'}.`;
+    s.addEventListener('click', () => {
+      if (channel === 'fg') editorState.drawFg = [...rgb];
+      else editorState.drawBg = [...rgb];
+      const fgEl = document.getElementById('wsFgColor');
+      const bgEl = document.getElementById('wsBgColor');
+      if (fgEl) fgEl.value = _rgbToHex(editorState.drawFg);
+      if (bgEl) bgEl.value = _rgbToHex(editorState.drawBg);
+      _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
+      _renderGlyphPicker(); _renderPaletteGrid(); _updateInfoDrawState();
+    });
+    s.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const swapTo = channel === 'fg' ? 'bg' : 'fg';
+      if (swapTo === 'fg') editorState.drawFg = [...rgb];
+      else editorState.drawBg = [...rgb];
+      const fgEl = document.getElementById('wsFgColor');
+      const bgEl = document.getElementById('wsBgColor');
+      if (fgEl) fgEl.value = _rgbToHex(editorState.drawFg);
+      if (bgEl) bgEl.value = _rgbToHex(editorState.drawBg);
+      _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
+      _renderGlyphPicker(); _renderPaletteGrid(); _updateInfoDrawState();
+    });
+    return s;
+  };
+  const fgGroup = document.createElement('div');
+  fgGroup.className = 'ws-recents-group';
+  const fgLbl = document.createElement('span');
+  fgLbl.className = 'ws-recents-label';
+  fgLbl.textContent = 'fg';
+  fgGroup.appendChild(fgLbl);
+  for (const c of editorState.recentFg) fgGroup.appendChild(_mkSwatch(c, 'fg'));
+  host.appendChild(fgGroup);
+  const bgGroup = document.createElement('div');
+  bgGroup.className = 'ws-recents-group';
+  const bgLbl = document.createElement('span');
+  bgLbl.className = 'ws-recents-label';
+  bgLbl.textContent = 'bg';
+  bgGroup.appendChild(bgLbl);
+  for (const c of editorState.recentBg) bgGroup.appendChild(_mkSwatch(c, 'bg'));
+  host.appendChild(bgGroup);
+}
 
 function _ensurePasteGhost() {
   let el = document.getElementById('wsPasteGhost');
@@ -1885,6 +1954,8 @@ function _applyEyedropperSample(glyph, fg, bg) {
   editorState.drawGlyph = glyph & 0xFF;
   editorState.drawFg = [...fg];
   editorState.drawBg = [...bg];
+  _pushRecentColor('fg', editorState.drawFg);
+  _pushRecentColor('bg', editorState.drawBg);
   // W29/W30 match-source contract: eyedropper is the explicit sample action.
   editorState.lastSampledCell = { glyph: glyph & 0xFF, fg: [...fg], bg: [...bg] };
 
@@ -2533,6 +2604,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   fgInput.title = 'Foreground color';
   fgInput.addEventListener('input', () => {
     editorState.drawFg = _hexToRgb(fgInput.value);
+    _pushRecentColor('fg', editorState.drawFg);
     _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
     _renderGlyphPicker();
     _renderPaletteGrid();
@@ -2549,6 +2621,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   bgInput.title = 'Background color';
   bgInput.addEventListener('input', () => {
     editorState.drawBg = _hexToRgb(bgInput.value);
+    _pushRecentColor('bg', editorState.drawBg);
     _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
     _renderGlyphPicker();
     _renderPaletteGrid();
@@ -2585,6 +2658,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
     b.style.color = rgb[0] + rgb[1] + rgb[2] > 384 ? '#000' : '#fff';
     b.addEventListener('click', () => {
       editorState.drawFg = [...rgb];
+      _pushRecentColor('fg', editorState.drawFg);
       const fgEl = document.getElementById('wsFgColor');
       if (fgEl) fgEl.value = _rgbToHex(editorState.drawFg);
       _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
@@ -2593,6 +2667,7 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
     b.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       editorState.drawBg = [...rgb];
+      _pushRecentColor('bg', editorState.drawBg);
       const bgEl = document.getElementById('wsBgColor');
       if (bgEl) bgEl.value = _rgbToHex(editorState.drawBg);
       _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
@@ -2625,6 +2700,8 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
     const _apply = (f, g) => {
       editorState.drawFg = [...f];
       editorState.drawBg = [...g];
+      _pushRecentColor('fg', editorState.drawFg);
+      _pushRecentColor('bg', editorState.drawBg);
       const fgEl = document.getElementById('wsFgColor');
       const bgEl = document.getElementById('wsBgColor');
       if (fgEl) fgEl.value = _rgbToHex(editorState.drawFg);
@@ -2648,6 +2725,13 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   ];
   for (const c of FBG_COMBOS) fbgRow.appendChild(_mkFbgBtn(c.fg, c.bg, c.label, c.hint));
   paletteSection.appendChild(fbgRow);
+
+  // B4: recents subpalette — auto-tracks last 8 fg + 8 bg selections.
+  const recentsRow = document.createElement('div');
+  recentsRow.id = 'wsRecentsRow';
+  recentsRow.className = 'ws-recents-row';
+  recentsRow.title = 'Recently-used colors (FG row top, BG row bottom). LMB applies to the same channel; RMB applies to the opposite channel.';
+  paletteSection.appendChild(recentsRow);
 
   toolsDrawer.appendChild(paletteSection);
 
