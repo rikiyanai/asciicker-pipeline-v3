@@ -4394,6 +4394,42 @@
       status(`Session active: ${state.sessionId.slice(0, 8)}...`, "ok");
       renderAll();
       hydrateWholeSheetEditor();
+      // FL-4178 fix: ?focusFrame=row,col auto-opens whole-sheet editor on that frame after hydration
+      try {
+        const ff = String(params.get("focusFrame") || "").trim();
+        if (ff) {
+          const parts = ff.split(",").map((s) => Number(String(s).trim()));
+          const fr = Number.isFinite(parts[0]) ? Math.max(0, parts[0] | 0) : 0;
+          const fc = Number.isFinite(parts[1]) ? Math.max(0, parts[1] | 0) : 0;
+          const tryFocus = async (attempt) => {
+            try {
+              // Seed selection (the button click handler reads these)
+              state.selectedRow = fr;
+              state.selectedCols = new Set([fc]);
+              state.selectionFocus = { row: fr, col: fc };
+              const wsEditor = window.__wholeSheetEditor;
+              const editorReady = !!(wsEditor && typeof wsEditor.mount === "function");
+              if (!editorReady) throw new Error("wsEditor not ready");
+              // Re-entrant + idempotent — returns existing promise if mount in flight
+              const p = hydrateWholeSheetEditor();
+              if (p && typeof p.then === "function") await p;
+              const panel = $("wholeSheetPanel");
+              if (panel) panel.classList.remove("hidden");
+              // openInspectorForSelectedFrame is the exact path the button click takes
+              const ok = openInspectorForSelectedFrame();
+              if (ok !== false) {
+                try { if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (_e) {}
+                status(`focusFrame=${fr},${fc} - whole-sheet editor focused`, "ok");
+                return true;
+              }
+            } catch (_e) {}
+            if (attempt < 40) setTimeout(() => { void tryFocus(attempt + 1); }, 250);
+            else status(`focusFrame=${fr},${fc} - whole-sheet editor did not mount within 10s`, "warn");
+            return false;
+          };
+          setTimeout(() => { void tryFocus(0); }, 400);
+        }
+      } catch (_e) {}
       // Avoid an expensive immediate full-session save (and background webbuild boot) right after convert/load.
       // Large sprite sheets can make the UI feel frozen here; defer both until the user edits or runs skin test.
       stopWebbuildReadyPoll();
@@ -6735,23 +6771,33 @@
 
   function hydrateWholeSheetEditor() {
     const wsEditor = window.__wholeSheetEditor;
-    if (!wsEditor || typeof wsEditor.mount !== "function") return;
+    if (!wsEditor || typeof wsEditor.mount !== "function") return null;
     const panel = $("wholeSheetPanel");
-    const mount = $("wholeSheetMount");
+    const mountEl = $("wholeSheetMount");
     const wsStatus = $("wholeSheetStatus");
-    if (!panel || !mount) return;
+    if (!panel || !mountEl) return null;
 
     if (!state.sessionId || !state.layers || state.layers.length === 0 || state.gridCols <= 0 || state.gridRows <= 0) {
       panel.classList.add("hidden");
       if (wsStatus) wsStatus.textContent = "not loaded";
-      return;
+      return null;
+    }
+
+    // Re-entrancy guard: mount() is async; without this, retry-loop callers
+    // (e.g. tryFocus) stack concurrent mounts. Each pending mount eventually
+    // resolves and clobbers editorState.activeTool back to 'cell', breaking
+    // the Select tool and silently disabling copy/paste.
+    if (state._wsHydrateInflight) return state._wsHydrateInflight;
+    const sigNow = `${state.sessionId}|${state.gridCols}x${state.gridRows}`;
+    if (state._wsHydratedSig === sigNow && wsEditor.getState && wsEditor.getState().mounted) {
+      return Promise.resolve();
     }
 
     panel.classList.remove("hidden");
     if (wsStatus) wsStatus.textContent = "loading...";
 
-    wsEditor.mount({
-      container: mount,
+    const mountPromise = wsEditor.mount({
+      container: mountEl,
       gridCols: state.gridCols,
       gridRows: state.gridRows,
       frameW: state.frameWChars,
@@ -6800,7 +6846,9 @@
       onBrowseRename: browseRenameSession,
       onBrowseDuplicate: browseDuplicateSession,
       onBrowseDelete: browseDeleteSession,
-    }).then(() => {
+    });
+    const tracked = mountPromise.then(() => {
+      state._wsHydratedSig = sigNow;
       if (wsStatus) {
         const st = wsEditor.getState();
         wsStatus.textContent = st.hasFontLoaded
@@ -6811,7 +6859,11 @@
     }).catch((err) => {
       console.error("[whole-sheet] mount failed:", err);
       if (wsStatus) wsStatus.textContent = "mount failed";
+    }).finally(() => {
+      state._wsHydrateInflight = null;
     });
+    state._wsHydrateInflight = tracked;
+    return tracked;
   }
 
   function panWholeSheetToFrame(row, col) {
@@ -8632,6 +8684,12 @@
     if ($("gridZoomInput")) $("gridZoomInput").addEventListener("input", () => {
       state.gridPanelZoom = clampGridPanelZoom($("gridZoomInput").value || 0);
       renderFrameGrid();
+    });
+    if ($("gridToggleLabels")) $("gridToggleLabels").addEventListener("click", () => {
+      const panel = $("gridPanel");
+      if (!panel) return;
+      const shown = panel.classList.toggle("frame-labels-visible");
+      $("gridToggleLabels").classList.toggle("active", shown);
     });
     $("assignAnimCategoryBtn").addEventListener("click", assignRowCategory);
     $("assignFrameGroupBtn").addEventListener("click", assignFrameGroup);

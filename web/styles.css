@@ -547,6 +547,11 @@ a { color: #80bdff; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: none;
+}
+
+.frame-grid.frame-labels-visible .frame-label {
+  display: block;
 }
 
 .frame-grid.frame-grid-compact .frame-label {
