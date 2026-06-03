@@ -19,6 +19,9 @@ COPY web/ web/
 COPY config/ config/
 COPY sprites/ sprites/
 COPY runtime/ runtime/
+# scripts/glyph_assignment is imported at startup by service.py (commit 07c778a:
+# "promote Upload PNG to rich CP437 glyph matcher") — must be present in image.
+COPY scripts/glyph_assignment/ scripts/glyph_assignment/
 COPY wsgi.py .
 
 # Create data directories (ephemeral on Cloud Run)
