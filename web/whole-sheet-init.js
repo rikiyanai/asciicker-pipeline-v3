@@ -1150,6 +1150,75 @@ const _PASTE_CURSOR_SVG = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.
 
 const _RECENTS_MAX = 8;
 
+function _hideRecentsContextMenu() {
+  const el = document.getElementById('wsRecentsContextMenu');
+  if (el) el.remove();
+  document.removeEventListener('mousedown', _onRecentsContextMenuDocClick, true);
+  document.removeEventListener('keydown', _onRecentsContextMenuKey, true);
+}
+
+function _onRecentsContextMenuDocClick(e) {
+  const el = document.getElementById('wsRecentsContextMenu');
+  if (!el) return;
+  if (el.contains(e.target)) return;
+  _hideRecentsContextMenu();
+}
+
+function _onRecentsContextMenuKey(e) {
+  if (e.key === 'Escape') _hideRecentsContextMenu();
+}
+
+function _showRecentsContextMenu(channel, anchorEl, clientX, clientY) {
+  _hideRecentsContextMenu();
+  const list = channel === 'bg' ? editorState.recentBg : editorState.recentFg;
+  if (!list || list.length === 0) return;
+  const menu = document.createElement('div');
+  menu.id = 'wsRecentsContextMenu';
+  menu.className = 'ws-recents-ctx';
+  const heading = document.createElement('div');
+  heading.className = 'ws-recents-ctx-heading';
+  heading.textContent = `Recent ${channel === 'bg' ? 'bg' : 'fg'} colors`;
+  menu.appendChild(heading);
+  const grid = document.createElement('div');
+  grid.className = 'ws-recents-ctx-grid';
+  for (const rgb of list) {
+    const sw = document.createElement('button');
+    sw.type = 'button';
+    sw.className = 'ws-recents-ctx-swatch';
+    sw.style.background = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+    sw.title = `rgb(${rgb.join(',')})`;
+    sw.addEventListener('click', () => {
+      if (channel === 'fg') editorState.drawFg = [...rgb];
+      else editorState.drawBg = [...rgb];
+      _pushRecentColor(channel, rgb);
+      const fgEl = document.getElementById('wsFgColor');
+      const bgEl = document.getElementById('wsBgColor');
+      if (fgEl) fgEl.value = _rgbToHex(editorState.drawFg);
+      if (bgEl) bgEl.value = _rgbToHex(editorState.drawBg);
+      _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
+      _renderGlyphPicker(); _renderPaletteGrid(); _updateInfoDrawState();
+      _hideRecentsContextMenu();
+    });
+    grid.appendChild(sw);
+  }
+  menu.appendChild(grid);
+  document.body.appendChild(menu);
+  // Position near pointer, clamped to viewport.
+  const rect = menu.getBoundingClientRect();
+  let left = clientX || (anchorEl?.getBoundingClientRect().right ?? 0);
+  let top = clientY || (anchorEl?.getBoundingClientRect().bottom ?? 0);
+  if (left + rect.width > window.innerWidth) left = window.innerWidth - rect.width - 4;
+  if (top + rect.height > window.innerHeight) top = window.innerHeight - rect.height - 4;
+  menu.style.left = Math.max(4, left) + 'px';
+  menu.style.top = Math.max(4, top) + 'px';
+  // Defer attaching outside-close listeners so the originating contextmenu
+  // event doesn't trip them.
+  setTimeout(() => {
+    document.addEventListener('mousedown', _onRecentsContextMenuDocClick, true);
+    document.addEventListener('keydown', _onRecentsContextMenuKey, true);
+  }, 0);
+}
+
 function _pushRecentColor(channel, rgb) {
   if (!Array.isArray(rgb) || rgb.length !== 3) return;
   const key = `${rgb[0]},${rgb[1]},${rgb[2]}`;
@@ -2610,6 +2679,11 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
     _renderPaletteGrid();
     _updateInfoDrawState();
   });
+  // B3: right-click the fg swatch opens recents context menu.
+  fgInput.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    _showRecentsContextMenu('fg', fgInput, e.clientX, e.clientY);
+  });
 
   const bgLabel = document.createElement('span');
   bgLabel.className = 'ws-swatch-label';
@@ -2626,6 +2700,11 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
     _renderGlyphPicker();
     _renderPaletteGrid();
     _updateInfoDrawState();
+  });
+  // B3: right-click the bg swatch opens recents context menu.
+  bgInput.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    _showRecentsContextMenu('bg', bgInput, e.clientX, e.clientY);
   });
 
   const swapBtn = document.createElement('button');

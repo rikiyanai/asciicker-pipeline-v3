@@ -850,6 +850,38 @@ label.inline {
 .ws-recent-swatch:hover {
   border-color: #4b91ff;
 }
+/* Right-click recents context menu — opens above the FG/BG swatches.
+   (B3, FL-2026-06-03) */
+.ws-recents-ctx {
+  position: fixed;
+  background: #14181f;
+  border: 1px solid #2a2f3a;
+  border-radius: 4px;
+  padding: 6px;
+  z-index: 1100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+.ws-recents-ctx-heading {
+  font-size: 10px;
+  color: #9aa3b2;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.ws-recents-ctx-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 22px);
+  gap: 4px;
+}
+.ws-recents-ctx-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #2a2f3a;
+  cursor: pointer;
+}
+.ws-recents-ctx-swatch:hover {
+  border-color: #4b91ff;
+}
 /* Paste ghost preview — shows clipboard bbox under cursor while paste mode
    is armed. Top-left anchored to cursor cell. (B6, FL-2026-06-03) */
 .ws-paste-ghost {
