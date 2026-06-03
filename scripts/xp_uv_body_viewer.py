@@ -554,7 +554,7 @@ def _layout_preview_and_info(
         return preview_lines
 
     preview_width = max(_visible_len(line) for line in preview_lines)
-    info_width = max(len(line) for line in info_lines)
+    info_width = max(_visible_len(line) for line in info_lines)
     if preview_width + gap + info_width > terminal_cols:
         return preview_lines + [""] + info_lines
 
@@ -577,7 +577,7 @@ def _is_side_by_side_layout(
     if not preview_lines or not info_lines:
         return False
     preview_width = max(_visible_len(line) for line in preview_lines)
-    info_width = max(len(line) for line in info_lines)
+    info_width = max(_visible_len(line) for line in info_lines)
     return preview_width + gap + info_width <= terminal_cols
 
 
@@ -1338,14 +1338,22 @@ def _load_anchor_state(anchor_path: Path) -> AnchorReviewState:
 
     # Build cell_assignments from existing semantic_cells
     for frame_key, frame_data in data.get("frames", {}).items():
-        angle = frame_data.get("angle", int(frame_key))
+        try:
+            angle = frame_data.get("angle", int(frame_key))
+        except (ValueError, TypeError):
+            print(f"Error: frame key '{frame_key}' is not a valid integer", file=sys.stderr)
+            raise SystemExit(1)
         for ridx, region in enumerate(frame_data.get("regions", [])):
             for cell in region.get("semantic_cells", []):
                 st.cell_assignments[(angle, cell["x"], cell["y"])] = ridx
 
     # Build dual_assignments from existing fg_region/bg_region fields
     for frame_key, frame_data in data.get("frames", {}).items():
-        angle = frame_data.get("angle", int(frame_key))
+        try:
+            angle = frame_data.get("angle", int(frame_key))
+        except (ValueError, TypeError):
+            print(f"Error: frame key '{frame_key}' is not a valid integer", file=sys.stderr)
+            raise SystemExit(1)
         regions = frame_data.get("regions", [])
         # Map region name -> index for resolving fg_region/bg_region values
         region_name_to_idx: dict[str, int] = {}
@@ -1386,8 +1394,9 @@ def _style_anchor_cell(
     region_tint: tuple[int, int, int] | None,
     is_cursor: bool,
     is_selected: bool,
+    is_in_rect: bool = False,
 ) -> str:
-    """Render a single cell with optional region tint, cursor, and selection indicators."""
+    """Render a single cell with optional region tint, cursor, selection, and rect indicators."""
     parts: list[str] = []
 
     # Blend region tint into background
@@ -1408,8 +1417,12 @@ def _style_anchor_cell(
         parts.append("\033[1;4;7m")  # bold + underline + inverted
     elif is_cursor:
         parts.append("\033[1;4m")  # bold + underline
+    elif is_selected and is_in_rect:
+        parts.append("\033[4;7m")  # underline + inverted (rect visible on selected)
     elif is_selected:
         parts.append("\033[7m")  # inverted
+    elif is_in_rect:
+        parts.append("\033[2;4m")  # dim + underline
 
     parts.append(_cp437_char(glyph))
     parts.append("\033[0m")
@@ -1431,6 +1444,13 @@ def _anchor_render_frame(
     color_map = st.region_color_map
     angle = st.current_angle
 
+    # Precompute rect perimeter bounds if a rect selection is in progress
+    rect_bounds = None
+    if st.rect_start is not None:
+        rx0, ry0 = st.rect_start
+        rx1, ry1 = st.cursor_x, st.cursor_y
+        rect_bounds = (min(rx0, rx1), min(ry0, ry1), max(rx0, rx1), max(ry0, ry1))
+
     for y in range(st.frame_h):
         row_chars: list[str] = []
         for x in range(st.frame_w):
@@ -1439,11 +1459,18 @@ def _anchor_render_frame(
             tint = color_map.get(ridx) if ridx is not None else None
             is_cursor = (x == st.cursor_x and y == st.cursor_y)
             is_selected = (x, y) in st.selected_cells
+            in_rect = False
+            if rect_bounds is not None:
+                bx0, by0, bx1, by1 = rect_bounds
+                if bx0 <= x <= bx1 and by0 <= y <= by1:
+                    if x == bx0 or x == bx1 or y == by0 or y == by1:
+                        in_rect = True
             row_chars.append(_style_anchor_cell(
                 glyph, fg, bg,
                 region_tint=tint,
                 is_cursor=is_cursor,
                 is_selected=is_selected,
+                is_in_rect=in_rect,
             ))
         lines.append(f"{y:02d}  {''.join(row_chars)}")
     return lines
@@ -1899,7 +1926,9 @@ def _anchor_help_lines() -> list[str]:
         "[arrows] move cursor  [a/d] angle  [w/s] anim  [,/.] frame  [x] toggle  [m] rect",
         "[1-9] assign region  [n] new region  [Backspace] unassign  [h] half-block mode",
         "[r/f] cycle region focus  [g] region grid (all angles×frames)  [b] body map  [p] autoplay",
-        "[c] composite  [j/k] skin  [v] proj  [Ctrl+S] save  [q] quit",
+        "[c] composite  [j/k] skin  [v] proj  [Ctrl+S/Ctrl+W] save  [q] quit",
+        "Workflow: [r/f] focus region -> [g] grid check -> [m] rect or [e] select-all -> [1-9] assign -> [Ctrl+S] save",
+        "Tip: [e] selects all cells in focused region for bulk reassign/unassign",
     ]
 
 
@@ -1914,7 +1943,7 @@ def _layout_three(
     """Place three columns side-by-side, falling back to stacked if too wide."""
     lw = max((_visible_len(l) for l in left), default=0)
     mw = max((_visible_len(l) for l in mid), default=0)
-    rw = max((len(l) for l in right), default=0)
+    rw = max((_visible_len(l) for l in right), default=0)
     if lw + gap + mw + gap + rw <= terminal_cols:
         total = max(len(left), len(mid), len(right))
         result: list[str] = []
@@ -1939,19 +1968,29 @@ def _anchor_compose_screen(
 ) -> str:
     """Compose the full terminal output for anchor review mode.
 
-    Layout depends on whether a body map is loaded:
+    Layout depends on active mode:
 
-    Body map loaded (show_body_map=True):
-        [body map band (left)] | [sprite+tint (centre)] | [region-only (right)]
+    Region grid (show_region_grid=True):
+        [full-screen region grid across angles × frames]
+    Composite (show_composite=True):
+        [sprite+tint | composite result | skin selector]
+    Body map (show_body_map=True):
+        [body map band | sprite+tint | region-only]
+    Classic (default, UV data available):
+        [sprite+tint | region-only | UV map]
         [region info panel below]
-
-    No body map:
-        Row 1: [sprite+tint] | [region-only]
-        Row 2: [UV map]      | [region info]
+    Classic (no UV data):
+        [sprite+tint | region-only]
+        [region info panel below]
     """
     cols, rows = shutil.get_terminal_size(fallback=(120, 32))
 
     help_lines = _anchor_help_lines()
+    # Replace static header with metadata: semantic map, XP path, layer
+    # Strip ANSI escapes from JSON-sourced strings to prevent injection (FL-4014)
+    ref_xp = _ANSI_RE.sub("", st.anchor_data.get("reference_xp", ""))
+    safe_name = _ANSI_RE.sub("", st.anchor_path.name)
+    help_lines[0] = f"Anchor review: {safe_name} -> {ref_xp} layer {layer_index}"
     status_lines = _anchor_status_bar(st)
 
     # Panel A: sprite + region tint overlay
@@ -1992,13 +2031,13 @@ def _anchor_compose_screen(
         top = _layout_three(box_body, box_sprite, box_region, terminal_cols=cols)
         visible = (help_lines + [""] + top + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
     else:
-        # Classic 2-row layout
-        row1 = _layout_preview_and_info(box_sprite, box_region, terminal_cols=cols)
+        # Classic layout: 3-panel horizontal when UV data available, else 2-panel
         if box_uv:
-            row2 = _layout_preview_and_info(box_uv, panel_lines, terminal_cols=cols)
+            top = _layout_three(box_sprite, box_region, box_uv, terminal_cols=cols)
+            visible = (help_lines + [""] + top + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
         else:
-            row2 = panel_lines
-        visible = (help_lines + [""] + row1 + [""] + row2 + [""] + status_lines)[:max(1, rows)]
+            row1 = _layout_preview_and_info(box_sprite, box_region, terminal_cols=cols)
+            visible = (help_lines + [""] + row1 + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
 
     return "\033[H\033[2J" + "\r\n".join(visible)
 
@@ -2093,7 +2132,9 @@ def _read_anchor_key(fd: int) -> str | None:
         return "LEFT"
     if data == "\x1b":
         return "ESCAPE"
-    if data == "\x13":
+    # Ctrl+S or Ctrl+W: check anywhere in data (may arrive concatenated with prior key)
+    # Ctrl+W is fallback for terminals that intercept Ctrl+S (macOS flow control)
+    if "\x13" in data or "\x17" in data:
         return "CTRL_S"
     if data in ("\x7f", "\x08"):
         return "BACKSPACE"
@@ -2513,6 +2554,27 @@ def _handle_anchor_key(
         st.quit_pending = False
         return True
 
+    # --- Select all cells in focused region (e) ---
+    if key in ("e", "E"):
+        if st.region_focus is None:
+            st.status = "Focus a region first (press r), then press e"
+        else:
+            st.rect_start = None  # cancel any in-progress rect
+            angle = st.current_angle
+            before = len(st.selected_cells)
+            for (a, x, y), ridx in st.cell_assignments.items():
+                if a == angle and ridx == st.region_focus:
+                    st.selected_cells.add((x, y))
+            added = len(st.selected_cells) - before
+            regions = st.regions_at_angle()
+            rname = regions[st.region_focus]["name"] if st.region_focus < len(regions) else "?"
+            if added:
+                st.status = f"Selected {added} cells from region '{rname}' ({len(st.selected_cells)} total)"
+            else:
+                st.status = f"No cells to select — all {len(st.selected_cells)} already in region '{rname}'"
+        st.quit_pending = False
+        return True
+
     # --- Region grid toggle (g): show focused region across all angles × frames ---
     if key in ("g", "G"):
         if st.region_focus is None:
@@ -2761,6 +2823,19 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
     else:
         ref_path = None
 
+    # Guard: reference_xp must resolve within the anchor's parent tree or sprite_dir (FL-4015)
+    if ref_path is not None:
+        anchor_root = anchor_path.parent.resolve()
+        sprite_root = sprite_dir.resolve()
+        try:
+            ref_path.relative_to(anchor_root)
+        except ValueError:
+            try:
+                ref_path.relative_to(sprite_root)
+            except ValueError:
+                print(f"reference_xp escapes trusted directories: {ref_xp}", file=sys.stderr)
+                return 1
+
     if ref_path is None or not ref_path.exists():
         print(f"reference XP not found: {ref_xp} (at: {ref_path})", file=sys.stderr)
         return 1
@@ -2849,18 +2924,29 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
                 prev_frame = st.current_frame
                 prev_proj = st.proj_idx
 
-            # Autoplay: advance angle on timer
+            # Autoplay: advance angle on timer (mirrors manual a/d guards)
             if st.autoplay:
                 now = time.monotonic()
                 if now - st.autoplay_last >= st.autoplay_interval:
                     st.current_angle = (st.current_angle + 1) % st.num_angles
                     st.autoplay_last = now
                     st.visited_angles.add(st.current_angle)
+                    st.selected_cells.clear()
+                    st.rect_start = None
                     redraw_pending[0] = True
 
             if redraw_pending[0] or st.autoplay:
                 redraw_pending[0] = False
-                sys.stdout.write(_anchor_compose_screen(st, cell_data, asset=asset, layer_index=layer_index))
+                try:
+                    screen = _anchor_compose_screen(st, cell_data, asset=asset, layer_index=layer_index)
+                    sys.stdout.write(screen)
+                except Exception:
+                    import traceback
+                    traceback.print_exc(file=sys.stderr)
+                    try:
+                        sys.stdout.write("\033[H\033[2JRender error — check stderr\r\n")
+                    except Exception:
+                        pass
                 sys.stdout.flush()
 
             key = _read_anchor_key(fd)

@@ -33,7 +33,7 @@ if not (Y9_ROOT / "scripts" / "pipeline" / "xp_core.py").is_file():
     )
     sys.exit(1)
 sys.path.insert(0, str(Y9_ROOT))
-from scripts.pipeline.xp_core import XPFile, XPLayer
+from scripts.pipeline.xp_core import XPFile, XPLayer, encode_digit, rebase_visual_layer_transparency_keys
 
 MAGENTA = (255, 0, 255)
 
@@ -49,13 +49,7 @@ FAMILY_FILL: dict[str, tuple[int, int, int]] = {
 SLOT_ORDER = {"body": 0, "head": 1, "armor": 2, "weapon": 3, "shield": 4, "mount": 5}
 
 
-def _digit(v: int) -> int:
-    """Encode a small integer as a CP437 glyph (0-9 → '0'-'9', 10-35 → 'A'-'Z')."""
-    if v <= 9:
-        return ord(str(v))
-    if v <= 35:
-        return ord("A") + (v - 10)
-    raise ValueError(f"value {v} out of CP437 digit range")
+_digit = encode_digit
 
 
 class RegionEntry(TypedDict):
@@ -248,7 +242,9 @@ def build_body_map(map_path: Path) -> XPFile:
 
     out = XPFile()
     out.version = -1
-    out.layers = [l0, l1, XPLayer(body_w, body_h, l2)]
+    visual = XPLayer(body_w, body_h, l2)
+    out.layers = [l0, l1, visual]
+    rebase_visual_layer_transparency_keys(visual, None, l0)
     return out
 
 

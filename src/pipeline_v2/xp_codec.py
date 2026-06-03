@@ -5,6 +5,63 @@ import struct
 from pathlib import Path
 
 
+# Color-key transparency.
+#
+# Upstream sprite.cpp uses layer-0's background color at cell (0,0) as the
+# per-sprite transparency key (read once, then any layer cell whose fg or bg
+# matches that color is treated as transparent). Magenta is also treated as
+# transparent unconditionally as a hardcoded safety net.
+#
+# Legacy monolithic sprites (the originals: player, wolfie, bigbee, attack,
+# plydie, wolack, etc.) author their key as bright yellow. Newer sprites use
+# magenta. Both must be honored by every renderer.
+MAGENTA_KEY_RGB: tuple[int, int, int] = (255, 0, 255)
+LEGACY_YELLOW_KEY_RGB: tuple[int, int, int] = (255, 255, 85)
+
+
+def layer0_color_key(layers) -> tuple[int, int, int] | None:
+    """Return the per-sprite transparency key from L0 cell (0,0)'s background.
+
+    Accepts either:
+      - png2xp2png-style layers: list of ``(width, height, cells)`` tuples
+        where ``cells`` is a flat column-major list of ``(glyph, fg, bg)``.
+      - ``read_xp`` dict ``cells`` form: list of flat lists of ``(glyph, fg, bg)``.
+
+    Returns ``None`` if the structure can't be interpreted.
+    """
+    if not layers:
+        return None
+    first = layers[0]
+    if isinstance(first, tuple) and len(first) == 3 and hasattr(first[2], "__getitem__"):
+        cells = first[2]
+    elif isinstance(first, list):
+        cells = first
+    else:
+        return None
+    if not cells:
+        return None
+    cell = cells[0]
+    if len(cell) < 3:
+        return None
+    bg = cell[2]
+    return (int(bg[0]), int(bg[1]), int(bg[2]))
+
+
+def sprite_transparency_keys(layers) -> set[tuple[int, int, int]]:
+    """Return the full set of transparent color keys for a parsed XP.
+
+    Always includes magenta and the legacy yellow key, plus the per-sprite
+    ``L0[0,0].bg`` value when readable. Mirrors upstream sprite.cpp behavior
+    (per-sprite L0 key + hardcoded magenta fallback) and adds legacy-yellow
+    coverage for compatibility with this codebase's monolithic sources.
+    """
+    keys: set[tuple[int, int, int]] = {MAGENTA_KEY_RGB, LEGACY_YELLOW_KEY_RGB}
+    sprite_key = layer0_color_key(layers)
+    if sprite_key is not None:
+        keys.add(sprite_key)
+    return keys
+
+
 def write_xp(path: str | Path, width: int, height: int, layers: list[list[tuple[int, tuple[int, int, int], tuple[int, int, int]]]]) -> None:
     """Write a minimal REXPaint-like XP file.
 

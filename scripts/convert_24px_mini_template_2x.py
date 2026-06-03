@@ -45,11 +45,26 @@ class FamilySpec:
     cell_h_chars: int
 
 
-FAMILIES = {
-    "player": FamilySpec((1, 8), 14, 20),
-    "attack": FamilySpec((8,), 18, 20),
-    "plydie": FamilySpec((5,), 22, 22),
-}
+import os as _os
+
+# FL-4098 (1): hires FAMILIES doubles char dimensions per frame.
+# Source TILE_PX (52) is unchanged; each char cell now consumes ~1.4 source
+# pixels (was ~2.9) so SSIM has 4x more cells to work with per figure.
+# Toggle: env GLYPH_HIRES=1 (default ON for the FL-4098 smoke test).
+_HIRES = _os.environ.get("GLYPH_HIRES", "1") == "1"
+
+if _HIRES:
+    FAMILIES = {
+        "player": FamilySpec((1, 8), 28, 40),
+        "attack": FamilySpec((8,), 36, 40),
+        "plydie": FamilySpec((5,), 44, 44),
+    }
+else:
+    FAMILIES = {
+        "player": FamilySpec((1, 8), 14, 20),
+        "attack": FamilySpec((8,), 18, 20),
+        "plydie": FamilySpec((5,), 22, 22),
+    }
 
 # Per-family base configs — semantic_bias is injected per-run from semantic maps.
 # Values follow the block extractor's candidate_limit=12 / score_delta_threshold=0.35
@@ -59,6 +74,31 @@ _FAMILY_BASE_CONFIGS: dict[str, GlyphAssignmentConfig] = {}  # populated in main
 
 
 def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
+    # FL-4095: edge_aware enabled across all 24px families. Sobel/DoG runs
+    # the stroke pre-pass; bias scope reduces to non-stroke cells.
+    # FL-4096 (A+B): tone overlay + Canny NMS/hysteresis.
+    # FL-4097 (1+2+3): SSIM glyph picker, multi-scale edges, skeleton/polyline.
+    common_edge_kwargs = {
+        "edge_aware": True,
+        # iter 5b baseline locked — FL-4100 reverted (iter 6 was too dark
+        # in body centers per operator). Threshold 80, RGB luminance edges.
+        # Env overrides preserved for ablation.
+        "edge_magnitude_threshold": float(_os.environ.get("GLYPH_EDGE_THRESHOLD", "80")),
+        "edge_use_dog": True,
+        "edge_grid_shift_search_px": 2,
+        "edge_use_alpha_channel": _os.environ.get("GLYPH_ALPHA_EDGES", "0") == "1",
+        "ssim_for_strokes": True,
+        "ssim_candidate_filter_by_orientation": True,
+        "multi_scale_edges": True,
+        "use_skeleton_polyline": True,
+        # FL-4099 stick-figure modes — env-controlled per-feature toggles.
+        #   GLYPH_ANTI_FILL=1 → anti-fill bias in body.*/armor.* regions (default ON)
+        #   GLYPH_POLYLINE_PRIMARY=1 → polyline cells use tangent glyph (default ON)
+        #   GLYPH_SILHOUETTE_ONLY=1 → only stroke/polyline cells drawn (default OFF)
+        "anti_fill_in_body": _os.environ.get("GLYPH_ANTI_FILL", "1") == "1",
+        "polyline_primary": _os.environ.get("GLYPH_POLYLINE_PRIMARY", "1") == "1",
+        "silhouette_only": _os.environ.get("GLYPH_SILHOUETTE_ONLY", "0") == "1",
+    }
     return {
         "player": GlyphAssignmentConfig(
             font_path=font_path,
@@ -66,13 +106,15 @@ def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
             target_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
             candidate_limit=5,
             score_delta_threshold=0.15,
+            **common_edge_kwargs,
         ),
         "attack": GlyphAssignmentConfig(
             font_path=font_path,
             font_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
             target_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
             candidate_limit=8,
-            score_delta_threshold=0.20,
+            score_delta_threshold=0.25,
+            **common_edge_kwargs,
         ),
         "plydie": GlyphAssignmentConfig(
             font_path=font_path,
@@ -80,6 +122,7 @@ def _build_family_configs(font_path: Path) -> dict[str, GlyphAssignmentConfig]:
             target_cell_size=(ASSIGNMENT_CELL_PX, ASSIGNMENT_CELL_PX),
             candidate_limit=4,
             score_delta_threshold=0.20,
+            **common_edge_kwargs,
         ),
     }
 
@@ -296,6 +339,11 @@ def _upload_session(client, xp_path: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="convert only the first N source sheets")
+    parser.add_argument(
+        "--name-filter",
+        default=None,
+        help="only convert source sheets whose stem starts with this prefix (e.g. knight1)",
+    )
     args = parser.parse_args()
 
     xps_dir = OUT_DIR / "xps"
@@ -313,6 +361,8 @@ def main() -> None:
     client = app.test_client()
 
     source_paths = sorted(SOURCE_DIR.glob("*-source.png"))
+    if args.name_filter is not None:
+        source_paths = [p for p in source_paths if p.name.startswith(args.name_filter)]
     if args.limit is not None:
         source_paths = source_paths[: args.limit]
 
