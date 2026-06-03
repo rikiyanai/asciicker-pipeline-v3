@@ -1793,6 +1793,20 @@ function _handleTextKey(e) {
   return false;
 }
 
+function _swapFgBg() {
+  const tmp = editorState.drawFg;
+  editorState.drawFg = editorState.drawBg;
+  editorState.drawBg = tmp;
+  _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
+  const fgEl = document.getElementById('wsFgColor');
+  if (fgEl) fgEl.value = _rgbToHex(editorState.drawFg);
+  const bgEl = document.getElementById('wsBgColor');
+  if (bgEl) bgEl.value = _rgbToHex(editorState.drawBg);
+  _renderGlyphPicker();
+  _renderPaletteGrid();
+  _updateInfoDrawState();
+}
+
 function _applyEyedropperSample(glyph, fg, bg) {
   editorState.drawGlyph = glyph & 0xFF;
   editorState.drawFg = [...fg];
@@ -2154,6 +2168,10 @@ function _onKeyDown(e) {
       _switchTool('select');
       e.preventDefault();
       break;
+    case 'x':
+      _swapFgBg();
+      e.preventDefault();
+      break;
   }
 }
 
@@ -2463,8 +2481,16 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
     _updateInfoDrawState();
   });
 
+  const swapBtn = document.createElement('button');
+  swapBtn.id = 'wsSwapFgBg';
+  swapBtn.textContent = '⇄';
+  swapBtn.className = 'ws-tool-btn';
+  swapBtn.title = 'Swap foreground / background (X)';
+  swapBtn.addEventListener('click', _swapFgBg);
+
   swatchRow.appendChild(fgLabel);
   swatchRow.appendChild(fgInput);
+  swatchRow.appendChild(swapBtn);
   swatchRow.appendChild(bgLabel);
   swatchRow.appendChild(bgInput);
   paletteSection.appendChild(swatchRow);
