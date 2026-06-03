@@ -694,12 +694,8 @@ export class Canvas {
 
   _drawCellToContext(ctx, cell, x, y) {
     const pixelCoords = this.cellToPixelCoords(x, y);
-    if (cell.glyph === 0) {
-      return;
-    }
 
     const bgColor = _rgb(cell.bg[0], cell.bg[1], cell.bg[2]);
-
     ctx.fillStyle = bgColor;
     ctx.fillRect(
       pixelCoords.x,
@@ -707,6 +703,10 @@ export class Canvas {
       this.cellSizePixels,
       this.cellSizePixels
     );
+
+    if (cell.glyph === 0) {
+      return;
+    }
 
     // Use CP437 font renderer if available and loaded
     if (this.cp437Font && this.cp437Font.spriteSheet) {

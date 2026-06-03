@@ -183,7 +183,12 @@ class EraseTool {
   _erase(x, y) {
     if (!this.canvas) return;
     if (x < 0 || y < 0 || x >= this.canvas.width || y >= this.canvas.height) return;
-    this.canvas.setCell(x, y, 0, [255, 255, 255], [0, 0, 0]);
+    const activeLayer = this.canvas.layerStack && this.canvas.layerStack.getActiveLayer();
+    if (activeLayer) {
+      const cell = activeLayer.getCell(x, y);
+      if (cell && cell.bg && cell.bg[0] === 255 && cell.bg[1] === 0 && cell.bg[2] === 255) return;
+    }
+    this.canvas.setCell(x, y, 0, [255, 255, 255], [255, 0, 255]);
   }
   _line(x0, y0, x1, y1) {
     const cells = [];
@@ -1276,7 +1281,7 @@ function _transformSelection(kind) {
   // Clear source region first
   for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
     for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
-      canvas.setCell(x, y, 0, [255, 255, 255], [0, 0, 0]);
+      canvas.setCell(x, y, 0, [255, 255, 255], [255, 0, 255]);
     }
   }
 
