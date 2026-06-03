@@ -2603,6 +2603,52 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   transparentRow.appendChild(_mkTransparentBtn([255,0,255], 'MAG transparent', 'Primary transparent key (255,0,255) — runtime renders as see-through. LMB = FG, RMB = BG.'));
   transparentRow.appendChild(_mkTransparentBtn([255,255,0], 'YEL transparent-2', 'Secondary transparent key (255,255,0) — Y9-2 engine. LMB = FG, RMB = BG.'));
   paletteSection.appendChild(transparentRow);
+
+  // B5: prefilled FBG-combo subpalette derived from Y9-2 semantic_maps/player-0100.json
+  // canonical palette_roles. Each button selects FG+BG together (LMB) or swaps (RMB).
+  const fbgRow = document.createElement('div');
+  fbgRow.className = 'ws-fbg-combo-row';
+  fbgRow.title = 'Canonical FG/BG combos from Y9-2 player-0100. LMB = apply (fg,bg). RMB = apply swapped (bg,fg).';
+  const _mkFbgBtn = (fg, bg, label, hint) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ws-fbg-combo-btn';
+    b.title = `${label} — fg=rgb(${fg.join(',')}) bg=rgb(${bg.join(',')}). ${hint}`;
+    const fgHalf = document.createElement('span');
+    fgHalf.className = 'ws-fbg-half ws-fbg-half-top';
+    fgHalf.style.background = `rgb(${fg[0]},${fg[1]},${fg[2]})`;
+    const bgHalf = document.createElement('span');
+    bgHalf.className = 'ws-fbg-half ws-fbg-half-bot';
+    bgHalf.style.background = `rgb(${bg[0]},${bg[1]},${bg[2]})`;
+    b.appendChild(fgHalf);
+    b.appendChild(bgHalf);
+    const _apply = (f, g) => {
+      editorState.drawFg = [...f];
+      editorState.drawBg = [...g];
+      const fgEl = document.getElementById('wsFgColor');
+      const bgEl = document.getElementById('wsBgColor');
+      if (fgEl) fgEl.value = _rgbToHex(editorState.drawFg);
+      if (bgEl) bgEl.value = _rgbToHex(editorState.drawBg);
+      _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
+      _renderGlyphPicker(); _renderPaletteGrid(); _updateInfoDrawState();
+    };
+    b.addEventListener('click', () => _apply(fg, bg));
+    b.addEventListener('contextmenu', (e) => { e.preventDefault(); _apply(bg, fg); });
+    return b;
+  };
+  const FBG_COMBOS = [
+    { fg: [0,0,0],       bg: [255,255,85],  label: 'hair on subcell',  hint: 'black hair fg over yellow subcell-fill bg' },
+    { fg: [170,0,0],     bg: [255,85,85],   label: 'mouth on skin',    hint: 'dark-red detail on light-red skin' },
+    { fg: [255,255,255], bg: [255,85,85],   label: 'shine on skin',    hint: 'white highlight on skin' },
+    { fg: [0,0,0],       bg: [255,85,85],   label: 'eye on skin',      hint: 'black eye on skin' },
+    { fg: [170,0,170],   bg: [255,255,85],  label: 'shirt edge',       hint: 'purple shirt fg on yellow subcell-fill bg' },
+    { fg: [0,0,170],     bg: [85,85,255],   label: 'pants seam',       hint: 'dark-blue fg on bright-blue pants bg' },
+    { fg: [170,85,0],    bg: [255,255,85],  label: 'boot edge',        hint: 'brown boot fg on yellow subcell-fill bg' },
+    { fg: [255,255,255], bg: [0,0,170],     label: 'pants highlight',  hint: 'white highlight on dark-blue pants' },
+  ];
+  for (const c of FBG_COMBOS) fbgRow.appendChild(_mkFbgBtn(c.fg, c.bg, c.label, c.hint));
+  paletteSection.appendChild(fbgRow);
+
   toolsDrawer.appendChild(paletteSection);
 
   // 3.4 Tools / Apply (spec §3.4: two-column layout)

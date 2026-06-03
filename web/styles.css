@@ -792,6 +792,34 @@ label.inline {
 .ws-status-toast.ws-status-toast-show {
   opacity: 1;
 }
+/* FBG-combo subpalette — canonical (fg, bg) pairs from Y9-2 player-0100
+   semantic_maps. LMB applies, RMB applies swapped. (B5, FL-2026-06-03) */
+.ws-fbg-combo-row {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+  margin-top: 6px;
+}
+.ws-fbg-combo-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #2a2f3a;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+}
+.ws-fbg-combo-btn:hover {
+  border-color: #4b91ff;
+}
+.ws-fbg-half {
+  display: block;
+  width: 100%;
+  flex: 1 1 50%;
+}
 /* Paste ghost preview — shows clipboard bbox under cursor while paste mode
    is armed. Top-left anchored to cursor cell. (B6, FL-2026-06-03) */
 .ws-paste-ghost {
