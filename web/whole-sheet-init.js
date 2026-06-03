@@ -2496,6 +2496,41 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   swatchRow.appendChild(bgLabel);
   swatchRow.appendChild(bgInput);
   paletteSection.appendChild(swatchRow);
+
+  // Dedicated transparent-key row — MAG (255,0,255) primary, YEL (255,255,0) secondary (Y9-2).
+  // FL-2026-06-03: user reported picking "magenta-ish" from palette and it not being the canonical
+  // transparent key — these pin to the exact values used by the runtime renderer.
+  const transparentRow = document.createElement('div');
+  transparentRow.className = 'ws-transparent-row';
+  transparentRow.title = 'Transparent keys: MAG (255,0,255) makes a cell see-through in the runtime; YEL (255,255,0) is the Y9-2 secondary transparent key. LMB = set foreground, RMB = set background.';
+  const _mkTransparentBtn = (rgb, label, title) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ws-transparent-btn';
+    b.textContent = label;
+    b.title = title;
+    b.style.background = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+    b.style.color = rgb[0] + rgb[1] + rgb[2] > 384 ? '#000' : '#fff';
+    b.addEventListener('click', () => {
+      editorState.drawFg = [...rgb];
+      const fgEl = document.getElementById('wsFgColor');
+      if (fgEl) fgEl.value = _rgbToHex(editorState.drawFg);
+      _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
+      _renderGlyphPicker(); _renderPaletteGrid(); _updateInfoDrawState();
+    });
+    b.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      editorState.drawBg = [...rgb];
+      const bgEl = document.getElementById('wsBgColor');
+      if (bgEl) bgEl.value = _rgbToHex(editorState.drawBg);
+      _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
+      _renderGlyphPicker(); _renderPaletteGrid(); _updateInfoDrawState();
+    });
+    return b;
+  };
+  transparentRow.appendChild(_mkTransparentBtn([255,0,255], 'MAG transparent', 'Primary transparent key (255,0,255) — runtime renders as see-through. LMB = FG, RMB = BG.'));
+  transparentRow.appendChild(_mkTransparentBtn([255,255,0], 'YEL transparent-2', 'Secondary transparent key (255,255,0) — Y9-2 engine. LMB = FG, RMB = BG.'));
+  paletteSection.appendChild(transparentRow);
   toolsDrawer.appendChild(paletteSection);
 
   // 3.4 Tools / Apply (spec §3.4: two-column layout)
