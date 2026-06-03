@@ -13656,8 +13656,57 @@ Order: B1 (doc, no code risk) → A1/A2 CDP audit → B6 paste anchor decision �
 
 Each step: commit narrowly, run `tests/web/whole-sheet-*` if applicable, headed CDP screenshot proof appended to this section, do not advance until previous step green.
 
-### D. CDP audit results (pending)
+### D. CDP audit results
 
-(Filled in as each audit completes.)
+Audit script: `scripts/audit/audit_2026_06_03_gaps.mjs`, headed Playwright on `127.0.0.1:5071/workbench`, fixture `sprites/player-0000.xp`. Artifacts in `artifacts/2026-06-03-gap-audit/`.
+
+| Claim | Code-level verdict | UX verdict | Root cause if user complaint stands |
+|---|---|---|---|
+| A4 hide IDs | ✅ correct — `.frame-label` computed `display: none`, `#gridToggleLabels` present and toggles | ✅ matches user expectation | — |
+| A3 swap F/B + X | ✅ correct — click swaps drawFg↔drawBg, X key swaps back, `_swapFgBg` covered by try/catch | ✅ matches user expectation | — |
+| A2 erase to MAG | ⚠️ partially correct — DATA write is correct (erase sets glyph=0 bg=MAG on layer); RENDER is broken | ❌ user sees BLACK on erase | **Composite `getCell` in `web/rexpaint-editor/canvas.js:567` skips any cell with `glyph===0` regardless of bg, then falls back to bg=BLACK at line 577.** So an erased L2 cell (glyph=0 bg=MAG) is skipped during composite — if no lower visible layer has glyph!=0, fallback returns BLACK and `_drawCellToContext` fills BLACK. af1e799 only fixed the draw path AFTER getCell; the getCell itself still hides the MAG-bg state. |
+| A1 sticky paste | ⚠️ partially correct — pasteMode + button stay armed correctly, `_pasteAt` no longer cancels paste mode (sticky logic works) | ❌ user sees "paste does nothing" | **`resolveWritableClipboardLayers` in `web/whole-sheet-clipboard.mjs:94` returns `null` if ANY layer the clipboard captured is locked, and on import of `player-0000.xp` L0 is LOCKED by default (verified: `audit_a1_lock_check.mjs` output).** Result: `_pasteAt` returns silently with no error/no feedback, dest cells remain unchanged. User has no way to know paste was blocked. Also missing: no visible "green plus" cursor/affordance to indicate paste mode is armed. |
+
+Sub-findings:
+
+- Paste anchor (B6) confirmed: top-left of selection bbox maps onto click cell. No ghost preview.
+- Three layers in `player-0000.xp` after import: L0 = hidden + LOCKED (family marker), L1 = hidden + unlocked (anim-row digits), L2 = visible + active + unlocked (paint surface).
+- The whole-sheet editor uses `web/rexpaint-editor/canvas.js` as its low-level renderer (verified by inspection — `editorState.canvas` is a `Canvas` instance from rexpaint-editor).
+
+### E. Fix order (revised after audit)
+
+1. **A2-fix**: composite getCell + render path — distinguish "truly empty" (glyph=0 bg=BLACK) from "transparent-painted" (glyph=0 bg=MAG). Composite must return MAG-bg cells, not skip them.
+2. **A1-fix**: paste path must either (a) skip locked layers when pasting (only writing to writable ones) or (b) surface "Paste blocked: layer L# locked" toast. Choose (a) since locked layers should be silently respected. Also: add visible paste-mode affordance (green-plus cursor / button class change verified visible).
+3. **B1**: MAG semantics tooltip + short doc.
+4. **B2**: color picker dedicated MAG (transparent) + YEL (secondary transparent) pin buttons.
+5. **B3+B4**: recents context menu on swatch right-click + visible recents subpalette section.
+6. **B5**: prefilled FBG-combo subpalette from `2026-05-21 final json`.
+7. **B6**: paste ghost-preview (cursor-following clipboard outline) — small UX polish.
+8. **B7**: promote knight-style glyphify to "Upload PNG" workflow (pipeline button mode selector).
+9. E2E verification with audit + manual sanity check.
+10. Build static workbench bundle + deploy to rikiworld.com/xpedit.
+
+### F. Resolution status (2026-06-03, end of session)
+
+| Gap | Status | Commit |
+|---|---|---|
+| A1 sticky paste | Resolved — locked-layer skip + paste-armed affordance + plus cursor | cdb1f22 |
+| A2 erase to MAG | Resolved — composite getCell + fallback render MAG | 8127791 |
+| A3 swap F/B | Already shipped (audit clean) | 2501a47 |
+| A4 hide IDs default | Already shipped (audit clean) | 1db7052 |
+| B1 MAG semantics doc | Tooltip + explicit button labels (inline doc) | ef00d6b |
+| B2 MAG/YEL pinned buttons | Resolved | ef00d6b |
+| B3 recents context menu | Deferred (next session) | — |
+| B4 recents subpalette | Deferred (next session) | — |
+| B5 FBG-combo prefilled subpalette from y9-2 2026-05-21 final json | Deferred (next session) | — |
+| B6 paste anchor ghost preview | Deferred (next session); current behavior = top-left of bbox at click cell | — |
+| B7 promote knight glyphify → Upload PNG | Already shipped | 07c778a |
+
+Audit scripts under `scripts/audit/`:
+- `audit_2026_06_03_gaps.mjs` — covers A1/A2 (data + pixel) /A3/A4
+- `audit_a1_locked_visible.mjs` — locked-layer paste regression case
+- `audit_b2_transparent_keys.mjs` — MAG/YEL button presence and click semantics
+
+All audits pass at end-of-session. Deploy to rikiworld.com/xpedit triggered via GitHub Actions workflow_dispatch `Deploy to Cloud Run` with target ref `main`.
 
 
