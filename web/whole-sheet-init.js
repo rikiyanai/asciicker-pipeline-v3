@@ -1143,10 +1143,13 @@ function _cutSelection() {
  * @returns {boolean} true if paste mode entered
  */
 function _enterPasteMode() {
+  if (editorState.pasteMode) { _cancelPasteMode(); return false; }
   if (!editorState.clipboard || countClipboardCells(editorState.clipboard) === 0) return false;
   editorState.pasteMode = true;
   const canvasEl = editorState.canvas && editorState.canvas.canvasElement;
   if (canvasEl) canvasEl.style.cursor = 'copy';
+  const btn = document.getElementById('wsPasteSelection');
+  if (btn) btn.classList.add('ws-tool-active');
   return true;
 }
 
@@ -1155,6 +1158,8 @@ function _cancelPasteMode() {
   editorState.pasteMode = false;
   const canvasEl = editorState.canvas && editorState.canvas.canvasElement;
   if (canvasEl) canvasEl.style.cursor = 'crosshair';
+  const btn = document.getElementById('wsPasteSelection');
+  if (btn) btn.classList.remove('ws-tool-active');
 }
 
 /**
@@ -1184,7 +1189,7 @@ function _pasteAt(cx, cy) {
   }
 
   _commitLayerMutation();
-  _cancelPasteMode();
+  // Paste mode stays armed — user can keep stamping until Escape or tool switch
 }
 
 // ── Selection transforms (W24-W27) ──
