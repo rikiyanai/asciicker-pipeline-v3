@@ -577,12 +577,13 @@ export class Canvas {
           bg: [...cell.bg],
         };
       }
-      // No visible layer had content — surface MAG so the author sees explicit
-      // transparency (matches the canonical transparent-key value).
+      // No visible layer had content — canvas default is BLACK. Explicit
+      // transparency (bg=MAG) is per-cell on the active layer, not a global
+      // render fallback (codex review 2026-06-03).
       return {
         glyph: 0,
         fg: [255, 255, 255],
-        bg: [255, 0, 255],
+        bg: [0, 0, 0],
       };
     }
 

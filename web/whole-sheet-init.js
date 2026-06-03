@@ -1144,6 +1144,25 @@ function _cutSelection() {
  */
 const _PASTE_CURSOR_SVG = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'><path d='M10 3v14M3 10h14' stroke='%232ecc71' stroke-width='3' stroke-linecap='round'/></svg>\") 10 10, copy";
 
+let _wsStatusTimer = null;
+function _showWorkbenchStatus(message, ms = 2500) {
+  let el = document.getElementById('wsStatusToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'wsStatusToast';
+    el.className = 'ws-status-toast';
+    const host = document.querySelector('.ws-canvas-area') || document.body;
+    host.appendChild(el);
+  }
+  el.textContent = String(message || '');
+  el.classList.add('ws-status-toast-show');
+  if (_wsStatusTimer) clearTimeout(_wsStatusTimer);
+  _wsStatusTimer = setTimeout(() => {
+    el.classList.remove('ws-status-toast-show');
+    _wsStatusTimer = null;
+  }, ms);
+}
+
 function _enterPasteMode() {
   if (editorState.pasteMode) { _cancelPasteMode(); return false; }
   if (!editorState.clipboard || countClipboardCells(editorState.clipboard) === 0) return false;
@@ -1175,7 +1194,22 @@ function _pasteAt(cx, cy) {
   if (!canvas) return;
 
   const layerEntries = resolveWritableClipboardLayers(editorState.layerStack, clip);
-  if (!layerEntries || layerEntries.length === 0) return;
+  if (!layerEntries || layerEntries.length === 0) {
+    // All referenced layers are locked or out-of-range — silent no-op was the
+    // pre-codex-review failure mode. Surface it (codex 2026-06-03 MEDIUM).
+    const allLocked = Array.isArray(clip.layers) && clip.layers.length > 0
+      && clip.layers.every((e) => {
+        const i = Number(e?.layerIndex);
+        if (!Number.isInteger(i)) return true;
+        const L = editorState.layerStack?.layers?.[i];
+        return !L || L.locked;
+      });
+    if (allLocked) {
+      console.warn('[workbench] Paste skipped: all target layers are locked.');
+      _showWorkbenchStatus('Paste blocked: target layers locked');
+    }
+    return;
+  }
   const clipW = Math.max(0, Number(clip.bounds?.w) || 0);
   const clipH = Math.max(0, Number(clip.bounds?.h) || 0);
   if (!clipW || !clipH) return;

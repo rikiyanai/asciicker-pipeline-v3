@@ -770,6 +770,28 @@ label.inline {
   margin-left: 4px;
   font-weight: bold;
 }
+/* Workbench status toast — surfaces silent failure modes (e.g., paste blocked
+   when all clipboard target layers are locked). Codex review 2026-06-03. */
+.ws-status-toast {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  background: rgba(20, 20, 30, 0.92);
+  color: #ffe066;
+  border: 1px solid #ffb84d;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease;
+  z-index: 1000;
+}
+.ws-status-toast.ws-status-toast-show {
+  opacity: 1;
+}
 /* Dedicated transparent-key buttons (FL-2026-06-03): pin to canonical
    (255,0,255) and (255,255,0) so users can pick the exact transparent
    key. Right-click sets BG; left-click sets FG. */
@@ -838,6 +860,7 @@ label.inline {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  position: relative; /* anchor for .ws-status-toast */
 }
 
 .ws-layout .ws-scroll-wrap {
