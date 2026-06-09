@@ -13710,3 +13710,12 @@ Audit scripts under `scripts/audit/`:
 All audits pass at end-of-session. Deploy to rikiworld.com/xpedit triggered via GitHub Actions workflow_dispatch `Deploy to Cloud Run` with target ref `main`.
 
 
+### G. Code-review findings (2026-06-03, post-deferral commits)
+
+| Finding | Severity | Commit | Status |
+|---|---|---|---|
+| **B4 recents**: color swatches used `input` event → every intermediate picker drag value pushed to recents LRU, filling all 8 slots with transient colors | 🔴 HIGH | B3-B6 bundle | Fixed — `input` → `change` on both fgInput and bgInput |
+| **B5 FBG combos**: 8 canonical pairs hardcoded in JS; diverges from Y9-2 semantic_maps symlink source of truth with no provenance comment | 🟡 MEDIUM | B5 bundle | Noted — added source-path comment inline |
+| **B6 ghost pixel formula**: lacks defensive fallback (`canvas.cellSize || CELL_SIZE`) that the paste interceptor has at line 955 | 🟢 LOW | B6 bundle | Noted — guarded by zero-size check at line 1310; kept in sync by manual review |
+
+

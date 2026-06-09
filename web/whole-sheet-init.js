@@ -2671,7 +2671,9 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   fgInput.id = 'wsFgColor';
   fgInput.value = _rgbToHex(editorState.drawFg);
   fgInput.title = 'Foreground color';
-  fgInput.addEventListener('input', () => {
+  // Use 'change' not 'input' so only the final committed picker value pushes to recents
+  // (codex review 2026-06-03: input fires on every intermediate drag value, polluting LRU).
+  fgInput.addEventListener('change', () => {
     editorState.drawFg = _hexToRgb(fgInput.value);
     _pushRecentColor('fg', editorState.drawFg);
     _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
@@ -2693,7 +2695,9 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
   bgInput.id = 'wsBgColor';
   bgInput.value = _rgbToHex(editorState.drawBg);
   bgInput.title = 'Background color';
-  bgInput.addEventListener('input', () => {
+  // Use 'change' not 'input' so only the final committed picker value pushes to recents
+  // (codex review 2026-06-03: input fires on every intermediate drag value, polluting LRU).
+  bgInput.addEventListener('change', () => {
     editorState.drawBg = _hexToRgb(bgInput.value);
     _pushRecentColor('bg', editorState.drawBg);
     _forEachTool((t) => _setToolColors(t, editorState.drawFg, editorState.drawBg));
@@ -2792,6 +2796,9 @@ function _buildSidebar(layerCount, activeLayer, layerNames, visibleLayers, gridC
     b.addEventListener('contextmenu', (e) => { e.preventDefault(); _apply(bg, fg); });
     return b;
   };
+  // Source: docs/research/ascii/semantic_maps/player-0100.json → palette_roles
+  // (vendor symlink to asciicker-Y9-2). If the Y9-2 source updates, revise this
+  // list to match. Last synced: 2026-06-03 (codex review 2026-06-03: provenance).
   const FBG_COMBOS = [
     { fg: [0,0,0],       bg: [255,255,85],  label: 'hair on subcell',  hint: 'black hair fg over yellow subcell-fill bg' },
     { fg: [170,0,0],     bg: [255,85,85],   label: 'mouth on skin',    hint: 'dark-red detail on light-red skin' },
