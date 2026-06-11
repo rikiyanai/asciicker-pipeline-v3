@@ -1295,6 +1295,22 @@ Decision (inference from sources):
    - drawers/sheets: source helpers, frame nav, browse, layer management
 5. The frame-navigation view should become a compact logical strip/filmstrip on
    mobile, not a second full grid competing with the canvas for space.
+6. `Show IDs` / frame labels are off by default on every viewport, including
+   iPad/mobile. They may exist as an explicit debug/navigation toggle, but the
+   default editing surface must show the sheet, not overlaid cell/frame IDs.
+7. Mobile must expose a clear `Open Workbench` mode before any dense authoring
+   dashboard. The iPad upload helper proving drag/drop, picker, and URL intake
+   does not by itself make the product usable if the next screen is the current
+   multi-panel workbench menu.
+8. On iPad-sized screens, the full workbench editor may prefer landscape
+   orientation for the canvas/tool layout, but orientation cannot be a hard gate
+   for opening an XP. Portrait may show a compact open/import/continue sheet and
+   a rotate hint after the file is loaded.
+9. The mobile first screen is task-rooted: `Open XP`, `Continue Draft`,
+   `New From Template`, `Export/Share`, and a clearly secondary
+   `Advanced Workbench` entry. ActorVisualProfile draft controls, TERM++ native
+   controls, verification command templates, recorder controls, and source/debug
+   panels are not first-screen mobile controls.
 
 Sources:
 
@@ -1413,6 +1429,23 @@ Neither is allowed to become a parallel long-term owner. The replacement
 direction is fixed by §2.3.0 and §2.10: one shared bundle-authoring contract,
 multiple thin clients.
 
+**Status correction - 2026-06-09:** the Y9-2 replacement path is still partial
+and implemented-unproven, but its latest `origin/main` no longer matches the
+older `appearance_bundle.py` / `render_plans.json` wording below. The fetched
+Y9-2 branch has deleted legacy render-plan owners in commit `ea54ffb86` and
+deleted `engine/bundle_runtime.cpp` in commit `6fe089012`; its live replacement
+surface is now the ActorVisualProfile generated-table path
+(`scripts/compile_actor_visual_profiles.py`,
+`engine/actor_visual_profile_table.generated.h`,
+`engine/actor_visual_profile_runtime.h`). That production compiler explicitly
+derives rows from server reachability and upstream sprite resolver/load
+semantics; authored pipeline-v3 `config/actor_visual_profiles/*.json` files do
+not participate in that track. Therefore the current misalignment is not
+"pipeline-v3 behind a completed Y9-2 refactor." It is: pipeline-v3 still ships
+a legacy `BundleSession` workbench authoring UX, while Y9-2 has a partial
+ActorVisualProfile replacement path whose authoring seam is not yet shared with
+pipeline-v3.
+
 Section 2 is not allowed to own the image/session root. It may only:
 
 - help ingest source art
@@ -1423,14 +1456,15 @@ Section 2 is not allowed to own the image/session root. It may only:
 
 ### 2.1 Engine Truth: `skin_family`, Legacy Combo Sheets, Direct Overlays, And AHSW Naming
 
-> **⚠ DELETION TARGET (2026-05-12, §2.15):** This section documents the
-> current Y9-2 runtime visual-resolution architecture — selector-driven bundles,
-> family fallback chains, `LookupPresentationSprite()`, combo-sheet matrices,
-> `bundle_layer_resolver`, and `ActorAppearanceBundleCache`. This system is the
-> deletion target specified in §2.15.1. It describes what exists today, not what
-> is correct tomorrow. The replacement is an exact `RenderPlanTable` lookup with
-> no runtime resolution. Read §2.15 before treating anything in this section as
-> the target architecture.
+> **⚠ DELETION TARGET / HISTORICAL REFERENCE (2026-06-09):** This section
+> documents the old Y9-2 runtime visual-resolution architecture —
+> selector-driven bundles, family fallback chains, `LookupPresentationSprite()`,
+> combo-sheet matrices, `bundle_layer_resolver`, and
+> `ActorAppearanceBundleCache`. Those owners were deletion targets under
+> §2.15. In the fetched Y9-2 `origin/main` state, several of the older
+> `RenderPlanTable` transition owners have themselves been superseded by the
+> ActorVisualProfile generated-table path. Treat this subsection as historical
+> context and compatibility background, not the current target architecture.
 
 The main game no longer treats player appearance as a presentation-state-only
 lookup. The canonical runtime dispatch is now:
@@ -1549,8 +1583,8 @@ animated prefix groups are:
 | `player-green` | `green` | on-foot idle/walk | `player-green-0001.xp` | runtime/proof-only |
 | `attack-green` | `green` | on-foot attack | `attack-green-0001.xp` | runtime/proof-only |
 | `plydie-green` | `green` | on-foot fall/death | `plydie-green-0001.xp` | runtime/proof-only |
-| `wolfie` | `human` (green falls back here today) | mounted idle/walk | `wolfie-0001.xp` | engine-real; **authorable: true** — UQ-007 identity CLOSED, mounted builder landed. Proof-blocked on `mounted_authoring_e2e` AND `UQ-R15` (selector/fallback logic still in gameplay path per FL-3865; old resolver proving mounted rows is not acceptable evidence). |
-| `wolack` | `human` (green falls back here today) | mounted attack | `wolack-0001.xp` | engine-real; **authorable: true** — UQ-007 identity CLOSED, mounted builder landed. Proof-blocked on `mounted_authoring_e2e` AND `UQ-R15` (selector/fallback logic still in gameplay path per FL-3865; old resolver proving mounted rows is not acceptable evidence). |
+| `wolfie` | `human` (green falls back here today) | mounted idle/walk | `wolfie-0001.xp` | engine-real; **authorable: true** — UQ-007 identity CLOSED, mounted builder landed. Proof-blocked on `mounted_authoring_e2e`, latest Y9-2 ActorVisualProfile runtime acceptance, and no legacy fallback in the claimed runtime path. Old resolver proving mounted rows is not acceptable evidence. |
+| `wolack` | `human` (green falls back here today) | mounted attack | `wolack-0001.xp` | engine-real; **authorable: true** — UQ-007 identity CLOSED, mounted builder landed. Proof-blocked on `mounted_authoring_e2e`, latest Y9-2 ActorVisualProfile runtime acceptance, and no legacy fallback in the claimed runtime path. Old resolver proving mounted rows is not acceptable evidence. |
 | `bigbee` | `human` | bee-mount / NPC path | `bigbee-0001.xp` | runtime-real, not authorable |
 
 `player-nude.xp` remains a special runtime file, but it is not the canonical
@@ -2274,11 +2308,11 @@ The live wrapper architecture is still misaligned in these exact ways after the
 | Y9-2 bundle wizard not wired as launcher sub-action | `Y9-2 scripts/launcher.py`, `Y9-2 scripts/pipeline/bundle_wizard/main.py` | The current bundle-wizard client exists, but `[3] ASSET PIPELINE` is still absent from the launcher rather than wired to the shared owner contract. Tracked as Y9-2 DESIGN OPEN B-13. |
 | **GAP: No wearable or item templates, and no backend parity runner for wearable slot/style contracts** | `config/template_registry.json`, `scripts/xp_fidelity_test/`, `tests/` | Pipeline-v2 has no wearable/item authoring surface, and there is no structural-contract runner that proves the local schema matches Y9-2 slot/style truth. That means gold/dark/default wearable semantics are still only partially covered by ad hoc runtime or engine-side knowledge. Tracked as S2-FAM-04. |
 | **GAP: Runtime identity is live, but semantic-runtime proof still lacks mounted/item runtime evidence** | `scripts/xp_fidelity_test/bundle_contract.mjs`, `scripts/xp_fidelity_test/run_semantic_runtime_contract_test.mjs`, `tests/xp_fidelity_test/semantic_runtime_contract.test.mjs`, `scripts/xp_fidelity_test/run_bundle_fidelity_test.mjs`, `scripts/xp_fidelity_test/run_manual_assembly_e2e_test.mjs`, `config/template_registry.json`, `config/runtime_identity_registry.json`, `Y9-2 server/network.h`, `Y9-2 engine/inventory.h`, `Y9-2 scripts/pipeline/staging/appearance_bundle/phase2-positive/appearance_bundle.json` | Pipeline-v3 now has live `skin_definition_id` / `presentation_kind_id` / `layer_definition_id` ownership. Generalized bundle-port readiness remains false because item/world/inventory rows are still explicit blockers and mounted runtime proof still needs `mounted_authoring_e2e` evidence. |
-| **GAP: Y9-2 runtime still resolves visual meaning at runtime — bundle compiler output not yet `RenderPlanTable`** | `Y9-2 engine/bundle_layer_resolver.cpp`, `Y9-2 engine/bundle_runtime_admission_validator.cpp`, `Y9-2 engine/mounted_compose_runtime.h`, `Y9-2 engine/ActorAppearanceBundleCache`, `Y9-2 scripts/pipeline/appearance_bundle.py` | The Y9-2 runtime still resolves conditional body/item layers, mounted admission tables, fallback chains, selector masks, attachment order, default head/body insertion, and slot-order inference at runtime. This means compiler and runtime can disagree on any new content axis. The compiler must enumerate every server-authorable `ServerVisualKey` and emit a flat ordered `RenderPlan` row for each key — missing key is a hard compiler rejection with no runtime fallback. Pipeline-v3 compiler output obligations extend to include `render_plans.json` once §2.15 transition is active. Tracked as `UQ-R15`. FL-3861. |
-| **GAP: `ActorVisualProfile` authored data structure not defined in pipeline-v3** | `config/runtime_identity_registry.json`, `src/pipeline_v2/service.py::resolve_blueprint_targets()` | No data structure captures the full visual profile as an authored object: `skin_id`, `presentation_kind`, `variation` (e.g. `crossbow_attack`), body layer assignment, wearable slot layer assignments (head/chest/weapon/shield with explicit XP refs), mount rear/rider/front layer split, or future rig/bone/socket data. `runtime_identity_registry.json` captures IDs; `resolve_blueprint_targets()` captures geometry — neither captures authored content ownership or variation/mount slot assignments. Without this object, the pipeline cannot produce a structured authoring artifact or compile RenderPlan rows from authored content. FL-3863. |
+| **GAP: Y9-2 replacement path is partial and no longer the old `appearance_bundle.py` target** | Y9-2 `origin/main`: `scripts/compile_actor_visual_profiles.py`, `engine/actor_visual_profile_table.generated.h`, `engine/actor_visual_profile_runtime.h`; deleted legacy refs: `scripts/pipeline/appearance_bundle.py`, `assets/appearance_bundle/current/render_plans.json`, `engine/bundle_runtime.cpp` | The latest fetched Y9-2 branch has moved beyond the May 12 `appearance_bundle.py` / `render_plans.json` transition language: commits `ea54ffb86` and `6fe089012` delete those legacy/transition owners. The active production path emits ActorVisualProfile generated-table artifacts from server reachability and upstream sprite resolver/load semantics. It is still implemented-unproven and partial because authored profile JSON is not a production input, parser/visual proof remains a separate gate, and pipeline-v3 has no shared authoring seam into that compiler. Tracked by the Y9-2 bundle family around FL-3912, FL-3943..FL-3946, FL-4049, FL-4055, and FL-4125, not the local-stale FL-3861..FL-3868 numbering. |
+| **GAP: pipeline-v3 `ActorVisualProfile` UI exists, but generated profiles are not authoritative** | `src/pipeline_v2/app.py::api_wb_create_actor_visual_profile()`, `src/pipeline_v2/service.py::workbench_create_actor_visual_profile()`, `config/actor_visual_profiles/` | Pipeline-v3 now has an ActorVisualProfile schema, route, examples, and workbench button, but the generated object is scaffolding: unstable `hash(session_id)` identity, hardcoded `layer_definition_id=700`, hardcoded `visual_style_id=1`, one full-sheet region, and no durable Y9-2 compiler consumer. The current workbench must not claim that this button produces live Y9-2 runtime rows. |
 | **GAP: Structured authoring artifact (Step 7) missing semantic map refs, variation, slot/layer assignments** | `src/pipeline_v2/service.py::workbench_export_bundle()`, `src/pipeline_v2/service.py::workbench_web_skin_bundle_payload()` | Current export produces per-action XP paths + runtime identity IDs. Missing: semantic map refs, `variation` field, explicit slot/layer assignments (which XP covers which slot), mount rear/front separation, mount composition data, quality gate summary per slot. This is the pipeline-v3 side of Step 7 of the content authoring workflow. FL-3863. |
-| **GAP: Runtime Parser Gate absent from `verify-current` and `build-web.sh`** | `asciicker-Y9-2/scripts/build-web.sh:129`, `asciicker-Y9-2/scripts/pipeline/appearance_bundle.py::verify_current()` | `build-web.sh` runs Python-only bundle validation before WASM compilation. The actual C++ runtime parser is never invoked. A bundle can pass all Python gates and still be rejected by the C++ parser. The parser gate is mandatory before any RenderPlanTable claim is provable: emitted plan must be accepted by exact C++ runtime, not Python validator. FL-3862. |
-| **GAP: Bundle System Guide in Y9-2 launcher documents old selector-driven architecture** | `asciicker-Y9-2/scripts/launcher.py::_show_bundle_system_guide()` (~lines 5851–5906) | The user-facing Bundle System Guide accessible from the launcher explains the old XP→bundle→server→client chain with selector IDs. It does not explain: ActorVisualProfile, RenderPlanTable, ServerVisualKey, or why crossbow/mounted are not special cases. Content authors will learn the wrong model. FL-3864. |
+| **GAP: Runtime parser / headed visual proof remains mandatory for any replacement-path claim** | Y9-2 generated ActorVisualProfile table and runtime loader surfaces; pipeline-v3 Skin Dock proof surfaces | A Python-only compile or generated-header presence is not enough. The accepted gate is still runtime acceptance plus headed visual proof for the content path being claimed. In pipeline-v3, the proven May 15 path is legacy `BundleSession` -> Skin Dock payload, not authored ActorVisualProfile -> Y9-2 runtime. |
+| **GAP: Bundle/System Guide and workbench labels teach mixed or stale models** | Y9-2 launcher guide; pipeline-v3 `web/workbench.html` Panel 4b; `docs/plans/2026-03-23-workbench-canonical-spec.md` §2.10; `docs/plans/2026-06-09-workbench-prune-proposal.md` | User-facing surfaces still mix old template bundle language, May 12 `RenderPlanTable` language, and latest ActorVisualProfile generated-table language. Until the shared authoring seam exists, labels must distinguish "legacy Skin Dock preview" from "ActorVisualProfile artifact draft" and must not imply that pipeline-v3 profile JSON compiles into live Y9-2 runtime rows. The prune proposal is the remediation plan for current workbench labels and first-screen pruning. |
 
 #### 2.5.1 Exact Live Gap Inventory By Surface
 
@@ -2512,6 +2546,7 @@ mapping only.
 | `UQ-008` | `S2-R9` |
 | `UQ-009` | Section 3 support/proof follow-through for landed Section 2 surfaces |
 | `UQ-010` | `S2-R10` |
+| `UQ-014` | `S2-PRINT-01` / `FL-PRINT-01` printable authoring grid paper side feature |
 
 `world_item` / `inventory_grid` remain explicit deferred follow-through under
 `S2-FAM-04`; they are visible in the contract but are not promoted into the
@@ -2532,6 +2567,40 @@ This means:
 - bundle blueprints and presentation targets are authoring constraints, not engine law
 - bundle/session/presentation state is workbench state management, not runtime truth
 - runtime proof is wrapper proof, not proof that the root editor architecture is correct
+
+### 2.6.1 Printable Authoring Grid Paper Side Feature (`S2-PRINT-01` / `FL-PRINT-01`)
+
+This is a Section 2 side feature because it is an authoring aid for wrapper /
+Y9-2 sprite production. It must not become a second editor owner and must not
+override template registry, semantic map, or source-manifest truth.
+
+User seed (2026-06-11): an earlier `sprite-sheet-full.html` concept opened in
+Chrome and attempted to put a full sheet on one letter page with a grayscale
+underdrawing, cell grid, thicker frame boundaries, angle labels, frame numbers,
+fiducials, calibration strip, footer, and OMR bubbles. That artifact is not
+authoritative: the stated `126x72` sheet, `7.5in x 4.3in` image, `1.5mm` cells,
+`6`-column / `9`-row frame cadence, and `0..20` frame labels are layout guesses.
+The idea is valid; the geometry is not.
+
+Correct target contract:
+
+1. The generator derives sheet size, frame grid, angle labels, frame labels,
+   cell dimensions, and action rows from the same registry/template/source
+   authority used by Section 2 authoring. It must not hardcode `126x72`, `6x9`,
+   or `21` frames unless the selected template proves those values.
+2. Output is a printable HTML/PDF artifact for human sketch/review, not a
+   runtime artifact and not proof of Y9-2 integration.
+3. The page includes:
+   - grayscale underdrawing from the selected XP/template layer
+   - per-cell grid lines plus thicker semantic frame/action boundaries
+   - angle/action/frame labels derived from the selected template
+   - fiducials and a calibration strip suitable for scan/camera correction
+   - optional review bubbles / notes only if the corresponding import/review
+     path consumes them explicitly
+4. Any scan-back or camera-back import is a future explicit sub-feature. Until
+   then, printable grid paper is a manual authoring worksheet only.
+5. The implementation belongs after the source-manifest/template geometry owner
+   is stable enough to emit the paper from one source of truth.
 
 ### 2.7 Section-2 Behavior Tree
 
@@ -2700,23 +2769,28 @@ that authors bundle contributions rather than standalone per-action assets. Brow
 CLI, launcher, MCP, and CI are thin clients over that flow. Section 1 remains
 the root XP editor; Section 2 adds the bundle-authoring wrapper around it.
 
-**Refactor note (2026-05-12):** The command semantics below were written against
-the old selector-driven bundle model. Under the §2.15 replacement architecture,
-`compile-skin-request` must emit `render_plans.json` / `RenderPlanTable` rows,
-not just `appearance_bundle.json`. The Y9-2 launcher Bundle Mods menu labels
-(`New Bundle Item`, `Import Assets`, `Draft Manifest`, `Compile Bundle`,
-`Preview`, `Verify`) map to the new operations as follows:
+**Refactor note (2026-06-09):** The command semantics below were written against
+the old selector-driven bundle model and then partially amended for the May 12
+`RenderPlanTable` transition. Latest fetched Y9-2 `origin/main` has moved again:
+production rows are compiled by `scripts/compile_actor_visual_profiles.py` into
+ActorVisualProfile generated-table artifacts, and that compiler explicitly does
+not consume authored profile JSON. Therefore the shared command contract must be
+phrased by semantic obligation, not by the obsolete output filename
+`render_plans.json`. The Y9-2 launcher Bundle Mods menu labels (`New Bundle
+Item`, `Import Assets`, `Draft Manifest`, `Compile Bundle`, `Preview`, `Verify`)
+map to the target operations as follows:
 
 | Old launcher label | New operation under §2.15 |
 |--------------------|--------------------------|
 | Import Assets | import content artifact + validate content DB entry |
 | Draft Manifest | author `ActorVisualProfile` fields (skin/variation/slot assignments) |
-| Compile Bundle | compile `RenderPlan` rows → emit `render_plans.json` |
-| Preview | preview exact `RenderPlan` layer stack (body/wearables/mount) |
-| Verify | verify runtime parser accepts `RenderPlanTable` (C++ parser gate, FL-3862) |
+| Compile Bundle | compile server-reachable actor visual rows into the current Y9-2 runtime table artifact |
+| Preview | preview exact compiled layer stack (body/wearables/mount) |
+| Verify | verify runtime accepts the compiled actor visual table and headed proof exercises the claimed content path |
 
-These labels have not been renamed in live code. `UQ-R15` and FL-3864 track
-the guide and launcher label updates.
+These labels have not been renamed in live code. The guide and launcher label
+updates must now target the ActorVisualProfile generated-table model rather than
+the older selector-bundle or May 12 `render_plans.json` transition wording.
 
 **Required shared headless surface:** the product must converge on one
 authoritative CLI/API contract with at least these command semantics:
@@ -2728,10 +2802,10 @@ authoritative CLI/API contract with at least these command semantics:
 | `validate-skin-intake` | validate source PNG geometry/coverage for the skin lane | no | `planned_only` - no route exists |
 | `convert-skin-request` | convert walk/attack/death PNG inputs into staged XP and update the request artifact | yes | `planned_only` - no route exists |
 | `register-skin-request` | dry-run or perform canonical registration into bundle source + sprite destinations | yes | `planned_only` - no route exists |
-| `compile-skin-request` | compile canonical bundle outputs from a registered request — must include `render_plans.json` under §2.15 | yes | `planned_only` - no route exists |
+| `compile-skin-request` | compile canonical actor visual runtime artifacts from a registered request; exact output files may differ by Y9-2 generation model, but the result must be runtime-accepted and provenance-stable | yes | `planned_only` - no route exists |
 | `validate-xp` | run XP-only G7-G12 validation without requiring bundle/session context | no | `planned_only` - no route exists |
 | `status` | inspect request artifact state, blockers, next steps, and provenance | no | `planned_only` - no route exists |
-| `verify-cpp-parser` | invoke C++ runtime parser against emitted `render_plans.json` and confirm acceptance — mandatory gate per FL-3862 | no | `planned_only` - does not exist |
+| `verify-runtime-table` | invoke the Y9-2 runtime acceptance path against the emitted actor visual table artifacts and confirm headed proof for the claimed content path | no | `planned_only` - does not exist |
 
 The API naming may differ from the CLI verb spelling, but the semantics and
 validation rules must be identical. There must not be a browser-only, MCP-only,
@@ -3165,7 +3239,11 @@ Legacy-step normalization for older references:
 - The Y9-2 launcher/wizard/MCP follow-through work is not Step 11 here. It is
   `UQ-010`, on top of the shared Section 2.10 bundle-authoring contract.
 - `UQ-011` remains the public replacement / cutover lane.
-- `UQ-013` remains the small-screen layout and persistence follow-through lane.
+- `UQ-013` is promoted to mobile workbench usability follow-through when mobile
+  XP upload works but the first-screen/menu UX blocks real use.
+- `UQ-014` is the printable grid paper side-feature lane. It is parked until
+  template/source geometry authority is stable enough to generate paper from one
+  truth source.
 
 **Queue protocol:**
 
@@ -3205,7 +3283,8 @@ Legacy-step normalization for older references:
 | UQ-010 | PARKED | Finish Y9-2 gateway follow-through on the shared bundle-authoring contract | UQ-004 through UQ-009 passed, or user explicitly reprioritizes it after backend truth is stable | Execute `S2-R10`: wire launcher / bundle-wizard / MCP front doors to the shared Section 2.10 headless contract (`phase0-status`, `phase0-build`, `validate-skin-intake`, `convert-skin-request`, `register-skin-request`, `compile-skin-request`, `validate-xp`, `status`) and remove any surviving second pipeline owner or local CLI substitution from the execution path. | Y9-2 front doors use the same stable bundle-authoring contract that Section 2 and Section 3 already prove | Any fix creates a second pipeline owner, keeps local subprocess behavior alive as parallel truth, or reclassifies missing contract ownership as launcher-only wiring after Section 2.10 defined the shared owner | Section 2.10 / `S2-R10` / B-13 |
 | UQ-011 | PARKED | Public replacement / cutover lane | UQ-003 through UQ-010 passed; user explicitly starts cutover | Run the direct public-parity audit against `rikiworld.com/xpedit`, freeze the exact replacement SHA and proof artifacts, validate the `/xpedit` deploy path, deploy the frozen candidate, and re-run headed proof on the live URL | Public replacement is backed by the same root-hosted, prefixed, and public evidence chain with no unresolved earlier-layer blocker | Any earlier row is still open, any public parity check fails, or cutover is claimed from code state alone | Replacement lane / public parity |
 | UQ-012 | ALWAYS | Canon hygiene and anti-overclaiming | Every non-trivial source/doc/proof change | Keep `PLAYWRIGHT_FAILURE_LOG.md`, this canon spec, and any directly-adjacent proof-summary text aligned. Separate code state, proof state, and doc state explicitly. Reopen rows when live code falsifies an earlier closeout. | Authority docs and live source agree, and no stale completion claim survives a contradiction | A lower-priority note, stale sequence summary, or old "COMPLETE" wording contradicts the current failure log or source | Canon authority / process |
-| UQ-013 | PARKED | Small-screen layout and browser persistence follow-through | Core Section 1-3 queue rows passed, or user explicitly reprioritizes | Finish the Section 1.9.1 pointer/touch migration, three-tier persistence model, and narrow-screen layout contract without reopening the Section 1 owner graph | Small-screen/persistence work lands on the proven root editor rather than competing with it | Any fix reopens owner boundaries or is used to dodge unfinished Section 1 parity work | Section 1.9.1 / legacy Step 14 |
+| UQ-013 | CURRENT | Mobile Open Workbench usability and browser persistence follow-through | UQ-001 complete; mobile XP upload helper has proven file intake but first-screen workbench UX is product-blocking | Implement the Section 1.9 mobile contract as a clean task-rooted mode: `Open XP`, `Continue Draft`, `New From Template`, `Export/Share`, landscape-friendly editor layout, IDs off by default, and a clearly secondary `Advanced Workbench` escape hatch to the existing dense dashboard. Keep dense bundle/AVP/native/proof/source/debug controls out of the mobile first screen. | A real iPad or headed WebKit iPad pass can open/import an XP and reach the editor without navigating the current multi-panel workbench menu; IDs are off by default; export/share remains reachable | Any fix treats successful upload as usability closure, makes portrait/landscape orientation a hard open gate, reopens Section 1 ownership, or hides the required Advanced Workbench escape hatch | Section 1.9 / FL-MOB-01 |
+| UQ-014 | PARKED | Printable Y9-2 authoring grid paper side feature | UQ-006 source-manifest/template geometry authority stable, or user explicitly reprioritizes a design-only prototype | Build the correct version of the printable grid-paper method from Section 2.6.1 / `FL-PRINT-01`: generate printable HTML/PDF from selected template/XP geometry, with underdrawing, cell grid, semantic boundaries, labels, fiducials, calibration strip, and explicit non-runtime status | Generated paper matches selected template geometry and records provenance; no hardcoded dimensions from the rejected seed artifact survive as authority | Any implementation copies the incorrect `sprite-sheet-full.html` layout as truth, hardcodes stale dimensions, or claims scan/import/runtime integration without a consuming path | S2-PRINT-01 / FL-PRINT-01 |
 
 Future after current skin-authoring closure:
 
@@ -4214,11 +4293,25 @@ authoring surface to the generalized bundle identity model is the core open work
 
 **Added 2026-05-12. Source: FL-3912 architectural diagnosis.**
 
-This section establishes what must be deleted from the Y9-2 game runtime, what
-replaces it, and how pipeline-v3 compiler output obligations change to support
-the replacement owner. It is canon law for all subsequent Y9-2 bundle work and
-for pipeline-v3 compile targets. It may not be treated as a suggestion or a
-future-milestone deferral.
+> **HISTORICAL / SUPERSEDED TARGET (2026-06-11):** This section was inserted
+> after Section 3 during the May 12 Y9-2 RenderPlanTable transition and remains
+> here as a historical appendix. The active 2026-06-09 status correction at the
+> start of Section 2 overrides any `render_plans.json` or `RenderPlanTable`
+> output obligation below. Latest fetched Y9-2 `origin/main` has moved to
+> ActorVisualProfile generated-table artifacts
+> (`scripts/compile_actor_visual_profiles.py`,
+> `engine/actor_visual_profile_table.generated.h`,
+> `engine/actor_visual_profile_runtime.h`), and that production compiler does
+> not consume authored pipeline-v3 profile JSON. Use this section only as the
+> deleted-transition-owner record unless a later canon update reactivates it.
+
+This section originally established what had to be deleted from the Y9-2 game
+runtime, what the May 12 RenderPlanTable transition expected to replace it, and
+how pipeline-v3 compiler output obligations would have changed for that target.
+After the 2026-06-09 correction above, it is retained as lineage and deletion
+context only. Active compile/runtime obligations are governed by the current
+Section 2 status correction, §2.5 misalignment ledger, §2.10 shared contract,
+and Unified Queue rows.
 
 ### 2.15.0 Governing Law
 
@@ -4315,14 +4408,19 @@ Sprite* sprite = compose(plan->layers);
 
 No other runtime visual-resolution code may exist in the gameplay path.
 
-### 2.15.3 Compiler Output Obligation — `render_plans.json`
+### 2.15.3 Historical Compiler Output Obligation — `render_plans.json`
 
-The Y9-2 appearance bundle compiler (`scripts/pipeline/appearance_bundle.py`)
-must emit a `render_plans.json` output in addition to the current
-`appearance_bundle.json`. This is the compiler's primary deliverable under
-the new architecture.
+The May 12 transition target required the Y9-2 appearance bundle compiler
+(`scripts/pipeline/appearance_bundle.py`) to emit `render_plans.json` as the
+primary compiled artifact. That is no longer the active target in this canon.
+Latest fetched Y9-2 `origin/main` deleted the old transition owners and now
+emits ActorVisualProfile generated-table artifacts from server reachability and
+upstream sprite resolver/load semantics. The current obligation is semantic:
+the emitted runtime artifact, whatever its filename, must be provenance-stable,
+runtime-accepted, and headed-proofed for the claimed content path. Pipeline-v3
+profile JSON remains draft-only until Y9-2 consumes authored profile data.
 
-**Required `render_plans.json` schema:**
+**Historical `render_plans.json` schema retained for context only:**
 
 ```json
 {
@@ -4389,42 +4487,46 @@ key. `wolf_mount` is a `mount` key. They produce normal `RenderPlan` rows.
 There is no C++ special case, no mounted-compose branch, and no weapon
 exception in the replacement architecture.
 
-### 2.15.4 Pipeline-V3 Authoring Implication
+### 2.15.4 Current Pipeline-V3 Authoring Implication
 
-Pipeline-v3 does not own the Y9-2 runtime replacement. That work lives in
-the Y9-2 game repo. However, pipeline-v3's compiler output obligations change
-once `render_plans.json` becomes the authoritative compiled artifact:
+Pipeline-v3 does not own the Y9-2 runtime replacement. That work lives in the
+Y9-2 game repo. Pipeline-v3 must therefore avoid claiming that its current
+workbench output compiles into live Y9-2 runtime rows.
 
-1. **XP authoring obligation** (unchanged): help an author produce XP files
-   that pass structural gates G10-G12.
-2. **Manifest declaration obligation** (unchanged): help declare
-   `layer_definition` rows in `positive.bundle.json`.
-3. **Compiled bundle obligation** (extended): produce both `appearance_bundle.json`
-   (current) and `render_plans.json` (new target) from a registered
-   full-coverage request.
-4. **Key-space completeness obligation** (new): the compiler must be able to
-   enumerate the full server-authorable visual key space from registry truth
-   and reject the bundle if any key lacks a plan. Pipeline-v3 must expose
-   this as a verifiable compile gate, not a post-hoc runtime gap.
+Current obligations:
+
+1. **XP authoring obligation:** help an author produce XP files that pass the
+   live structural gates for the selected template/family.
+2. **Draft profile obligation:** if the workbench emits ActorVisualProfile JSON,
+   label it as a draft artifact until latest Y9-2 production compilation consumes
+   authored profile JSON.
+3. **Semantic completeness obligation:** any future shared compile path must
+   prove the complete server-authorable visual key space for the selected content
+   path, regardless of whether Y9-2 names the emitted artifact
+   `render_plans.json`, a generated header, or another runtime table format.
+4. **Runtime proof obligation:** no pipeline-v3 proof may claim Y9-2 integration
+   from Skin Dock preview alone. Runtime acceptance plus headed proof of the
+   claimed Y9-2 path remains mandatory.
 
 The pipeline-v3 authoring surface does not need to change its XP editing
-workflow. The change is in what the compiler emits and what it validates.
-`render_plans.json` is produced by the same `appearance_bundle.py` compiler
-that already produces `appearance_bundle.json`. It is a new output from an
-existing compile step, not a new product surface.
+workflow to satisfy this historical section. The needed product change is honest
+labeling and a future shared authoring seam, not a revived `render_plans.json`
+target.
 
 ### 2.15.5 Impact On Queue And Gates
 
 | Item | Change |
 |------|--------|
-| `UQ-R15` (new) | Owns the `render_plans.json` compiler output and the `RenderPlanTable` runtime replacement path in Y9-2. Blocked until §2.15.1 deletion components are removed from gameplay path and one mounted crossbow attack key renders through `render_plans.json` with no call into deleted components. |
-| `UQ-008` mounted parity | Additionally blocked on `UQ-R15` and FL-3917 residual. `mounted_authoring_e2e` runtime proof requires the replacement runtime path, not the old resolver. The old resolver proving mounted rows is not acceptable evidence. FL-3867 (`rig_definition_id` absent from all surfaces) and authored socket/anchor contracts are required before rig seam closure is claimable. |
-| Blocking gate (new, §2.15) | `render_plans.json` emitted by compiler — OPEN (FL-3866: `render_plan_table.py` disconnected from compile action) |
-| Blocking gate (new, §2.15) | One mounted crossbow attack `ServerVisualKey` renders through `RenderPlanTable` with no deleted component in call path — OPEN (FL-3865: 4 §2.15.1 targets still in gameplay path) |
-| Deletion progress (2026-05-12) | FL-3912: first deletion pass `0bd90fae` removed 6 of 8 §2.15.1 targets. 4 remain in gameplay path — see FL-3865 for exact component list. ProofState: IMPLEMENTED-UNPROVEN. |
+| `UQ-R15` | Historical May 12 transition row. Do not use it as the active pipeline-v3 blocker unless a later Y9-2 canon update reactivates a RenderPlanTable target. Current Y9-2 origin uses ActorVisualProfile generated-table artifacts. |
+| `UQ-008` mounted parity | Still proof-blocked, but not on `UQ-R15`. `mounted_authoring_e2e` must prove generated mounted output, latest Y9-2 runtime acceptance, headed visual correctness, and no legacy fallback in the claimed path. Authored socket/anchor contracts and mounted wolf + crossbow alignment remain proof obligations. |
+| Historical blocking gate (§2.15) | `render_plans.json` emitted by compiler — SUPERSEDED by latest Y9-2 ActorVisualProfile generated-table artifacts. |
+| Historical blocking gate (§2.15) | Mounted crossbow attack through `RenderPlanTable` — SUPERSEDED as a named artifact target; the remaining active obligation is runtime acceptance and headed proof through the latest Y9-2 generated-table path. |
+| Deletion progress (2026-05-12) | Historical FL-3912 transition evidence. Keep for lineage only; do not treat local-stale FL-3861..FL-3868 numbering as the active latest-origin bundle target. |
 
 The existing blocking gates for `UQ-008` and generalized bundle-port readiness
-remain open. They are now also gated on `UQ-R15` completion.
+remain open, but they are no longer gated on `UQ-R15` completion. They are gated
+on the latest Y9-2 ActorVisualProfile runtime path accepting the claimed content
+and on headed proof showing the content is selected without legacy fallback.
 
 ---
 
@@ -4445,18 +4547,17 @@ not a task plan - it is a gate list. Migration is ready when all blocking gates 
 | UQ-005 export/web-skin quality contract fully enforced | §Unified Queue `UQ-005` | CLOSED — export/web-skin paths share live G7-G12 enforcement. Canonical `/api/workbench/validate-xp` route + MCP `validate_xp` tool added. G8/G9 threshold policy locked in `gates.py` with named policy constants. |
 | UQ-006 manifest-backed source authoring no longer JSON-first | §Unified Queue `UQ-006` | OPEN |
 | UQ-007 runtime identity layer landed | §Unified Queue `UQ-007` | CLOSED - `config/runtime_identity_registry.json` owns live `skin_definition_id` / `presentation_kind_id` / `layer_definition_id` values and backend/helper/export/payload surfaces emit them |
-| UQ-008 mounted-family parity for `wolfie` / `wolack` proven | §Unified Queue `UQ-008` | PROOF BLOCKED - native builders, authorable registry state, and browser/backend artifact surfaces exist; `mounted_authoring_e2e` runtime proof still must prove generated rows and no legacy fallback. Additionally blocked on: `UQ-R15` (old resolver still in gameplay path, FL-3865); FL-3917 residual (`rig_definition_id` absent from all surfaces, FL-3867 — authored socket/anchor contracts not yet specified, mounted wolf + crossbow alignment unproven via human visual proof). Old resolver proving mounted rows is not acceptable evidence. |
+| UQ-008 mounted-family parity for `wolfie` / `wolack` proven | §Unified Queue `UQ-008` | PROOF BLOCKED - native builders, authorable registry state, and browser/backend artifact surfaces exist; `mounted_authoring_e2e` runtime proof still must prove generated mounted output, latest Y9-2 ActorVisualProfile runtime acceptance, headed visual correctness, and no legacy fallback in the claimed path. Authored socket/anchor contracts and mounted wolf + crossbow alignment remain unproven via human visual proof. Old resolver proving mounted rows is not acceptable evidence. |
 | UQ-009 current-scope Section 3 signoff + contract runners current | §Unified Queue `UQ-009` | PARTIAL |
 | UQ-010 Y9-2 wizard / launcher gateway wired to shared bundle-authoring contract | §Unified Queue `UQ-010` | OPEN |
 | UQ-011 cutover support gates ready (`§2.11`, `§2.12`) | §Unified Queue `UQ-011` | OPEN |
-| UQ-R15 Y9-2 runtime visual-resolution system deleted and replaced by `RenderPlanTable` | §2.15 | IMPLEMENTED-UNPROVEN — FL-3912: first deletion pass (commit `0bd90fae`) removed 6 of 8 §2.15.1 targets. **4 still in gameplay path** (FL-3865): `ActorAppearanceBundleCache` resolver fields in `bundle_runtime.h/.cpp` + `bundle_cache_queries.h/.cpp`; selector mask interpretation in `bundle_presentation_resolver.cpp:70–94` (`FindActorBundleSelectorForRuntime()`); `ACTOR_BUNDLE_FALLBACK_BODY_BIT` fallback logic; `FillActorBundleRenderArrays` in `bundle_render_stack_builder.cpp`. `render_plans.json` not yet emitted by compiler (`render_plan_table.py` disconnected from compile action — FL-3866). No proof that one mounted crossbow attack `ServerVisualKey` renders through replacement path with no call into deleted components. |
-| FL-3862 Runtime Parser Gate — `verify-current` and `build-web.sh` must invoke C++ parser | §2.10 / §2.15 | OPEN — build-web.sh line 129 runs Python-only validation; C++ runtime parser never called; mandatory before any `RenderPlanTable` proof claim. |
-| FL-3863 `ActorVisualProfile` authored object — pipeline-v3 missing data structure | §2.5 | OPEN — no structure captures skin_id, variation, body/wearable/mount layer assignments; `runtime_identity_registry.json` covers IDs only. |
-| FL-3864 Bundle System Guide rewrite — must explain Content DB → RenderPlanTable | §2.10 / §2.15 | OPEN — launcher guide at `_show_bundle_system_guide()` documents old selector architecture; content authors will learn wrong model. |
-| FL-3865 Four §2.15.1 deletion targets still in Y9-2 gameplay path | §2.15.1 | OPEN — `ActorAppearanceBundleCache` resolver fields (`bundle_runtime.h/.cpp`, `bundle_cache_queries.h/.cpp`); selector mask interpretation (`bundle_presentation_resolver.cpp:70–94`); `ACTOR_BUNDLE_FALLBACK_BODY_BIT` fallback logic; `FillActorBundleRenderArrays` (`bundle_render_stack_builder.cpp`). Blocks UQ-R15 proof. |
-| FL-3866 `render_plan_table.py` disconnected from `bundle_mods.py compile` | §2.15.3 | OPEN — module exists but not invoked by compile action; `render_plans.json` never emitted on compile; §2.15.3 output obligation cannot be gated. Blocks UQ-R15. |
-| FL-3867 `rig_definition_id` absent from all Y9-2 engine code and pipeline-v3 surfaces | §2.15 / §2.5 | OPEN — absent from `appearance_bundle.py`, `render_plan_table.py`, all engine C++, `app.py`, `service.py`, `runtime_identity_registry.json`, `workbench_mcp_server.py`. Spec defines it as authored selector dimension; code has no implementation. Blocks UQ-008 rig-seam residual. |
-| FL-3868 pipeline-v3 `workbench_create_actor_visual_profile()` not wired to any bundle workflow | §2.5 / §2.15.4 | OPEN — function exists in `service.py` but not called from any REST route, MCP tool, or workflow path. Zero authored `ActorVisualProfile` JSON files exist. `compile-skin-request`/`register-skin-request` are CLI-only in Y9-2's `bundle_wizard/main.py`. Step 6 of content authoring flow has no functional path. Blocks FL-3863 closure. |
+| Historical UQ-R15 RenderPlanTable transition | §2.15 | SUPERSEDED / HISTORICAL — the May 12 `RenderPlanTable` / `render_plans.json` target has been overtaken by latest fetched Y9-2 ActorVisualProfile generated-table artifacts. Keep this row for lineage only; do not use it as an active gate. |
+| Historical FL-3862 Runtime Parser Gate | §2.10 / §2.15 | SUPERSEDED AS WRITTEN — C++/runtime acceptance is still mandatory, but not specifically a `RenderPlanTable` parser gate unless Y9-2 reactivates that artifact target. Active wording: verify the latest generated actor visual table is runtime-accepted and headed-proofed. |
+| ActorVisualProfile authored-object gap | §2.5 | OPEN — pipeline-v3 has a schema/route/button, but generated profiles are scaffolding and latest Y9-2 production compilation does not consume authored profile JSON. Use `FL-BA-05` / `FL-BA-06` for current tracking rather than local-stale FL-3863 numbering. |
+| Historical FL-3864 Bundle System Guide rewrite | §2.10 / §2.15 | SUPERSEDED AS WRITTEN — guide/label cleanup remains required, but target wording must explain latest ActorVisualProfile generated-table truth, not Content DB → RenderPlanTable as the live architecture. |
+| Historical FL-3865 / FL-3866 RenderPlanTable blockers | §2.15.1 / §2.15.3 | SUPERSEDED AS ACTIVE PIPELINE-V3 GATES — retain only as May 12 lineage. Current active gate is latest Y9-2 runtime acceptance plus headed proof for generated ActorVisualProfile table artifacts, with no legacy fallback in the claimed path. |
+| Rig/socket/anchor contract gap | §2.5 / §2.15 | OPEN — authored socket/anchor/layer-order contracts and mounted wolf + crossbow alignment remain unproven. Do not tie this to `render_plan_table.py` or `render_plans.json` as the active artifact target. |
+| pipeline-v3 `workbench_create_actor_visual_profile()` not wired to Y9-2 production workflow | §2.5 / §2.10 | OPEN — route exists, but emitted profile JSON is draft/scaffolding and no shared cross-repo authoring seam feeds latest Y9-2 production compilation. Tracked by `FL-BA-05` / `FL-BA-06`. |
 
 ### Non-Blocking Gaps (required for full parity, not migration gate)
 
@@ -4465,13 +4566,14 @@ not a task plan - it is a gate list. Migration is ready when all blocking gates 
 | Wearable/item authoring surface | §2.3.6 / §2.3.7 | EXPLICITLY DEFERRED post skin-authoring signoff |
 | Proof-only color-variant family authoring surface | §2.5 misalignment ledger | PROOF-ONLY by policy (`service.py`, `workbench.js`) |
 | M2 E2E proof run (PNG→WS→export, committed headed run) | §Milestone 2 | PARTIAL |
-| UQ-013 small-screen layout and persistence | §Unified Queue `UQ-013` | OPEN |
+| UQ-013 mobile Open Workbench usability and persistence | §Unified Queue `UQ-013` / `FL-MOB-01` | CURRENT - mobile XP intake works, but first-screen workbench UX is product-blocking; clean mobile root, IDs-off default, export/share, and Advanced Workbench escape hatch are now the active robot task |
+| UQ-014 printable Y9-2 authoring grid paper side feature | §2.6.1 / §Unified Queue `UQ-014` / `FL-PRINT-01` | PARKED - idea captured; prior `sprite-sheet-full.html` layout is non-authoritative and must be regenerated from template/source geometry before implementation |
 | Whole-sheet browse-model split implementation | §1.8 / §2 boundary | DECISION FIXED - browse opens XP/root-editor documents first, layer 0 is editable in principle, and template metadata compatibility is a later wrapper concern; implementation remains intentionally sequenced after grid contrast, expanded grid presets, grid-scoped replace semantics, and their proof updates |
-| FL-3861 `render_plans.json` compiler output | §2.15 | OPEN — non-blocking only if UQ-R15 is treated as a Y9-2-first deliverable; becomes blocking once pipeline-v3 owns the compile step |
-| RenderPlan preview surface (Step 11 of content authoring flow) — FL-3919 | §2.10 | OPEN — no surface exists to inspect ordered layer stacks before activation; FL-3919 confirmed: no `inspect_render_plan` or equivalent agent-callable RenderPlan inspector in `workbench_mcp_server.py`. |
+| Historical FL-3861 `render_plans.json` compiler output | §2.15 | SUPERSEDED — non-blocking lineage only; latest Y9-2 origin uses ActorVisualProfile generated-table artifacts rather than the May 12 `render_plans.json` target |
+| Runtime-artifact preview surface (historical Step 11 of content authoring flow) — FL-3919 lineage | §2.10 | OPEN — no surface exists to inspect the exact compiled layer stack/runtime artifact before activation. The active target must follow latest Y9-2 ActorVisualProfile generated-table truth, not a hardcoded RenderPlanTable surface. |
 | Structured authoring artifact completeness (Step 7 of content authoring flow) | §2.5 | OPEN — export-bundle missing semantic map refs, variation field, slot/layer assignments, mount rear/front separation |
 | Bundle Mods E2E smoke automation (FL-3602) | §2.10 | PARTIAL — menu items exist in launcher, no tmux-driven automation of full Status→Package→Rollback sequence |
-| Promote-to-current render-plan identity check (Step 16) | §2.10 | OPEN — `promote_candidate_to_current.py` checks manifest mismatch but not `render_plans.json` hash parity |
+| Promote-to-current runtime-artifact identity check (Step 16) | §2.10 | OPEN — current target must compare the emitted runtime artifact/provenance used by latest Y9-2, not specifically `render_plans.json` hash parity |
 
 ### Gate Maintenance Rule
 

@@ -13710,6 +13710,145 @@ Audit scripts under `scripts/audit/`:
 All audits pass at end-of-session. Deploy to rikiworld.com/xpedit triggered via GitHub Actions workflow_dispatch `Deploy to Cloud Run` with target ref `main`.
 
 
+---
+
+## Bundle Dual-Ownership Architecture Audit — 2026-06-09
+
+**Audit trigger:** Cross-repo inspection of pipeline-v3 workbench bundle system vs Y9-2 RenderPlan/appearance_bundle system.
+**Audit scope:** 8 lanes — spec truth, ownership map, UX inventory, XP editor access, ActorVisualProfile, Y9-2 refactor progress, e2e authoring contract, workbench prune/redesign.
+**Evidence sources:** pipeline-v3 `src/pipeline_v2/app.py`, `src/pipeline_v2/service.py`, `web/workbench.html`, `web/workbench.js`, `web/persistence.mjs`, `web/manifest.json`, `config/template_registry.json`, `config/actor_visual_profile_schema.json`, `docs/proof-run-2026-05-15-knight-bundle.md`, `docs/plans/2026-03-23-workbench-canonical-spec.md`; Y9-2 local submodule HEAD `490d49e83`; fetched Y9-2 `origin/main` after `git -C asciicker-Y9-2 fetch origin` on 2026-06-09.
+
+### Findings ledger
+
+**FL-BA-01 (OPEN — P0): Y9-2 compiler-owner target changed; local checkout and `origin/main` disagree.**
+The local vendored Y9-2 submodule is stale (`ahead 3, behind 1602`) and still contains `scripts/pipeline/appearance_bundle.py`, `scripts/pipeline/appearance_bundle_outputs.py`, `engine/bundle_runtime.cpp`, `engine/render_plan_table.cpp`, and `assets/appearance_bundle/current/render_plans.json`. Latest fetched Y9-2 `origin/main` no longer has that source shape: commit `ea54ffb86` deletes `scripts/pipeline/appearance_bundle.py`, `appearance_bundle_outputs.py`, and `assets/appearance_bundle/current/render_plans.json`; commit `6fe089012` deletes `engine/bundle_runtime.cpp`. The active latest source is `scripts/compile_actor_visual_profiles.py` plus generated/runtime ActorVisualProfile table files. Future work must not treat the stale local submodule as current Y9-2 truth.
+Evidence: `git -C asciicker-Y9-2 ls-tree -r --name-only origin/main | rg 'appearance_bundle.py|render_plans.json|compile_actor_visual_profiles.py|actor_visual_profile_table.generated.h'`.
+
+**FL-BA-02 (OPEN — P0): `render_plans.json` is stale-transition truth, not latest Y9-2 production truth.**
+`render_plans.json` exists in the local stale submodule, but latest fetched Y9-2 `origin/main` deletes `assets/appearance_bundle/current/render_plans.json` and keeps `engine/actor_visual_profile_table.generated.h` plus `scripts/compile_actor_visual_profiles.py`. The problem is not simply "missing JSON"; the problem is that pipeline-v3 docs/UI still describe May 12 RenderPlan output while latest Y9-2 production rows are ActorVisualProfile generated-table artifacts. The shared authoring contract must name semantic obligations and runtime/provenance gates, not the obsolete output file.
+Evidence: local `find asciicker-Y9-2 -path '*render_plans.json'` returns files; `git -C asciicker-Y9-2 ls-tree -r --name-only origin/main | rg 'render_plans.json'` returns no production file.
+
+**FL-BA-03 (OPEN — P1): `load_bundle` imported but not wired to any route.**
+`src/pipeline_v2/app.py:55` imports `load_bundle` from service. It is called internally by `workbench_update_bundle_action_status`, `workbench_export_bundle`, `workbench_web_skin_bundle_payload`, and `bundle_action_run`. But no GET or POST route exposes bundle-by-id loading to the frontend. `web/workbench.js` does not parse `bundle_id` from URL parameters. The proof doc `docs/proof-run-2026-05-15-knight-bundle.md:3` correctly notes this gap.
+Evidence: `rg "load_bundle" src/pipeline_v2/app.py` shows import only; no `@bp.get` or `@bp.post` wraps it.
+
+**FL-BA-04 (OPEN — P2): Workbench template select omits `mounted_native_full`.**
+`web/workbench.html:75-76` hardcodes two `<option>` elements: `player_native_idle_only` and `player_native_full`. The template registry at `config/template_registry.json:274` defines `mounted_native_full` (wolf full bundle) as the third authorable template set. The select is populated from static HTML, not from `fetchTemplateRegistry()` dynamic data. Users cannot create mounted sessions from the UI.
+Evidence: `rg "mounted_native_full" web/workbench.html` returns zero hits.
+
+**FL-BA-05 (OPEN — P1): ActorVisualProfile generation is scaffolding, not authoritative.**
+`workbench_create_actor_visual_profile()` at `src/pipeline_v2/service.py:5537` produces profiles with:
+- `skin_definition_id` = `abs(hash(session_id)) % 1000 + 100` — non-deterministic across Python processes (hash randomization)
+- `layer_definition_id` always `700` — hardcoded for all profiles
+- `slot` from a fixed domain→slot map — no per-layer granularity
+- `xp_ref` = `assets/sprites/{session_id}.xp` — session exports in `data/exports/`, not durable assets
+- `visual_style_id` always `1` — hardcoded
+- `region` = `(0, 0, grid_cols, grid_rows)` — assigns entire sheet to one slot
+- All quality gates set to `None` in `workbench_export_actor_visual_profile()`
+The generated JSON writes to `config/actor_visual_profiles/` which contains only 3 examples and 1 proof artifact. No production profiles exist. No path feeds these profiles into Y9-2's compiler.
+Evidence: `config/actor_visual_profiles/` lists only `examples/` and `wolfie_crossbow_proof_idle.json`.
+
+**FL-BA-06 (OPEN — P0): No data flow from pipeline-v3 ActorVisualProfile to Y9-2 runtime.**
+The workbench creates ActorVisualProfile JSON under `config/actor_visual_profiles/`. Latest Y9-2 `origin/main` consumes generated ActorVisualProfile runtime table artifacts, but `scripts/compile_actor_visual_profiles.py` explicitly says production rows are derived from server reachability and upstream sprite resolver/load semantics: "No authored profile JSON participates in this track." The pipeline-v3 workbench has no API or CLI bridge to submit its profile JSON to Y9-2. The only working authoring-to-preview path in pipeline-v3 remains legacy `BundleSession` -> `web-skin-bundle-payload` -> Skin Dock injection, which bypasses the Y9-2 ActorVisualProfile production compiler.
+
+**FL-BA-07 (OPEN — P3): mounted-authoring buttons are session-gated, not permanently disabled.**
+`web/workbench.html` panel 11 contains `mountedCalibrationBtn` and `mountedSemanticBtn`. They are HTML-`disabled` on fresh load and JS-enable at `web/workbench.js:4109-4110` when a session exists. They have click handlers and backend routes: `/api/workbench/mounted-calibration/compute`, `/api/workbench/mounted-semantic/proposals`, `/api/workbench/session/mounted-calibration`, and `/api/workbench/session/mounted-semantic-review`. UX issue: they still read like unfinished U2/U4 task labels on the first screen and should move behind an Advanced/Mounted drawer until the mounted authoring flow is proven end-to-end.
+
+**FL-BA-07b (OPEN — P2): Three Skin Dock buttons are unreachable hidden DOM controls, not visible disabled controls.**
+- `webbuildApplyInPlaceBtn` and `webbuildApplyRestartBtn`: `class="hidden" disabled`; `updateWebbuildUI()` updates their disabled/title state, but no code removes `hidden`, so users never see them.
+- `webbuildApplySkinBtn`: inside `<details class="hidden">` parent (`Advanced Skin Dock Controls`). `updateWebbuildUI()` can enable it when session/runtime/preflight are ready, but the parent remains hidden, so the control is unreachable.
+These are the actual "bad buttons" to prune. There are zero confirmed permanently-disabled visible buttons on fresh load; most disabled controls are session- or selection-gated.
+
+**FL-BA-08 (OPEN — P3): "RenderPlanTable" label in workbench UI is misleading.**
+Panel 4b (`domainVariationPanel`) is labeled "Domain + Variation Chooser (RenderPlanTable)" and its guide text says "Creates an ActorVisualProfile JSON... compiled into a RenderPlan row by the RenderPlanTable compiler." There is no functional RenderPlanTable compiler reachable from the workbench. The profile is written to local JSON with no downstream consumer.
+
+**FL-BA-09 (INFORMATIONAL): Current Read FL numbers are incorrect.**
+The Current Read document references "FL-3861 to FL-3868" as defining a Y9-2 bundle refactor. These FLs are actually watchdog tooling entries: FL-3861 = typed error model CE review, FL-3862 = HMAC integrity gaps, FL-3863 = tmp_clone dedup, FL-3864 = deploy extraction, FL-3867 = phase 5 CE review, FL-3868 = bee_mount_attack_wrapper. The actual bundle/RenderPlan FLs are FL-3912 through FL-3995. This matters because the Current Read's framing of a "May bundle refactor" must be retargeted to the correct FL evidence.
+
+### Architecture summary
+
+The two "bundle" systems are **disconnected, not conflicting**:
+1. **pipeline-v3 BundleSession** — works for template→session→export→SkinDock injection (proven in proof-run-2026-05-15). Does not produce RenderPlan rows.
+2. **Y9-2 ActorVisualProfile generated-table path** — latest fetched `origin/main` runtime authority for compiled actor visuals. It has moved beyond the older `appearance_bundle.py` / `render_plans.json` transition files, but production rows are generated from server reachability rather than authored pipeline-v3 profile JSON.
+
+The architecture is dual-orphaned: neither side has a complete shared authoring→compile→runtime chain. The pipeline-v3 workbench path works for XP authoring and Skin Dock preview but cannot feed the Y9-2 multiplayer server. The latest Y9-2 replacement path is partial/implemented-unproven because authored profile JSON does not participate in production compilation and headed runtime proof remains the acceptance gate.
+
+### Re-audit confirmation — 2026-06-09 (8-lane parallel subagent pass)
+
+All 8 lanes independently re-verified against live code with no prior context. Results:
+
+| Lane | Original finding | Re-audit result | New evidence |
+|------|-----------------|-----------------|-------------|
+| 1 Spec Truth | Canonical spec stale vs Y9-2 May audit | **CONFIRMED WITH CORRECTION** — spec knows about May 12 `RenderPlanTable`, but latest fetched Y9-2 moved again to ActorVisualProfile generated-table artifacts | Section 2 now needs latest-origin correction, not a blanket "March spec stale" claim |
+| 2 Ownership | Dual-orphaned, 7 owners | **CONFIRMED WITH CORRECTION** — local stale submodule still has `appearance_bundle.py` and `render_plans.json`; fetched Y9-2 `origin/main` deletes those and uses `compile_actor_visual_profiles.py` / generated runtime table | Template registry has 3 sets, registry JSON has `mounted_native_full`; UI hardcodes 2 |
+| 3 UX Inventory | 18 panels, template omission, stubs | **CONFIRMED** — 123 buttons, 18 selects, 47 inputs. Template select hardcodes 2 `<option>`s | **CORRECTED:** 0 permanently-disabled visible buttons. 5 conditionally-enabled (session-gated). 3 invisible dead-end (`webbuildApplyInPlaceBtn`, `webbuildApplyRestartBtn`, `webbuildApplySkinBtn`). 2 mounted stubs are session-gated, not permanently dead |
+| 4 XP Editor Access | No unified edit path, iPad gap | **CONFIRMED** — 3 disjoint entry points (Import XP, Open File via File System Access API, Desktop XP Tool). PWA manifest exists but no icons | `importXp()` at line 4600, `openXpFileLocal()` at line 8264, `openInXpTool()` at line 1937 |
+| 5 ActorVisualProfile | Scaffolding, no consumer | **CONFIRMED WITH CORRECTION** — `skin_definition_id` from `hash(session_id)`, `visual_style_id=1` hardcoded, route exists at `/api/workbench/actor-visual-profile/create`, but no Y9-2 production compiler consumes it | The previous "no POST route" subclaim was wrong; the route exists, the cross-repo data flow does not |
+| 6 Y9-2 Refactor | Compiler deleted, parser absent | **CONFIRMED WITH CORRECTION** — latest fetched Y9-2 deletes old transition owners and restores `compile_actor_visual_profiles.py`; local submodule is stale and still has old files | This is a latest-origin state correction, not true of the checked-out local submodule |
+| 7 E2E Contract | Steps 1-3 work, 4-7 broken | **CONFIRMED WITH CORRECTION** — Legacy BundleSession→SkinDock path works (proof doc May 15). Profile→Y9-2 production compile→runtime proof chain has no shared cross-repo authoring path | No cross-repo API/CLI bridge; Y9-2 production compiler states authored profile JSON does not participate |
+| 8 Prune/Redesign | 18 panels, task-based redesign needed | **CONFIRMED** — 18 `data-panel-number` panels. 5 panels always hidden. 3 `<details>` collapsible | 3 invisible dead-end buttons in Skin Dock Advanced section. `mounted_native_full` absent from HTML, present in registry |
+
+**Re-audit cross-check correction:** The broad architecture verdict stands, but several subclaims were corrected on 2026-06-09. The local Y9-2 submodule and fetched `origin/main` disagree; FL-3861..3868 are bundle rows locally but watchdog/deploy/bee rows on latest origin; `Open File` is always enabled; File System Access API is implemented in `web/persistence.mjs`; mounted U2/U4 controls are session-gated and route-backed; the real dead buttons are three hidden Skin Dock DOM controls.
+
+### Remediation order (proposed)
+
+1. Decide the shared authoring target: pipeline-v3 must either feed latest Y9-2 `compile_actor_visual_profiles.py` or explicitly remain a Skin Dock-only XP editor.
+2. Wire pipeline-v3 ActorVisualProfile output as a real compiler input only after Y9-2 accepts authored profile JSON in production.
+3. Add `GET /api/workbench/bundle/<id>` route and frontend `bundle_id` URL param parsing if persisted BundleSession reopen remains a supported product path.
+4. Populate the template select from the registry so `mounted_native_full` is reachable; before implementation, prove whether `mounted_native_full` is only hidden by hardcoded HTML or fails later in the apply/export/preview path.
+5. Harden ActorVisualProfile generation (stable IDs, validated dimensions, real quality gates) and relabel it as draft-only until consumed by Y9-2.
+6. Define registry failure UX first: `/api/workbench/templates` 503/malformed state must fail closed with a visible degraded-state warning, not an empty template list.
+7. Remove or unhide-and-validate the three hidden Skin Dock DOM controls; first audit null guards for every `getElementById`/`$()` path so element deletion cannot introduce startup JS exceptions.
+8. Demote misleading "RenderPlanTable" panel to an Advanced/Draft Artifact drawer, with the draft warning inside the drawer as well as in the label.
+9. Relabel Skin Dock as local XP preview, not live Y9-2 game integration proof.
+10. Run headed runtime proof for whichever path is claimed: legacy Skin Dock preview or Y9-2 ActorVisualProfile runtime table.
+
+### Doc hygiene routing update — 2026-06-11
+
+**FL-MOB-01 (OPEN — P0): Mobile XP intake works, but mobile workbench UX is product-blocking.**
+The iPad upload helper has proven file intake paths, but the user still cannot
+comfortably work after upload because the current workbench first screen exposes
+the dense desktop authoring dashboard/menu instead of a clean mobile editor mode.
+This is not an upload failure. It is a Section 1 mobile usability failure:
+`Open XP`, `Continue Draft`, `New From Template`, and `Export/Share` must be the
+mobile root, with a visible `Advanced Workbench` escape hatch available from
+that root. `Show IDs` / frame labels must remain off by default on mobile as
+well as desktop. Landscape may be the preferred full-editor orientation, but
+portrait must still allow opening and reaching a loaded-work state.
+
+Routing:
+- Canon spec §1.9.1 owns the mobile/touch/open-workbench contract.
+- Unified Queue `UQ-013` owns implementation order and acceptance gates.
+- The prune proposal owns the UI pruning proposal and pre-edit safeguards.
+- This failure-log row owns the observed failure and proof boundary.
+
+**FL-DOC-ROUTE-01 (OPEN — P1): Prune proposal findings must stay split by document role.**
+The review findings route as follows:
+- `/api/workbench/templates` 503/malformed fallback belongs in canon §2 registry
+  behavior and prune proposal preconditions; failures/proof go here.
+- `mounted_native_full` reachability belongs in prune proposal preflight and
+  `UQ-008`/Section 2 mounted authoring proof; do not call it missing until the
+  registry-vs-HTML blocker and downstream apply/export/preview behavior are
+  proven.
+- Hidden Skin Dock button deletion belongs in prune proposal implementation
+  order; null-guard misses or startup exceptions go here.
+- ActorVisualProfile draft warning belongs in canon Section 2 honesty rules and
+  the UI proposal; any user-reachable misleading label remains `FL-BA-08`.
+- Skin Dock language belongs in Section 2 proof separation and prune proposal
+  relabeling; it must not imply live Y9-2 game integration.
+
+**FL-PRINT-01 (PARKED — P2): Printable Y9-2 authoring grid paper idea captured; existing layout seed is non-authoritative.**
+The user supplied a `sprite-sheet-full.html` concept: one letter page, full sheet,
+grayscale underdrawing, cell grid, thicker frame boundaries, angle/frame labels,
+fiducials, calibration strip, footer, and OMR bubbles. The idea is useful, but
+the described `126x72`, `7.5in x 4.3in`, `1.5mm`, `6x9`, and `0..20` frame
+layout is explicitly not accepted as truth. Canon spec §2.6.1 now owns the
+correct side-feature contract: generate paper from selected Y9-2/template/source
+geometry, record provenance, and do not claim scan-back/runtime integration until
+a consuming path exists.
+
+---
+
 ### G. Code-review findings (2026-06-03, post-deferral commits)
 
 | Finding | Severity | Commit | Status |
@@ -13717,5 +13856,3 @@ All audits pass at end-of-session. Deploy to rikiworld.com/xpedit triggered via 
 | **B4 recents**: color swatches used `input` event → every intermediate picker drag value pushed to recents LRU, filling all 8 slots with transient colors | 🔴 HIGH | B3-B6 bundle | Fixed — `input` → `change` on both fgInput and bgInput |
 | **B5 FBG combos**: 8 canonical pairs hardcoded in JS; diverges from Y9-2 semantic_maps symlink source of truth with no provenance comment | 🟡 MEDIUM | B5 bundle | Noted — added source-path comment inline |
 | **B6 ghost pixel formula**: lacks defensive fallback (`canvas.cellSize || CELL_SIZE`) that the paste interceptor has at line 955 | 🟢 LOW | B6 bundle | Noted — guarded by zero-size check at line 1310; kept in sync by manual review |
-
-
