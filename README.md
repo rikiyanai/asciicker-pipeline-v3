@@ -2,6 +2,8 @@
 
 REXPAINT WEBCLONE AND ASCIICKER SPRITE CONVERTER AND SPRITE EDITING/AUTHORING WORKBENCH. Greenfield rebuild of main sprite-sheet pipeline features currently still broken in the main Asciicker-Y9-2 Fork. This repo is intentionally independent of the main Asciicker and Asciicker-Y9-2 Fork codebase. This is a browser-based XP sprite editor and functional alternative to the Windows-only REXPaint Editor, adapted specifically for the Asciicker Game Engine. Features include: convert PNG sprite sheets to `.xp` files, edit cells in a whole-sheet editor with true REXPaint parity, and test skins live in the game engine. More features to come, please report any bugs or complaints.
 
+![XPEdit workbench demo](docs/artifacts/bundle-baseline-2026-03-12/workbench-bundle-baseline.gif)
+
 ## Run
 
 ```bash
@@ -73,4 +75,4 @@ PYTHONPATH=src python3 -m pytest
 ## Docs
 
 - Canonical spec: `docs/plans/2026-03-23-workbench-canonical-spec.md`
-- Failure log: `PLAYWRIGHT_FAILURE_LOG.md`
+- Failure log: `docs/PLAYWRIGHT_FAILURE_LOG.md`
