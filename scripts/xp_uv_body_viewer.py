@@ -18,10 +18,19 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 # This file lives in scripts/ (one level below repo root).
 # Need Y9-2 on sys.path for xp_core, layer2_browser, etc.
+# Guard: an uninitialized git submodule at pipeline-v3/asciicker-Y9-2/ creates an
+# empty directory that passes .is_dir() but contains nothing. Check for
+# scripts/pipeline presence to skip uninitialized submodule placeholders.
+def _has_pipeline(p: Path) -> bool:
+    return p.is_dir() and (p / "scripts" / "pipeline").is_dir()
+
 Y9_ROOT = REPO_ROOT / "asciicker-Y9-2"
-if not Y9_ROOT.is_dir():
+if not _has_pipeline(Y9_ROOT):
+    # When pipeline-v3 is a subdirectory of asciicker-Y9-2, the parent IS the Y9-2 root.
+    Y9_ROOT = REPO_ROOT.parent
+if not _has_pipeline(Y9_ROOT):
     Y9_ROOT = REPO_ROOT.parent / "asciicker-Y9-2"
-if not Y9_ROOT.is_dir():
+if not _has_pipeline(Y9_ROOT):
     Y9_ROOT = REPO_ROOT.parent.parent / "asciicker-Y9-2"
 if str(Y9_ROOT) not in sys.path:
     sys.path.insert(0, str(Y9_ROOT))
@@ -2011,9 +2020,10 @@ def _anchor_compose_screen(
     panel_lines = _anchor_region_panel(st)
 
     if st.show_region_grid and st.region_focus is not None and asset is not None:
-        # Region grid mode: full-screen grid of focused region across angles × frames
+        # Region grid mode: sprite reference on left, region grid on right (stacks if terminal too narrow)
         grid_lines = _anchor_render_region_grid(st, asset, layer_index)
-        visible = (help_lines + [""] + grid_lines + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
+        top = _layout_preview_and_info(box_sprite, grid_lines, terminal_cols=cols)
+        visible = (help_lines + [""] + top + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
     elif st.show_composite and st.skin_asset is not None:
         # Composite mode: [source/mount | composite result | skin selector]
         skin_layer = min(2, st.skin_asset.layer_count - 1)
