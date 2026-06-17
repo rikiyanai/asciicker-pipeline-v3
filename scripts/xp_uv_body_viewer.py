@@ -1235,6 +1235,12 @@ class AnchorReviewState:
     skin_xp_index: int = 0
     skin_search_dirs: list[Path] = field(default_factory=list)
     skin_search_patterns: list[str] = field(default_factory=list)
+    # FL-4162 read-only evidence sidebar: this family's per-(sprite,layer) cards
+    # from layer_evidence_cards.jsonl, rejects-first. The viewer NEVER mutates
+    # this evidence — it only displays it (step 7; decision capture is later).
+    evidence_cards: list = field(default_factory=list)
+    show_evidence: bool = False
+    evidence_idx: int = 0
 
     @property
     def skin_asset(self) -> "RawAsset | None":
@@ -1272,6 +1278,92 @@ class AnchorReviewState:
             if a == angle and ridx == region_idx:
                 count += 1
         return count
+
+
+def _evi_clip(text: object, width: int) -> str:
+    """Single-line, ANSI-stripped, width-clipped text for the evidence panel."""
+    s = _ANSI_RE.sub("", str(text)).replace("\n", " ").replace("\r", " ").strip()
+    return s if len(s) <= width else s[: max(0, width - 1)] + "…"
+
+
+def _load_evidence_cards_for_family(anchor_path: Path, stem: str) -> list[dict]:
+    """Read this family's FL-4162 evidence cards from layer_evidence_cards.jsonl.
+
+    The jsonl lives in the same semantic_maps/ dir as the anchor file. Returns
+    the family's cards ordered rejects-first (review.review_rank). READ-ONLY:
+    the viewer never writes this evidence (step 7 is a microscope, not an
+    authoring surface). Returns [] if the file is missing/unreadable.
+    """
+    jsonl = anchor_path.parent / "layer_evidence_cards.jsonl"
+    if not jsonl.is_file():
+        return []
+    family = stem.split("-", 1)[0]
+    cards: list[dict] = []
+    try:
+        with open(jsonl, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    card = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(card, dict) and card.get("family") == family:
+                    cards.append(card)
+    except OSError:
+        return []
+    cards.sort(key=lambda c: c.get("review", {}).get("review_rank", 1_000_000))
+    return cards
+
+
+def _anchor_render_evidence_panel(st: AnchorReviewState) -> list[str]:
+    """Read-only FL-4162 evidence card for the current sprite/layer.
+
+    Shows the hand label/note + provenance, engine composition facts, glyph
+    similarity, and the rejects-first review rank, alongside the viewer's
+    existing raw + merged sprite panels. [ / ] browse the family's cards.
+    """
+    cards = st.evidence_cards
+    if not cards:
+        return ["EVIDENCE", "", "no layer_evidence_cards.jsonl for this family"]
+    idx = max(0, min(st.evidence_idx, len(cards) - 1))
+    c = cards[idx]
+    hand = c.get("hand", {})
+    eng = c.get("engine", {})
+    sim = c.get("glyph_similarity", {})
+    rev = c.get("review", {})
+    cells = c.get("cells", {})
+    ft = eng.get("frame_topology") or {}
+    role = eng.get("fixed_role") or (
+        f"overlay#{eng.get('overlay_ordinal')}" if eng.get("is_overlay") else "?"
+    )
+    swoosh = "  SWOOSH(cyan)" if eng.get("swoosh_cyan_fg_detected") else ""
+    lines = [
+        f"EVIDENCE [{idx + 1}/{len(cards)}] family={c.get('family', '?')}  ([/] nav  [i] hide)",
+        f"card {c.get('card_id', '?')}  L{c.get('raw_layer_index', '?')}  ({c.get('source_xp_resolution', '?')})",
+        f"rank #{rev.get('review_rank', '?')}  {rev.get('queue_class_name', '?')}",
+        "",
+        f"STATUS {hand.get('status', '?')}   pre_source={_evi_clip(hand.get('pre_source', ''), 24)}",
+        f"label  {_evi_clip(hand.get('corrected_label', ''), 56)}",
+        f"note   {_evi_clip(hand.get('note', ''), 56)}",
+        f"guess  {_evi_clip(hand.get('pre_guess', ''), 48)}",
+    ]
+    if hand.get("auto_propagated_from"):
+        lines.append(
+            f"propagated<-{hand.get('auto_propagated_from')} ({_evi_clip(hand.get('auto_propagation_kind', ''), 20)})"
+        )
+    lines += [
+        "",
+        f"ENGINE {role}{swoosh}",
+        f"  layers={eng.get('family_layer_count', '?')} angles={ft.get('angles', '?')} "
+        f"anims={ft.get('anims', '?')} fr/ang={ft.get('frames_per_angle', '?')}",
+        f"GLYPH  {cells.get('glyph_count', '?')} cells  set={cells.get('visible_glyph_set', [])[:10]}",
+        f"MATCH  exact={len(sim.get('exact_matches', []) or [])} near={len(sim.get('near_matches', []) or [])}",
+        "",
+        _evi_clip("why: " + str(rev.get("rationale", "")), 60),
+    ]
+    return lines
 
 
 def _load_anchor_state(anchor_path: Path) -> AnchorReviewState:
@@ -1914,7 +2006,10 @@ def _anchor_status_bar(st: AnchorReviewState) -> list[str]:
     play_indicator = "  [PLAY]" if st.autoplay else ""
     composite_indicator = f"  [COMPOSITE: {st.skin_name}]" if st.show_composite else ""
     proj_indicator = f"  [REAR]" if st.proj_idx == 1 else ""
-    lines.append(f"{frame_info}  {cursor_info}{hb_indicator}{dirty_indicator}{play_indicator}{composite_indicator}{proj_indicator}")
+    evidence_indicator = (
+        f"  [EVIDENCE {st.evidence_idx + 1}/{len(st.evidence_cards)}]" if st.show_evidence else ""
+    )
+    lines.append(f"{frame_info}  {cursor_info}{hb_indicator}{dirty_indicator}{play_indicator}{composite_indicator}{proj_indicator}{evidence_indicator}")
 
     # Prompt line
     if st.prompt_mode == "new_region":
@@ -1934,7 +2029,7 @@ def _anchor_help_lines() -> list[str]:
         "Anchor review",
         "[arrows] move cursor  [a/d] angle  [w/s] anim  [,/.] frame  [x] toggle  [m] rect",
         "[1-9] assign region  [n] new region  [Backspace] unassign  [h] half-block mode",
-        "[r/f] cycle region focus  [g] region grid (all angles×frames)  [b] body map  [p] autoplay",
+        "[r/f] cycle region focus  [g] region grid (all angles×frames)  [b] body map  [p] autoplay  [i] evidence",
         "[c] composite  [j/k] skin  [v] proj  [Ctrl+S/Ctrl+W] save  [q] quit",
         "Workflow: [r/f] focus region -> [g] grid check -> [m] rect or [e] select-all -> [1-9] assign -> [Ctrl+S] save",
         "Tip: [e] selects all cells in focused region for bulk reassign/unassign",
@@ -2039,6 +2134,11 @@ def _anchor_compose_screen(
         # 3-panel horizontal: [body map | sprite | region-only]
         box_body = _anchor_render_body_map_band(st)
         top = _layout_three(box_body, box_sprite, box_region, terminal_cols=cols)
+        visible = (help_lines + [""] + top + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
+    elif st.show_evidence:
+        # Evidence sidebar mode: [sprite+tint | read-only FL-4162 card]
+        box_evidence = _box_preview_lines(_anchor_render_evidence_panel(st))
+        top = _layout_preview_and_info(box_sprite, box_evidence, terminal_cols=cols)
         visible = (help_lines + [""] + top + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
     else:
         # Classic layout: 3-panel horizontal when UV data available, else 2-panel
@@ -2496,6 +2596,27 @@ def _handle_anchor_key(
         st.quit_pending = False
         return True
 
+    # --- Evidence sidebar toggle (i) — read-only FL-4162 cards ---
+    if key in ("i", "I"):
+        if not st.evidence_cards:
+            st.status = "No evidence cards for this family (layer_evidence_cards.jsonl)"
+        else:
+            st.show_evidence = not st.show_evidence
+            st.status = "Evidence ON ([ / ] browse)" if st.show_evidence else "Evidence OFF"
+        st.quit_pending = False
+        return True
+    # --- Evidence card navigation ([ prev / ] next) ---
+    if key == "[" and st.show_evidence and st.evidence_cards:
+        st.evidence_idx = (st.evidence_idx - 1) % len(st.evidence_cards)
+        st.status = f"Evidence {st.evidence_idx + 1}/{len(st.evidence_cards)}"
+        st.quit_pending = False
+        return True
+    if key == "]" and st.show_evidence and st.evidence_cards:
+        st.evidence_idx = (st.evidence_idx + 1) % len(st.evidence_cards)
+        st.status = f"Evidence {st.evidence_idx + 1}/{len(st.evidence_cards)}"
+        st.quit_pending = False
+        return True
+
     # --- Composite mode toggle (c) ---
     if key in ("c", "C"):
         if not st.skin_assets:
@@ -2858,6 +2979,16 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
 
     # Use the asset's actual anim_lengths (from XP layer-0 metadata)
     st.anim_lengths = list(asset.entry.meta.anim_lengths)
+
+    # FL-4162 read-only evidence cards for this family (rejects-first); position
+    # on the card matching the current sprite+layer if present. Never mutated.
+    _evi_stem = ref_path.stem if ref_xp else anchor_path.stem
+    st.evidence_cards = _load_evidence_cards_for_family(anchor_path, _evi_stem)
+    _evi_target = f"{_evi_stem}-L{layer_index}"
+    for _i, _card in enumerate(st.evidence_cards):
+        if _card.get("card_id") == _evi_target:
+            st.evidence_idx = _i
+            break
 
     # Try to load body map XP from pipeline-v3/output/
     repo_root = Path(__file__).resolve().parents[1]
