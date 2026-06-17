@@ -3020,7 +3020,18 @@ def main(argv: list[str] | None = None) -> int:
 
     # Anchor review mode takes priority
     if args.anchor_review is not None:
-        return run_anchor_review(args.anchor_review, sprite_dir=args.sprite_dir)
+        try:
+            return run_anchor_review(args.anchor_review, sprite_dir=args.sprite_dir)
+        except ValueError as exc:
+            # FL-4306: a non-anchor JSON (roles/spatial/conventions doc — no
+            # grid_layout or frame_w<=0) was passed directly. Fail with a
+            # readable message instead of an unhandled traceback. The launcher
+            # picker also filters these out (_is_anchor_schema_file).
+            print(
+                f"not an anchor-schema semantic map: {args.anchor_review}\n  {exc}",
+                file=sys.stderr,
+            )
+            return 2
 
     dump_mode = args.json or args.sprite is not None or args.layer is not None
     if dump_mode:
