@@ -2114,7 +2114,14 @@ def _anchor_compose_screen(
     # Region info text list
     panel_lines = _anchor_region_panel(st)
 
-    if st.show_region_grid and st.region_focus is not None and asset is not None:
+    if st.show_evidence:
+        # Evidence sidebar has explicit display priority when toggled on (FL-4306),
+        # so an auto-loaded body map / composite / region grid never hides it.
+        # [sprite+tint | read-only FL-4162 card]
+        box_evidence = _box_preview_lines(_anchor_render_evidence_panel(st))
+        top = _layout_preview_and_info(box_sprite, box_evidence, terminal_cols=cols)
+        visible = (help_lines + [""] + top + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
+    elif st.show_region_grid and st.region_focus is not None and asset is not None:
         # Region grid mode: sprite reference on left, region grid on right (stacks if terminal too narrow)
         grid_lines = _anchor_render_region_grid(st, asset, layer_index)
         top = _layout_preview_and_info(box_sprite, grid_lines, terminal_cols=cols)
@@ -2134,11 +2141,6 @@ def _anchor_compose_screen(
         # 3-panel horizontal: [body map | sprite | region-only]
         box_body = _anchor_render_body_map_band(st)
         top = _layout_three(box_body, box_sprite, box_region, terminal_cols=cols)
-        visible = (help_lines + [""] + top + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
-    elif st.show_evidence:
-        # Evidence sidebar mode: [sprite+tint | read-only FL-4162 card]
-        box_evidence = _box_preview_lines(_anchor_render_evidence_panel(st))
-        top = _layout_preview_and_info(box_sprite, box_evidence, terminal_cols=cols)
         visible = (help_lines + [""] + top + [""] + panel_lines + [""] + status_lines)[:max(1, rows)]
     else:
         # Classic layout: 3-panel horizontal when UV data available, else 2-panel

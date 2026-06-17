@@ -101,3 +101,18 @@ def test_nav_keys_cycle_card_index_readonly(tmp_path):
     assert st.evidence_idx == 2  # wraps back
     # read-only: navigation never mutated the cards
     assert json.dumps(st.evidence_cards, sort_keys=True) == snapshot
+
+
+def test_evidence_branch_wins_over_body_map(tmp_path):
+    """FL-4306: evidence has display priority when toggled on — an auto-loaded
+    body map (show_body_map True) must NOT mask it. Locks the branch order in
+    _anchor_compose_screen so the microscope works for body-map sprites too."""
+    st = _state(tmp_path, [_card("bigbee-0000-L2", "bigbee", 1, qc="wrong_guess_reject")])
+    st.anchor_data = {"frames": {}}
+    st.show_evidence = True
+    st.show_body_map = True
+    st.body_map_xp = object()  # truthy; the body-map branch must NOT be reached
+    cell_data = [[(0, (0, 0, 0), (0, 0, 0)) for _ in range(st.frame_w)] for _ in range(st.frame_h)]
+    screen = v._anchor_compose_screen(st, cell_data, asset=None, layer_index=2)
+    assert "EVIDENCE" in screen
+    assert "NO. BEE ONLY" in screen
