@@ -380,21 +380,38 @@ PARTIAL_CLUSTERS = [
        "wolfie L2 base; wolf + rider + armor"),
 ]
 
+# --- Batch 5: prose_caps_accept verdicts (CAPS prose, interpreted like partials) ---
+PROSE_CAPS_CLUSTERS = [
+    _v("bigbee-1112-L4", ["armor"], "hand 'ARMOR FOR BIGBEE UPPER TORSO BIT'", "bigbee L4 armor overlay; upper torso"),
+    _v("bigbee-1111-L5", ["armor", "shield"], "hand 'ARMOUR BIT PLUS SOME FOR SHIELD ... ONLY ONE ARM'",
+       "bigbee L5 overlay; one arm"),
+    _v("bigbee-1112-L5", ["crossbow"], "hand 'CROSS BOW ARROW IN HAND BIT ... (refs bigbee-0112-L4)'",
+       "bigbee L5 crossbow overlay"),
+    _v("bigbee-1111-L6", ["helmet"], "hand 'HELMET BIT'", "bigbee L6 helmet overlay"),
+    _v("bigbee-1112-L7", ["crossbow", "shield"], "hand 'CROSSBOW BOW STRING BIT PLUS SHIELD BIT'",
+       "bigbee L7 overlay; crossbow string + shield"),
+]
+
 # queue_class -> its label-clustered verdicts (interpreted batches). Batch 1
 # (wrong_guess_reject) is card-keyed via REVIEWED.
-CLUSTER_BATCHES = {"reject": REJECT_CLUSTERS, "partial": PARTIAL_CLUSTERS}
+CLUSTER_BATCHES = {
+    "reject": REJECT_CLUSTERS,
+    "partial": PARTIAL_CLUSTERS,
+    "prose_caps_accept": PROSE_CAPS_CLUSTERS,
+}
 
 # Clean-label batches: the hand corrected_label is ALREADY a normalized role token
 # (these tiers were auto-acceptable), so the proposal is a faithful PASSTHROUGH of the
-# human's own clean label — no agent reinterpretation. An empty label is unresolved.
-PASSTHROUGH_CLASSES = {"clean_accept"}
+# human's own clean label — no agent reinterpretation. An empty label is unresolved
+# (this is how the single empty-label `ambig` card resolves).
+PASSTHROUGH_CLASSES = {"clean_accept", "ambig"}
 
 
 def _passthrough_verdict(card: dict) -> dict:
     label = _norm_label(card)
     if not label:
         return dict(roles=[], supported=False, unresolved=True, topology="",
-                    contradictions=[], support="clean-accept card with empty hand label")
+                    contradictions=[], support="card with empty hand label — no role token to pass through")
     roles = [p.strip() for p in label.split(";") if p.strip()]
     return dict(roles=roles, supported=True, unresolved=False, topology="", contradictions=[],
                 support="hand clean-accept label, used verbatim (already a normalized role token)")
