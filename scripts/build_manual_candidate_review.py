@@ -242,6 +242,133 @@ REJECT_CLUSTERS = [
        "wolfie L5 sword overlay; possible shoulder bit (hand '?')"),
 ]
 
+# --- Batch 3: partial-class verdicts, one per hand-label cluster -------------
+PARTIAL_CLUSTERS = [
+    _v("wolack-0001-L2", ["mount_body_wolf"], "hand 'wolf body only' (ears-detail uncertain only)",
+       "wolf/wolack L2 base body; ears presence is a detail note"),
+    _v("wolfie-0010-L4", ["shield"], "hand 'shield bit only for wolfie'", "wolfie L4 shield overlay"),
+    _v("plydie-0112-L4", ["crossbow"], "hand 'ply die cross bow bit only'", "plydie L4 crossbow overlay"),
+    _v("plydie-1010-L3", ["shield"], "hand 'ply die shield bit only reflection only'",
+       "plydie L3 shield overlay; reflection projection"),
+    _v("attack-0111-L4", ["swoosh"], "hand META note 'AGAIN, NEED TO COMPARE WITH OTHER SWOOSH GLYPHS'",
+       "attack L4; reviewer flagged for swoosh-glyph comparison", supported=False, unresolved=True),
+    _v("wolack-1101-L4", ["armor"], "hand 'armor bit only for wolack'", "wolack L4/5 armor overlay"),
+    _v("plydie-0102-L4", ["crossbow"], "hand 'ply die crossbow bit only'", "plydie L4/5 crossbow overlay"),
+    _v("plydie-1001-L4", ["armor"], "hand 'plydie armour bit only'", "plydie L4 armor overlay"),
+    _v("wolack-0011-L3", ["mount_body_wolf", "rider_torso", "sword"],
+       "hand 'wolf body top part with player with sword attacking no armour no helm'",
+       "wolack L3 overlay; attack composite; no armour/helm",
+       ["pre_guess armor negated by hand"]),
+    _v("bigbee-1002-L4", ["armor"], "hand 'ARMOR FOR BIGBEE UPPER TORSO BIT'", "bigbee L4 armor overlay; upper torso"),
+    _v("attack-1011-L3", ["armor", "shield"],
+       "hand 'ARMOR ONLY BIT BUT SUBTLE BROWN ... MEANT FOR ARMOR AND SHIELD'",
+       "attack L3; subtle brown cell flags armor+shield"),
+    _v("bigbee-1011-L5", ["armor", "shield"], "hand 'ARMOUR BIT PLUS SOME FOR SHIELD ... ONLY ONE ARM'",
+       "bigbee L5 overlay; one arm"),
+    _v("attack-1111-L3", ["armor"], "hand 'ARMOUR ONLY BIT FOR ATTACKING ANIM ... BROWN BIT'",
+       "attack L3 armor overlay; attack anim; brown bit crucial per hand"),
+    _v("attack-1111-L2", ["player_body", "shield"],
+       "hand 'ATTACKING ANIM OF PLAYER WITH SHIELD WITHOUT HELMET / HAIR'", "attack L2 base; attack anim; no helmet/hair"),
+    _v("bigbee-0112-L4", ["crossbow"], "hand 'CROSS BOW ARROW IN HAND BIT' (anim reason is the guess, not the identity)",
+       "bigbee L4 crossbow overlay; presence guessed due to animation"),
+    _v("bigbee-1002-L5", ["crossbow"], "hand 'CROSS BOW ARROW IN HAND BIT ... BUT FOR ARMOR'",
+       "bigbee L5; crossbow-arrow bit; hand also references armor"),
+    _v("bigbee-1012-L5", ["crossbow"], "hand 'CROSS BOW ARROW IN HAND BIT ... (refs bigbee-0112-L4)'",
+       "bigbee L5 crossbow overlay"),
+    _v("bigbee-1102-L5", ["crossbow"], "hand 'CROSSBOW ARROW IN PARTICULAR'", "bigbee L5 crossbow overlay"),
+    _v("bigbee-1012-L6", ["crossbow", "shield"], "hand 'CROSSBOW BOW STRING BIT PLUS SHIELD BIT'",
+       "bigbee L6 overlay; crossbow string + shield"),
+    _v("attack-0101-L4", ["swoosh"], "hand META note 'NEED TO CHCK DIFFERENT SWOOSH GLYPHS'",
+       "attack L4; reviewer flagged for swoosh comparison", supported=False, unresolved=True),
+    _v("attack-1011-L2", ["player_body", "shield"],
+       "hand 'PLAYER PLUS SHIELD NO HELMET/HAIR ATTACKING' ('maybe' refers to recall, not identity)",
+       "attack L2 base; attacking; no helmet/hair"),
+    _v("attack-0011-L2", ["player_body", "shield", "sword"],
+       "hand 'PLAYER PLUS SHIELD WHILE ATTACKING WITH SWORD'", "attack L2 base; attacking with sword"),
+    _v("attack-1001-L2", ["player_body"], "hand 'PLAYER SPRITE NO ARMOUR NO HELMET / HAIR ATTACKING'",
+       "attack L2 base; attacking; no armour/helmet"),
+    _v("bigbee-0112-L5", ["rider_torso", "crossbow", "shield"],
+       "hand 'PLAYER UPPER TORSO CROSSBOW BIT WITH SHIELD NO LEGS NO HELM FOR BIGBEE RIDER'",
+       "bigbee L5; rider upper torso, no legs/helm; crossbow + shield"),
+    _v("player-0111-L2", ["player_body", "shield"], "hand 'PLAYER WITH SHIELD NO HELMET'", "player L2 base + shield"),
+    _v("player-0112-L2", ["player_body", "shield"], "hand 'PLAYER w SHIELD'", "player L2 base + shield"),
+    _v("player-1011-L2", ["player_body", "shield"], "hand 'Player w/shield'", "player L2 base + shield"),
+    _v("bigbee-0111-L5", ["rider_torso", "shield"], "hand 'SHIELD PLUS PLAYER MISSING AN ARM LEGS'",
+       "bigbee L5; rider torso + shield; missing arm/legs"),
+    _v("attack-0111-L2", ["player_body", "shield"], "hand 'SHIELD PLUS PLAYER WHILE ATTACKING NO HELMET'",
+       "attack L2 base; attacking; no helmet"),
+    _v("bigbee-1010-L5", ["shield"], "hand 'SHIELD BITS ONLY FOR BIGBEE, ARM AND MOUTH VISIBLE FOR SOME'",
+       "bigbee L5 shield overlay; arm/mouth visible for some"),
+    _v("wolfie-1010-L5", ["armor", "shield"], "hand 'armor and shield bits only for wolfie'", "wolfie L5 overlay"),
+    _v("wolfie-1012-L4", ["armor", "sword"], "hand 'armor bit only and some sword bits'", "wolfie L4 overlay"),
+    _v("wolack-1011-L5", ["armor"], "hand 'armor bit only for wolack sheet'", "wolack L5 armor overlay"),
+    _v("wolfie-1011-L6", ["armor", "sword"], "hand 'armor bit only with some sword parts'", "wolfie L6 overlay"),
+    _v("wolfie-1102-L2", ["mount_body_wolf", "armor"], "hand 'armor;mount_body_wolf no arms helm'",
+       "wolfie L2 base; wolf body + armor; no arms/helm"),
+    _v("wolfie-0102-L4", ["crossbow"], "hand 'crossbow arrow bit only for wolfie (with a hand or two, some shirt bits)'",
+       "wolfie L4 crossbow overlay; incidental hand/shirt bits"),
+    _v("wolfie-0112-L4", ["crossbow"], "hand 'crossbow bit for wolfie'", "wolfie L4 crossbow overlay"),
+    _v("wolfie-1002-L5", ["crossbow"], "hand 'crossbow bit only'", "wolfie L5 crossbow overlay"),
+    _v("wolfie-0012-L5", ["crossbow"], "hand 'crossbow bit only for wolfie'", "wolfie L5 crossbow overlay"),
+    _v("wolfie-1012-L6", ["crossbow"], "hand 'crossbow bits only for wolfie'", "wolfie L6 crossbow overlay"),
+    _v("plydie-1102-L3", ["helmet"],
+       "hand uncertain 'maybe plydie helm and or shoulder bit, reflection has cross bow parts'",
+       "plydie L3; helm-vs-shoulder ambiguous; reflection has crossbow", supported=False, unresolved=True),
+    _v("wolfie-1101-L2", ["mount_body_wolf", "armor", "sword"], "hand 'mounted body armored with sword'",
+       "wolfie L2 base; armored wolf mount body + sword"),
+    _v("player-0011-L2", ["player_body", "shield", "sword"], "hand 'player shield with sword no helm/hair'",
+       "player L2 base + shield + sword; no helm/hair"),
+    _v("wolfie-0112-L2", ["mount_body_wolf", "rider_torso", "shield"],
+       "hand 'player torso and wolf with shield NO ARMOR'", "wolfie L2 base; wolf+rider+shield; no armor"),
+    _v("player-1111-L2", ["player_body", "shield"], "hand 'player with shield no armour/hair'", "player L2 base + shield"),
+    _v("bigbee-0110-L3", ["rider_torso", "shield"], "hand 'player with shield no helm no armour no weapon'",
+       "bigbee L3 rider overlay; rider torso + shield"),
+    _v("plydie-1010-L4", ["armor"], "hand 'ply die armor only'", "plydie L4 armor overlay"),
+    _v("plydie-1002-L3", ["armor"], "hand 'ply die armour bit only'", "plydie L3 armor overlay"),
+    _v("plydie-1102-L2", ["plydie_body", "armor"], "hand 'ply die body with armour (no sword helm, arms)'",
+       "plydie L2 base + armor; no sword/helm/arms"),
+    _v("plydie-1112-L2", ["plydie_body", "armor", "shield"], "hand 'ply die body with armour and shield'",
+       "plydie L2 base + armor + shield"),
+    _v("plydie-0112-L2", ["plydie_body", "shield"], "hand 'ply die body with shield only'", "plydie L2 base + shield"),
+    _v("plydie-0111-L2", ["plydie_body", "sword", "shield"], "hand 'ply die body with sword and shield'",
+       "plydie L2 base + sword + shield"),
+    _v("plydie-0110-L2", ["plydie_body", "shield"], "hand 'ply die with shield, no hair/helm'", "plydie L2 base + shield"),
+    _v("plydie-1012-L4", ["armor"], "hand 'plydie armor bit only'", "plydie L4 armor overlay"),
+    _v("plydie-1101-L2", ["plydie_body", "armor", "sword"], "hand 'plydie body with armor and sword'",
+       "plydie L2 base + armor + sword"),
+    _v("plydie-1111-L2", ["plydie_body", "armor", "sword", "shield"], "hand 'plydie body with armor sword and shield'",
+       "plydie L2 base + armor + sword + shield"),
+    _v("plydie-1110-L2", ["plydie_body", "shield", "armor"], "hand 'plydie body with shield and armor'",
+       "plydie L2 base + shield + armor"),
+    _v("plydie-1112-L4", ["crossbow"], "hand 'plydie crossbow bit only'", "plydie L4 crossbow overlay"),
+    _v("plydie-0012-L3", ["shield"], "hand 'plydie shield projection only'", "plydie L3 shield overlay; projection"),
+    _v("plydie-1100-L2", ["plydie_body", "armor"], "hand 'plydie with armor, no sword, shield or helm/hair'",
+       "plydie L2 base + armor"),
+    _v("wolfie-1012-L5", ["shield", "armor"], "hand 'shield and armor bits only for wolfie'", "wolfie L5 overlay"),
+    _v("wolack-1011-L4", ["shield"], "hand 'shield bit only for the Wolack sheet'", "wolack L4 shield overlay"),
+    _v("wolack-0111-L4", ["shield"], "hand 'shield bit only for the wolack sheet'", "wolack L4 shield overlay"),
+    _v("wolack-1111-L4", ["shield"], "hand 'shield bit only for wolack'", "wolack L4 shield overlay"),
+    _v("wolfie-1111-L2", ["mount_body_wolf", "armor", "shield", "sword"],
+       "hand 'shield;armor;mount_body_wolf HOLDING A SWORD'", "wolfie L2 base; armored wolf mount + shield + sword"),
+    _v("wolfie-0100-L2", ["mount_body_wolf", "rider_torso"],
+       "hand 'wolf top part with player torso (no armour helm arms)'", "wolfie L2 base; wolf + rider torso"),
+    _v("wolfie-0110-L2", ["mount_body_wolf", "rider_torso", "shield"],
+       "hand 'wolf top part with player torso holding shield'", "wolfie L2 base; wolf + rider + shield"),
+    _v("wolfie-0111-L2", ["mount_body_wolf", "rider_torso", "shield", "sword"],
+       "hand 'wolf top part with player torso holding shield and sword (no helm)'",
+       "wolfie L2 base; wolf + rider + shield + sword"),
+    _v("wolfie-0101-L2", ["mount_body_wolf", "rider_torso", "sword"],
+       "hand 'wolf top part with player torso holding sword (no armour helm shield)'",
+       "wolfie L2 base; wolf + rider + sword"),
+    _v("wolfie-1100-L2", ["mount_body_wolf", "rider_torso", "armor"],
+       "hand 'wolfie top part with player torso armored (no arms helm shield)'",
+       "wolfie L2 base; wolf + rider + armor"),
+]
+
+# queue_class -> its label-clustered verdicts (batches 2+). Batch 1 (wrong_guess_reject)
+# is card-keyed via REVIEWED.
+CLUSTER_BATCHES = {"reject": REJECT_CLUSTERS, "partial": PARTIAL_CLUSTERS}
+
 
 def merge_and_write_decisions(path, records: list[dict]) -> dict[str, dict]:
     """Upsert `records` into the decisions file, FAIL-CLOSED (FL-4162 Law 6).
@@ -349,27 +476,29 @@ def main() -> int:
     for cid, verdict in REVIEWED.items():
         apply_verdict(cards[cid], verdict)
 
-    # Batch 2 — reject-class cards, grouped by normalized hand label, one verdict
-    # per cluster (identified by a representative card_id).
-    missing_reps = [cl["rep"] for cl in REJECT_CLUSTERS if cl["rep"] not in cards]
-    if missing_reps:
-        print(f"ERROR: reject cluster reps absent from cards file: {missing_reps}", file=sys.stderr)
-        return 2
-    reject_cards = [c for c in cards.values()
-                    if (c.get("review", {}) or {}).get("queue_class_name") == "reject"]
-    rep_to_verdict = {cl["rep"]: cl for cl in REJECT_CLUSTERS}
-    groups: dict[str, list] = {}
-    for c in reject_cards:
-        groups.setdefault(_norm_label(c), []).append(c)
-    uncovered_reject: list[str] = []
-    for _label, group in groups.items():
-        ids = {c["card_id"] for c in group}
-        cl = next((rep_to_verdict[r] for r in rep_to_verdict if r in ids), None)
-        if cl is None:
-            uncovered_reject.extend(sorted(ids))
-            continue
-        for c in group:
-            apply_verdict(c, cl)
+    # Batches 2+ — each queue class with label-clustered verdicts. Cards are grouped
+    # by normalized hand label; one verdict per cluster (representative card_id).
+    uncovered_cluster: list[str] = []
+    for queue_class, clusters in CLUSTER_BATCHES.items():
+        missing_reps = [cl["rep"] for cl in clusters if cl["rep"] not in cards]
+        if missing_reps:
+            print(f"ERROR: {queue_class} cluster reps absent from cards file: {missing_reps}",
+                  file=sys.stderr)
+            return 2
+        batch_cards = [c for c in cards.values()
+                       if (c.get("review", {}) or {}).get("queue_class_name") == queue_class]
+        rep_to_verdict = {cl["rep"]: cl for cl in clusters}
+        groups: dict[str, list] = {}
+        for c in batch_cards:
+            groups.setdefault(_norm_label(c), []).append(c)
+        for _label, group in groups.items():
+            ids = {c["card_id"] for c in group}
+            cl = next((rep_to_verdict[r] for r in rep_to_verdict if r in ids), None)
+            if cl is None:
+                uncovered_cluster.extend(sorted(ids))
+                continue
+            for c in group:
+                apply_verdict(c, cl)
 
     packet_rows.sort(key=lambda r: (r["review_rank"] is None, r["review_rank"]))
 
@@ -395,14 +524,14 @@ def main() -> int:
             "supported_proposals": len(supported_records),
             "unresolved": sum(1 for r in packet_rows if r["agent_verdict"]["unresolved"]),
         },
-        "uncovered_reject_card_ids": uncovered_reject,
+        "uncovered_cluster_card_ids": uncovered_cluster,
         "pending_by_queue_class": {qc: len(ids) for qc, ids in pending.items()},
         "pending_card_ids": pending,
         "reviewed": packet_rows,
     }
-    if uncovered_reject:
-        print(f"WARNING: {len(uncovered_reject)} reject cards uncovered by any "
-              f"cluster verdict: {uncovered_reject}", file=sys.stderr)
+    if uncovered_cluster:
+        print(f"WARNING: {len(uncovered_cluster)} reject cards uncovered by any "
+              f"cluster verdict: {uncovered_cluster}", file=sys.stderr)
     PACKET.write_text(json.dumps(packet, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # Upsert the supported reviewed rows into the decisions file, FAIL-CLOSED
