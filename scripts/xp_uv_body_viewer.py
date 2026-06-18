@@ -48,6 +48,15 @@ except ModuleNotFoundError:
     layer2_browser = None
     XPFile = None
 
+# FL-4162 step 8 — reviewed-decision write path (sibling module in scripts/).
+# The viewer is the interactive trigger; decision_capture owns the file format,
+# fingerprint guard, and atomic upsert. Optional: a missing module degrades the
+# [t] keybind to a status message rather than crashing the viewer.
+try:
+    import decision_capture
+except ModuleNotFoundError:
+    decision_capture = None
+
 
 def _require_y9_helpers() -> None:
     if semantic_dict is None or layer2_browser is None or XPFile is None:
@@ -1241,6 +1250,14 @@ class AnchorReviewState:
     evidence_cards: list = field(default_factory=list)
     show_evidence: bool = False
     evidence_idx: int = 0
+    # FL-4162 step 8 read/WRITE decision capture: reviewed verdicts keyed by
+    # source_key, loaded from + written to source_layer_review_decisions.jsonl
+    # (a THIRD owner, proposal-only — see decision_capture.py). The sidebar stays
+    # a read-only microscope; the ONLY write is the explicit [t] keybind prompt.
+    decisions_path: object | None = None
+    decisions: dict = field(default_factory=dict)  # source_key -> decision record
+    decision_pending_role: str = ""  # carries role from the role prompt to the note prompt
+    decision_card_fp: str | None = None  # fingerprint captured when [t] opened the prompt
 
     @property
     def skin_asset(self) -> "RawAsset | None":
@@ -1363,6 +1380,17 @@ def _anchor_render_evidence_panel(st: AnchorReviewState) -> list[str]:
         "",
         _evi_clip("why: " + str(rev.get("rationale", "")), 60),
     ]
+    # FL-4162 step 8: surface any reviewed decision for THIS card beside it.
+    # Read-only display; the verdict is authored via the [t] keybind, not here.
+    dec = (st.decisions or {}).get(c.get("source_key"))
+    if dec:
+        lines += [
+            "",
+            f"DECISION = {_evi_clip(dec.get('approved_role', ''), 48)}  ([t] re-record)",
+            _evi_clip("  note: " + str(dec.get("reviewer_note", "") or "—"), 58),
+        ]
+    else:
+        lines += ["", "DECISION = none recorded  ([t] record draft)"]
     return lines
 
 
@@ -2016,6 +2044,10 @@ def _anchor_status_bar(st: AnchorReviewState) -> list[str]:
         lines.append(f"New region name: {st.prompt_buffer}_")
     elif st.prompt_mode == "bg_region":
         lines.append(f"bg region? [1-9 or n]: _")
+    elif st.prompt_mode == "decision_role":
+        lines.append(f"Decision role: {st.prompt_buffer}_   (ENTER=next, ESC=cancel)")
+    elif st.prompt_mode == "decision_note":
+        lines.append(f"Decision note: {st.prompt_buffer}_   (ENTER=save, ESC=cancel)")
     elif st.status:
         lines.append(st.status)
     else:
@@ -2029,7 +2061,7 @@ def _anchor_help_lines() -> list[str]:
         "Anchor review",
         "[arrows] move cursor  [a/d] angle  [w/s] anim  [,/.] frame  [x] toggle  [m] rect",
         "[1-9] assign region  [n] new region  [Backspace] unassign  [h] half-block mode",
-        "[r/f] cycle region focus  [g] region grid (all angles×frames)  [b] body map  [p] autoplay  [i] evidence",
+        "[r/f] cycle region focus  [g] region grid (all angles×frames)  [b] body map  [p] autoplay  [i] evidence  [t] record decision",
         "[c] composite  [j/k] skin  [v] proj  [Ctrl+S/Ctrl+W] save  [q] quit",
         "Workflow: [r/f] focus region -> [g] grid check -> [m] rect or [e] select-all -> [1-9] assign -> [Ctrl+S] save",
         "Tip: [e] selects all cells in focused region for bulk reassign/unassign",
@@ -2413,7 +2445,101 @@ def _handle_anchor_prompt_key(st: AnchorReviewState, key: str) -> bool:
                 return True
         return True
 
+    # --- FL-4162 step 8: reviewed-decision capture (two typed fields) ---
+    # role -> note -> atomic write. ESC at any step aborts with NO write; this is
+    # the ONLY mutation path for source_layer_review_decisions.jsonl.
+    if st.prompt_mode == "decision_role":
+        if key == "ESCAPE":
+            st.prompt_mode = ""
+            st.prompt_buffer = ""
+            st.decision_pending_role = ""
+            st.status = "Decision cancelled"
+            return True
+        if key == "ENTER":
+            role = st.prompt_buffer.strip()
+            st.prompt_buffer = ""
+            if not role:
+                st.prompt_mode = ""
+                st.status = "Empty role, decision cancelled"
+                return True
+            st.decision_pending_role = role
+            st.prompt_mode = "decision_note"
+            st.status = "Decision: optional note, ENTER to save, ESC to cancel"
+            return True
+        if key == "BACKSPACE":
+            st.prompt_buffer = st.prompt_buffer[:-1]
+            return True
+        if len(key) == 1 and key.isprintable():
+            st.prompt_buffer += key
+            return True
+        return True
+
+    if st.prompt_mode == "decision_note":
+        if key == "ESCAPE":
+            st.prompt_mode = ""
+            st.prompt_buffer = ""
+            st.decision_pending_role = ""
+            st.status = "Decision cancelled"
+            return True
+        if key == "ENTER":
+            note = st.prompt_buffer.strip()
+            role = st.decision_pending_role
+            st.prompt_mode = ""
+            st.prompt_buffer = ""
+            st.decision_pending_role = ""
+            st.status = _commit_decision(st, role, note)
+            return True
+        if key == "BACKSPACE":
+            st.prompt_buffer = st.prompt_buffer[:-1]
+            return True
+        if len(key) == 1 and key.isprintable():
+            st.prompt_buffer += key
+            return True
+        return True
+
     return False
+
+
+def _commit_decision(st: AnchorReviewState, approved_role: str, reviewer_note: str) -> str:
+    """Write one reviewed decision for the currently displayed evidence card.
+
+    Fail-closed: passes the fingerprint captured when [t] opened the prompt as
+    expected_fingerprint, so a card that changed underneath blocks the write.
+    Returns a status string; never raises into the input loop.
+    """
+    if decision_capture is None:
+        return "Decision capture unavailable (decision_capture module not importable)"
+    cards = st.evidence_cards
+    if not cards:
+        return "No evidence card to record a decision against"
+    idx = max(0, min(st.evidence_idx, len(cards) - 1))
+    card = cards[idx]
+    if st.decisions_path is None:
+        return "No decisions path resolved — cannot write"
+    provenance = {
+        "tool": "xp_uv_body_viewer",
+        "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "anchor": st.anchor_path.name,
+        "viewer_user": os.environ.get("USER", "?"),
+        "source_final_sha256": card.get("source_final_sha256"),
+    }
+    try:
+        rec = decision_capture.record_decision(
+            st.decisions_path,
+            card,
+            approved_role=approved_role,
+            reviewer_note=reviewer_note,
+            provenance=provenance,
+            expected_fingerprint=st.decision_card_fp,
+        )
+    except decision_capture.DecisionFingerprintMismatch:
+        return "Card changed since decision began — write BLOCKED (fail closed)"
+    except (OSError, ValueError) as exc:
+        return f"Decision write failed: {exc}"
+    finally:
+        st.decision_card_fp = None
+    st.decisions[rec["source_key"]] = rec
+    return f"Decision recorded: {card.get('card_id', '?')} -> {rec['approved_role']}"
 
 
 def _handle_anchor_key(
@@ -2616,6 +2742,28 @@ def _handle_anchor_key(
     if key == "]" and st.show_evidence and st.evidence_cards:
         st.evidence_idx = (st.evidence_idx + 1) % len(st.evidence_cards)
         st.status = f"Evidence {st.evidence_idx + 1}/{len(st.evidence_cards)}"
+        st.quit_pending = False
+        return True
+
+    # --- FL-4162 step 8: record reviewed decision (t) — evidence mode only ---
+    # Opens the role prompt; the actual write only happens after the reviewer
+    # types a role + ENTER (then optional note + ENTER). Never writes from this
+    # keypress alone, and is inert outside the evidence microscope.
+    if key in ("t", "T"):
+        if decision_capture is None:
+            st.status = "Decision capture unavailable (module not importable)"
+        elif not (st.show_evidence and st.evidence_cards):
+            st.status = "Open evidence first ([i]), then [t] to record a decision"
+        else:
+            idx = max(0, min(st.evidence_idx, len(st.evidence_cards) - 1))
+            card = st.evidence_cards[idx]
+            # Pin the fingerprint of the card being reviewed (fail-closed on change).
+            st.decision_card_fp = decision_capture.card_fingerprint(card)
+            # Prefill the hand's own corrected label so the reviewer confirms or
+            # edits it (human-in-loop) rather than re-typing from scratch.
+            st.prompt_buffer = str((card.get("hand", {}) or {}).get("corrected_label", "") or "")
+            st.prompt_mode = "decision_role"
+            st.status = "Record decision: edit role, ENTER=next, ESC=cancel"
         st.quit_pending = False
         return True
 
@@ -2991,6 +3139,15 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
         if _card.get("card_id") == _evi_target:
             st.evidence_idx = _i
             break
+
+    # FL-4162 step 8: load any already-reviewed decisions (keyed by source_key)
+    # so each card shows its current verdict. Read here; written only via [t].
+    if decision_capture is not None:
+        st.decisions_path = anchor_path.parent / decision_capture.DECISIONS_FILENAME
+        try:
+            st.decisions = decision_capture.load_decisions(st.decisions_path)
+        except Exception:
+            st.decisions = {}
 
     # Try to load body map XP from pipeline-v3/output/
     repo_root = Path(__file__).resolve().parents[1]
