@@ -66,3 +66,25 @@ def test_missing_file_starts_clean(tmp_path):
     merged = b.merge_and_write_decisions(p, [_rec("only", "r")])
     assert set(merged) == {"only"}
     assert p.exists()
+
+
+def _card_for(queue_class: str) -> dict:
+    return {
+        "card_id": "c-L3", "source_key": "c-L3", "source_xp_path": "x.xp",
+        "family": "fam", "raw_layer_index": 3, "source_final_sha256": "sha",
+        "review": {"queue_class_name": queue_class},
+    }
+
+
+def test_reject_decision_records_batch_reject():
+    """A reject-batch row must carry provenance.batch=rejects-first/reject, not the
+    batch-1 wrong_guess_reject value."""
+    card = _card_for("reject")
+    rec = dc.build_decision_record(card, approved_role="helmet", provenance=b._provenance_for(card))
+    assert rec["review_provenance"]["batch"] == "rejects-first/reject"
+
+
+def test_wrong_guess_decision_records_batch_wrong_guess_reject():
+    card = _card_for("wrong_guess_reject")
+    rec = dc.build_decision_record(card, approved_role="bee_body", provenance=b._provenance_for(card))
+    assert rec["review_provenance"]["batch"] == "rejects-first/wrong_guess_reject"

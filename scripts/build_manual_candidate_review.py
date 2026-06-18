@@ -49,12 +49,22 @@ DECISIONS = SEMANTIC / "source_layer_review_decisions.jsonl"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import decision_capture as dc  # noqa: E402
 
+# Base provenance shared by every reviewed row. `batch` is NOT here — it is added
+# per row from the card's own queue class (see _provenance_for) so a reject-batch
+# decision is distinguishable from a wrong_guess_reject one in downstream audit.
 REVIEW_PROVENANCE = {
     "tool": "build_manual_candidate_review",
     "review_kind": "agent_manual_review_of_hand_corpus",
     "recorded_at": "2026-06-18",
-    "batch": "rejects-first/wrong_guess_reject",
 }
+
+
+def _provenance_for(card: dict) -> dict:
+    """Per-row review provenance. `batch` reflects THIS card's queue class
+    ('rejects-first/<queue_class>'), so audit can tell batch-1 wrong_guess_reject
+    review apart from batch-2 reject review by provenance alone."""
+    qc = (card.get("review", {}) or {}).get("queue_class_name", "unknown")
+    return {**REVIEW_PROVENANCE, "batch": f"rejects-first/{qc}"}
 
 # --- Agent reviewed verdicts, keyed by card_id ------------------------------
 # Each verdict was made by reading THIS card's hand prose + glyph exact/near +
@@ -327,7 +337,7 @@ def main() -> int:
         if verdict["supported"] and not verdict["unresolved"]:
             supported_records.append(dc.build_decision_record(
                 card, approved_role=";".join(roles), composite_roles=roles,
-                provenance=REVIEW_PROVENANCE, topology_note=verdict["topology"],
+                provenance=_provenance_for(card), topology_note=verdict["topology"],
                 contradictions=verdict["contradictions"], reviewer_note=verdict["support"],
             ))
 
