@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -74,31 +76,22 @@ def _presentation_candidates(family: str) -> list[str]:
     return ["idle_walk"]
 
 
-def _slot_candidates(role: str, family: str, layer_index: int | None) -> list[str]:
-    text = role.lower().replace("-", "_").replace(" ", "_")
-    slots: list[str] = []
-    if "helmet" in text or "head" in text:
-        slots.append("head")
-    if "armor" in text or "armour" in text or "chest" in text:
-        slots.append("chest")
-    if "crossbow" in text or "sword" in text or "weapon" in text or "swoosh" in text:
-        slots.append("weapon")
-    if "shield" in text:
-        slots.append("shield")
-    if "rider" in text:
-        slots.append("mount_rider")
-    if "front" in text:
-        slots.append("mount_front")
-    if "rear" in text:
-        slots.append("mount_rear")
-    if "mount" in text or family in {"bigbee", "wolfie", "wolack"}:
-        if "mount_rider" not in slots and "rider" not in text:
-            slots.append("mount_rear")
-    if not slots and layer_index == 2:
-        slots.append("body")
-    if not slots:
-        slots.append("unresolved_slot")
-    return sorted(set(slots))
+def _explicit_slot_candidates(decision: dict[str, Any]) -> list[str]:
+    for key in ("slot_candidates", "required_slots", "actor_visual_slots"):
+        value = decision.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            candidates = [part.strip() for part in value.split(";") if part.strip()]
+        elif isinstance(value, list):
+            candidates = [str(part).strip() for part in value if str(part).strip()]
+        else:
+            raise RequirementDerivationError(
+                f"{decision.get('source_key')}: {key} must be a string or list"
+            )
+        if candidates:
+            return sorted(set(candidates))
+    return ["unresolved_slot"]
 
 
 def _requirement_blockers(decision: dict[str, Any], card: dict[str, Any]) -> list[str]:
@@ -117,6 +110,8 @@ def _requirement_blockers(decision: dict[str, Any], card: dict[str, Any]) -> lis
     roles = decision.get("composite_roles") or []
     if len(roles) > 1:
         blockers.add("composite_layer_requires_family_contract")
+    if "unresolved_slot" in _explicit_slot_candidates(decision):
+        blockers.add("needs_reviewed_slot_candidates")
     return sorted(blockers)
 
 
@@ -137,9 +132,7 @@ def build_requirement(decision: dict[str, Any], card: dict[str, Any]) -> dict[st
     raw_layer_index = decision.get("raw_layer_index", card.get("raw_layer_index"))
     roles = list(decision.get("composite_roles") or [decision.get("approved_role")])
     roles = [str(role).strip() for role in roles if str(role).strip()]
-    slot_candidates = sorted(
-        {slot for role in roles for slot in _slot_candidates(role, family, raw_layer_index)}
-    )
+    slot_candidates = _explicit_slot_candidates(decision)
     return {
         "requirement_id": f"avp_req:{source_key}",
         "authority": False,
@@ -185,6 +178,8 @@ def build_requirement(decision: dict[str, Any], card: dict[str, Any]) -> dict[st
 def build_requirements_packet(
     decision_rows: dict[str, dict[str, Any]],
     cards: dict[str, dict[str, Any]],
+    *,
+    allow_missing_cards: bool = False,
 ) -> dict[str, Any]:
     requirements: list[dict[str, Any]] = []
     missing_cards: list[str] = []
@@ -194,6 +189,10 @@ def build_requirements_packet(
             missing_cards.append(key)
             continue
         requirements.append(build_requirement(decision_rows[key], card))
+    if missing_cards and not allow_missing_cards:
+        raise RequirementDerivationError(
+            "missing evidence cards for reviewed decisions: " + ", ".join(missing_cards)
+        )
 
     state_counts = Counter(req["evidence_card_ref"]["hand_status"] for req in requirements)
     family_counts = Counter(req["family"] for req in requirements)
@@ -225,8 +224,33 @@ def build_requirements_packet(
     }
 
 
+def validate_packet(packet: dict[str, Any]) -> None:
+    missing_cards = packet.get("missing_cards") or []
+    if missing_cards:
+        raise RequirementDerivationError(
+            "missing evidence cards for reviewed decisions: " + ", ".join(map(str, missing_cards))
+        )
+
+
 def dump_json(value: Any) -> str:
     return json.dumps(value, indent=2, ensure_ascii=True, sort_keys=True) + "\n"
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd_tmp, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp", prefix=path.stem)
+    try:
+        with os.fdopen(fd_tmp, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, str(path))
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -248,10 +272,13 @@ def main(argv: list[str]) -> int:
         )
     cards = load_evidence_cards(args.cards)
     packet = build_requirements_packet(decision_rows, cards)
+    try:
+        validate_packet(packet)
+    except RequirementDerivationError as exc:
+        raise SystemExit(f"FAIL: {exc}") from exc
     output = dump_json(packet)
     if args.write:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(output, encoding="utf-8")
+        atomic_write_text(args.out, output)
         print(f"wrote {args.out}")
     else:
         print(output, end="")
