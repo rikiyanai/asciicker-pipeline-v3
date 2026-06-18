@@ -126,3 +126,15 @@ def test_clean_accept_empty_label_is_unresolved():
     v = b._passthrough_verdict(card)
     assert v["unresolved"] is True and v["supported"] is False
     assert v["roles"] == []
+
+
+def test_ambig_class_is_unresolved_even_with_text_label():
+    """ambig must resolve to unresolved BY CLASS (FL-4162): an ambig card carrying a
+    real label must still be unresolved and never proposed (not rescued by passthrough)."""
+    assert "ambig" in b.UNRESOLVED_CLASSES
+    assert "ambig" not in b.PASSTHROUGH_CLASSES
+    card = {"hand": {"corrected_label": "shield"},  # non-empty, plausible role token
+            "review": {"queue_class_name": "ambig"}}
+    v = b._unresolved_verdict(card)
+    assert v["unresolved"] is True and v["supported"] is False
+    assert v["roles"] == []  # never proposed, despite the text label

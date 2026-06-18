@@ -28,10 +28,13 @@ Discipline (do not regress):
   - Nothing here mutates state_FINAL or the evidence cards, and nothing claims
     compiler / semantic-map authority. That gate is later (Step 10).
 
-Rejects-first: this first batch reviews the 20 wrong_guess_reject rows (the rows
-where a wrong machine guess was overridden by hand), starting with the mount
-families. Remaining queue classes (reject / partial / *_accept) are listed as
-pending in the packet so coverage is never silently overclaimed.
+Coverage: the full 343-card corpus is reviewed, rejects-first, by queue class:
+  - wrong_guess_reject  card-keyed agent verdicts (REVIEWED)
+  - reject / partial / prose_caps_accept  interpreted label clusters (CLUSTER_BATCHES)
+  - clean_accept        passthrough — the hand label is already a role token
+  - ambig               fail-closed UNRESOLVED by class policy (never auto-proposed)
+Any card a handler does not cover is reported as pending/uncovered in the packet, so
+coverage is never silently overclaimed.
 """
 from __future__ import annotations
 
@@ -402,9 +405,23 @@ CLUSTER_BATCHES = {
 
 # Clean-label batches: the hand corrected_label is ALREADY a normalized role token
 # (these tiers were auto-acceptable), so the proposal is a faithful PASSTHROUGH of the
-# human's own clean label — no agent reinterpretation. An empty label is unresolved
-# (this is how the single empty-label `ambig` card resolves).
-PASSTHROUGH_CLASSES = {"clean_accept", "ambig"}
+# human's own clean label — no agent reinterpretation. An empty label is unresolved.
+PASSTHROUGH_CLASSES = {"clean_accept"}
+
+# Fail-closed-by-class (FL-4162): the queue class itself signals ambiguity, so EVERY card
+# in it is unresolved regardless of label content — never auto-proposed. (By class, not by
+# empty-string luck: an ambig card that happened to carry text must still hold.)
+UNRESOLVED_CLASSES = {"ambig"}
+
+
+def _unresolved_verdict(card: dict) -> dict:
+    """Fail-closed-by-class verdict for an UNRESOLVED_CLASSES card (FL-4162): never a
+    proposal, whatever the label says. A present label is kept as a disambiguation hint."""
+    qc = (card.get("review", {}) or {}).get("queue_class_name", "?")
+    label = _norm_label(card)
+    hint = f" (hand label '{label}' needs human disambiguation)" if label else " (empty hand label)"
+    return dict(roles=[], supported=False, unresolved=True, topology="", contradictions=[],
+                support=f"queue class '{qc}' is fail-closed-by-class to unresolved" + hint)
 
 
 def _passthrough_verdict(card: dict) -> dict:
@@ -554,6 +571,13 @@ def main() -> int:
         if qc not in PASSTHROUGH_CLASSES or c["card_id"] in reviewed_ids:
             continue
         apply_verdict(c, _passthrough_verdict(c))
+
+    # Fail-closed-by-class tiers: every card unresolved, never proposed.
+    for c in cards.values():
+        qc = (c.get("review", {}) or {}).get("queue_class_name")
+        if qc not in UNRESOLVED_CLASSES or c["card_id"] in reviewed_ids:
+            continue
+        apply_verdict(c, _unresolved_verdict(c))
 
     packet_rows.sort(key=lambda r: (r["review_rank"] is None, r["review_rank"]))
 
