@@ -108,3 +108,21 @@ def test_uncovered_warning_is_queue_class_neutral():
     assert "clean_accept" in w
     assert "foo-L2" in w
     assert "reject cards" not in w  # no hard-coded class
+
+
+def test_clean_accept_passthrough_uses_hand_label_verbatim():
+    """clean-accept labels are already role tokens — proposal passes them through,
+    splitting composites on ';', with no agent reinterpretation."""
+    card = {"hand": {"corrected_label": "shield;armor;mount_body_wolf"},
+            "review": {"queue_class_name": "clean_accept"}}
+    v = b._passthrough_verdict(card)
+    assert v["supported"] is True and v["unresolved"] is False
+    assert v["roles"] == ["shield", "armor", "mount_body_wolf"]
+    assert v["contradictions"] == []
+
+
+def test_clean_accept_empty_label_is_unresolved():
+    card = {"hand": {"corrected_label": "  "}, "review": {"queue_class_name": "clean_accept"}}
+    v = b._passthrough_verdict(card)
+    assert v["unresolved"] is True and v["supported"] is False
+    assert v["roles"] == []

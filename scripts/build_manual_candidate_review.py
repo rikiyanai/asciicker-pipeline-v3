@@ -380,9 +380,24 @@ PARTIAL_CLUSTERS = [
        "wolfie L2 base; wolf + rider + armor"),
 ]
 
-# queue_class -> its label-clustered verdicts (batches 2+). Batch 1 (wrong_guess_reject)
-# is card-keyed via REVIEWED.
+# queue_class -> its label-clustered verdicts (interpreted batches). Batch 1
+# (wrong_guess_reject) is card-keyed via REVIEWED.
 CLUSTER_BATCHES = {"reject": REJECT_CLUSTERS, "partial": PARTIAL_CLUSTERS}
+
+# Clean-label batches: the hand corrected_label is ALREADY a normalized role token
+# (these tiers were auto-acceptable), so the proposal is a faithful PASSTHROUGH of the
+# human's own clean label — no agent reinterpretation. An empty label is unresolved.
+PASSTHROUGH_CLASSES = {"clean_accept"}
+
+
+def _passthrough_verdict(card: dict) -> dict:
+    label = _norm_label(card)
+    if not label:
+        return dict(roles=[], supported=False, unresolved=True, topology="",
+                    contradictions=[], support="clean-accept card with empty hand label")
+    roles = [p.strip() for p in label.split(";") if p.strip()]
+    return dict(roles=roles, supported=True, unresolved=False, topology="", contradictions=[],
+                support="hand clean-accept label, used verbatim (already a normalized role token)")
 
 
 def merge_and_write_decisions(path, records: list[dict]) -> dict[str, dict]:
@@ -515,6 +530,13 @@ def main() -> int:
                 continue
             for c in group:
                 apply_verdict(c, cl)
+
+    # Passthrough batches — clean-label tiers: the hand label is the role token.
+    for c in cards.values():
+        qc = (c.get("review", {}) or {}).get("queue_class_name")
+        if qc not in PASSTHROUGH_CLASSES or c["card_id"] in reviewed_ids:
+            continue
+        apply_verdict(c, _passthrough_verdict(c))
 
     packet_rows.sort(key=lambda r: (r["review_rank"] is None, r["review_rank"]))
 
