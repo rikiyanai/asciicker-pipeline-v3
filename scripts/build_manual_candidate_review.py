@@ -66,6 +66,21 @@ def _provenance_for(card: dict) -> dict:
     qc = (card.get("review", {}) or {}).get("queue_class_name", "unknown")
     return {**REVIEW_PROVENANCE, "batch": f"rejects-first/{qc}"}
 
+
+def _reviewed_batch_label(packet_rows: list[dict]) -> str:
+    """Packet header derived from the queue classes ACTUALLY reviewed, so it never
+    goes stale as new batches widen coverage (do not hard-code the class list)."""
+    classes = sorted({r.get("queue_class") for r in packet_rows if r.get("queue_class")})
+    return "rejects-first; reviewed queue classes: " + (", ".join(classes) or "(none)")
+
+
+def _uncovered_warning(uncovered: list[dict]) -> str:
+    """Queue-class-neutral warning for cards no cluster verdict matched."""
+    classes = sorted({u.get("queue_class", "?") for u in uncovered})
+    ids = [u.get("card_id") for u in uncovered]
+    return (f"WARNING: {len(uncovered)} cards uncovered by any cluster verdict "
+            f"across queue classes {classes}: {ids}")
+
 # --- Agent reviewed verdicts, keyed by card_id ------------------------------
 # Each verdict was made by reading THIS card's hand prose + glyph exact/near +
 # engine facts. `roles` are read from the human's words. `supported` gates the
@@ -495,7 +510,8 @@ def main() -> int:
             ids = {c["card_id"] for c in group}
             cl = next((rep_to_verdict[r] for r in rep_to_verdict if r in ids), None)
             if cl is None:
-                uncovered_cluster.extend(sorted(ids))
+                uncovered_cluster.extend(
+                    {"queue_class": queue_class, "card_id": c} for c in sorted(ids))
                 continue
             for c in group:
                 apply_verdict(c, cl)
@@ -518,20 +534,20 @@ def main() -> int:
         "is_proposal": True,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "review_kind": "agent_manual_review_of_hand_corpus",
-        "batch": "rejects-first: wrong_guess_reject + reject (mount families first)",
+        "batch": _reviewed_batch_label(packet_rows),
+        "reviewed_queue_classes": sorted({r.get("queue_class") for r in packet_rows if r.get("queue_class")}),
         "counts": {
             "reviewed": len(packet_rows),
             "supported_proposals": len(supported_records),
             "unresolved": sum(1 for r in packet_rows if r["agent_verdict"]["unresolved"]),
         },
-        "uncovered_cluster_card_ids": uncovered_cluster,
+        "uncovered_cluster_cards": uncovered_cluster,
         "pending_by_queue_class": {qc: len(ids) for qc, ids in pending.items()},
         "pending_card_ids": pending,
         "reviewed": packet_rows,
     }
     if uncovered_cluster:
-        print(f"WARNING: {len(uncovered_cluster)} reject cards uncovered by any "
-              f"cluster verdict: {uncovered_cluster}", file=sys.stderr)
+        print(_uncovered_warning(uncovered_cluster), file=sys.stderr)
     PACKET.write_text(json.dumps(packet, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # Upsert the supported reviewed rows into the decisions file, FAIL-CLOSED

@@ -88,3 +88,23 @@ def test_wrong_guess_decision_records_batch_wrong_guess_reject():
     card = _card_for("wrong_guess_reject")
     rec = dc.build_decision_record(card, approved_role="bee_body", provenance=b._provenance_for(card))
     assert rec["review_provenance"]["batch"] == "rejects-first/wrong_guess_reject"
+
+
+def test_packet_batch_label_derives_from_reviewed_rows_not_hardcoded():
+    """The packet header must reflect the queue classes actually reviewed, so it
+    can't go stale (e.g. omit 'partial') as batches widen."""
+    rows = [{"queue_class": "wrong_guess_reject"}, {"queue_class": "reject"},
+            {"queue_class": "partial"}]
+    label = b._reviewed_batch_label(rows)
+    for qc in ("wrong_guess_reject", "reject", "partial"):
+        assert qc in label, f"{qc} missing from derived batch label: {label!r}"
+    # A future class shows up automatically.
+    assert "clean_accept" in b._reviewed_batch_label(rows + [{"queue_class": "clean_accept"}])
+
+
+def test_uncovered_warning_is_queue_class_neutral():
+    """The uncovered-cluster warning must name the queue class, not say 'reject'."""
+    w = b._uncovered_warning([{"queue_class": "clean_accept", "card_id": "foo-L2"}])
+    assert "clean_accept" in w
+    assert "foo-L2" in w
+    assert "reject cards" not in w  # no hard-coded class
