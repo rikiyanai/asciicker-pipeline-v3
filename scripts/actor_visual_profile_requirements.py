@@ -94,7 +94,44 @@ def _explicit_slot_candidates(decision: dict[str, Any]) -> list[str]:
     return ["unresolved_slot"]
 
 
-def _requirement_blockers(decision: dict[str, Any], card: dict[str, Any]) -> list[str]:
+def conflicted_source_keys(
+    decision_rows: dict[str, dict[str, Any]],
+    cards: dict[str, dict[str, Any]],
+) -> set[str]:
+    """FL-4162 step 7: source_keys whose byte-identical layer (same
+    whole_atlas_fingerprint) received more than one distinct role-name set in
+    review. Pixel identity is code-level proof the layers are the same role, so the
+    divergence is a canonical-NAME conflict (e.g. helmet vs player_helmet_regular),
+    not a content difference. Such a card cannot be promoted until a human picks the
+    canonical name — the family topology contract records the same conflict. This
+    keys on pixel identity only, never on glyph co-occurrence
+    ([[feedback_no_glyph_classifier_from_cooccurrence]])."""
+    by_fp: dict[str, list[str]] = {}
+    for key, decision in decision_rows.items():
+        card = cards.get(key)
+        if card is None:
+            continue
+        fp = (card.get("cells") or {}).get("whole_atlas_fingerprint")
+        if not fp:
+            continue
+        by_fp.setdefault(str(fp), []).append(key)
+    conflicted: set[str] = set()
+    for keys in by_fp.values():
+        role_sets = {
+            tuple(sorted(
+                decision_rows[k].get("composite_roles")
+                or [decision_rows[k].get("approved_role")]
+            ))
+            for k in keys
+        }
+        if len(role_sets) > 1:
+            conflicted.update(keys)
+    return conflicted
+
+
+def _requirement_blockers(
+    decision: dict[str, Any], card: dict[str, Any], *, conflicted: bool = False
+) -> list[str]:
     blockers = {
         "not_actor_visual_profile_source",
         "not_compiler_input",
@@ -112,6 +149,8 @@ def _requirement_blockers(decision: dict[str, Any], card: dict[str, Any]) -> lis
         blockers.add("composite_layer_requires_family_contract")
     if "unresolved_slot" in _explicit_slot_candidates(decision):
         blockers.add("needs_reviewed_slot_candidates")
+    if conflicted:
+        blockers.add("role_name_conflict_unresolved")
     return sorted(blockers)
 
 
@@ -125,7 +164,9 @@ def _verify_fingerprint(decision: dict[str, Any], card: dict[str, Any]) -> None:
         )
 
 
-def build_requirement(decision: dict[str, Any], card: dict[str, Any]) -> dict[str, Any]:
+def build_requirement(
+    decision: dict[str, Any], card: dict[str, Any], *, conflicted: bool = False
+) -> dict[str, Any]:
     _verify_fingerprint(decision, card)
     source_key = str(decision["source_key"])
     family = str(decision.get("family") or card.get("family") or "")
@@ -171,7 +212,7 @@ def build_requirement(decision: dict[str, Any], card: dict[str, Any]) -> dict[st
             "frame_topology": card.get("engine", {}).get("frame_topology"),
             "glyph_exact_group_id": card.get("groups", {}).get("glyph_exact_group_id"),
         },
-        "promotion_blockers": _requirement_blockers(decision, card),
+        "promotion_blockers": _requirement_blockers(decision, card, conflicted=conflicted),
     }
 
 
@@ -183,12 +224,15 @@ def build_requirements_packet(
 ) -> dict[str, Any]:
     requirements: list[dict[str, Any]] = []
     missing_cards: list[str] = []
+    conflicted = conflicted_source_keys(decision_rows, cards)
     for key in sorted(decision_rows):
         card = cards.get(key)
         if card is None:
             missing_cards.append(key)
             continue
-        requirements.append(build_requirement(decision_rows[key], card))
+        requirements.append(
+            build_requirement(decision_rows[key], card, conflicted=(key in conflicted))
+        )
     if missing_cards and not allow_missing_cards:
         raise RequirementDerivationError(
             "missing evidence cards for reviewed decisions: " + ", ".join(missing_cards)
@@ -196,6 +240,10 @@ def build_requirements_packet(
 
     state_counts = Counter(req["evidence_card_ref"]["hand_status"] for req in requirements)
     family_counts = Counter(req["family"] for req in requirements)
+    role_name_conflict_count = sum(
+        1 for req in requirements
+        if "role_name_conflict_unresolved" in req["promotion_blockers"]
+    )
     return {
         "schema": SCHEMA,
         "surface_kind": SURFACE_KIND,
@@ -218,6 +266,7 @@ def build_requirements_packet(
             "missing_cards": len(missing_cards),
             "hand_status_counts": dict(sorted(state_counts.items())),
             "family_counts": dict(sorted(family_counts.items())),
+            "role_name_conflict_unresolved": role_name_conflict_count,
         },
         "missing_cards": missing_cards,
         "requirements": requirements,

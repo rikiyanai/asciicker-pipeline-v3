@@ -152,6 +152,39 @@ def test_cli_allow_empty_writes_empty_packet(tmp_path):
     assert packet["summary"]["requirements"] == 0
 
 
+def test_role_name_conflict_blocks_byte_identical_layers_with_different_names():
+    """FL-4162 step 7: two byte-identical layers (same whole_atlas_fingerprint) that
+    got different role NAMES are a canonical-name conflict — both carry the
+    role_name_conflict_unresolved blocker; a layer with a unique fingerprint does
+    not."""
+    a = _card(source_key="player-0100-L3", role_label="helmet")
+    a["family"] = "player"; a["raw_layer_index"] = 3
+    a["cells"]["whole_atlas_fingerprint"] = "FP_SHARED"
+    b = _card(source_key="player-0102-L3", role_label="helmet")
+    b["family"] = "player"; b["raw_layer_index"] = 3
+    b["cells"]["whole_atlas_fingerprint"] = "FP_SHARED"
+    c = _card(source_key="player-0103-L3", role_label="helmet")
+    c["family"] = "player"; c["raw_layer_index"] = 3
+    c["cells"]["whole_atlas_fingerprint"] = "FP_UNIQUE"
+
+    decisions = {
+        "player-0100-L3": _decision(a, approved_role="player_helmet_regular"),
+        "player-0102-L3": _decision(b, approved_role="helmet"),  # same pixels, other name
+        "player-0103-L3": _decision(c, approved_role="helmet"),
+    }
+    cards = {"player-0100-L3": a, "player-0102-L3": b, "player-0103-L3": c}
+
+    conflicted = req.conflicted_source_keys(decisions, cards)
+    assert conflicted == {"player-0100-L3", "player-0102-L3"}
+
+    packet = req.build_requirements_packet(decisions, cards)
+    by_key = {r["source_key"]: r for r in packet["requirements"]}
+    assert "role_name_conflict_unresolved" in by_key["player-0100-L3"]["promotion_blockers"]
+    assert "role_name_conflict_unresolved" in by_key["player-0102-L3"]["promotion_blockers"]
+    assert "role_name_conflict_unresolved" not in by_key["player-0103-L3"]["promotion_blockers"]
+    assert packet["summary"]["role_name_conflict_unresolved"] == 2
+
+
 def test_atomic_write_failure_preserves_original_and_cleans_tmp(tmp_path, monkeypatch):
     out = tmp_path / "requirements.json"
     out.write_text("original\n", encoding="utf-8")
