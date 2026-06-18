@@ -64,6 +64,14 @@ class DecisionFingerprintMismatch(Exception):
     no write happens."""
 
 
+class DecisionLoadError(Exception):
+    """Raised when an EXISTING decisions file cannot be loaded faithfully — it is
+    present but unreadable, or it contains a malformed JSON line or a row missing
+    its source_key. Fail closed per canon Law 6 (FL-4162): a reviewed human-verdict
+    owner must never silently drop a decision. A genuinely-ABSENT file is not an
+    error (returns {})."""
+
+
 def card_fingerprint(card: dict) -> str:
     """Stable sha256 over the evidence subset a role decision pins against."""
     subset = {k: card.get(k) for k in _FINGERPRINT_FIELDS}
@@ -122,27 +130,33 @@ def build_decision_record(
 def load_decisions(path: Path | str) -> dict[str, dict]:
     """Read the decisions file, upserting by source_key (later lines win).
 
-    Returns {source_key: record}. Missing/unreadable file -> {}. Malformed lines
-    are skipped, not fatal — a partially-bad file still yields its good rows.
+    Returns {source_key: record}. A genuinely-MISSING file returns {} — there is
+    nothing to lose. But an EXISTING file that is unreadable, or that contains a
+    malformed JSON line or a row missing its source_key, raises DecisionLoadError
+    rather than silently dropping rows (fail closed, canon Law 6 / FL-4162). Silent
+    row loss would let a reviewer's recorded decision vanish with no signal.
     """
     p = Path(path)
     if not p.is_file():
         return {}
-    out: dict[str, dict] = {}
     try:
-        with open(p, "r", encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except ValueError:
-                    continue
-                if isinstance(rec, dict) and rec.get("source_key"):
-                    out[str(rec["source_key"])] = rec
-    except OSError:
-        return {}
+        raw = p.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise DecisionLoadError(f"decisions file present but unreadable: {p} ({exc})") from exc
+    out: dict[str, dict] = {}
+    for lineno, line in enumerate(raw.splitlines(), start=1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except ValueError as exc:
+            raise DecisionLoadError(f"malformed JSON on line {lineno} of {p}: {exc}") from exc
+        if not isinstance(rec, dict) or not rec.get("source_key"):
+            raise DecisionLoadError(
+                f"line {lineno} of {p} is not a decision record (missing source_key)"
+            )
+        out[str(rec["source_key"])] = rec
     return out
 
 

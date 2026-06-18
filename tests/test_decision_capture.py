@@ -235,3 +235,81 @@ def test_upsert_keeps_one_current_record_per_source_key(tmp_path):
     lines = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
     assert len(lines) == 1, "upsert left more than one row for the same source_key"
     assert json.loads(lines[0])["approved_role"] == "revised"
+
+
+# --- fail-closed loading (FL-4162 reviewer Medium finding) -------------------
+
+def test_missing_file_still_returns_empty(tmp_path):
+    """A genuinely-absent file has nothing to lose -> {} (NOT an error)."""
+    path = tmp_path / dc.DECISIONS_FILENAME
+    assert not path.exists()
+    assert dc.load_decisions(path) == {}
+
+
+def test_malformed_jsonl_raises(tmp_path):
+    """An EXISTING file with a malformed JSON line must fail closed, never skip."""
+    path = tmp_path / dc.DECISIONS_FILENAME
+    dc.record_decision(path, _card(), approved_role="bee_body", provenance=PROV)  # one good row
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write("{ this is not valid json\n")
+    with pytest.raises(dc.DecisionLoadError):
+        dc.load_decisions(path)
+
+
+def test_row_missing_source_key_raises(tmp_path):
+    """A structurally-invalid row (valid JSON, no source_key) must fail closed."""
+    path = tmp_path / dc.DECISIONS_FILENAME
+    path.write_text(json.dumps({"approved_role": "bee_body"}) + "\n", encoding="utf-8")
+    with pytest.raises(dc.DecisionLoadError):
+        dc.load_decisions(path)
+
+
+def test_unreadable_present_file_raises(tmp_path, monkeypatch):
+    """A present-but-unreadable file must fail closed, not be read as empty.
+
+    Monkeypatched so the result is deterministic regardless of test-runner uid
+    (chmod 000 does not block root)."""
+    path = tmp_path / dc.DECISIONS_FILENAME
+    dc.record_decision(path, _card(), approved_role="bee_body", provenance=PROV)
+    orig_read_text = Path.read_text
+
+    def boom(self, *a, **k):
+        if Path(self) == path:
+            raise OSError("simulated unreadable file")
+        return orig_read_text(self, *a, **k)
+
+    monkeypatch.setattr(Path, "read_text", boom)
+    with pytest.raises(dc.DecisionLoadError):
+        dc.load_decisions(path)
+
+
+def test_record_decision_blocks_on_corrupt_existing_file(tmp_path):
+    """Writing must not blindly overwrite a corrupt file (which could lose rows);
+    the internal load fails closed and propagates DecisionLoadError."""
+    path = tmp_path / dc.DECISIONS_FILENAME
+    path.write_text("{ not json\n", encoding="utf-8")
+    with pytest.raises(dc.DecisionLoadError):
+        dc.record_decision(path, _card(), approved_role="bee_body", provenance=PROV)
+    # The corrupt file is left as-is, not silently replaced.
+    assert path.read_text(encoding="utf-8") == "{ not json\n"
+
+
+# --- viewer surfaces the load failure (FL-4162) ------------------------------
+
+def test_viewer_panel_surfaces_load_failure_not_none_recorded(tmp_path):
+    st = _state(tmp_path, [_card()])
+    st.decisions_load_error = "malformed JSON on line 2 of decisions.jsonl"
+    text = "\n".join(v._anchor_render_evidence_panel(st))
+    assert "DECISION FILE LOAD FAILED" in text
+    assert "none recorded" not in text  # must NOT pretend the file is valid/empty
+
+
+def test_t_keybind_blocked_when_load_failed(tmp_path):
+    st = _state(tmp_path, [_card()])
+    st.show_evidence = True
+    st.decisions_load_error = "decisions file present but unreadable"
+    cell = [[(0, (0, 0, 0), (0, 0, 0))]]
+    v._handle_anchor_key(st, "t", cell)
+    assert st.prompt_mode == ""  # did not open a capture prompt
+    assert "blocked" in st.status.lower()
+    assert not st.decisions_path.exists()

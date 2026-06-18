@@ -1258,6 +1258,9 @@ class AnchorReviewState:
     decisions: dict = field(default_factory=dict)  # source_key -> decision record
     decision_pending_role: str = ""  # carries role from the role prompt to the note prompt
     decision_card_fp: str | None = None  # fingerprint captured when [t] opened the prompt
+    # FL-4162: set when an EXISTING decisions file failed to load (corrupt/unreadable).
+    # The viewer stays alive but must NOT pretend the file is valid/empty.
+    decisions_load_error: str | None = None
 
     @property
     def skin_asset(self) -> "RawAsset | None":
@@ -1382,6 +1385,15 @@ def _anchor_render_evidence_panel(st: AnchorReviewState) -> list[str]:
     ]
     # FL-4162 step 8: surface any reviewed decision for THIS card beside it.
     # Read-only display; the verdict is authored via the [t] keybind, not here.
+    if getattr(st, "decisions_load_error", None):
+        # FL-4162 Law 6: the decisions file is present but did not load faithfully.
+        # Do NOT show "none recorded" as if the file were valid/empty.
+        lines += [
+            "",
+            _evi_clip("DECISION FILE LOAD FAILED: " + str(st.decisions_load_error), 58),
+            "  (decisions NOT loaded — fix the file; [t] blocked until valid)",
+        ]
+        return lines
     dec = (st.decisions or {}).get(c.get("source_key"))
     if dec:
         lines += [
@@ -2534,6 +2546,8 @@ def _commit_decision(st: AnchorReviewState, approved_role: str, reviewer_note: s
         )
     except decision_capture.DecisionFingerprintMismatch:
         return "Card changed since decision began — write BLOCKED (fail closed)"
+    except decision_capture.DecisionLoadError as exc:
+        return f"Decisions file unreadable/corrupt — write BLOCKED per FL-4162: {exc}"
     except (OSError, ValueError) as exc:
         return f"Decision write failed: {exc}"
     finally:
@@ -2754,6 +2768,9 @@ def _handle_anchor_key(
             st.status = "Decision capture unavailable (module not importable)"
         elif not (st.show_evidence and st.evidence_cards):
             st.status = "Open evidence first ([i]), then [t] to record a decision"
+        elif st.decisions_load_error:
+            # FL-4162 Law 6: do not author onto a file we could not load faithfully.
+            st.status = f"Decisions file load failed — [t] blocked: {st.decisions_load_error}"
         else:
             idx = max(0, min(st.evidence_idx, len(st.evidence_cards) - 1))
             card = st.evidence_cards[idx]
@@ -3146,8 +3163,14 @@ def run_anchor_review(anchor_path: Path, sprite_dir: Path = SPRITE_DIR) -> int:
         st.decisions_path = anchor_path.parent / decision_capture.DECISIONS_FILENAME
         try:
             st.decisions = decision_capture.load_decisions(st.decisions_path)
-        except Exception:
+            st.decisions_load_error = None
+        except Exception as exc:
+            # FL-4162 Law 6: a present-but-corrupt/unreadable decisions file must not
+            # be silently treated as empty. Keep the viewer running, but record the
+            # failure so the panel surfaces it instead of "none recorded".
             st.decisions = {}
+            st.decisions_load_error = str(exc) or exc.__class__.__name__
+            st.status = f"DECISION FILE LOAD FAILED — {st.decisions_load_error}"
 
     # Try to load body map XP from pipeline-v3/output/
     repo_root = Path(__file__).resolve().parents[1]
