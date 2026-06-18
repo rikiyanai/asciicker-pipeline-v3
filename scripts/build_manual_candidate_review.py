@@ -148,6 +148,25 @@ REVIEWED: dict[str, dict] = {
 }
 
 
+def merge_and_write_decisions(path, records: list[dict]) -> dict[str, dict]:
+    """Upsert `records` into the decisions file, FAIL-CLOSED (FL-4162 Law 6).
+
+    Loads existing rows first via decision_capture.load_decisions, which RAISES
+    DecisionLoadError on a present-but-corrupt/unreadable file — the file is left
+    untouched, never overwritten. Rows from earlier review batches that are not in
+    this batch are PRESERVED; each reviewed source_key upserts in place (one row).
+    Writes atomically. Returns the merged {source_key: record}.
+
+    This is the canonical write path: it must not regress the Step 8 loader fix by
+    blindly overwriting from only the current batch.
+    """
+    existing = dc.load_decisions(path)  # fail-closed on corrupt/unreadable present file
+    for rec in records:
+        existing[rec["source_key"]] = rec
+    dc._atomic_write_jsonl(Path(path), [existing[k] for k in sorted(existing)])
+    return existing
+
+
 def _load_cards() -> dict[str, dict]:
     out: dict[str, dict] = {}
     for line in CARDS.read_text(encoding="utf-8").splitlines():
@@ -163,6 +182,7 @@ def _preserved(card: dict) -> dict:
     hand = card.get("hand", {}) or {}
     eng = card.get("engine", {}) or {}
     gly = card.get("glyph_similarity", {}) or {}
+    cel = card.get("cells", {}) or {}
     return {
         "card_id": card.get("card_id"),
         "source_key": card.get("source_key"),
@@ -177,10 +197,21 @@ def _preserved(card: dict) -> dict:
         "hand_note": hand.get("note"),
         "hand_pre_source": hand.get("pre_source"),
         "hand_pre_guess": hand.get("pre_guess"),
-        # preserved evidence
+        # preserved glyph evidence — full records so the packet is self-contained
         "ahsw": card.get("ahsw"),
         "glyph_exact_matches": gly.get("exact_matches", []),
-        "glyph_near_match_count": len(gly.get("near_matches", []) or []),
+        "glyph_near_matches": gly.get("near_matches", []),  # full {cell_delta, key} records
+        "glyph_similarity_scope": gly.get("scope"),
+        # preserved cell evidence — visible glyphs + frame-0 cell positions
+        "visible_glyph_set": cel.get("visible_glyph_set", []),
+        "glyph_count": cel.get("glyph_count"),
+        "atlas_visible_count": cel.get("atlas_visible_count"),
+        "cell_positions": cel.get("cell_positions", []),
+        "cell_positions_truncated": cel.get("cell_positions_truncated"),
+        "frame_wh": cel.get("frame_wh"),
+        "frame_scope": cel.get("frame_scope"),
+        "whole_atlas_fingerprint": cel.get("whole_atlas_fingerprint"),
+        # preserved engine facts
         "engine_fixed_role": eng.get("fixed_role"),
         "engine_is_overlay": eng.get("is_overlay"),
         "engine_overlay_ordinal": eng.get("overlay_ordinal"),
@@ -253,18 +284,25 @@ def main() -> int:
     }
     PACKET.write_text(json.dumps(packet, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    # Write decisions file fresh from the supported reviewed rows (authority:false).
-    ordered = {r["source_key"]: r for r in supported_records}
-    dc._atomic_write_jsonl(DECISIONS, [ordered[k] for k in sorted(ordered)])
+    # Upsert the supported reviewed rows into the decisions file, FAIL-CLOSED
+    # (FL-4162 Law 6): preserves earlier-batch rows and refuses to overwrite a
+    # corrupt/unreadable existing file. Must not regress the Step 8 loader fix.
+    try:
+        merged = merge_and_write_decisions(DECISIONS, supported_records)
+    except dc.DecisionLoadError as exc:
+        print(f"ABORT: existing decisions file is corrupt/unreadable — write blocked "
+              f"(fail closed): {exc}", file=sys.stderr)
+        return 3
 
     print(json.dumps({
         "reviewed": len(packet_rows),
-        "supported_written": len(ordered),
+        "supported_written_this_batch": len(supported_records),
+        "decisions_total_rows": len(merged),
         "unresolved": packet["counts"]["unresolved"],
         "packet": str(PACKET.relative_to(REPO)),
         "decisions": str(DECISIONS.relative_to(REPO)),
         "all_proposal_only": all(r.get("authority") is False and r.get("is_proposal") is True
-                                 for r in supported_records),
+                                 for r in merged.values()),
     }, indent=2))
     return 0
 
