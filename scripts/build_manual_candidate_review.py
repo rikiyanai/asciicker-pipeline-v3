@@ -148,6 +148,91 @@ REVIEWED: dict[str, dict] = {
 }
 
 
+def _norm_label(card: dict) -> str:
+    """Whitespace-normalized hand corrected_label — the cluster key for the reject
+    batch. Cards the human gave the SAME label inherit the SAME proposal."""
+    return " ".join(str((card.get("hand", {}) or {}).get("corrected_label", "") or "").split())
+
+
+# --- Reject-batch verdicts, one per hand-label cluster ----------------------
+# Each cluster is identified by a representative card_id (`rep`); every reject-class
+# card in the same normalized-label group inherits the verdict. Role tokens are read
+# from the human's own words (PLAYER->player/rider torso, HELMET->helmet, sword/shield
+# overlays, BIG BEE->bee_body, ply die body->plydie_body). Uncertain hand prose
+# ("maybe", "idk", "?") stays unresolved and out of the decisions file.
+def _v(rep, roles, support, topology="", contradictions=None, supported=True, unresolved=False):
+    return dict(rep=rep, roles=roles, support=support, topology=topology,
+                contradictions=list(contradictions or []), supported=supported, unresolved=unresolved)
+
+
+REJECT_CLUSTERS = [
+    _v("bigbee-0000-L3", ["rider_torso"],
+       "hand: limbless player torso for big bee mount, made to interchange with sword/shield",
+       "bigbee L3 overlay; 3x3-grid player torso; no armour/helm/arms; rider slice for the bee mount"),
+    _v("bigbee-0102-L2", ["bee_body"],
+       "hand 'BIG BEE MOUNT' + engine L2 base accumulator (consistent with the wrong_guess_reject bigbee L2 set)",
+       "bee as mount; base body layer", ["machine wolf/armor signature does not apply — this is a bee"]),
+    _v("wolfie-0000-L3", ["rider_torso"],
+       "hand: player body for mounted, the mounted overlay/underlay slice for offset",
+       "wolfie L3 overlay; rider player body for the wolf mount"),
+    _v("bigbee-1100-L5", ["helmet"], "hand 'HELMET'", "helmet overlay (bigbee/player)"),
+    _v("bigbee-0101-L4", ["rider_torso", "sword"],
+       "hand 'upper torso holding sword, one arm'", "bigbee L4 overlay; one arm; holding (not swinging) sword"),
+    _v("player-1101-L4", ["helmet"], "hand 'helmet'", "player L4 helmet overlay"),
+    _v("player-0102-L2", ["player_body"],
+       "hand 'PLAYER NO ARMOUR NO HELMET / HAIR NO ARMS'", "player L2 base; no armour/helm/arms"),
+    _v("plydie-0100-L2", ["plydie_body"], "hand 'ply die body'", "plydie L2 base body"),
+    _v("plydie-1110-L3", ["helmet"],
+       "hand uncertain: 'ply die helmet bit maybe or shoulder bit as said before'",
+       "plydie L3 overlay; helmet-vs-shoulder ambiguous", supported=False, unresolved=True),
+    _v("bigbee-0001-L4", ["rider_torso", "sword"],
+       "hand 'PLAYER HOLDING SWORD (NOT SWINGING) ... NO LEGS, JUST UPPER TORSO ... FOR BIG BEE'",
+       "bigbee L4 overlay; upper torso only, no legs, holding sword; rider slice"),
+    _v("plydie-1010-L2", ["plydie_body", "shield"], "hand 'ply die with shield'", "plydie L2 base + shield"),
+    _v("attack-0101-L2", ["player_body"],
+       "hand 'ATACKING WITHOUT THE HELMET (NO HAIR EITHER)'", "attack-anim player body; no helmet/hair"),
+    _v("attack-1101-L2", ["player_body"],
+       "hand 'ATTACKING ANIM WITHOUT HELM/HAIR'", "attack-anim player body; no helm/hair"),
+    _v("bigbee-0111-L6", ["helmet"], "hand 'HELMET BIT'", "bigbee L6 helmet overlay"),
+    _v("attack-1111-L4", ["helmet"], "hand 'HELMET BIT FOR ATTACKING ANIM'", "attack L4 helmet overlay"),
+    _v("attack-1101-L4", ["helmet"], "hand 'HELMET PART FOR ATTACKING ANIM'", "attack L4 helmet overlay"),
+    _v("attack-0111-L3", ["helmet"], "hand 'HELMET PART ONLY'", "attack L3 helmet overlay"),
+    _v("player-1100-L2", ["player_body"], "hand 'PLAYER NO ARMOUR NO HELMET / HAIR'", "player L2 base"),
+    _v("player-0100-L2", ["player_body"],
+       "hand 'PLAYER NO ARMOUR NO HELMET / HAIR missing one shoulder'", "player L2 base; missing one shoulder"),
+    _v("bigbee-0102-L5", ["helmet"], "hand 'helmey' (typo for helmet)", "bigbee L5 helmet overlay"),
+    _v("plydie-0012-L2", ["plydie_body", "shield"],
+       "hand 'play die body with shield no hair/helm (guessing its in another layer)'",
+       "plydie L2 base + shield; hair/helm placed in another layer per hand"),
+    _v("player-0002-L2", ["player_body"],
+       "hand 'player no armour no helmet one single arm missing hip region, idle walk anim'",
+       "player L2 base; one arm, missing hip region; idle walk anim"),
+    _v("player-nude-base-L2", ["player_body"], "hand 'player nude'", "player nude base; no equipment"),
+    _v("plydie-0101-L2", ["plydie_body", "sword"], "hand 'ply die body with sword'", "plydie L2 base + sword"),
+    _v("plydie-0101-L3", ["helmet"], "hand 'ply die helmet bit only'", "plydie L3 helmet overlay"),
+    _v("plydie-1011-L2", ["sword", "shield"],
+       "hand 'ply die sword and shield'",
+       "plydie L2; hand labels equipment only",
+       ["engine 'L2 base accumulator' vs hand equipment-only label — layer may carry equipment not body"]),
+    _v("plydie-0010-L2", ["plydie_body", "shield"], "hand 'ply_die_body with shield'", "plydie L2 base + shield"),
+    _v("plydie-0011-L2", ["plydie_body", "shield", "sword"],
+       "hand 'ply_die_body with shield AND sword'", "plydie L2 base + shield + sword"),
+    _v("plydie-1100-L3", ["helmet"], "hand 'plydie helm'", "plydie L3 helmet overlay"),
+    _v("plydie-1101-L3", ["helmet"],
+       "hand uncertain: 'plydie helmet bit only maybe idk ... it might be the shoulder bit only idk'",
+       "plydie L3 overlay; helmet-vs-shoulder ambiguous", supported=False, unresolved=True),
+    _v("plydie-1001-L3", ["sword"],
+       "hand 'plydie sword bit only for colums 0-3 col 4 is player with sword no armour no helm'",
+       "plydie L3 sword overlay; col 4 differs (player+sword) per hand"),
+    _v("wolfie-0011-L5", ["sword"],
+       "hand 'top partial sword bit only for wolfie (holding sword bit not attacking)'",
+       "wolfie L5 sword overlay; holding, not attacking"),
+    _v("wolfie-1011-L5", ["sword"],
+       "hand 'top sword and shoulder? bit only for wolfie' (sword confident, shoulder uncertain)",
+       "wolfie L5 sword overlay; possible shoulder bit (hand '?')"),
+]
+
+
 def merge_and_write_decisions(path, records: list[dict]) -> dict[str, dict]:
     """Upsert `records` into the decisions file, FAIL-CLOSED (FL-4162 Law 6).
 
@@ -222,15 +307,11 @@ def _preserved(card: dict) -> dict:
 
 def main() -> int:
     cards = _load_cards()
-    missing = [cid for cid in REVIEWED if cid not in cards]
-    if missing:
-        print(f"ERROR: reviewed card_ids absent from cards file: {missing}", file=sys.stderr)
-        return 2
+    reviewed_ids: set[str] = set()
+    packet_rows: list[dict] = []
+    supported_records: list[dict] = []
 
-    packet_rows = []
-    supported_records = []
-    for cid, verdict in REVIEWED.items():
-        card = cards[cid]
+    def apply_verdict(card: dict, verdict: dict) -> None:
         roles = list(verdict["roles"])
         row = _preserved(card)
         row["agent_verdict"] = {
@@ -242,17 +323,43 @@ def main() -> int:
             "topology_note": verdict["topology"],
         }
         packet_rows.append(row)
+        reviewed_ids.add(card["card_id"])
         if verdict["supported"] and not verdict["unresolved"]:
-            rec = dc.build_decision_record(
-                card,
-                approved_role=";".join(roles),
-                composite_roles=roles,
-                provenance=REVIEW_PROVENANCE,
-                topology_note=verdict["topology"],
-                contradictions=verdict["contradictions"],
-                reviewer_note=verdict["support"],
-            )
-            supported_records.append(rec)
+            supported_records.append(dc.build_decision_record(
+                card, approved_role=";".join(roles), composite_roles=roles,
+                provenance=REVIEW_PROVENANCE, topology_note=verdict["topology"],
+                contradictions=verdict["contradictions"], reviewer_note=verdict["support"],
+            ))
+
+    # Batch 1 — card-keyed wrong_guess_reject verdicts.
+    missing = [cid for cid in REVIEWED if cid not in cards]
+    if missing:
+        print(f"ERROR: reviewed card_ids absent from cards file: {missing}", file=sys.stderr)
+        return 2
+    for cid, verdict in REVIEWED.items():
+        apply_verdict(cards[cid], verdict)
+
+    # Batch 2 — reject-class cards, grouped by normalized hand label, one verdict
+    # per cluster (identified by a representative card_id).
+    missing_reps = [cl["rep"] for cl in REJECT_CLUSTERS if cl["rep"] not in cards]
+    if missing_reps:
+        print(f"ERROR: reject cluster reps absent from cards file: {missing_reps}", file=sys.stderr)
+        return 2
+    reject_cards = [c for c in cards.values()
+                    if (c.get("review", {}) or {}).get("queue_class_name") == "reject"]
+    rep_to_verdict = {cl["rep"]: cl for cl in REJECT_CLUSTERS}
+    groups: dict[str, list] = {}
+    for c in reject_cards:
+        groups.setdefault(_norm_label(c), []).append(c)
+    uncovered_reject: list[str] = []
+    for _label, group in groups.items():
+        ids = {c["card_id"] for c in group}
+        cl = next((rep_to_verdict[r] for r in rep_to_verdict if r in ids), None)
+        if cl is None:
+            uncovered_reject.extend(sorted(ids))
+            continue
+        for c in group:
+            apply_verdict(c, cl)
 
     packet_rows.sort(key=lambda r: (r["review_rank"] is None, r["review_rank"]))
 
@@ -262,7 +369,7 @@ def main() -> int:
         qc = (card.get("review", {}) or {}).get("queue_class_name", "?")
         by_class.setdefault(qc, []).append(cid)
     pending = {
-        qc: sorted(c for c in ids if c not in REVIEWED)
+        qc: sorted(c for c in ids if c not in reviewed_ids)
         for qc, ids in sorted(by_class.items())
     }
 
@@ -272,16 +379,20 @@ def main() -> int:
         "is_proposal": True,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "review_kind": "agent_manual_review_of_hand_corpus",
-        "batch": "rejects-first / wrong_guess_reject (mount families first)",
+        "batch": "rejects-first: wrong_guess_reject + reject (mount families first)",
         "counts": {
             "reviewed": len(packet_rows),
             "supported_proposals": len(supported_records),
             "unresolved": sum(1 for r in packet_rows if r["agent_verdict"]["unresolved"]),
         },
+        "uncovered_reject_card_ids": uncovered_reject,
         "pending_by_queue_class": {qc: len(ids) for qc, ids in pending.items()},
         "pending_card_ids": pending,
         "reviewed": packet_rows,
     }
+    if uncovered_reject:
+        print(f"WARNING: {len(uncovered_reject)} reject cards uncovered by any "
+              f"cluster verdict: {uncovered_reject}", file=sys.stderr)
     PACKET.write_text(json.dumps(packet, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # Upsert the supported reviewed rows into the decisions file, FAIL-CLOSED
