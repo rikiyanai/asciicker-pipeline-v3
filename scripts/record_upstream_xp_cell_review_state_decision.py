@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Record one manually reviewed layer-wide FL-4162 cell decision.
-
-This command never infers a semantic role. The reviewer supplies the semantic
-contribution after inspecting the raw layer. It deliberately refuses composite
-segmentation units; those require coordinate-specific review.
-"""
+"""Record one fingerprint-bound manual FL-4162 queue-state decision."""
 from __future__ import annotations
 
 import argparse
@@ -20,79 +15,37 @@ import compare_upstream_xp_cell_contracts as comparison
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_LEDGER = REPO / "docs/research/ascii/semantic_maps/upstream_xp_cell_contract"
 DEFAULT_SIMILARITY = DEFAULT_LEDGER / "similarity_index.json"
-DEFAULT_OUT = DEFAULT_LEDGER / "cell_role_decisions.jsonl"
-SCHEMA = "fl4162.upstream_xp_cell_role_decision.v2"
-
-
-def _compress(
-    by_coordinate: dict[tuple[int, int, int, int], tuple[str, tuple[str, ...]]]
-) -> list[list[Any]]:
-    rows: dict[tuple[int, int, int], list[tuple[int, tuple[str, tuple[str, ...]]]]] = {}
-    for (angle, frame, y, x), assignment in by_coordinate.items():
-        rows.setdefault((angle, frame, y), []).append((x, assignment))
-    out: list[list[Any]] = []
-    for (angle, frame, y), cells in sorted(rows.items()):
-        cells.sort()
-        start = previous = cells[0][0]
-        operation, semantics = cells[0][1]
-        for x, assignment in cells[1:]:
-            if x != previous + 1 or assignment != (operation, semantics):
-                out.append([
-                    angle, frame, y, start, previous - start + 1,
-                    operation, list(semantics),
-                ])
-                start = x
-                operation, semantics = assignment
-            previous = x
-        out.append([
-            angle, frame, y, start, previous - start + 1,
-            operation, list(semantics),
-        ])
-    return out
+DEFAULT_OUT = DEFAULT_LEDGER / "cell_review_state_decisions.jsonl"
 
 
 def build_decision(
-    unit: dict[str, Any], record: dict[str, Any], semantics: list[str],
-    decision_text: str, evidence_refs: list[str], exceptions: list[str],
-    reviewer: str, reviewed_at: str,
+    unit: dict[str, Any], target: str, decision_text: str,
+    evidence_refs: list[str], reviewer: str, reviewed_at: str,
 ) -> dict[str, Any]:
     if unit["decision_state"] != "needs_cell_semantic_confirmation":
         raise queue.ReviewQueueError(
-            f"{unit['review_unit_id']}: layer-wide recorder refuses {unit['decision_state']}"
+            f"{unit['review_unit_id']}: review-state recorder refuses {unit['decision_state']}"
         )
-    semantics = list(dict.fromkeys(value.strip() for value in semantics if value.strip()))
-    if not semantics:
-        raise queue.ReviewQueueError("at least one reviewed semantic contribution is required")
-    cells = comparison.expand_cells(record)
-    assignments = {
-        coordinate: (
-            str(value["render_operation"]),
-            () if value.get("cell_type") == "transparent" else tuple(semantics),
-        )
-        for coordinate, value in cells.items()
-    }
-    operations = sorted({value[0] for value in assignments.values()})
+    if target not in queue.REVIEW_STATE_TARGETS:
+        raise queue.ReviewQueueError(f"invalid review-state target: {target}")
+    if not decision_text.strip() or not evidence_refs:
+        raise queue.ReviewQueueError("review-state decision requires rationale and evidence")
     return {
-        "schema": SCHEMA,
+        "schema": queue.REVIEW_STATE_DECISION_SCHEMA,
         "authority": False,
         "is_proposal": True,
         "review_unit_id": unit["review_unit_id"],
         "source_layer_sha256": unit["source_layer_sha256"],
         "frame_geometry": unit["frame_geometry"],
         "member_source_keys": unit["member_source_keys"],
-        "cell_assignments": _compress(assignments),
-        "composition_review": {
-            "engine_rule": ";".join(operations),
-            "verified_against_upstream_ref": True,
-            "effect_on_l2_accumulator": ";".join(operations),
-        },
-        "exceptions": exceptions,
+        "source_decision_state": "needs_cell_semantic_confirmation",
+        "target_decision_state": target,
         "review_provenance": {
             "reviewer": reviewer,
             "reviewed_at": reviewed_at,
             "evidence_refs": evidence_refs,
             "decision": decision_text,
-            "reviewed_source_key": record["source_key"],
+            "reviewed_source_key": unit["representative_source_key"],
             "reviewed_candidate_role_sets": unit["candidate_role_sets"],
         },
     }
@@ -122,19 +75,15 @@ def atomic_write(path: Path, rows: list[dict[str, Any]]) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-key", required=True)
-    parser.add_argument("--semantic", action="append", required=True)
+    parser.add_argument("--target", choices=sorted(queue.REVIEW_STATE_TARGETS), required=True)
     parser.add_argument("--decision", required=True)
     parser.add_argument("--evidence-ref", action="append", required=True)
-    parser.add_argument("--exception", action="append", default=[])
     parser.add_argument("--reviewer", default="codex_manual_source_review")
-    parser.add_argument("--reviewed-at", default="2026-07-15")
+    parser.add_argument("--reviewed-at", default="2026-07-14")
     parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
     parser.add_argument("--similarity", type=Path, default=DEFAULT_SIMILARITY)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    parser.add_argument(
-        "--review-state-decisions", type=Path,
-        default=queue.DEFAULT_REVIEW_STATE_DECISIONS,
-    )
+    parser.add_argument("--cell-decisions", type=Path, default=queue.DEFAULT_DECISIONS)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -143,11 +92,6 @@ def main(argv: list[str] | None = None) -> int:
             raise queue.ReviewQueueError(f"unknown source key: {args.source_key}")
         similarity = queue.load_similarity(args.similarity, set(records))
         review_doc = queue.build_queue(records, similarity)
-        queue.apply_review_state_decisions(
-            review_doc, queue.load_review_state_decisions(args.review_state_decisions)
-        )
-        existing = queue.load_decisions(args.out)
-        queue.apply_decisions(review_doc, existing, records)
         unit = next(
             (value for value in review_doc["review_units"]
              if args.source_key in value["member_source_keys"]),
@@ -155,17 +99,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         if unit is None:
             raise queue.ReviewQueueError(f"no review unit for {args.source_key}")
+        cell_decisions = queue.load_decisions(args.cell_decisions)
+        if unit["review_unit_id"] in cell_decisions:
+            raise queue.ReviewQueueError(
+                f"{unit['review_unit_id']}: full-cell decision already exists"
+            )
         decision = build_decision(
-            unit, records[args.source_key], args.semantic, args.decision,
-            args.evidence_ref, args.exception, args.reviewer, args.reviewed_at,
+            unit, args.target, args.decision, args.evidence_ref,
+            args.reviewer, args.reviewed_at,
         )
-        merged = dict(existing)
+        merged = queue.load_review_state_decisions(args.out)
         merged[unit["review_unit_id"]] = decision
         final_doc = queue.build_queue(records, similarity)
-        queue.apply_review_state_decisions(
-            final_doc, queue.load_review_state_decisions(args.review_state_decisions)
-        )
-        queue.apply_decisions(final_doc, merged, records)
+        queue.apply_review_state_decisions(final_doc, merged)
+        queue.apply_decisions(final_doc, cell_decisions, records)
         if not args.check:
             atomic_write(args.out, [merged[key] for key in sorted(merged)])
     except (comparison.ComparisonError, queue.ReviewQueueError, OSError) as exc:
@@ -174,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps({
         "recorded_unit": unit["review_unit_id"],
         "member_source_keys": unit["member_source_keys"],
-        "semantic_contributions": args.semantic,
+        "target_decision_state": args.target,
         "coverage": final_doc["coverage"],
     }, indent=2))
     return 0
