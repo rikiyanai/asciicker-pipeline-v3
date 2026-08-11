@@ -13909,12 +13909,13 @@ Audit result:
   narrative decision-exit conditions, human/device blockers, safe resume
   commands, evidence boundaries, and the RQ/gate promotion condition. The
   project `AGENTS.md` carries the required `Maintain operational grounding`
-  behavior contract for successors. The published outer handoff is
-  `1a8d53a2b850f38c1fa0e6e46c001e1850b88e8a` on `origin/main`; the canonical
-  Y9 ledger handoff is `21c0c9c9bb28b4c85bdfff30fe7b80f92a91aab5` on
-  `origin/agent/workbench-wayfinder-handoff-20260812`. At review time, both
-  dirty local checkouts still pointed at their baseline commits, so immutable
-  commit inspection—not the local branch pointer—is the publication proof.
+  behavior contract for successors. The reviewed substantive correction is
+  outer `bd93dee67f2c4126339f4cbf6afda068610e1b0e` on `origin/main` and inner
+  `ac57affda7f73e4ec25470fa685cf95b2117aada` on
+  `origin/agent/workbench-wayfinder-handoff-20260812`; the following receipt
+  commits change only these provenance pointers. At review time, both dirty
+  local checkouts still pointed at their baseline commits, so immutable commit
+  inspection—not the local branch pointer—is the publication proof.
 
 **Stage:** Baseline tagged; mobile salvage audit resolved; Unicode roadmap
 decomposed; grounded planning handoff recorded. Machine-visible execution
