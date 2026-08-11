@@ -13856,3 +13856,59 @@ a consuming path exists.
 | **B4 recents**: color swatches used `input` event → every intermediate picker drag value pushed to recents LRU, filling all 8 slots with transient colors | 🔴 HIGH | B3-B6 bundle | Fixed — `input` → `change` on both fgInput and bgInput |
 | **B5 FBG combos**: 8 canonical pairs hardcoded in JS; diverges from Y9-2 semantic_maps symlink source of truth with no provenance comment | 🟡 MEDIUM | B5 bundle | Noted — added source-path comment inline |
 | **B6 ghost pixel formula**: lacks defensive fallback (`canvas.cellSize || CELL_SIZE`) that the paste interceptor has at line 955 | 🟢 LOW | B6 bundle | Noted — guarded by zero-size check at line 1310; kept in sync by manual review |
+
+---
+
+## Workbench Wayfinder mobile/Unicode roadmap audit baseline — 2026-08-12 06:39:06 JST
+
+Before the FL-4257 roadmap audit, matching annotated safety tags were created in
+both Git owners:
+
+- outer workbench: `safety/2026-08-12-workbench-wayfinder-baseline-20260812T063906+0900`
+  at `f9ca59759fd46828e6cc320428ec7e6132dd4648`;
+- inner Y9 FL: the same tag name at
+  `490d49e83c2c77542ec374f947ab3260a7e73d70`.
+
+The tag annotations record branch, timestamp, dirty-path count, and SHA-256
+fingerprints for porcelain status, staged diff, unstaged diff, and untracked
+paths. The outer worktree had 125 dirty paths and the inner worktree had four.
+Tags anchor committed state only; they do not claim to contain uncommitted
+content. No stash, branch switch, auxiliary worktree, commit, product-file
+mutation, or cleanup was performed. The matching receipt is recorded on
+Y9-2 `FL-4257`; that FL remains the sole Wayfinder roadmap owner.
+
+Audit result:
+
+- `FL-4268` resolved the current-shell salvage question. The task-rooted entry,
+  whole-sheet canvas and shared handlers, draft restoration, pan/scroll ideas,
+  and prior recipes remain diagnostic inputs. The `ws-advanced` legacy
+  dashboard split, Section 2 parity drawers, thirteen-toggle top bar, and
+  coarse-pointer-plus-orientation anchoring are not destination owners.
+- The 2026-08-10 Chromium view-mode artifact reports no errors at its three
+  sampled viewports, but it does not exercise sustained authoring, rotation,
+  resize, soft keyboard, native share, WebKit, or physical Safari. Its 390 px
+  sample records the scroll chrome from x=295.09375 through x=416.09375, beyond
+  the viewport edge.
+- The locally configured Playwright Chromium, WebKit, and Firefox executable
+  paths are all absent. Older headed-WebKit artifacts remain historical
+  evidence; they are not a current executable receipt.
+- The former broad Unicode child was decomposed. `FL-4266` owns semantic cell
+  and editing invariants, `FL-4269` owns deterministic font resolution and
+  rendering, and `FL-4270` owns enhanced-native serialization plus explicit
+  XP/text/ANSI/image/Y9-2 projections. Current code remains CP437-bound:
+  `text-tool.js` iterates UTF-16 code units and masks to eight bits, while
+  `canvas.js` validates and stores only 0..255 glyph values.
+- Updated route: `FL-4263 -> FL-4266 -> (FL-4269 || FL-4270) -> FL-4267 ->
+  FL-4258 -> FL-4264 -> FL-4259 -> FL-4261 -> FL-4260 -> FL-4262`, with
+  `FL-4256` as the picker-specific physical-device dependency. `FL-4268` is
+  resolved research feeding the mobile steps.
+- `FL-4271` is the durable end-to-end execution handoff. It records the owner,
+  safety receipt, current stage of every claim, ordered child exit gates,
+  resume commands, evidence boundaries, and completion semantics. The project
+  `AGENTS.md` now carries the required `Maintain operational grounding`
+  behavior contract for successors. The canonical Y9 ledger commit is
+  `21c0c9c9b` on `agent/workbench-wayfinder-handoff-20260812`.
+
+**Stage:** Baseline tagged; mobile salvage audit resolved; Unicode roadmap
+decomposed; grounded handoff recorded; product implementation and acceptance
+remain open.

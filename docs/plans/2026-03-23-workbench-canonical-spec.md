@@ -1219,6 +1219,12 @@ Decision (inference from sources):
    or a visible status strip.
 6. Context actions on touch use an explicit selection toolbar first. Long-press
    can open the same menu, but long-press is an accelerator, not the only path.
+7. Two-finger scroll is viewport pan. Two active pointers on the canvas pan the
+   viewport; they never paint. The gesture must be available as the primary mobile
+   viewport navigation method. Scroll affordance chrome must not assume users
+   will discover the gesture — any visible scroll controls must be non-blocking:
+   translucent overlays or controls positioned adjacent to the whole-sheet editor
+   zoom bar at the top, not opaque persistent sidebars.
 
 Sources:
 
@@ -1259,6 +1265,11 @@ Decision (inference from sources):
    acceleration only, surfaced only after `beforeinstallprompt`.
 5. Mobile persistence cannot assume desktop-class "save back to same file".
    Final mobile UX must always offer an explicit export/share path.
+6. `Continue Draft` on the mobile first screen is a deliberate product entry,
+   not merely the existing opportunistic restore banner. The workbench already
+   has IndexedDB draft persistence and latest-draft restore plumbing; UQ-013
+   must decide the mobile draft-discovery UX, including whether the first screen
+   exposes only the latest draft or a small recent-drafts chooser.
 
 Sources:
 
@@ -1311,6 +1322,28 @@ Decision (inference from sources):
    `Advanced Workbench` entry. ActorVisualProfile draft controls, TERM++ native
    controls, verification command templates, recorder controls, and source/debug
    panels are not first-screen mobile controls.
+10. Mobile usability precedes broad workbench pruning. UQ-013 may keep the
+    existing desktop workbench available as a fallback/escape hatch, but the
+    default mobile route must open into a responsive landscape-oriented editor
+    shell rather than the current dense dashboard.
+11. Source authoring is not junk-drawer advanced UI. On mobile it belongs in the
+    named `source` drawer from item 3 above, while low-level source-debug output
+    may stay behind Advanced.
+12. Viewport scroll controls must be translucent and/or positioned adjacent to
+    the whole-sheet editor zoom bar at the top of the editor. Persistent opaque
+    scroll bars or directional buttons must not occlude canvas content. Two-finger
+    pan is the primary mobile viewport scroll gesture per §1.9.1:7; visible scroll
+    chrome is a secondary affordance only and must not compete with the canvas
+    for vertical space.
+13. `Export/Share` is not proven by server-side XP export alone. Mobile proof
+    must distinguish: generated XP path, browser download behavior, and native
+    share/download affordance where the platform exposes one. iPad closure must
+    show the user can actually get the exported XP out of the mobile browser.
+14. Desktop/Advanced fallback surfaces are allowed, but they are not mobile
+    parity unless separately proven in mobile mode. ActorVisualProfile draft
+    controls, Verification, TERM++ native launch, Recorder, and hidden/advanced
+    Skin Dock controls must be documented as `Advanced/Desktop fallback` until
+    dedicated mobile proof exists.
 
 Sources:
 
@@ -2530,6 +2563,13 @@ cross-repo baseline and the remaining browser gap are now fixed.
    - session load/save must continue to round-trip
      `mounted_rider_calibration` and `mounted_semantic_review` exactly; these
      artifacts are durable prerequisites, not transient UI-only guesses
+6. U2/U4 placement clarification (2026-06-13):
+   - U2/U4 are required mounted-authoring surfaces, not optional debug controls.
+   - They may move out of the mobile first screen, but only into a named
+     `Mounted Authoring` drawer/panel with the required artifact and explicit
+     confirmation semantics intact.
+   - They must not be hidden in a generic Advanced bucket that makes required
+     S2-R9 work look like diagnostic clutter.
 
 #### 2.5.5 Queue Crosswalk
 
@@ -3283,8 +3323,134 @@ Legacy-step normalization for older references:
 | UQ-010 | PARKED | Finish Y9-2 gateway follow-through on the shared bundle-authoring contract | UQ-004 through UQ-009 passed, or user explicitly reprioritizes it after backend truth is stable | Execute `S2-R10`: wire launcher / bundle-wizard / MCP front doors to the shared Section 2.10 headless contract (`phase0-status`, `phase0-build`, `validate-skin-intake`, `convert-skin-request`, `register-skin-request`, `compile-skin-request`, `validate-xp`, `status`) and remove any surviving second pipeline owner or local CLI substitution from the execution path. | Y9-2 front doors use the same stable bundle-authoring contract that Section 2 and Section 3 already prove | Any fix creates a second pipeline owner, keeps local subprocess behavior alive as parallel truth, or reclassifies missing contract ownership as launcher-only wiring after Section 2.10 defined the shared owner | Section 2.10 / `S2-R10` / B-13 |
 | UQ-011 | PARKED | Public replacement / cutover lane | UQ-003 through UQ-010 passed; user explicitly starts cutover | Run the direct public-parity audit against `rikiworld.com/xpedit`, freeze the exact replacement SHA and proof artifacts, validate the `/xpedit` deploy path, deploy the frozen candidate, and re-run headed proof on the live URL | Public replacement is backed by the same root-hosted, prefixed, and public evidence chain with no unresolved earlier-layer blocker | Any earlier row is still open, any public parity check fails, or cutover is claimed from code state alone | Replacement lane / public parity |
 | UQ-012 | ALWAYS | Canon hygiene and anti-overclaiming | Every non-trivial source/doc/proof change | Keep `PLAYWRIGHT_FAILURE_LOG.md`, this canon spec, and any directly-adjacent proof-summary text aligned. Separate code state, proof state, and doc state explicitly. Reopen rows when live code falsifies an earlier closeout. | Authority docs and live source agree, and no stale completion claim survives a contradiction | A lower-priority note, stale sequence summary, or old "COMPLETE" wording contradicts the current failure log or source | Canon authority / process |
-| UQ-013 | CURRENT | Mobile Open Workbench usability and browser persistence follow-through | UQ-001 complete; mobile XP upload helper has proven file intake but first-screen workbench UX is product-blocking | Implement the Section 1.9 mobile contract as a clean task-rooted mode: `Open XP`, `Continue Draft`, `New From Template`, `Export/Share`, landscape-friendly editor layout, IDs off by default, and a clearly secondary `Advanced Workbench` escape hatch to the existing dense dashboard. Keep dense bundle/AVP/native/proof/source/debug controls out of the mobile first screen. | A real iPad or headed WebKit iPad pass can open/import an XP and reach the editor without navigating the current multi-panel workbench menu; IDs are off by default; export/share remains reachable | Any fix treats successful upload as usability closure, makes portrait/landscape orientation a hard open gate, reopens Section 1 ownership, or hides the required Advanced Workbench escape hatch | Section 1.9 / FL-MOB-01 |
+| UQ-013 | CURRENT | Mobile Open Workbench usability and browser persistence follow-through | UQ-001 complete; mobile XP upload helper has proven file intake but first-screen workbench UX is product-blocking; prune proposal is downstream of this row | Implement the Section 1.9.2/1.9.3 mobile contract as a clean task-rooted mode: `Open XP`, `Continue Draft`, `New From Template`, `Export/Share`, responsive landscape editor shell, portrait open/import/continue sheet with rotate hint, IDs off by default, and a clearly secondary `Advanced Workbench` escape hatch to the existing dense dashboard. Keep dense AVP/native/proof/debug controls out of the mobile first screen; keep source as a named drawer, not generic Advanced. Decide and document the draft-discovery UX before implementation. | A real iPad or headed WebKit iPad pass can open/import an XP, continue an IndexedDB draft through the chosen draft entry, and reach the editor without navigating the current multi-panel workbench menu; landscape editor shell is usable; portrait can open/import/continue and then steer to landscape; IDs are off by default; export/share remains reachable; Advanced Workbench remains reachable as fallback | Any fix treats successful upload as usability closure, makes portrait/landscape orientation a hard open gate, reopens Section 1 ownership, hides the required Advanced Workbench escape hatch, buries source or U2/U4 required surfaces in generic Advanced, or implements prune before mobile usability design is approved | Section 1.9.2 / Section 1.9.3 / FL-MOB-01 |
 | UQ-014 | PARKED | Printable Y9-2 authoring grid paper side feature | UQ-006 source-manifest/template geometry authority stable, or user explicitly reprioritizes a design-only prototype | Build the correct version of the printable grid-paper method from Section 2.6.1 / `FL-PRINT-01`: generate printable HTML/PDF from selected template/XP geometry, with underdrawing, cell grid, semantic boundaries, labels, fiducials, calibration strip, and explicit non-runtime status | Generated paper matches selected template geometry and records provenance; no hardcoded dimensions from the rejected seed artifact survive as authority | Any implementation copies the incorrect `sprite-sheet-full.html` layout as truth, hardcodes stale dimensions, or claims scan/import/runtime integration without a consuming path | S2-PRINT-01 / FL-PRINT-01 |
+
+#### UQ-013 Closure Sequence
+
+Ratified 2026-06-15. Execute in order; each step gates the next.
+
+1. **Mobile design approved** — UQ-013 mobile Open Workbench design (landscape
+   editor shell, portrait import/continue sheet, named drawers, draft-discovery
+   UX) is reviewed and approved before any UI edits begin.
+   *Status 2026-06-15: implemented locally without a separate design-approval
+   gate; the MVP shell (Open XP / Continue Draft / New From Template / Advanced
+   Workbench) landed as an additive overlay. Formal design approval deferred to
+   proof step; no incompatible lock-in.*
+   *Status 2026-06-16: design direction approved by user — Option 2, a dedicated
+   editor-first mobile shell (after session-load the dense dashboard collapses
+   and the whole-sheet editor is the primary surface; dashboard reachable only
+   via Advanced). Implemented and screenshot-proven; real iPad pass still gates
+   final closure.*
+2. **Additive mobile shell** — Implement `Open XP`, `Continue Draft`,
+   `New From Template`, `Export/Share`, and `Advanced Workbench` escape hatch as
+   the task-rooted mobile first screen. `Continue Draft` requires JS wiring to
+   `persistence.mjs` async draft discovery (`listDrafts()` / `loadLatestDraft()`)
+   plus empty-list and error states; this is not a pure HTML/CSS change.
+   *Status 2026-06-15: implemented locally. All dismiss paths gate on session-load
+   success. URL/session-restore path also clears first screen via `loadSession()`
+   success hook. Proof pending.*
+   *Status 2026-06-16: editor-first shell added — `body.ws-session-loaded:not(.ws-advanced)`
+   hides the dense `.wrap` dashboard panels and promotes `#wholeSheetPanel`; a
+   mobile top-bar `Advanced` ⇄ `Editor` toggle (`body.ws-advanced`) is the
+   escape hatch. Debug ID overlay now OFF by default everywhere. Headed-WebKit
+   screenshots captured (`artifacts/2026-06-16-mobile-visual/`).*
+3. **Scroll chrome** — Add visible scroll affordances adjacent to the whole-sheet
+   editor zoom bar (`ws-zoom-row`). Controls must be translucent and must not
+   occlude canvas content. Two-finger pan remains the primary gesture per
+   §1.9.1:7.
+   *Status 2026-06-15: implemented locally. `ws-scroll-chrome` ◄►▲▼ buttons
+   appended to `ws-zoom-row` in `whole-sheet-init.js`. Translucent via CSS;
+   hidden on desktop. Proof pending.*
+   *Status 2026-06-16: visibility breakpoint corrected to
+   `@media (pointer: coarse), (max-width: 1024px)` (covers iPad landscape). A
+   Playwright bounding-box assertion verifies the chrome sits at/above the canvas
+   top edge (non-occlusion). Screenshot proof captured.*
+4. **Portrait/import/continue + landscape hint** — Portrait shows compact
+   open/import/continue sheet with rotate hint after file load. Landscape shows
+   responsive editor shell.
+   *Status 2026-06-15: implemented locally. `#mobileRotateHint` overlay appears
+   in portrait after `ws-session-loaded` is set by `loadSession()`. Proof pending.*
+   *Status 2026-06-16: rotate hint demoted from a full-screen blocker to a slim
+   dismissable banner below the top bar, so the editor canvas is usable in
+   portrait immediately; suppressed in the Advanced dashboard fallback. Landscape
+   shows the editor-first shell at full width. Screenshot proof captured.*
+5. **Headed Playwright mobile proof** — Run headed WebKit iPad emulation
+   confirming open/import, Continue Draft flow, editor reach, IDs off, scroll
+   chrome visible, Advanced Workbench reachable, and representative authoring
+   workflows executable without entering Advanced.
+   *Status 2026-06-15: next required step.*
+   Status 2026-06-16 (see FL-MOB-01 / FL-MOB-02): headed-WebKit proof step
+   is now split into explicit proof classes, not one broad "mobile parity"
+   claim:
+   - Probe #1, drawer reachability: PASS, smoke only. It proves named drawers
+     are present and editor-first without Advanced, not action semantics.
+   - Probe #2, baseline author/export: PASS. Mobile first screen -> template ->
+     tools drawer -> paint/rectangle -> frame add -> save -> export -> XP glyph
+     oracle.
+   - Probe #3, editing parity: PASS. Select, copy, paste, cut, clear, undo,
+     redo, color selection, save, export, and XP glyph/color oracle.
+   - Probe #4, source/import: PASS. PNG upload -> source box -> find sprites ->
+     convert -> editor population -> save -> export -> nonzero XP oracle. This
+     does not prove pixel-faithful glyph/color mapping from the source PNG.
+   - Probe #5, file/session persistence: PASS. URL restore plus IndexedDB
+     Continue Draft restore, native export, and XP glyph/color oracle.
+   - Probe #6, Skin Dock: PASS for local flat preview pipeline readiness.
+     Author -> save -> export -> Test This Skin -> `webbuild.ready === true`.
+     This does not prove authored-skin visual rendering in WASM and does not
+     prove live Y9-2 integration.
+   - Probe #7, desktop unaffected: PASS. Desktop template -> paint -> Save ->
+     Export -> XP oracle with mobile chrome absent.
+   Headed-WebKit screenshots across portrait+landscape × fresh/template/
+   advanced/tools-drawer plus desktop-unchanged are captured at
+   `artifacts/2026-06-16-mobile-visual/`. Note: all probes are WebKit
+   automation/emulation, not a physical device; step 6 still required.
+6. **Real iPad proof** — Confirm the same flows on a real iPad before UQ-013
+   is declared satisfied.
+   *Status 2026-06-16: pending. This is the only hard closure gate for
+   UQ-013, but the physical-device pass must include the proof-boundary gaps
+   from FL-MOB-01: first-screen Open XP with a real `.xp` file, mobile
+   Export/Share behavior, representative frame operations beyond Add Frame,
+   representative layer/tool drawer operations beyond the editing recipe, and
+   gesture/scroll discoverability in Safari.*
+
+Broad workbench pruning (AVP, Skin Dock cleanup, hidden button removal) is
+downstream of UQ-013 proof, not merely code landing. As of 2026-06-16 the headed
+proof step (step 5) is satisfied only within the explicit boundaries above
+(FL-MOB-01 / FL-MOB-02). The prune proposal Implementation Order remains blocked
+until the real iPad proof (step 6) and user sign-off close UQ-013.
+
+#### 1.9.4 Wayfinder ownership correction — 2026-08-12
+
+`asciicker-Y9-2` `FL-4257` is the sole cross-repository roadmap owner for the
+canonical enhanced Section 1 editor. `UQ-013`, `FL-MOB-01`, and `FL-MOB-02`
+remain historical implementation/proof records beneath that map; they do not
+own the future editor architecture or authorize the legacy workbench dashboard
+to remain a second document/control owner.
+
+The current mobile shell is diagnostic input, not the accepted composition.
+Reusable inputs and rejected ownership are recorded in resolved research child
+`FL-4268`. The future control surface must reanchor the same commands and state
+from usable canvas/control geometry. Coarse-pointer detection and orientation
+may inform measurements, but cannot select a phone/tablet product architecture
+by themselves. Current Chromium screenshots and recipes do not satisfy
+continuous-authoring, WebKit, or physical-iPad acceptance.
+
+Full Unicode authoring is also roadmap work, not current behavior. The active
+editor still stores CP437-style 0..255 glyph indices; JavaScript string input,
+the XP uint32 field, and a large glyph palette are not a canonical Unicode cell
+model. `FL-4266` owns semantic cell/edit invariants, `FL-4269` owns deterministic
+font resolution/rendering, and `FL-4270` owns enhanced-native persistence plus
+explicit lossless/constrained/lossy compatibility projections. No source,
+storage, or UI implementation may precede those decisions or silently redefine
+REXPaint XP and Y9-2 runtime glyph semantics.
+
+Current route:
+`FL-4263 -> FL-4266 -> (FL-4269 || FL-4270) -> FL-4267 -> FL-4258 ->
+FL-4264 -> FL-4259 -> FL-4261 -> FL-4260 -> FL-4262`, with `FL-4256` as the
+picker-specific physical-device dependency. Resolved task child `FL-4271` is
+the execution handoff for this route and incorporates the project `AGENTS.md`
+`Maintain operational grounding` contract.
 
 Future after current skin-authoring closure:
 
