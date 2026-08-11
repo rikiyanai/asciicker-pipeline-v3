@@ -13898,17 +13898,25 @@ Audit result:
   XP/text/ANSI/image/Y9-2 projections. Current code remains CP437-bound:
   `text-tool.js` iterates UTF-16 code units and masks to eight bits, while
   `canvas.js` validates and stores only 0..255 glyph values.
-- Updated route: `FL-4263 -> FL-4266 -> (FL-4269 || FL-4270) -> FL-4267 ->
-  FL-4258 -> FL-4264 -> FL-4259 -> FL-4261 -> FL-4260 -> FL-4262`, with
-  `FL-4256` as the picker-specific physical-device dependency. `FL-4268` is
-  resolved research feeding the mobile steps.
-- `FL-4271` is the durable end-to-end execution handoff. It records the owner,
-  safety receipt, current stage of every claim, ordered child exit gates,
-  resume commands, evidence boundaries, and completion semantics. The project
-  `AGENTS.md` now carries the required `Maintain operational grounding`
-  behavior contract for successors. The canonical Y9 ledger commit is
-  `21c0c9c9b` on `agent/workbench-wayfinder-handoff-20260812`.
+- The current research frontiers are `FL-4263` and `FL-4266`; they may proceed
+  independently. `FL-4269` and `FL-4270` wait on `FL-4266`. `FL-4267` waits on
+  `FL-4263`, resolved `FL-4265`, and the resolved Unicode contracts. The
+  remaining route is `FL-4258 -> FL-4264 -> FL-4259 -> FL-4261 -> FL-4260 ->
+  (FL-4262 plus FL-4256)`. `FL-4268` is resolved research feeding the mobile
+  steps.
+- `FL-4271` is the durable Wayfinder planning handoff, not yet a tracked E2E
+  execution runbook. It records the owner, safety receipt, dependency graph,
+  narrative decision-exit conditions, human/device blockers, safe resume
+  commands, evidence boundaries, and the RQ/gate promotion condition. The
+  project `AGENTS.md` carries the required `Maintain operational grounding`
+  behavior contract for successors. The published outer handoff is
+  `1a8d53a2b850f38c1fa0e6e46c001e1850b88e8a` on `origin/main`; the canonical
+  Y9 ledger handoff is `21c0c9c9bb28b4c85bdfff30fe7b80f92a91aab5` on
+  `origin/agent/workbench-wayfinder-handoff-20260812`. At review time, both
+  dirty local checkouts still pointed at their baseline commits, so immutable
+  commit inspection—not the local branch pointer—is the publication proof.
 
 **Stage:** Baseline tagged; mobile salvage audit resolved; Unicode roadmap
-decomposed; grounded handoff recorded; product implementation and acceptance
-remain open.
+decomposed; grounded planning handoff recorded. Machine-visible execution
+gates, RQ projection, product implementation, execution, verification, and
+acceptance remain open.

@@ -3445,12 +3445,16 @@ explicit lossless/constrained/lossy compatibility projections. No source,
 storage, or UI implementation may precede those decisions or silently redefine
 REXPaint XP and Y9-2 runtime glyph semantics.
 
-Current route:
-`FL-4263 -> FL-4266 -> (FL-4269 || FL-4270) -> FL-4267 -> FL-4258 ->
-FL-4264 -> FL-4259 -> FL-4261 -> FL-4260 -> FL-4262`, with `FL-4256` as the
-picker-specific physical-device dependency. Resolved task child `FL-4271` is
-the execution handoff for this route and incorporates the project `AGENTS.md`
-`Maintain operational grounding` contract.
+Current dependency route: `FL-4263` and `FL-4266` are independent research
+frontiers. `FL-4269` and `FL-4270` wait on `FL-4266`; `FL-4267` waits on
+`FL-4263`, resolved `FL-4265`, and all resolved Unicode contracts. The remaining
+default route is `FL-4258 -> FL-4264 -> FL-4259 -> FL-4261 -> FL-4260 ->
+(FL-4262 plus FL-4256)`. Resolved task child `FL-4271` is the Wayfinder planning
+handoff for this route and incorporates the project `AGENTS.md` `Maintain
+operational grounding` contract. It is not a tracked E2E execution runbook:
+that label requires later RQ projection with named owners, machine-visible
+required fields, exact commands and environments, artifact destinations,
+falsifiers, rollback boundaries, and acceptance criteria.
 
 Future after current skin-authoring closure:
 
