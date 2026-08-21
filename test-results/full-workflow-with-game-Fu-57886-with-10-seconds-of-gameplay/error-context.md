@@ -1,0 +1,333 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - text: 1 banner
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - generic [ref=e6]: PRE-ALPHA, PLEASE REPORT ANY BUGS
+          - generic [ref=e7]: Workbench and the embedded XPEdit are still under active development. Expect rough edges. If something feels confusing, slow, or broken, treat that as a bug.
+        - button "Report Bug" [ref=e8] [cursor=pointer]
+    - 'heading "Asciicker XPEdit Session: idle" [level=1] [ref=e9]'
+    - generic [ref=e10]:
+      - text: 2 guide
+      - heading "Getting Started" [level=3] [ref=e11]
+      - list [ref=e12]:
+        - listitem [ref=e13]:
+          - strong [ref=e14]: Create session geometry
+          - text: — either select a template and click
+          - strong [ref=e15]: Apply Template
+          - text: ", or set classic geometry in"
+          - strong [ref=e16]: Session Ops
+          - text: and click
+          - strong [ref=e17]: New XP
+          - text: .
+        - listitem [ref=e18]:
+          - strong [ref=e19]: Add your art
+          - text: — click
+          - strong [ref=e20]: Upload PNG
+          - text: to import a sprite sheet, or
+          - strong [ref=e21]: Import XP
+          - text: to load a REXPaint file.
+        - listitem [ref=e22]:
+          - strong [ref=e23]: Edit
+          - text: — click
+          - strong [ref=e24]: Focus Whole-Sheet
+          - text: or double-click any frame tile to open the XPEdit cell editor.
+        - listitem [ref=e25]:
+          - strong [ref=e26]: Test
+          - text: — click
+          - strong [ref=e27]: Test This Skin
+          - text: to preview your skin running in the game engine below.
+        - listitem [ref=e28]:
+          - strong [ref=e29]: Export
+          - text: — click
+          - strong [ref=e30]: Save
+          - text: to store your session, or
+          - strong [ref=e31]: Export XP
+          - text: to download the finished .xp file.
+    - text: 3 runtime-preflight 3b draft-restore
+    - generic [ref=e32]:
+      - generic [ref=e33]:
+        - text: 4 template
+        - heading "Template" [level=3] [ref=e34]
+        - generic [ref=e35]:
+          - generic [ref=e36]: Template
+          - combobox "Template" [ref=e37]:
+            - option "Player Skin (Idle Only)" [selected]
+            - option "Player Skin (Full Bundle)"
+          - button "Apply Template" [ref=e38] [cursor=pointer]
+          - generic [ref=e39]: Classic (single XP)
+        - generic [ref=e40]:
+          - text: Choose a template, then click
+          - strong [ref=e41]: Apply Template
+          - text: . Use
+          - strong [ref=e42]: Player Skin (Full Bundle)
+          - text: "for the 3-action workflow: fill each action tab,"
+          - strong [ref=e43]: Save
+          - text: or
+          - strong [ref=e44]: Export XP
+          - text: ", then click"
+          - strong [ref=e45]: Test Bundle Skin
+          - text: when all required actions are ready.
+      - generic [ref=e46]:
+        - text: 4b domain-variation
+        - heading "Domain + Variation Chooser (RenderPlanTable)" [level=3] [ref=e47]
+        - generic [ref=e48]:
+          - generic [ref=e49]:
+            - generic [ref=e50]: Domain
+            - combobox "Domain" [ref=e51]:
+              - option "Skin (body family)" [selected]
+              - option "Wearable (armor/clothing)"
+              - option "Weapon (held item)"
+              - option "Shield (off-hand)"
+              - option "Mount (rideable)"
+          - generic [ref=e52]:
+            - generic [ref=e53]: Presentation Kind
+            - combobox "Presentation Kind" [ref=e54]:
+              - option "Idle / Walk" [selected]
+              - option "Attack"
+              - option "Death"
+          - generic [ref=e55]:
+            - generic [ref=e56]: Variation
+            - combobox "Variation" [ref=e57]:
+              - option "Default" [selected]
+              - option "Crossbow Attack"
+              - option "Sword Attack"
+              - option "Shield Bash"
+              - option "Mounted Idle"
+              - option "Mounted Attack"
+          - button "Create ActorVisualProfile" [ref=e59] [cursor=pointer]
+        - generic [ref=e61]:
+          - strong [ref=e62]: "What this does:"
+          - text: Creates an ActorVisualProfile JSON that defines which layers belong to which slots for this specific (domain, presentation_kind, variation) combination. This profile is then compiled into a RenderPlan row by the RenderPlanTable compiler.
+        - generic [ref=e63]:
+          - strong [ref=e64]: "Domain:"
+          - text: What kind of visual object you're authoring (skin, wearable, weapon, shield, mount).
+          - strong [ref=e65]: "Presentation Kind:"
+          - text: What the actor is DOING (idle_walk, attack, plydie).
+          - strong [ref=e66]: "Variation:"
+          - text: Specific geometry/state variant (default, crossbow_attack, mounted_idle, etc.).
+          - text: Crossbow and mounted are NOT special cases — they're explicit variation dimensions.
+    - generic [ref=e68]:
+      - text: 5 session-ops
+      - heading "Session Ops" [level=3] [ref=e69]
+      - generic [ref=e70]:
+        - button "Load From Job" [ref=e71] [cursor=pointer]
+        - button "Save" [disabled] [ref=e72]
+        - button "Export XP" [disabled] [ref=e73]
+        - button "New XP" [ref=e74] [cursor=pointer]
+        - button "Undo" [disabled] [ref=e75]
+        - button "Redo" [disabled] [ref=e76]
+        - button "Choose File" [ref=e77]
+        - button "Import XP" [ref=e78] [cursor=pointer]
+        - button "Open File" [ref=e79] [cursor=pointer]
+        - button "Save to File" [disabled] [ref=e80]
+        - button "Save File As" [disabled] [ref=e81]
+      - generic [ref=e82]:
+        - generic [ref=e83]:
+          - generic [ref=e84]: Angles
+          - spinbutton [ref=e85]: "8"
+        - generic [ref=e86]:
+          - generic [ref=e87]: Frames
+          - textbox "e.g. 3 or 1,8" [ref=e88]: "9"
+        - generic [ref=e89]:
+          - generic [ref=e90]: Source Projs
+          - combobox [ref=e91]:
+            - option "1" [selected]
+            - option "2"
+        - generic [ref=e92]:
+          - generic [ref=e93]: Cell W
+          - spinbutton [ref=e94]: "7"
+        - generic [ref=e95]:
+          - generic [ref=e96]: Cell H
+          - spinbutton [ref=e97]: "10"
+        - button "Use Auto-Plan" [ref=e98] [cursor=pointer]
+        - generic [ref=e99]: New XP will create 126x80 (8 angles · frames 9 · source projs 1 · cell 7x10).
+      - generic [ref=e100]: Upload ready
+    - group [ref=e101]:
+      - text: 6 recorder
+      - generic "Recorder" [ref=e102]
+    - generic [ref=e104]:
+      - text: 7 upload-convert
+      - heading "Upload + Convert (Workbench Direct)" [level=3] [ref=e105]
+      - generic [ref=e106]:
+        - button "Choose File" [ref=e107]
+        - button "Upload PNG" [active] [ref=e108] [cursor=pointer]
+        - button "Convert to XP" [disabled] [ref=e109]
+      - generic [ref=e110]:
+        - generic [ref=e111]:
+          - generic [ref=e112]: Name
+          - textbox [ref=e113]: wb_sprite
+        - generic [ref=e114]:
+          - generic [ref=e115]: Glyph Mode
+          - combobox [ref=e116]:
+            - option "Geometric (fast, half-blocks)" [selected]
+            - option "Rich (CP437 font-mask matching)"
+        - generic [ref=e117]:
+          - generic [ref=e118]: Auto Plan
+          - generic [ref=e119]: Derived automatically from the uploaded PNG at convert time.
+      - generic [ref=e120]:
+        - text: 7A convert-json
+        - generic [ref=e122]: "{ \"height\": 32, \"sha256\": \"b8a27adfc49d1f366af97c73d60d3db3f3dcccf6b1739e02d0740dead12be85d\", \"source_path\": \"/Users/r/Downloads/asciicker-pipeline-v3/data/uploads/13c81f49-e9ad-47af-99f5-d40481e08586.png\", \"upload_id\": \"13c81f49-e9ad-47af-99f5-d40481e08586\", \"width\": 32 }"
+    - generic [ref=e123]:
+      - generic [ref=e125]:
+        - text: 8 source
+        - heading "Source Panel" [level=3] [ref=e126]
+        - generic [ref=e127]:
+          - button "Select" [ref=e128] [cursor=pointer]
+          - button "Draw Box" [ref=e129] [cursor=pointer]
+          - button "Drag Row" [ref=e130] [cursor=pointer]
+          - button "Drag Column" [ref=e131] [cursor=pointer]
+          - button "Vertical Cut" [ref=e132] [cursor=pointer]
+          - button "Delete Box" [ref=e133] [cursor=pointer]
+          - button "Find Sprites" [ref=e134] [cursor=pointer]
+          - generic [ref=e135]:
+            - checkbox "Rapid Add" [ref=e136]
+            - text: Rapid Add
+          - generic [ref=e137]: Threshold
+          - spinbutton [ref=e138]: "48"
+          - generic [ref=e139]: Min Size
+          - spinbutton [ref=e140]: "8"
+        - generic [ref=e141]:
+          - generic [ref=e142]: 8A Source Zoom
+          - slider "8A Source Zoom" [ref=e143]: "1"
+          - generic [ref=e144]: 1x
+        - generic [ref=e145]: "Mode: Select. Click sprite box to select; drag to move; drag handles to resize."
+        - generic [ref=e146]: 8A source-view
+        - generic [ref=e149]: sprites_detected=0 selected=0 cutsV=0
+      - generic [ref=e151]:
+        - text: 9 grid
+        - heading "Grid Panel" [level=3] [ref=e152]
+        - generic [ref=e153]:
+          - button "Row Up" [disabled] [ref=e154]
+          - button "Row Down" [disabled] [ref=e155]
+          - button "Col Left" [disabled] [ref=e156]
+          - button "Col Right" [disabled] [ref=e157]
+          - button "Add Frame" [disabled] [ref=e158]
+          - button "Clear Selected" [disabled] [ref=e159]
+          - button "Delete Frame" [disabled] [ref=e160]
+          - button "Focus Whole-Sheet" [disabled] [ref=e161]
+        - generic [ref=e162]:
+          - generic [ref=e163]: Active Layer
+          - combobox [ref=e164]
+          - generic [ref=e165]: "Select a frame tile, then click `Focus Whole-Sheet` (or double-click a frame tile)."
+        - generic [ref=e166]:
+          - generic [ref=e167]: 9A Frame Nav Zoom
+          - slider "9A Frame Nav Zoom" [ref=e168]: "0"
+          - generic [ref=e169]: Fit (1x)
+          - button "IDs" [ref=e170] [cursor=pointer]
+        - generic [ref=e171]:
+          - text: 9A frame-nav
+          - heading "Frame Navigation" [level=4] [ref=e172]
+          - generic [ref=e173]:
+            - text: 9B grid-panel
+            - generic "Select South row (1 frame slots)" [ref=e174] [cursor=pointer]:
+              - generic "Drag to reorder row" [ref=e175]
+              - generic [ref=e176]:
+                - generic [ref=e177]: Row 0
+                - generic [ref=e178]: South
+            - generic "Angle 0 (South), Frame 0" [ref=e179] [cursor=pointer]
+    - text: 10 whole-sheet
+    - generic [ref=e182]:
+      - text: 11 animation-metadata
+      - heading "Animation + Metadata" [level=3] [ref=e183]
+      - generic [ref=e184]:
+        - generic [ref=e185]: Row Category
+        - combobox [ref=e186]:
+          - option "idle" [selected]
+          - option "walk"
+          - option "attack"
+          - option "hurt"
+          - option "death"
+          - option "custom"
+        - button "Assign Row Category" [disabled] [ref=e187]
+      - generic [ref=e188]:
+        - generic [ref=e189]: Frame Group Name
+        - textbox [ref=e190]: group_1
+        - button "Assign Selected Frames" [disabled] [ref=e191]
+      - button "Apply Frame Groups to Metadata" [ref=e193] [cursor=pointer]
+      - heading "Frame Jitter" [level=4] [ref=e194]
+      - generic [ref=e195]:
+        - generic [ref=e196]: Align
+        - combobox [ref=e197]:
+          - option "Bottom Center" [selected]
+          - option "Bottom Left"
+          - option "Top Left"
+          - option "Center"
+        - generic [ref=e198]: Reference
+        - combobox [ref=e199]:
+          - option "First Selected" [selected]
+          - option "Median (Selected)"
+        - button "Auto Align Selected" [disabled] [ref=e200]
+        - button "Auto Align Row" [disabled] [ref=e201]
+      - generic [ref=e202]:
+        - generic [ref=e203]: Row
+        - spinbutton [ref=e204]: "0"
+        - generic [ref=e205]: Step
+        - spinbutton [ref=e206]: "1"
+        - button "←" [disabled] [ref=e207]
+        - button "→" [disabled] [ref=e208]
+        - button "↑" [disabled] [ref=e209]
+        - button "↓" [disabled] [ref=e210]
+        - generic [ref=e211]: "Keys: `W/A/S/D` or `Option` + arrows to nudge selected frames"
+      - generic [ref=e212]: Select one or more grid frames on a row to align/nudge jitter.
+      - heading "Mounted Review" [level=4] [ref=e213]
+      - generic [ref=e214]:
+        - button "U2 Calibrate Overlay" [disabled] [ref=e215]
+        - button "U4 Review Semantics" [disabled] [ref=e216]
+    - generic [ref=e220]:
+      - generic [ref=e221]:
+        - text: 12 xp-preview
+        - heading "XP Preview" [level=3] [ref=e222]
+        - generic [ref=e223]:
+          - button "Play" [ref=e224] [cursor=pointer]
+          - button "Stop" [ref=e225] [cursor=pointer]
+          - generic [ref=e226]: FPS
+          - spinbutton [ref=e227]: "8"
+          - generic [ref=e228]: Direction
+          - spinbutton [ref=e229]: "0"
+      - generic [ref=e231]:
+        - text: 13 session
+        - heading "Session" [level=3] [ref=e232]
+    - generic [ref=e235]:
+      - text: 14 skin-test-dock
+      - heading "Skin Test Dock (Term++ Skin Equiv on asciid)" [level=3] [ref=e236]
+      - generic [ref=e237]:
+        - button "Test This Skin" [disabled] [ref=e238]
+        - button "Upload Skin" [ref=e239] [cursor=pointer]
+        - generic [ref=e240]: Webbuild not loaded
+      - generic [ref=e241]: "`Test This Skin` exports the current Workbench XP and loads it into the flat test arena. `Upload Skin` loads an external `.xp` into the same flat test arena. Both use the deterministic test path."
+    - generic [ref=e242]:
+      - generic [ref=e243]:
+        - text: 16 verification
+        - heading "Verification (Term++ / QA)" [level=3] [ref=e244]
+        - generic [ref=e245]:
+          - generic [ref=e246]: Profile
+          - combobox [ref=e247]:
+            - option "Local XP Sanity (Built-in)" [selected]
+            - option "Custom Term++ Command"
+            - option "Legacy verify_e2e.py (Experimental)"
+          - generic [ref=e248]: Timeout
+          - spinbutton [ref=e249]: "20"
+          - button "Run Verification" [disabled] [ref=e250]
+          - button "Dry Run" [disabled] [ref=e251]
+        - generic [ref=e252]:
+          - generic [ref=e253]: Command Template
+          - textbox "Built-in verifier does not require a command template" [disabled] [ref=e254]
+        - generic [ref=e255]: "Built-in verifier: exports current session XP and checks XP structure/geometry/non-empty visual cells. Use this for quick regressions."
+      - generic [ref=e258]:
+        - text: 17 export-tools
+        - heading "Export" [level=3] [ref=e259]
+        - generic [ref=e260]: Export always writes current edited state.
+        - generic [ref=e261]:
+          - button "Launch Desktop XP Tool (Optional)" [disabled] [ref=e262]
+          - generic [ref=e263]: "Export an `.xp` to generate XP tool command."
+        - generic [ref=e264]:
+          - button "Export Authoring Artifact" [ref=e265] [cursor=pointer]
+          - generic [ref=e266]: Export structured JSON with ActorVisualProfile, source refs, quality gates.
+    - text: 18 inspector 15 native-termpp
+  - button "show IDs" [ref=e268] [cursor=pointer]
+```

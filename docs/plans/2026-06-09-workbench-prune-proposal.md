@@ -9,6 +9,11 @@ Goal: make `/xpedit/workbench` honest and task-oriented while Y9-2
 ActorVisualProfile refactor and pipeline-v3 authoring remain only partially
 connected.
 
+2026-06-13 routing correction: this proposal is downstream of UQ-013 mobile
+usability. Do not implement broad pruning until the mobile Open Workbench design
+is approved. The immediate product blocker is iPad/mobile open -> edit -> export
+usability, not AVP/Skin Dock cleanup.
+
 ## Current Truth
 
 - The proven pipeline-v3 path is legacy `BundleSession` -> export/web-skin
@@ -33,11 +38,15 @@ Mobile rule: the mobile root is a clean `Open Workbench` / editor mode, not the
 current dense dashboard. `Open XP`, `Continue Draft`, `New From Template`, and
 `Export/Share` are first-screen tasks. `Advanced Workbench` must remain visibly
 available as an escape hatch for existing power/debug flows, but it is secondary.
-Frame IDs / `Show IDs` are off by default on mobile and desktop.
+Frame IDs / `Show IDs` are off by default on mobile and desktop. In landscape,
+the target is a responsive REXPaint-like editor shell around the current editor
+capability; in portrait, the target is an open/import/continue sheet plus rotate
+hint after load.
 
 ## Canon Routing
 
-- Canon spec §1.9.1 owns the mobile/touch/open-workbench requirements.
+- Canon spec §1.9.1 owns touch interaction, §1.9.2 owns browser persistence and
+  drafts, and §1.9.3 owns mobile layout/open-workbench requirements.
 - Canon spec §2 owns wrapper honesty, mounted/bundle/AVP boundaries, and the
   printable authoring grid paper side feature.
 - Unified Queue owns robot-sized execution order: `UQ-013` for mobile workbench
@@ -45,11 +54,13 @@ Frame IDs / `Show IDs` are off by default on mobile and desktop.
 - `PLAYWRIGHT_FAILURE_LOG.md` owns observed failures, proof state, and blockers:
   `FL-MOB-01`, `FL-DOC-ROUTE-01`, `FL-PRINT-01`, and the `FL-BA-*` audit rows.
 - This proposal owns UI pruning scope and pre-edit safeguards only. It is not a
-  third active authority doc.
+  third active authority doc, and it is not allowed to outrun UQ-013 mobile
+  usability design.
 
 ## Preconditions Before UI Edits
 
-1. Registry error behavior must be specified and tested.
+1. Registry error behavior must be audited and tested against the existing
+   canon/API contract.
    `/api/workbench/templates` returns 503 with `registry_status.load_error`
    when `config/template_registry.json` is missing or malformed. A dynamic
    template select must fail closed with an operator-visible degraded-state
@@ -57,15 +68,14 @@ Frame IDs / `Show IDs` are off by default on mobile and desktop.
    registry states; an absent registry must not silently render an empty
    template list as if no templates are authorable.
 
-2. `mounted_native_full` reachability must be checked before implementation is
-   described as missing.
+2. Template select reachability must be fixed at the HTML/UI layer.
    The registry already marks `mounted_native_full`, `wolfie`, and `wolack` as
    authorable and `workbench-template-gating.js` already has registry-driven
-   action gating. The open question is whether the hardcoded HTML select is the
-   only blocker or whether applying the mounted template fails later. Required
-   preflight: run a browser/API walkthrough that selects or injects
-   `mounted_native_full`, applies the template, and records whether bundle tabs,
-   blank sessions, save/export, and Skin Dock preview behave honestly.
+   action gating. The known blocker is that `web/workbench.html` hardcodes the
+   template select and omits `mounted_native_full`. Required preflight after
+   dynamic population: select `mounted_native_full`, apply the template, and
+   record whether bundle tabs, blank sessions, save/export, and Skin Dock preview
+   behave honestly.
 
 3. Hidden button deletion requires a null-guard audit first.
    Before deleting `webbuildApplyInPlaceBtn`, `webbuildApplyRestartBtn`, or the
@@ -78,12 +88,23 @@ Frame IDs / `Show IDs` are off by default on mobile and desktop.
    Moving ActorVisualProfile controls into an Advanced drawer is not enough.
    The drawer itself must state that pipeline-v3 exports a draft artifact and
    latest Y9-2 production compilation does not consume authored profile JSON.
+   Open design question: because AVP IDs are currently non-deterministic or
+   hardcoded, the UI may need to be hidden entirely until a real bridge exists,
+   rather than merely relabeled.
 
 5. Skin Dock language must not imply live Y9-2 game integration.
    Skin Dock preview is a local workbench/runtime preview path. It may use
    Y9-2-derived assets, but it is not proof that the authored content is wired
    into the live multiplayer/server ActorVisualProfile path. The control label,
    status text, and proof docs must keep that boundary explicit.
+
+6. The mobile first screen is not a pure HTML/CSS change.
+   `Continue Draft` requires JS wiring to `persistence.mjs` async draft
+   discovery. The expected call path is `listDrafts()` / `loadLatestDraft()` or
+   equivalent, plus explicit empty-list and error states. Do not treat the
+   mobile first screen as a layout-only task; draft-discovery wiring is a
+   precondition for the `Continue Draft` entry to be honest rather than a
+   placeholder.
 
 ## Proposed First Screen
 
@@ -113,6 +134,16 @@ Frame IDs / `Show IDs` are off by default on mobile and desktop.
    - Contains draft AVP, native, verification, recorder, source/debug, and other
      non-root controls.
 
+6. Source
+   - Named drawer, not generic Advanced.
+   - Contains source helper workflows allowed by canon §1.9.3.
+   - Low-level source diagnostics may still live in Advanced.
+
+7. Mounted Authoring
+   - Named drawer/panel for U2/U4 calibration and semantic review.
+   - Required S2-R9 surface, not optional debug UI.
+   - Must preserve artifact-backed proposal/confirmation semantics.
+
 ## Hide Or Remove
 
 Remove from DOM unless a validated product path needs them:
@@ -124,12 +155,15 @@ Remove from DOM unless a validated product path needs them:
 Move behind Advanced:
 
 - Domain + Variation / ActorVisualProfile controls
-- Mounted U2/U4 calibration/review controls
 - TERM++ native launch/stream controls
 - Verification command template controls
 - UI recorder
-- Source slicing/debug panels
 - Legacy inspector palette/tool panel
+
+Move behind named drawers, not generic Advanced:
+
+- Source slicing helpers -> `Source`
+- Mounted U2/U4 calibration/review controls -> `Mounted Authoring`
 
 ## Relabel
 
@@ -145,18 +179,33 @@ Move behind Advanced:
 
 ## Implementation Order
 
+**This order is blocked on UQ-013 proof, not merely code landing (canon §UQ-013
+Closure Sequence). The UQ-013 mobile MVP shell (Open XP / Continue Draft / New
+From Template / Advanced Workbench) is in local implementation / proof-pending
+state as of 2026-06-15. Broad pruning starts only after UQ-013 headed Playwright
+proof (step 5) passes. Steps below describe prune-specific work order once that
+gate opens.**
+
 1. Add proof/audit tests before editing UI:
    - registry OK and registry 503 template-select behavior
-   - `mounted_native_full` apply-path status
+   - dynamic template select includes registry-authorable `mounted_native_full`
+   - `mounted_native_full` apply-path status after dynamic selection
    - null-guard audit for the three hidden Skin Dock controls
-2. Delete or unhide-and-test the three hidden Skin Dock controls. Preferred:
+2. UQ-013 headed Playwright mobile proof must pass (canon §UQ-013 Closure
+   Sequence step 5). If proof exposes regressions, fix before broad prune begins:
+   - mobile first screen appears and all dismiss paths work correctly
+   - scroll chrome visible adjacent to zoom bar
+   - portrait rotate hint appears after session load
+   - Advanced Workbench bypass works
+   - desktop layout unaffected
+3. Populate template select dynamically from `/api/workbench/templates`.
+4. Delete or unhide-and-test the three hidden Skin Dock controls. Preferred:
    delete until a reachable path requires them, but only after null guards are
    verified or added.
-3. Populate template select dynamically from `/api/workbench/templates`.
-4. Add or confirm `mounted_native_full` UI reachability through the registry
-   path, then document any downstream blocker by exact route/state.
-5. Collapse first-load panels into task sections and advanced drawers.
-6. Relabel ActorVisualProfile UI as draft-only, including inside its drawer.
+5. Collapse first-load panels into task sections, named drawers, and an
+   Advanced Workbench escape hatch.
+6. Decide AVP UI fate: hide until UQ-010 bridge/identity contract exists, or
+   relabel as draft-only with explicit non-deterministic/hardcoded-ID warning.
 7. Relabel Skin Dock as local XP preview and keep Y9-2 runtime proof claims out
    of the control text.
 8. Add Playwright first-load audit: no hidden enabled action controls, no
@@ -174,3 +223,6 @@ Move behind Advanced:
   for the workbench path.
 - Do not expose `mounted_native_full` through a hardcoded HTML option if the
   registry is supposed to own template availability.
+- Do not start broad prune implementation before UQ-013 mobile usability design
+  is approved.
+- Do not bury source or U2/U4 required surfaces in generic Advanced.

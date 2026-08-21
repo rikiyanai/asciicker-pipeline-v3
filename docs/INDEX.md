@@ -64,7 +64,9 @@ If a lower-priority doc conflicts with a higher-priority source or with current 
   to expose a product blocker in the first-screen workbench UX. Read
   `PLAYWRIGHT_FAILURE_LOG.md` rows `FL-MOB-01`, `FL-DOC-ROUTE-01`,
   `FL-PRINT-01`, and the canonical spec queue rows `UQ-013` / `UQ-014` before
-  implementing mobile pruning or printable grid-paper work.
+  implementing mobile pruning or printable grid-paper work. As of 2026-06-13,
+  UQ-013 mobile usability leads: broad prune implementation waits on an approved
+  mobile Open Workbench design.
 - **Milestone 1 is closed.** It is the baseline, not the active workstream.
 - The current working milestone is **Milestone 2: practical PNG ingest and manual assembly**.
 - Milestone 2 means:

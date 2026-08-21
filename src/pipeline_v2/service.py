@@ -53,7 +53,7 @@ from .source_manifest import (
     validate_manifest,
 )
 from .storage import save_json, load_json
-from .xp_codec import write_xp, read_xp
+from .xp_codec import encode_xp, write_xp, read_xp
 
 # Ensure the scripts directory is on sys.path so that mounted_rider_offset
 # (and other standalone scripts) can be imported by service functions.
@@ -87,6 +87,36 @@ WORKBENCH_TERMPP_DIR = ROOT / "output" / "termpp_skin_runs"
 WORKBENCH_STREAM_DIR = ROOT / "output" / "termpp_stream"
 _TERM_STREAM_LOCK = threading.Lock()
 _TERM_STREAMS: dict[str, dict[str, Any]] = {}
+
+_LEGACY_PREVIEW_TOKEN_TTL_SECONDS = 90
+_LEGACY_PREVIEW_MAX_XP_BYTES = 5 * 1024 * 1024
+_LEGACY_PREVIEW_LOCK = threading.Lock()
+_LEGACY_PREVIEW_TOKENS: dict[str, dict[str, Any]] = {}
+
+_LEGACY_PREVIEW_CONTRACTS: dict[tuple[int, int], dict[str, Any]] = {
+    (126, 72): {
+        "family": "player",
+        "runtime_state": "on_foot_no_equipment",
+        "mount_state": 0,
+    },
+    (180, 96): {
+        "family": "wolfie",
+        "runtime_state": "mounted_wolf_no_equipment",
+        "mount_state": 1,
+    },
+}
+
+
+def _legacy_preview_family_targets(family: str) -> list[str]:
+    if family not in {"player", "wolfie"}:
+        raise ValueError(f"unsupported legacy preview family: {family}")
+    return [
+        f"/sprites/{family}-{armor}{helmet}{shield}{weapon}.xp"
+        for armor in range(2)
+        for helmet in range(2)
+        for shield in range(2)
+        for weapon in range(3)
+    ]
 
 
 def _termpp_skin_override_names(registry: dict[str, Any]) -> list[str]:
@@ -4357,6 +4387,213 @@ def workbench_web_skin_payload(session_id: str, req_id: str) -> dict[str, Any]:
     }
 
 
+def _legacy_preview_contract_for_xp(
+    raw: bytes,
+    req_id: str,
+    *,
+    declared_family: str = "",
+) -> dict[str, Any]:
+    if not raw:
+        raise ApiError("XP preview payload is empty", "empty_xp", "workbench", req_id, 400)
+    if len(raw) > _LEGACY_PREVIEW_MAX_XP_BYTES:
+        raise ApiError("XP preview payload is too large", "xp_too_large", "workbench", req_id, 413)
+    try:
+        xp = read_xp(raw)
+    except Exception as exc:
+        raise ApiError(f"failed to parse XP preview payload: {exc}", "invalid_xp", "workbench", req_id, 422)
+
+    width = int(xp.get("width", 0))
+    height = int(xp.get("height", 0))
+    layers = int(xp.get("layers", 0))
+    contract = _LEGACY_PREVIEW_CONTRACTS.get((width, height))
+    if contract is None:
+        raise ApiError(
+            f"legacy preview accepts only player 126x72 or wolfie 180x96 XP; got {width}x{height}",
+            "legacy_preview_topology_mismatch",
+            "workbench",
+            req_id,
+            422,
+        )
+    if layers not in (3, 4):
+        raise ApiError(
+            f"legacy preview requires 3 or 4 XP layers; got {layers}",
+            "legacy_preview_layer_mismatch",
+            "workbench",
+            req_id,
+            422,
+        )
+
+    family = str(contract["family"])
+    declared = str(declared_family or "").strip().lower()
+    if declared and declared != family:
+        raise ApiError(
+            f"session family {declared!r} is incompatible with {width}x{height} {family} topology",
+            "legacy_preview_family_mismatch",
+            "workbench",
+            req_id,
+            422,
+        )
+
+    cells = xp.get("cells") or []
+    if not cells or len(cells[0]) < 3:
+        raise ApiError("XP is missing L0 metadata", "legacy_preview_metadata_missing", "workbench", req_id, 422)
+    marker = "".join(chr(int(cells[0][idx][0])) for idx in range(3))
+    if marker != "818":
+        raise ApiError(
+            f"legacy preview requires L0 marker 818; got {marker!r}",
+            "legacy_preview_metadata_mismatch",
+            "workbench",
+            req_id,
+            422,
+        )
+    key_rgb = tuple(int(v) for v in cells[0][0][2])
+    if key_rgb != (255, 255, 85):
+        raise ApiError(
+            f"legacy preview requires #ffff55 transparency key; got #{key_rgb[0]:02x}{key_rgb[1]:02x}{key_rgb[2]:02x}",
+            "legacy_preview_key_mismatch",
+            "workbench",
+            req_id,
+            422,
+        )
+
+    target_paths = _legacy_preview_family_targets(family)
+    return {
+        **contract,
+        "target_path": target_paths[0],
+        "target_paths": target_paths,
+        "width": width,
+        "height": height,
+        "layers": layers,
+        "l0_marker": marker,
+        "key_rgb": list(key_rgb),
+    }
+
+
+def _normalize_legacy_preview_xp(raw: bytes, req_id: str) -> tuple[bytes, int]:
+    """Adapt authored transparency to the frozen sprite.cpp L2 contract."""
+    try:
+        xp = read_xp(raw)
+        layers = [list(layer) for layer in xp["cells"]]
+    except Exception as exc:
+        raise ApiError(f"failed to normalize XP preview payload: {exc}", "invalid_xp", "workbench", req_id, 422)
+
+    layer0 = layers[0]
+    visual = layers[2]
+    normalized = 0
+    for index, (glyph, fg, bg) in enumerate(visual):
+        if int(glyph) in (0, 32) or tuple(bg) != MAGENTA_BG:
+            continue
+        output_key = tuple(int(value) for value in layer0[index][2])
+        if output_key == MAGENTA_BG:
+            raise ApiError(
+                f"drawn L2 cell {index} has no non-magenta layer-0 transparency key",
+                "legacy_preview_transparency_contract_mismatch",
+                "workbench",
+                req_id,
+                422,
+            )
+        visual[index] = (int(glyph), tuple(fg), output_key)
+        normalized += 1
+
+    if not normalized:
+        return raw, 0
+    return encode_xp(int(xp["width"]), int(xp["height"]), layers), normalized
+
+
+def workbench_mint_legacy_preview_token(
+    req_id: str,
+    *,
+    session_id: str = "",
+    xp_b64: str = "",
+    source_name: str = "",
+) -> dict[str, Any]:
+    sid = str(session_id or "").strip()
+    encoded = str(xp_b64 or "").strip()
+    if bool(sid) == bool(encoded):
+        raise ApiError(
+            "provide exactly one of session_id or xp_b64",
+            "legacy_preview_source_required",
+            "workbench",
+            req_id,
+            400,
+        )
+
+    declared_family = ""
+    if sid:
+        session_path = _session_path(sid)
+        if not session_path.exists():
+            raise ApiError("session not found", "session_not_found", "workbench", req_id, 404)
+        session = load_json(session_path)
+        session_family = str(session.get("filename_prefix") or session.get("family") or "").strip()
+        if not (_session_kind(session) == "raw_xp" and session_family in {"", "uploaded"}):
+            declared_family = session_family
+        export = workbench_export_xp(sid, req_id)
+        xp_path = Path(export["xp_path"]).expanduser().resolve()
+        try:
+            raw = xp_path.read_bytes()
+        except OSError as exc:
+            raise ApiError(f"failed reading exported XP: {exc}", "xp_read_failed", "workbench", req_id, 500)
+        source_name = source_name or xp_path.name
+    else:
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+        except Exception:
+            raise ApiError("xp_b64 is not valid base64", "invalid_xp_base64", "workbench", req_id, 400)
+
+    contract = _legacy_preview_contract_for_xp(raw, req_id, declared_family=declared_family)
+    runtime_raw, normalized_cells = _normalize_legacy_preview_xp(raw, req_id)
+    token = uuid.uuid4().hex
+    now = time.monotonic()
+    record = {
+        **contract,
+        "token": token,
+        "xp_bytes": runtime_raw,
+        "source_sha256": hashlib.sha256(raw).hexdigest(),
+        "source_size_bytes": len(raw),
+        "sha256": hashlib.sha256(runtime_raw).hexdigest(),
+        "size_bytes": len(runtime_raw),
+        "legacy_transparency_normalized_cells": normalized_cells,
+        "source_name": Path(str(source_name or "preview.xp")).name,
+        "session_id": sid,
+        "created_at": now,
+        "expires_at": now + _LEGACY_PREVIEW_TOKEN_TTL_SECONDS,
+    }
+    with _LEGACY_PREVIEW_LOCK:
+        expired = [key for key, value in _LEGACY_PREVIEW_TOKENS.items() if float(value["expires_at"]) <= now]
+        for key in expired:
+            _LEGACY_PREVIEW_TOKENS.pop(key, None)
+        _LEGACY_PREVIEW_TOKENS[token] = record
+
+    return {
+        key: value
+        for key, value in record.items()
+        if key not in {"xp_bytes", "created_at", "expires_at"}
+    } | {"expires_in_seconds": _LEGACY_PREVIEW_TOKEN_TTL_SECONDS}
+
+
+def workbench_consume_legacy_preview_token(token: str, req_id: str) -> dict[str, Any]:
+    key = str(token or "").strip().lower()
+    if len(key) != 32 or any(ch not in "0123456789abcdef" for ch in key):
+        raise ApiError("invalid legacy preview token", "invalid_preview_token", "workbench", req_id, 400)
+    now = time.monotonic()
+    with _LEGACY_PREVIEW_LOCK:
+        record = _LEGACY_PREVIEW_TOKENS.pop(key, None)
+    if record is None or float(record["expires_at"]) <= now:
+        raise ApiError(
+            "legacy preview token not found, expired, or already consumed",
+            "preview_token_unavailable",
+            "workbench",
+            req_id,
+            404,
+        )
+    raw = bytes(record["xp_bytes"])
+    return {
+        key: value
+        for key, value in record.items()
+        if key not in {"xp_bytes", "created_at", "expires_at"}
+    } | {"xp_b64": base64.b64encode(raw).decode("ascii")}
+
+
 def _action_override_names(family: str, ahsw_range: str) -> list[str]:
     """Generate override filenames for a family/AHSW range.
 
@@ -5055,7 +5292,11 @@ def workbench_save_session(session_id: str, payload: dict[str, Any], req_id: str
     derived_cols, derived_rows = _derive_session_grid_geometry(
         angles=next_angles,
         anims=next_anims,
-        projs=next_projs,
+        # Save-session validates the editable/source sheet geometry. Template
+        # sessions may author a 1-projection source sheet and export to a
+        # 2-projection runtime sheet later, so using next_projs here rejects
+        # valid authored source grids such as player_native_idle_only 126x80.
+        projs=next_source_projs,
         cell_w=next_cell_w,
         cell_h=next_cell_h,
         req_id=req_id,

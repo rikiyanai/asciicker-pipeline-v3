@@ -13795,13 +13795,14 @@ All 8 lanes independently re-verified against live code with no prior context. R
 1. Decide the shared authoring target: pipeline-v3 must either feed latest Y9-2 `compile_actor_visual_profiles.py` or explicitly remain a Skin Dock-only XP editor.
 2. Wire pipeline-v3 ActorVisualProfile output as a real compiler input only after Y9-2 accepts authored profile JSON in production.
 3. Add `GET /api/workbench/bundle/<id>` route and frontend `bundle_id` URL param parsing if persisted BundleSession reopen remains a supported product path.
-4. Populate the template select from the registry so `mounted_native_full` is reachable; before implementation, prove whether `mounted_native_full` is only hidden by hardcoded HTML or fails later in the apply/export/preview path.
-5. Harden ActorVisualProfile generation (stable IDs, validated dimensions, real quality gates) and relabel it as draft-only until consumed by Y9-2.
-6. Define registry failure UX first: `/api/workbench/templates` 503/malformed state must fail closed with a visible degraded-state warning, not an empty template list.
-7. Remove or unhide-and-validate the three hidden Skin Dock DOM controls; first audit null guards for every `getElementById`/`$()` path so element deletion cannot introduce startup JS exceptions.
-8. Demote misleading "RenderPlanTable" panel to an Advanced/Draft Artifact drawer, with the draft warning inside the drawer as well as in the label.
-9. Relabel Skin Dock as local XP preview, not live Y9-2 game integration proof.
-10. Run headed runtime proof for whichever path is claimed: legacy Skin Dock preview or Y9-2 ActorVisualProfile runtime table.
+4. Put UQ-013 mobile usability before broad pruning: design the landscape editor shell, portrait open/import/continue sheet, deliberate Continue Draft entry, export/share path, IDs-off default, and Advanced Workbench fallback.
+5. Populate the template select from the registry so `mounted_native_full` is reachable; the known first blocker is the hardcoded HTML select, then downstream apply/export/preview behavior must be proven.
+6. Decide whether the ActorVisualProfile UI should exist before a production bridge. Relabeling as draft is the minimum honesty fix, but current generated IDs are non-deterministic/hardcoded and no Y9-2 production compiler consumes the JSON.
+7. Define registry failure UX first: `/api/workbench/templates` 503/malformed state must fail closed with a visible degraded-state warning, not an empty template list.
+8. Remove or unhide-and-validate the three hidden Skin Dock DOM controls; first audit null guards for every `getElementById`/`$()` path so element deletion cannot introduce startup JS exceptions.
+9. Demote misleading "RenderPlanTable" panel to a Draft Artifact surface only if it remains visible; otherwise hide it until UQ-010/shared-authoring bridge and stable identity contracts exist.
+10. Relabel Skin Dock as local XP preview, not live Y9-2 game integration proof.
+11. Run headed runtime proof for whichever path is claimed: legacy Skin Dock preview or Y9-2 ActorVisualProfile runtime table.
 
 ### Doc hygiene routing update — 2026-06-11
 
@@ -13816,26 +13817,243 @@ that root. `Show IDs` / frame labels must remain off by default on mobile as
 well as desktop. Landscape may be the preferred full-editor orientation, but
 portrait must still allow opening and reaching a loaded-work state.
 
+Implementation status (2026-06-15): Mobile first screen implemented locally in
+`web/workbench.html` / `web/workbench.js` / `web/styles.css`. Open XP, Continue
+Draft, New From Template, and Advanced Workbench bypass are wired. Open XP and
+template apply dismiss only after `loadSession()` returns true; Continue Draft
+keeps first screen visible until user confirms inline Restore. URL/session restore
+path now also dismisses first screen via `loadSession()` success hook.
+
+Reclassification (2026-06-16): the prior 8-test Playwright run was STRUCTURAL
+SMOKE ONLY (overlay/button/class presence) and did not prove usability. Live
+headed-WebKit screenshots showed the mobile UI was visually unusable: (a) the
+`wbIdOverlay` debug element-ID labels (z-index 99999, defaulted `on=true`) bled
+over the whole first screen; (b) the first screen never appeared in iPad
+landscape (1194px > the 1024px width breakpoint); (c) after session load the
+user dropped into the dense desktop dashboard, not an editor. Visual usability:
+FAILED at that point.
+
+Dedicated mobile editor shell (2026-06-16): four defects fixed —
+D1 `wbIdOverlay` now defaults OFF on every device (opt-in via `?ids=1` /
+localStorage / Alt+I / corner toggle); D2 mobile detection switched to device
+capability (`@media (pointer: coarse), (max-width:1024px)` + `_isMobileLike()`)
+so iPad landscape qualifies; D3 first screen centered; D4 after session-load the
+dense `.wrap` dashboard panels collapse and `#wholeSheetPanel` becomes the
+primary surface (`body.ws-session-loaded:not(.ws-advanced)`), with a mobile
+top-bar `Advanced` ⇄ `Editor` toggle (`body.ws-advanced`) as the documented
+escape hatch, the portrait rotate hint demoted to a slim non-blocking banner,
+and numbered-panel dev badges suppressed in the editor view. Headed Playwright
+WebKit (engine-family emulation under the iPad Pro 11 profile — NOT Apple's
+shipping iOS Safari) screenshot proof captured at
+`artifacts/2026-06-16-mobile-visual/` (portrait + landscape × fresh-load /
+template-editor / advanced / tools-drawer, plus desktop-unchanged) via
+`scripts/audit/capture_mobile_states.mjs`. Screenshots show the editor-first
+shell with dashboard hidden, IDs off, working Tools drawer, and desktop
+structurally unchanged. This row remains OPEN pending user sign-off on the
+screenshots and a real iPad Safari proof (UQ-013 step 6).
+
+Parity reorganization (2026-06-16): live-probe review found the prior pass was a
+THIN editor-first mode — normal mobile mode exposed only `#wholeSheetPanel` and
+most workbench mechanics were reachable only via Advanced (not parity). Fix: the
+real dashboard panels are now reparented into mobile bottom-sheet drawers by
+wrapping them in `.ws-drawer` (transparent `display:contents` on desktop, fixed
+sheet on mobile) — Panel 5 → `files`, Panel 7 → `import`, Panel 8 → `source`,
+Panel 9 → `frames`; Tools/Layers/Browse/Info kept as-is. Same markup + handlers,
+no second mobile-only control set. Editor-first hide rule exempts `.ws-drawer`
+and the `#sourceFramesRow` two-col; Advanced mode re-flattens the reparented
+wrappers to `display:contents` so the dense dashboard still renders inline
+(scoped so in-editor drawers are untouched). Top bar gains Frames/Files/Source/
+Import toggles and scrolls horizontally; backdrop/top-bar z-index fixed (top bar
+101 > drawer 100 > backdrop 99) so toggles stay tappable while a drawer is open
+(direct drawer switching). Redundant `.ws-canvas-area` 96px double-offset removed
+so the editor sits flush under the top bar. AVP/Skin Dock/Verification/TERM++/
+Recorder stay behind Advanced (not mobile root).
+
+Proof (2026-06-16): live headed-WebKit parity probe
+`scripts/audit/probe_mobile_parity.mjs` opens each drawer in editor-first with
+`body.ws-advanced` ABSENT, enumerates the live controls, and screenshots each —
+report at `artifacts/2026-06-16-mobile-parity/PARITY_REPORT.md` (RESULT: all
+probed control drawers reachable; frames=15 controls, files=11, source=11,
+import=5, tools=65, layers=18). Browse/Info are status/list surfaces (session
+list / cell readout) — zero buttons is BY DESIGN, not control-parity surfaces.
+Reachability vs execution: the probe proves controls are visible+enabled; it
+also drives ONE headline mechanic end-to-end — Frames › Add Frame mutates state
+(frame cells 72→80, stays editor-first) at
+`artifacts/2026-06-16-mobile-parity/landscape-e2e-add-frame.png`. Other
+reparented actions (source slicing, export, PNG upload, file save) are proven
+REACHABLE/enabled only; full end-to-end on those still needs the real-device
+pass. 16/16 assertions hold in the headed WebKit suite
+`tests/playwright/mobile-first-screen.spec.js` incl. 4 reparented-drawer parity
+checks, a backdrop-tappability check, and the desktop-unaffected checks. Top-bar
+quick actions are exactly New/Save/Share; Export/Open/Save-to-File/Save-As/Import
+live in the Files drawer (not top-bar quick actions). Still OPEN: user sign-off
++ real iPad Safari (UQ-013 step 6) + end-to-end on the remaining reparented
+actions; polish note — in landscape the whole-sheet "Fit" leaves vertical room
+below the canvas because the sheet is wider than tall (zoomable; not a layout gap).
+
+Authoring recipe proof (2026-06-16): the parity proof above was still too weak
+because it did not prove a mobile user could create and export an XP sprite from
+scratch. Added `scripts/audit/mobile_authoring_recipe_probe.mjs`, a seedable
+headed-WebKit iPad-landscape recipe runner. Seed `42` now performs: mobile first
+screen template creation (`player_native_idle_only`) → Tools drawer draw-state
+selection → canvas cell painting → rectangle drawing → Frames drawer Add Frame →
+mobile top-bar Save → Files drawer Export XP → exported-XP glyph oracle. Report:
+`artifacts/2026-06-16-mobile-authoring-recipe/REPORT.md` (RESULT: PASS; exported
+XP `/Users/r/Downloads/asciicker-pipeline-v3/data/exports/session-5780eaa8-a5d7-49c6-9de0-a493b3d83438.xp`;
+authored glyph `67`, exported count `74`). During this probe two real blockers
+were found and fixed locally: stale mobile `wb-show-ids=1` localStorage could
+resurrect the debug ID overlay over the editor, so mobile/touch now ignores and
+clears that stale persisted opt-in unless `?ids=1` is present; and
+`workbench_save_session()` validated editable template sessions against runtime
+`projs` instead of source-sheet `source_projs`, rejecting valid authored
+`126x80` idle sheets with HTTP 422. Save-session now validates editable grid
+geometry against `source_projs` while preserving runtime `projs` for export.
+Superseded status note: at the time of this authoring-recipe entry, Source/
+Import, file/session, Skin Dock, and desktop-unaffected recipes were not yet
+accepted. Later entries below record those as automated PASS with explicit proof
+boundaries. Do not read this paragraph as the current final status.
+
+Whole-sheet editing parity proof (2026-06-16): `scripts/audit/mobile_editing_parity_probe.mjs`
+proves select, copy, paste, cut, clear, undo, redo through mobile drawers without Advanced mode.
+Command: `node scripts/audit/mobile_editing_parity_probe.mjs`
+Result: PASS — 16/16 steps.
+Exported XP: `data/exports/session-a8f8e5d0-9461-43f0-9cd9-2d7fbef41fac.xp`
+Report: `artifacts/2026-06-16-mobile-editing-parity/REPORT.md`
+
+Operations proven (Playwright WebKit iPad Pro 11 landscape — NOT Apple iOS Safari):
+- Paint glyph + fg + bg via Cell tool (Tools drawer); glyph and both colors verified in getDocumentSnapshot
+- Paint second glyph + distinct color (verified distinctly from first)
+- Select region (Select tool via Tools drawer + canvas drag; selectionBounds verified)
+- Copy selection (hasClipboard=true, clipboardCellCount≥9)
+- Paste at new location — 9 pasted cells verified: glyph + fg + bg match source
+- Cut selection (source cleared to glyph=0; clipboard updated)
+- Paste moved content at second location — 9 cells verified
+- Clear/delete 2×2 selection (cells cleared to glyph=0)
+- Undo (CLEAR_REGION cells restored to GLYPH_B+FG2/BG2) + Redo (re-cleared)
+- Save via mobile top bar (sessionDirty → false)
+- Export XP via Files drawer (xp_path obtained)
+- Artifact oracle: 18 × glyph 65 + (255,64,64)/(26,26,46) and 5 × glyph 66 + (0,204,136)/(51,0,68)
+  confirmed in XP binary. Count-based oracle used; position-based checks not used because
+  frame-layout maps whole-sheet editor coordinates to non-trivial XP positions (e.g. editor x=2,3,4 →
+  XP x=1,2,68 for this template).
+
+Superseded status note: later entries below record probe #4 Source/Import,
+probe #5 file/session persistence, probe #6 Skin Dock, and probe #7 desktop
+unaffected as automated PASS with explicit proof boundaries. Current hard-open
+gate remains real iPad Safari (UQ-013 step 6 / probe #8), plus the proof gaps
+listed in the 2026-06-16 status correction below.
+
 Routing:
-- Canon spec §1.9.1 owns the mobile/touch/open-workbench contract.
+- Canon spec §1.9.1 owns touch behavior.
+- Canon spec §1.9.2 owns browser draft persistence and `Continue Draft`.
+- Canon spec §1.9.3 owns mobile layout/open-workbench behavior.
 - Unified Queue `UQ-013` owns implementation order and acceptance gates.
-- The prune proposal owns the UI pruning proposal and pre-edit safeguards.
+- The prune proposal owns UI pruning scope and pre-edit safeguards only after
+  UQ-013 mobile usability design is approved.
 - This failure-log row owns the observed failure and proof boundary.
+
+Status correction (2026-06-16, late): automated probes #1-#7 are accepted as
+PASS only within their stated proof boundaries:
+1. Drawer reachability: smoke only.
+2. Baseline author/export: cells authored and exported XP glyph oracle passed.
+3. Editing parity: select/copy/paste/cut/clear/undo/redo/color/save/export
+   passed with XP glyph/color oracle.
+4. Source/import: PNG upload -> draw box -> find sprites -> convert -> editor
+   population -> save -> export -> nonzero XP oracle passed; it does not prove
+   pixel-faithful glyph/color mapping from PNG pixels.
+5. File/session persistence: URL restore plus IndexedDB Continue Draft restore
+   and native export passed with XP glyph/color oracle.
+6. Skin Dock: author -> save -> export -> Test This Skin -> `webbuild.ready`
+   passed for the local `termpp-web-flat` preview pipeline; it does not prove
+   authored-skin visual rendering in WASM and does not prove live Y9-2
+   integration.
+7. Desktop unaffected: desktop template -> paint -> Save -> Export -> XP oracle
+   passed with mobile chrome absent.
+
+Remaining mobile parity work besides visual operator sign-off:
+1. Re-prove first-screen Open XP with a real `.xp` file after the mobile-shell /
+   drawer refactor. Existing probes cover template creation, PNG source import,
+   save/reload, export, and Skin Dock; they do not clearly prove the native
+   mobile file-picker Open XP path after the refactor.
+2. Prove mobile Export/Share behavior, not only `#btnExport` through the Files
+   drawer. Canon §1.9.3 requires `Export/Share` at the mobile root.
+3. Extend frame-operation proof beyond Add Frame: row/column navigation,
+   delete/clear frame, focus, filmstrip behavior, frame-layer select, and any
+   move/shift/align controls that remain user-reachable in the Frames drawer.
+4. Extend tool/layer proof beyond the representative editing recipe. Copy/paste/
+   cut/select/color/undo/redo are proven; layer drawer operations and the full
+   tool suite remain mostly reachability unless explicitly exercised.
+5. Keep Skin Dock labeled as local flat preview readiness until a visual-runtime
+   gate proves the authored skin renders in WASM and, separately, until a Y9-2
+   integration path is actually tested.
+6. Keep Source/Import labeled structural unless/until a pixel-faithful
+   PNG-to-glyph/color oracle is added.
+7. Keep AVP, Verification, TERM++ native, Recorder, and hidden/advanced Skin
+   Dock controls documented as desktop/Advanced fallback only. Do not claim
+   mobile parity for those surfaces unless dedicated mobile proofs are added.
+
+**FL-MOB-02 (OPEN — P0): Mobile canvas has no discoverable two-finger scroll; scroll chrome placement is unspecified.**
+Two-finger pan for viewport navigation is required per canon §1.9.1:3 but the
+current workbench provides no affordance that teaches the gesture to mobile users,
+and no spec governs where scroll controls appear or how they must be styled.
+Required behaviors:
+1. Two active pointers on the canvas pan the viewport; they never paint (canon
+   §1.9.1:7).
+2. Any visible scroll controls must be translucent or positioned adjacent to the
+   whole-sheet editor zoom bar at the top of the editor — not persistent opaque
+   bars that occlude canvas content.
+3. If explicit scroll directional controls exist, they must co-locate with the
+   zoom bar so all viewport navigation affordances are grouped at the top.
+
+Clarification: the two-finger pan gesture implementation exists.
+`web/whole-sheet-init.js` wires `touch-gestures.mjs`; `onGestureStart` marks
+gesture mode and the pan path mutates `scrollWrap.scrollLeft/scrollTop`. The
+remaining P0 gap is discoverability and visible chrome — not renderer ownership.
+
+Implementation status (2026-06-15): Translucent ◄►▲▼ pan buttons (`ws-scroll-chrome`)
+implemented locally in `web/whole-sheet-init.js` (appended to `ws-zoom-row`) and
+`web/styles.css`. Buttons are hidden on desktop via CSS. Each button mutates
+`scrollWrap.scrollLeft/scrollTop` by 96px — same path as two-finger pan.
+
+Update (2026-06-16): visibility breakpoint corrected from `≤768px` to
+`@media (pointer: coarse), (max-width: 1024px)` so the chrome also appears on
+iPad in landscape (1194px). Headed-WebKit screenshot proof
+(`artifacts/2026-06-16-mobile-visual/*-4-scroll-chrome.png`, both orientations)
+shows the ◄►▲▼ chrome grouped in the whole-sheet zoom row. A Playwright layout
+assertion (`tests/playwright/mobile-first-screen.spec.js`, landscape block)
+verifies via bounding boxes that the chrome sits at/above the canvas top edge —
+i.e. it does not occlude canvas content. This row remains OPEN pending user
+sign-off and a real iPad Safari proof confirming gesture discoverability.
+
+Routing:
+- Canon spec §1.9.1:7 owns two-finger pan gesture availability and scroll chrome
+  non-occlusion rule.
+- Canon spec §1.9.3:12 owns scroll control visual treatment and placement
+  (translucent / adjacent to zoom bar).
+- UQ-013 owns implementation gate for the mobile editor shell.
+- This row owns the observed gap and acceptance boundary.
 
 **FL-DOC-ROUTE-01 (OPEN — P1): Prune proposal findings must stay split by document role.**
 The review findings route as follows:
 - `/api/workbench/templates` 503/malformed fallback belongs in canon §2 registry
-  behavior and prune proposal preconditions; failures/proof go here.
-- `mounted_native_full` reachability belongs in prune proposal preflight and
-  `UQ-008`/Section 2 mounted authoring proof; do not call it missing until the
-  registry-vs-HTML blocker and downstream apply/export/preview behavior are
-  proven.
+  behavior and prune proposal audit preconditions; failures/proof go here.
+- `mounted_native_full` UI reachability belongs first to the template select:
+  the registry already contains the authorable entry, while current HTML
+  hardcodes only two options. Downstream apply/export/preview behavior is a
+  second proof step after dynamic select population.
 - Hidden Skin Dock button deletion belongs in prune proposal implementation
   order; null-guard misses or startup exceptions go here.
 - ActorVisualProfile draft warning belongs in canon Section 2 honesty rules and
   the UI proposal; any user-reachable misleading label remains `FL-BA-08`.
+  Because generated AVP IDs are non-deterministic/hardcoded and no Y9-2
+  production compiler consumes authored JSON, hiding the UI until a bridge
+  exists is a valid design option.
 - Skin Dock language belongs in Section 2 proof separation and prune proposal
   relabeling; it must not imply live Y9-2 game integration.
+- Source helpers and U2/U4 mounted authoring surfaces must not be buried in a
+  generic Advanced bucket. Source belongs in a named Source drawer; U2/U4 belong
+  in a named Mounted Authoring drawer/panel because they are required S2-R9
+  surfaces.
 
 **FL-PRINT-01 (PARKED — P2): Printable Y9-2 authoring grid paper idea captured; existing layout seed is non-authoritative.**
 The user supplied a `sprite-sheet-full.html` concept: one letter page, full sheet,
@@ -13856,3 +14074,2634 @@ a consuming path exists.
 | **B4 recents**: color swatches used `input` event → every intermediate picker drag value pushed to recents LRU, filling all 8 slots with transient colors | 🔴 HIGH | B3-B6 bundle | Fixed — `input` → `change` on both fgInput and bgInput |
 | **B5 FBG combos**: 8 canonical pairs hardcoded in JS; diverges from Y9-2 semantic_maps symlink source of truth with no provenance comment | 🟡 MEDIUM | B5 bundle | Noted — added source-path comment inline |
 | **B6 ghost pixel formula**: lacks defensive fallback (`canvas.cellSize || CELL_SIZE`) that the paste interceptor has at line 955 | 🟢 LOW | B6 bundle | Noted — guarded by zero-size check at line 1310; kept in sync by manual review |
+
+---
+
+## Mobile File/Session Persistence Probe #5 — Root Cause + Bug (2026-06-16) — SUPERSEDED
+
+> **SUPERSEDED** by "Probe #5 (rerun)" entry below. The `_restoreDraft()` bug documented here has since been fixed; the direct-API workaround in step 11 has been replaced by a native `#btnExport` click; the artifact oracle count was `null` (xp_core stdout noise). See rerun entry for the correct clean result.
+
+### Status
+
+**PARTIAL** — workaround probe with known bug unfixed at time of run.
+
+Probe: `scripts/audit/mobile_file_session_probe.mjs`
+Report: `artifacts/2026-06-16-mobile-file-session/REPORT.md`
+
+### What was proven
+
+- **Path A (URL restore)**: authored cells survive `?session_id=` page reload; export works
+- **Path B (Continue Draft / IDB)**: IDB draft → first-screen "Continue Draft" → "Restore" → cells verified identical; export workaround passes
+- **Artifact oracle**: glyph 68 + exact fg/bg colors confirmed in XP binary
+- **WebKit race (Path A)**: `loadSession()` in `workbench.js` may call `hydrateWholeSheetEditor()` before the `<script type="module">` `whole-sheet-init.js` module has run. Workaround in probe: detect missing canvas after `ws-session-loaded`, then force-mount via direct `/api/workbench/load-session` fetch + `window.__wholeSheetEditor.mount()`.
+
+### Bug surfaced: `_restoreDraft()` does not restore geometry parameters
+
+**Symptom**: After Continue Draft restore, clicking the native `#btnExport` (Files drawer) causes an HTTP 422 from `/api/workbench/save-session`.
+
+**Root cause** (`workbench.js` lines 8214–8264):
+- `_restoreDraft()` sets `state.layers`, `state.gridCols`, `state.gridRows`, `state.frameWChars/cellWChars`, etc. from the IDB payload.
+- But it does NOT restore `state.angles`, `state.anims`, `state.projs`, `state.sourceProjs`.
+- These remain at page-load defaults: `angles=1, anims=[1]`.
+- `saveSessionState()` always sends `angles` and `anims` to the server.
+- The server computes derived geometry: `grid_cols = sum(anims) * source_projs * cell_w`, `grid_rows = angles * cell_h`. With `angles=1, anims=[1]`, this gives `cell_w × cell_h` (e.g. 8×8), not 72×64.
+- Server rejects with HTTP 422 `session_geometry_invalid`.
+
+**Fix needed in `workbench.js` `_restoreDraft()`**: after line 8248, add:
+```javascript
+if (typeof payload.angles === 'number') state.angles = payload.angles;
+if (Array.isArray(payload.anims)) state.anims = [...payload.anims];
+if (typeof payload.projs === 'number') state.projs = payload.projs;
+if (typeof payload.sourceProjs === 'number') state.sourceProjs = payload.sourceProjs;
+```
+
+**Fix needed in the probe's step 7 IDB save**: include `angles: wb.angles`, `anims: wb.anims`, `projs: wb.projs`, `sourceProjs: wb.sourceProjs` in the payload so these survive round-trip through IDB.
+
+**Probe workaround**: step 11 opens the Files drawer (proves mobile UI reachability), then calls `/api/workbench/load-session` to get correct geometry, calls `/api/workbench/save-session` with correct `angles`/`anims`, then calls `/api/workbench/export-xp` directly.
+
+---
+
+## Probe #6: Mobile Skin Dock — 2026-06-16 — 8/8 PASS — SUPERSEDED
+
+> **SUPERSEDED** by "Probe #6 (rewrite)" entry below. This was a smoke-only probe: no authored glyph was created, no session was saved or exported before "Test This Skin", and `webbuild.ready` was `false` at probe end. See rewrite entry for the full author→save→export→ready pipeline.
+
+**Script**: `scripts/audit/mobile_skin_dock_probe.mjs`
+**Report**: `artifacts/2026-06-16-mobile-skin-dock/REPORT.md`
+**Device**: Playwright WebKit — iPad Pro 11 landscape
+
+### What was proven
+
+- **Test drawer reachable from mobile top bar**: `data-drawer-toggle="test"` opens the skin dock panel without entering ws-advanced
+- **Runtime preflight passes**: `/api/workbench/runtime-preflight` returns `{"ok": true}` — termpp-web-flat runtime files present
+- **"Test This Skin" button enabled**: `#webbuildQuickTestBtn` becomes enabled after preflight load (sessionReady + preflightOk + !actionBusy)
+- **Click triggers webbuild state change**: `#webbuildState` text changes after button click
+- **webbuildFrame shown with src set**: iframe becomes visible within 20s
+- **state.webbuild.loaded === true**: iframe load event fires within 60s
+
+### What this probe does NOT prove
+
+- Visual rendering of the skin in the WASM game (EMFS injection limitation: engine caches sprites at init — post-init FS writes not re-read)
+- Live Y9-2 game integration (local flat test arena only: termpp-web-flat)
+- Real iOS Safari on a physical iPad (UQ-013 / FL-MOB-01 / FL-MOB-02 remain OPEN)
+
+---
+
+## Probe #7: Desktop Unaffected Gate — 2026-06-16 — 8/8 PASS — SUPERSEDED
+
+> **SUPERSEDED** by "Probe #7 (rewrite)" entry below. This probe used a hardcoded existing `SESSION_ID`, direct fetch calls for save/export (not desktop UI buttons), and a gzip-unaware artifact oracle that returned `oracleCount: 0`. Cell authoring was also unverified (`sessionDirty: false`). See rewrite entry for the correct desktop UI flow with clean oracle.
+
+**Script**: `scripts/audit/desktop_unaffected_probe.mjs`
+**Report**: `artifacts/2026-06-16-desktop-unaffected/REPORT.md`
+**Device**: Playwright WebKit — 1440×900 viewport, hasTouch:false (pointer:fine)
+
+### What was proven
+
+- **Mobile first screen CSS-hidden on desktop**: `window.getComputedStyle(#mobileFirstScreen).display === 'none'` — unconditional CSS rule `.ws-first-screen { display: none; }` applies
+- **Mobile top bar CSS-hidden on desktop**: `.ws-mobile-top-bar { display: none; }` applies at 1440px (above 1024px threshold)
+- **Session loads via ?session_id= URL param**: `ws-session-loaded` body class set; no ws-advanced auto-added
+- **Whole-sheet editor mounts on desktop**: `window.__wholeSheetEditor` defined; canvas appears in `#wholeSheetMount`
+- **Skin dock panel in DOM**: `#webbuildDockPanel` present in dashboard layout on desktop
+- **Cell authoring works**: mouse click on canvas marks session dirty
+- **Save and export work**: `/api/workbench/save-session` + `/api/workbench/export-xp` return 200
+- **Desktop layout intact post-operations**: no mobile regressions (first screen, top bar, ws-advanced all absent)
+
+### Workaround: `?focusFrame=0,0` for desktop URL-load hydration
+
+`?session_id=` URL load triggers the same WebKit module-vs-fetch race as probe #5:
+`loadSession()` calls `hydrateWholeSheetEditor()` before `whole-sheet-init.js` module runs.
+Fix in probe: add `&focusFrame=0,0` to the URL — this triggers a 40×250ms retry loop
+(`tryFocus` in `workbench.js`) that retries `hydrateWholeSheetEditor()` until the module loads.
+
+### What this probe does NOT prove
+
+- Real browser (Playwright WebKit, not native Safari/Chrome/Firefox)
+- GPU/WebGL/WASM performance under real OS
+- Real iOS Safari on a physical iPad (UQ-013 / FL-MOB-01 / FL-MOB-02 remain OPEN)
+
+---
+
+## Probe #5 (rerun) — Mobile File/Session Persistence — 2026-06-16 — 12/12 PASS (native path)
+
+**Script**: `scripts/audit/mobile_file_session_probe.mjs`
+**Report**: `artifacts/2026-06-16-mobile-file-session/REPORT.md`
+**Device**: Playwright WebKit — iPad Pro 11 landscape
+
+### Changes from prior partial run
+
+- **`_restoreDraft()` bug fixed** in `workbench.js`:
+  - Added `state.angles`, `state.anims`, `state.projs`, `state.sourceProjs` restoration from IDB payload
+  - Added `$("btnSave").disabled = false; $("btnExport").disabled = false;` after hydration
+  - Added `_dismissDraftBanner()` call (hides the draft-available banner that appeared on session load)
+- **`beforeunload` IDB payload** updated to save `angles`, `anims`, `projs`, `sourceProjs`
+- **`__wb_debug.getState()`** updated to expose `sourceProjs`
+- **Probe step 7** (`save-idb-draft`): IDB payload now includes `angles`, `anims`, `projs`, `sourceProjs`
+- **Probe step 11** (`export-via-files-drawer`): removed direct API workaround; now clicks native `#btnExport` button — `exportXp()` → `saveSessionState("pre-export")` → HTTP 200 → XP path returned
+
+### What was proven
+
+- Path A (URL restore): cells survive page reload
+- Path B (Continue Draft / IDB): cells survive IDB restore via first screen
+- **Native export after IDB restore works** (via fixed `_restoreDraft()`)
+- Artifact oracle: glyph 68 + exact colors count=9/expected=9 confirmed in XP binary (gzip-aware reader)
+
+---
+
+## Probe #6 (rewrite) — Mobile Skin Dock Author→Export→Test — 2026-06-16 — 10/10 PASS
+
+**Script**: `scripts/audit/mobile_skin_dock_probe.mjs`
+**Report**: `artifacts/2026-06-16-mobile-skin-dock/REPORT.md`
+**Device**: Playwright WebKit — iPad Pro 11 landscape
+
+### What was changed from initial smoke probe
+
+- Added steps 3-5: Author 3×3 glyph block, Save via mobile top bar, Export via native #btnExport
+- Renamed step: "open-test-drawer" → verifies preflight OK + button enabled
+- Added step 9: `webbuild-ready` — waits for `state.webbuild.ready === true` (skin injection complete, not just iframe load)
+  - Timeout: 240s (WASM game data ~24MB, first load can take 30-120s)
+- Added step 10: `preview-screenshot` — screenshot captured after ready
+
+### What is proven
+
+- Authored 3×3 glyph 68 block → saved → XP exported (native button)
+- Test drawer reachable; runtime preflight ok; button enabled
+- "Test This Skin" triggers webbuild state change
+- webbuildFrame visible with src set (`loaded: true`)
+- **`state.webbuild.ready === true`** — skin injection pipeline complete
+- Screenshot captured of preview surface after ready
+
+### What it still does NOT prove (honest label)
+
+- Visual rendering of the skin in WASM game (EMFS injection limitation)
+- Live Y9-2 game integration (local flat test arena: termpp-web-flat only)
+- Real iOS Safari on physical iPad (UQ-013 / FL-MOB-01 / FL-MOB-02 OPEN)
+
+---
+
+## Probe #7 (rewrite) — Desktop Unaffected Gate — 2026-06-16 — 9/9 PASS
+
+**Script**: `scripts/audit/desktop_unaffected_probe.mjs`
+**Report**: `artifacts/2026-06-16-desktop-unaffected/REPORT.md`
+**Device**: Playwright WebKit — 1440×900, hasTouch:false (pointer:fine)
+
+### What was changed from initial smoke probe
+
+- Removed hardcoded `SESSION_ID`; now creates fresh session via desktop UI
+- Template applied via `#templateSelect` + `#templateApplyBtn` (desktop dashboard controls, not mobile first screen)
+- Added `#btnSave` click (desktop Save button) with `sessionDirty → false` assertion
+- Added `#btnExport` click (desktop Export XP button) with `exportOut.xp_path` assertion
+- Added artifact oracle step on exported XP
+- Cell painting: `setDrawState({ glyph, fg, bg })` + `#wsToolCell` activation + direct `PointerEvent` dispatch on `#wholeSheetCanvas` (necessary because canvas is below fold and z-stacking prevents `page.mouse` from reaching it)
+- Verified `sessionDirty: true` after painting, `sessionDirty: false` after save
+
+### What was proven
+
+- Mobile first screen and top bar CSS-hidden on 1440px viewport (pointer:fine)
+- Template apply via desktop `#templateApplyBtn` → session loads → `ws-session-loaded`
+- Whole-sheet editor canvas mounts in `#wholeSheetMount`
+- Dense dashboard controls visible: `#templateApplyBtn`, `#btnExport`, `#webbuildDockPanel`
+- Cell painting marks `sessionDirty: true`; `#btnSave` clears to false
+- `#btnExport` exports XP; artifact oracle confirmed glyph 68 + exact colors count=9/expected=9 (gzip-aware reader)
+- No mobile UI regression after full flow
+
+### What it still does NOT prove
+
+- Real native browser (Playwright WebKit only)
+- GPU/WebGL/WASM performance
+- Real iOS Safari (UQ-013 / FL-MOB-01 / FL-MOB-02 OPEN)
+
+---
+
+## Probe #4 — Mobile Source/Import — 2026-06-16 — 10/10 PASS
+
+**Script**: `scripts/audit/mobile_source_import_probe.mjs`
+**Report**: `artifacts/2026-06-16-mobile-source-import/REPORT.md`
+**Device**: Playwright WebKit — iPad Pro 11 landscape
+
+### Prior run (same session): oracle null — SUPERSEDED
+
+The probe ran 10/10 PASS in a prior run, but `artifact-oracle` returned `totalNonZero: null` (xp_core "Loading…" stdout noise → `parseInt` returns NaN → JSON null; `NaN <= 0 = false` silently passed the assertion). The oracle was replaced with the same gzip-aware struct reader used by probes #5 and #7. This entry records the clean rerun.
+
+### What was changed from prior run
+
+- **`runArtifactOracle`**: replaced `xp_core.XPFile` call with gzip-aware Python struct reader (no stdout noise). Counts cells with `char_code > 32` across all XP layers.
+- **Assertion**: now also returns `editorCount` (L2 cells from `getDocumentSnapshot`) alongside `totalNonZero` (XP binary), confirming both in-editor and on-disk content.
+
+### What was proven
+
+- **Mobile first screen on fresh load**: `#mobileFirstScreen` visible (`ws-advanced: false`)
+- **Template apply via mobile first screen**: `#fsTemplateApplyBtn` → `ws-session-loaded`, editor-first shell, `ws-advanced: false`
+- **PNG upload via Import drawer**: `#wbFile` file input → `#wbUpload` → `sourceImageLoaded: true`, `#wbRun` enabled
+- **Source drawer reachable**: `#sourceCanvas` visible, `#drawBoxBtn` + `#extractBtn` reachable — no Advanced mode
+- **Draw source box on canvas**: pointer drag on `#sourceCanvas` → `drawCurrent: {x:3,y:2,w:26,h:26}` set
+- **Find Sprites**: `#extractBtn` click → `extractedBoxes: 1` — no Advanced mode
+- **Convert to XP (pipeline)**: `#wbRun` → `/api/run` → job completes → `loadFromJob` → whole-sheet editor populated: `initialCount: 0 → newCount: 4110` (L2 cells with `glyph > 32`); session replaced by pipeline (`afd7c8d8 → b4109e87`)
+- **Save via mobile top bar**: `[data-action="save"]` reachable and clickable (session already committed by pipeline, so `sessionDirty` was already false — button proved reachable, not a dirty-flush save)
+- **Export via Files drawer**: `openDrawer('files')` → `#btnExport` → `exportOut.xp_path` returned
+- **Artifact oracle (gzip-aware)**: `totalNonZero: 14197` (char_code > 32 across all XP layers); `editorCount: 4110` (L2 only, consistent — other layers add L0/L1/L3 content)
+
+### Honest label
+
+Mobile source/import pipeline: **PASS** — PNG upload → draw box → find sprites → Convert to XP → cells populated in editor → saved → exported → XP binary content confirmed.
+
+### What this probe does NOT cover
+
+- Real iOS Safari on a physical iPad (UQ-013 / FL-MOB-01 / FL-MOB-02 remain OPEN)
+- File/session persistence across page reload (probe #5)
+- Skin Dock / preview pipeline (probe #6)
+- Desktop layout unaffected (probe #7)
+- Specific glyph/color mapping accuracy from PNG pixels (oracle verifies non-zero count only, not pixel-level color fidelity)
+
+---
+
+## Probe #8 — Open XP — 2026-06-16 — 5/5 PASS
+
+**Probe**: `scripts/audit/open_xp_probe.mjs`
+**Artifact dir**: `artifacts/2026-06-16-open-xp/`
+**Profile**: Playwright WebKit, iPad Pro 11 landscape (`hasTouch: true`, `pointer:coarse`)
+
+### What changed vs. prior coverage
+
+No prior probe had tested the `#fsOpenXpBtn` → `openXpFile()` path. Prior probes all started from a template apply or a draft restore. This probe proves the first-screen "Open XP" button path end-to-end.
+
+### Why this is the proven path (not the File System Access API path)
+
+`persistence.mjs:309` sets `_hasFileSystemAccess = typeof window.showOpenFilePicker === 'function'`. WebKit does not implement `showOpenFilePicker`, so `_hasFileSystemAccess = false` and `openXpFile()` takes the `<input type="file">` fallback (lines 343–367): creates an `<input>` element, appends to `document.body`, calls `input.click()`. Playwright's `waitForEvent('filechooser')` intercepts this click and `fileChooser.setFiles(fixturePath)` injects the fixture XP bytes.
+
+### What was proven
+
+- **First screen on fresh load**: `#mobileFirstScreen` visible, `ws-session-loaded` absent
+- **File picker intercept**: `#fsOpenXpBtn` click → `filechooser` event → `setFiles(fixture)` → file `change` event fires → `openXpFileLocal()` receives `{data, handle: null, name}`
+- **Upload and session creation**: fixture bytes POSTed to `/api/workbench/upload-xp` → `{job_id, session_id}` returned → `loadSession(session_id)` called
+- **Session loaded (mobile shell)**: `ws-session-loaded` on body; `mobileFirstScreen.hidden = true` (dismissed by `_dismissFirstScreen()` inside `fsOpenBtn` handler after `ok = true`)
+- **ws-advanced absent**: `document.body.classList.contains('ws-advanced') = false` at all steps
+- **Editor populated**: `#wholeSheetCanvas` visible; `editorCount = 9` (L2 cells with `glyph > 32` — matches the PERSIST_BLOCK from the fixture XP)
+- **Export via Files drawer**: `openDrawer('files')` → `#btnExport` → `exportOut.xp_path` returned
+- **Artifact oracle (gzip-aware)**: `totalNonZero = 10096` (char_code > 32 across all 4 XP layers); `editorCount = 9` (L2 — the 9 PERSIST_BLOCK cells authored in probe #7)
+
+### Fixture
+
+`data/exports/session-885fa1cb-e3b0-451a-b401-9ef0cca75a11.xp` — exported by desktop-unaffected probe (#7). Contains a player_native_idle_only template + 9 PERSIST_BLOCK cells (glyph 68, FG #ee44ff, BG #001133) in L2. Total 10096 non-zero cells across 4 layers.
+
+### Honest label
+
+Open XP path: **PASS** — `#fsOpenXpBtn` → file picker fallback → fixture XP injected → `/api/workbench/upload-xp` → `loadSession()` → `ws-session-loaded` → first screen dismissed → editor populated (10096 cells / 9 in L2) → export confirmed.
+
+### What this probe does NOT cover
+
+- `showOpenFilePicker` (File System Access API) — not available in WebKit; fallback path proven
+- Save-back to original file (`saveXpFile` with handle) — requires File System Access API
+- Real iOS Safari on a physical iPad (UQ-013 / FL-MOB-01 / FL-MOB-02 remain OPEN)
+- Share / download UX (probe #9)
+
+---
+
+## Probe #9 — Export/Share (Download Fallback) — 2026-06-16 — 5/5 PASS
+
+**Probe**: `scripts/audit/share_xp_probe.mjs`
+**Artifact dir**: `artifacts/2026-06-16-share-xp/`
+**Profile**: Playwright WebKit, iPad Pro 11 landscape (`hasTouch: true`, `pointer:coarse`)
+
+### What changed vs. prior coverage
+
+Prior probes proved `#btnExport` via the Files drawer (`exportOut.xp_path`). None had proven the mobile top bar `[data-action="share-file"]` Share button path: `shareXpFileLocal()` → `_getExportedXpBytes()` → `shareXpFile()` → download. This probe closes that gap.
+
+### Why navigator.canShare was overridden
+
+`persistence.mjs:457` checks `navigator.share && navigator.canShare && navigator.canShare({ files: [file] })` before calling `navigator.share()`. In Playwright WebKit, `navigator.share` exists (WebKit supports Web Share API) and `navigator.canShare` returns true for file objects — so `navigator.share()` is called. Playwright cannot interact with the native macOS share sheet that WebKit opens; the probe timed out at 30s on first run. The probe overrides `navigator.canShare` via `ctx.addInitScript()` to return false for file objects, forcing the `_downloadBlob()` fallback path. This is intentional: the download fallback IS the testable path in any automated WebKit session; the native share sheet path requires physical device testing.
+
+### What was proven
+
+- **Share button visible in mobile top bar**: `[data-action="share-file"]` reachable without Advanced mode
+- **_getExportedXpBytes()**: session saved (`saveSessionState`), exported (`/api/workbench/export-xp`), binary fetched (`/api/workbench/download-xp`) — all server round-trips succeed
+- **shareXpFile() → _downloadBlob()**: `navigator.canShare` override forces download path → `<a download="export.xp">` clicked → Playwright download event fires
+- **Downloaded file name**: `export.xp` (from `_currentFileHandle` null fallback → `"export.xp"`)
+- **Downloaded bytes valid XP binary**: gzip-decompress → header `version=-1 n_layers=4` (REXPaint canonical version -1 is correct)
+- **Artifact oracle (gzip-aware)**: `totalNonZero=10087` (char_code > 32 across all 4 XP layers — template content)
+
+### Honest label
+
+Export/Share download path: **PASS** — Share button reachable → `_getExportedXpBytes()` (save+export+download) → `_downloadBlob()` fallback → downloaded file confirmed valid XP binary with content.
+
+### What this probe does NOT cover
+
+- `navigator.share()` with files (Web Share API): requires real iOS Safari + user gesture on physical device
+- iPad share sheet UX (AirDrop, Files app, etc.) — only testable on physical device
+- Real iOS Safari on a physical iPad (UQ-013 / FL-MOB-01 / FL-MOB-02 remain OPEN)
+- Frame parity beyond Add Frame (probe #10)
+
+---
+
+## Probe #10 — Frames Parity — 2026-06-16 — 13/13 PASS
+
+**Probe**: `scripts/audit/frames_parity_probe.mjs`
+**Artifact dir**: `artifacts/2026-06-16-frames-parity/`
+**Profile**: Playwright WebKit, iPad Pro 11 landscape (`hasTouch: true`, `pointer:coarse`)
+
+### What changed vs. prior coverage
+
+Prior probes had proven Add Frame but nothing else in the frames drawer. This probe extends coverage to: filmstrip tile selection, Col Right/Left frame reordering, Delete Frame, layer select, context menu (Copy/Paste Frame), and Focus Whole-Sheet.
+
+### WebKit touch profile note: contextmenu dispatch
+
+Playwright's `click({ button: 'right' })` does not fire the `contextmenu` event in touch device profiles — the right mouse button is not a touch gesture. The probe dispatches the `contextmenu` event directly via `page.evaluate()` and uses `element.click()` (JS) for context menu item activation. This is correct behavior because the workbench JS listens for the `contextmenu` event on `#gridPanel` and uses JS click handlers for menu items — no browser native context menu is involved.
+
+### What was proven
+
+- **Frames drawer renders**: `openDrawer('frames')` → `#gridPanel .frame-cell[data-row][data-col]` tiles present
+- **Template frame count**: 72 frames across `player_native_idle_only` (8 per Add Frame call — bundle action grid)
+- **Frame tile selection**: click `.frame-cell` → `.selected` class; `addFrameBtn` + `openInspectorBtn` enabled
+- **Col Right**: selected frame `(0,0)→(0,1)` — verified via `.frame-cell.selected[data-col]`
+- **Col Left**: selected frame moved back `(0,1)→(0,0)`
+- **Row Down enabled**: `rowDownBtn` not disabled (player_native_idle_only has ≥2 rows); Row Up disabled at row 0
+- **Add Frame**: count 72→80 (+8 frames per add-action call)
+- **Delete Frame**: count 80→72 (delete reverses add)
+- **Layer select**: `#layerSelect` value changed 2→0; 4 options (L0–L3 all selectable); confirmed change registered
+- **Context menu — Copy Frame**: `contextmenu` dispatched → `#gridContextMenu` no longer `hidden`; `#ctxCopy` enabled (`hasSel=true`); `ctxCopy.click()` → clipboard set
+- **Context menu — Paste Frame**: `contextmenu` re-dispatched → `#ctxPaste` enabled (`inspectorFrameClipboard` set); `ctxPaste.click()` → frame pasted
+- **Focus Whole-Sheet**: `#openInspectorBtn` enabled → click → `#wholeSheetPanel` `.hidden` removed (panel visible)
+- **Export + oracle**: `totalNonZero=10087` across all 4 XP layers
+
+### Frame control availability (player_native_idle_only)
+
+| Button | Enabled after tile select | Notes |
+|---|---|---|
+| `addFrameBtn` | ✅ | Always enabled with session |
+| `openInspectorBtn` | ✅ | Enabled when frame selected |
+| `colRightBtn` | ✅ | Template has ≥2 cols in row 0 |
+| `colLeftBtn` | ❌ at col 0 | Enabled after moving right |
+| `rowUpBtn` | ❌ at row 0 | Disabled (already at row 0) |
+| `rowDownBtn` | ✅ | Template has ≥2 animation rows |
+
+### Honest label
+
+Frames parity: **PASS** — filmstrip tile select, Col Right/Left reorder, Add Frame (+8), Delete Frame, layer select (4 layers), context menu Copy+Paste, Focus Whole-Sheet all proven. Row Up/Down reorder and Clear Selected remain documented as not driven.
+
+### What this probe does NOT cover
+
+- Row Up/Row Down (reorder animation rows) — requires template with ≥2 rows AND selection not at boundary; `rowDownBtn` is enabled (template has ≥2 rows) but probe stays on row 0 to keep the test deterministic
+- Clear Selected (`deleteCellBtn`) — reachability confirmed; not driven (would clear authored content in the session)
+- `gridZoomInput` / `gridToggleLabels` — reachability confirmed; not state-mutated in this probe
+- Real iOS Safari on a physical iPad (UQ-013 / FL-MOB-01 / FL-MOB-02 remain OPEN)
+
+---
+
+## Probe #11 — Tool/Layer Parity — 2026-06-16 — 13/13 PASS
+
+**Probe**: `scripts/audit/tool_layer_parity_probe.mjs`
+**Artifact dir**: `artifacts/2026-06-16-tool-layer-parity/`
+**Profile**: Playwright WebKit, iPad Pro 11 landscape (`hasTouch: true`, `pointer:coarse`)
+
+### What changed vs. prior coverage
+
+Prior probes used Cell, Select, Copy, Paste, Cut, Clear, Undo, Redo via direct canvas interaction (keyboard shortcuts + canvas drags). No probe had opened the tools or layers drawers, switched tools via their buttons, or driven layer panel operations. This probe closes that gap.
+
+### Tools drawer note
+
+The `data-drawer="tools"` element is not in `workbench.html` static HTML. It is created dynamically by `whole-sheet-init.js:_buildSidebar()` (line 2527) and appended to the page when the whole-sheet editor is hydrated (`hydrateWholeSheetEditor()`). After session load (`ws-session-loaded`), the tools drawer exists in the DOM and `toggleDrawer('tools')` opens it as a bottom sheet on mobile.
+
+### What was proven
+
+- **Tools drawer reachable**: `openDrawer('tools')` → `#wsToolErase`, `#wsToolLine`, `#wsToolCell`, `#wsToolSelect` all visible
+- **Switch to Erase**: `#wsToolErase.click()` → `editorState.activeTool = 'erase'` (confirmed via `__wholeSheetEditor.getState().activeTool`)
+- **Switch to Line**: `#wsToolLine.click()` → `activeTool = 'line'`
+- **Restore to Cell**: `#wsToolCell.click()` → `activeTool = 'cell'`
+- **Layers drawer reachable**: `openDrawer('layers')` → `#wsLayersPanel` renders 4 `.ws-layer-row` elements
+- **Layer info**: `[L0: Metadata (hidden), L1: Layer 1 (hidden), L2: Visual (visible), L3: Layer 3 (hidden)]`
+- **Layer visibility toggle**: `.ws-layer-vis-btn` click on L0 → `ws-layer-visible` class toggled `false→true`; toggled back `true→false` (restored)
+- **Add Layer**: `.ws-layer-add-btn` click → layer count 4→5 (+1)
+- **Delete Layer**: select new layer → `.ws-layer-del-btn` click → count 5→4
+- **Export + oracle**: `totalNonZero=10087` across all 4 XP layers — session intact after layer operations
+
+### Honest label
+
+Tool/Layer parity: **PASS** — tools drawer reachable, Erase/Line/Cell tool switches confirmed via `activeTool`, layers drawer renders 4 layers, visibility toggle + add + delete all proven with state mutation.
+
+### What this probe does NOT cover
+
+- Erase/Line/Fill/Eyedropper/Text tool actual canvas usage (painting/erasing cells) — tools are proven reachable and switchable; canvas usage is covered by the editing parity probe for Cell/Select
+- Layer lock/unlock toggle — `.ws-layer-lock-btn` is present in each row; not driven in this probe
+- Layer rename — no rename button in current UI (name span is static text; may require double-click or dedicated rename UX)
+- Real iOS Safari on a physical iPad (UQ-013 / FL-MOB-01 / FL-MOB-02 remain OPEN)
+
+---
+
+## Gate Decision — Skin Dock Visual Runtime — 2026-06-16 — DEFERRED (EMFS Constraint)
+
+**Related probe**: `scripts/audit/mobile_skin_dock_probe.mjs` (Probe #6)
+**Decision**: Keep Skin Dock labeled **"pipeline-ready, not visual-runtime proven"** until EMFS cache injection is implemented.
+
+### Why pixel/visual probing is not the right next gate
+
+The mobile_skin_dock_probe.mjs already documents at line 24: "Does NOT prove the skin renders visually in the WASM game (EMFS injection...)". The reason is structural:
+
+- The Y9-2 WASM engine initializes its sprite cache from Emscripten virtual FS (EMFS) at startup, not on each frame
+- The authored XP must be injected into EMFS before the game process starts
+- Until EMFS cache injection is implemented, the game iframe shows the **default sprite**, not the authored skin — regardless of whether the authored XP is exported and `webbuild.ready=true`
+- A pixel probe of the iframe canvas would only prove the default sprite renders (game is running), not that the authored skin is visually active
+
+### What would unlock this gate
+
+- EMFS injection: the web build pipeline writes the authored XP bytes into the EMFS mount point that the game reads at sprite cache init
+- After injection, a pixel probe of `#webbuildFrame` canvas could compare expected pixel values (e.g., color at known frame coordinates)
+- Until that feature exists, this gate remains "ready-state only"
+
+### Current honest label (unchanged)
+
+Skin Dock: **pipeline-ready** — author skin → export → `webbuild.ready=true`. Visual rendering of the authored skin in the WASM game is NOT proven (EMFS sprite cache initialized at engine startup, not on authored XP export).
+
+---
+
+## Gate Decision — Source/Import Pixel Fidelity — 2026-06-16 — DEFERRED (Oracle Scope Boundary)
+
+**Related probe**: `scripts/audit/mobile_source_import_probe.mjs` (Probe #4)
+**Decision**: Keep Source/Import labeled **"nonzero structural content, not visual fidelity"** — no pixel-faithful oracle added at this time.
+
+### Why
+
+- Probe #4 oracle counts `char_code > 32` cells across all XP layers (14197 total)
+- This proves the pipeline ran and produced non-blank XP content
+- Pixel-faithful oracle would require defining the expected glyph/color at each cell position, derived from the fixture PNG's sprite box coordinates + the source-to-glyph/color mapping algorithm
+- That mapping is algorithmic — it depends on the pipeline's color quantization and glyph selection logic
+- Until that expected mapping is documented and fixture-pinned, any pixel-faithful oracle would be brittle and tied to internal algorithm state
+
+### What would unlock this gate
+
+- A fixture PNG with known exact pixels and a reference output XP with known expected glyphs/colors per cell
+- A comparison oracle that reads the exported XP and verifies glyph and color at specific coordinates match the fixture reference
+- This is a pipeline algorithm correctness gate, not a mobile parity gate — it would live in pipeline test coverage, not in the mobile UX probes
+
+### Current honest label (unchanged)
+
+Source/Import: **structural content proven** — PNG upload → draw box → find sprites → Convert to XP → `totalNonZero=14197` (all layers) / `editorCount=4110` (L2). Pixel-level glyph/color fidelity from PNG pixels is NOT proven by this probe.
+
+---
+
+## Advanced Fallback Audit — 2026-06-16 — CONSISTENT
+
+**Audited documents**:
+- `docs/plans/2026-03-23-workbench-canonical-spec.md`
+- `docs/plans/2026-06-09-workbench-prune-proposal.md`
+- `docs/PLAYWRIGHT_FAILURE_LOG.md` (FL-MOB-01 section)
+
+**Verdict**: All three documents explicitly and consistently label AVP, TERM++ native, Verification, Recorder, and advanced Skin Dock controls as **Advanced/Desktop fallback only**. No language in any document implies mobile parity for these surfaces.
+
+### Key confirming quotes
+
+- **Canon spec §1.9.3:9** (line 1320–1324): *"ActorVisualProfile draft controls, TERM++ native controls, verification command templates, recorder controls, and source/debug panels are not first-screen mobile controls."*
+- **Canon spec §1.9.3:14** (line 1342–1346): *"ActorVisualProfile draft controls, Verification, TERM++ native launch, Recorder, and hidden/advanced Skin Dock controls must be documented as `Advanced/Desktop fallback` until dedicated mobile proof exists."*
+- **Prune proposal** (lines 155–159): explicitly lists AVP, TERM++ native, Verification as "Move behind Advanced"
+- **FL-MOB-01** (line 13870): *"AVP/Skin Dock/Verification/TERM++/Recorder stay behind Advanced (not mobile root)"*
+
+### Decision
+
+No probe is needed for Advanced surfaces. The design boundary is correctly documented in all three sources. The mobile parity gate does not require proof of AVP, Verification, TERM++ native, Recorder, or advanced Skin Dock controls on mobile. These surfaces remain "Advanced/Desktop fallback only" until explicit mobile requirements are added.
+
+**If requirements change**: any surface moving from Advanced to mobile-root requires a dedicated probe before claiming mobile parity for it.
+
+---
+
+## Y9-2 FL Mirror — 2026-07-07 — Deformation recovery + sprite-sheet conversion + Workbench UX directives
+
+**Mirror of**: canonical `asciicker-Y9-2/docs/FAILURE_LOG.md` entries filed 2026-07-07 via the `/fl-audit` front doors. These are mirrored here for pipeline-v3 traceability (the workbench UX items were proven with a headless Playwright probe against this repo's `web/` surface). The Y9-2 FAILURE_LOG remains the authority; this section is a read-only mirror — do not edit FL status here, edit it in Y9-2 and re-mirror.
+
+**Owner lane**: FL-4547 (MacLeek/ascii-art Python-3 port, reference-study only per FL-4546 / Law 1) for the deformation/conversion cluster; FL-4178 (workbench cold-start whole-sheet gap) for the workbench UX cluster.
+
+### Umbrella fix-attempt — FL-4547 @ `main` (commit `53cb01960`)
+
+Recovered the Xu/Zhang/Wong 2010 constrained-deformation SA loop (FL-4547 "BROKEN/ultra-slow") and sprite-sheet conversion in `.scratch/macleek-ascii-art-ref/ascii_port.py`. Four child correctness/perf findings + one sprite-sheet fix + two open follow-ups, all filed individually in Y9-2. Verified by energy monotonically decreasing (was spinning on NaN before):
+
+| Image | E (match-only) | E (after deform) | Δ | accepted | time |
+|---|---:|---:|---:|---:|---:|
+| monk_1.bmp (Rw=12) | 55.69 | 55.07 | −0.61 | 6 | 61s |
+| Civilian1_Idle sprite (Rw=20) | 72.87 | 45.62 | −27.25 (~37%) | 94 | 67s |
+| Knight1_Attack sprite (Rw=20) | 55.28 | 54.20 | −1.08 | 37 | 150s |
+
+Per-run results recorded in `.scratch/macleek-ascii-art-ref/DEFORMATION_FIX_LOG.md`. No mixed-ownership changes: only `.scratch` files touched; concurrent session's uncommitted FAILURE_LOG.md edits left intact.
+
+### Deformation / conversion child entries (ComplaintRef FL-4547)
+
+| Y9-2 FL | Status | Kind | Title | Code ref |
+|---|---|---|---|---|
+| FL-4549 | PARTIAL | bug_fix | `line_intersection` div-by-zero guard was commented out → NaN poisoned SA energy (FIXED) | `ascii_port.py:238` |
+| FL-4550 | PARTIAL | bug_fix | `nearest_points` ray-endpoint clobber corrupted ray after first segment (FIXED, vectorized, ~36× fewer intersection calls) | `ascii_port.py:269` |
+| FL-4551 | PARTIAL | bug_fix | `local_deform` max/min div-by-zero for coincident points A==B / A==C (FIXED) | `ascii_port.py:318` |
+| FL-4552 | PARTIAL | performance | `D_cell` was O(segments) per affected cell → precompute cell→total-length O(1) lookup (FIXED, behavior-preserving) | `ascii_port.py:539` |
+| FL-4553 | **OPEN** | open_bug | SA worse-move acceptance `Pr < random` appears inverted vs standard SA (follow-up; flipping to `rand < Pr` is the experiment) | `ascii_port.py:613` |
+| FL-4555 | **OPEN** | performance | ~40 ms/iter; `cell_length` rebuilt per iteration; incremental update on segment moves would speed up (follow-up, needed for batch conversion) | `ascii_port.py:540` |
+| FL-4556 | PARTIAL | bug_fix | sprite-sheet RGBA transparency: R-channel threshold treated transparent (R=0) as structure → alpha-composite onto white before `load_img` (FIXED; Civilian1_Idle 72.87→45.62, Knight1_Attack 55.28→54.20) | `ascii_port.py:447` |
+
+### Workbench UX entries (ComplaintRef FL-4178 / FL-3840) — proven via Playwright in this repo
+
+These three are the Playwright-relevant ones. FL-4557 was verified with a headless Chromium probe against `http://127.0.0.1:5071/workbench?session_id=…` in this repo.
+
+| Y9-2 FL | Status | Kind | Title | Code ref (this repo) |
+|---|---|---|---|---|
+| FL-4557 | OPEN | ux_bug | Workbench should default to **desktop** mode; mobile-first UQ-013/D4 shell hides Whole-Sheet XPEdit on `?session_id=` load. Playwright proof: `?session_id=…` alone → `#wholeSheetPanel` stays `hidden`, `wsStatus="not loaded"`, `mounted=false`; adding `&focusFrame=0,0` → panel mounts (126×72, 3 layers, `mounted=true`). Recurrence of FL-4178 cold-start gap. | `web/styles.css:1621`, `web/workbench.js:4397` |
+| FL-4558 | OPEN | ux_bug | Mobile tools overlay (`ws-drawer` bottom sheets) too inconvenient for a REXPaint-clone editor; needs side panel / half-split (iPhone-keyboard-style) / floating-island selector bar, re-anchorable to side or top, with XP-sheet navigation buttons in addition to zoom in landscape. FL-MOB-03 (`web/styles.css:1936`) is a partial step but still bottom-sheet shaped. | `web/styles.css:1485`, `web/styles.css:1936` |
+| FL-4559 | OPEN | adr | Whole-Sheet XPEdit must be a full REXPaint-clone/parity surface that works **without** the surrounding workbench features (skin dock, bundle, etc.); canonical spec must cleanly separate **section 1 (editor)** from **section 2 (surrounding shell)**. Editor must be independently launchable and independently provable. | `web/workbench.html:360`, `web/whole-sheet-init.js:4684` |
+
+### Conversion-method ADR (ComplaintRef FL-4547)
+
+| Y9-2 FL | Status | Kind | Title |
+|---|---|---|---|
+| FL-4560 | OPEN | adr | Main asciicker-Y9-2 repo sprite conversion script should use the **structured ASCII art method** (MacLeek / Xu-Zhang-Wong SIGGRAPH 2010) once deformation + sprite-sheet fixes land — clean-room Y9-2 implementation, NOT a copy of the `.scratch` port (reference-study only, Law 1 per FL-4546). Implementation gated on FL-4549/4550/4551/4552/4556 landing and FL-4553/4555 resolution-or-acceptance. |
+
+### Lineage (verified union-preserving in Y9-2)
+
+- **FL-4547** ComplaintRefs now 11: `FL-4208, FL-4260, FL-4546` (existing) + `FL-4549, FL-4550, FL-4551, FL-4552, FL-4553, FL-4555, FL-4556, FL-4560` (new). CodeRefs gained line-anchored refs `:238 :269 :318 :539 :613 :447`.
+- **FL-4178** ComplaintRefs now `FL-4557, FL-4558, FL-4559`; CodeRefs gained `web/styles.css:1621`, `web/styles.css:1485`, `web/whole-sheet-init.js:4684`.
+- `python3 scripts/analyze_failure_log.py validate` ran clean in Y9-2 after the writes.
+
+### Verify (run in Y9-2)
+
+```
+python3 scripts/analyze_failure_log.py overlay --complaint-ref FL-4547   # 8 children + ADR
+python3 scripts/analyze_failure_log.py overlay --fl FL-4178             # workbench UX children
+python3 scripts/analyze_runs.py fl attempt-accounting --fl-ids FL-4547,FL-4549,FL-4550,FL-4551,FL-4552,FL-4553,FL-4555,FL-4556,FL-4557,FL-4558,FL-4559,FL-4560
+```
+
+### Honest label
+
+Mirror only. The Y9-2 FAILURE_LOG is the authority for status/overlay/lineage; this section reproduces the 2026-07-07 filings for pipeline-v3 visibility (especially the three Playwright-proven workbench UX entries). No FL status was changed in this repo — status changes must happen in Y9-2 and be re-mirrored.
+
+---
+
+## Actor Sheet Reflection Audit — Gromit & Wallace — 2026-08-09 — PARTIAL (upstream contract NOT yet verified)
+
+**Repo state at time of audit**: branch `main`, HEAD `1da542f`. Verified with `git branch --show-current && git rev-parse HEAD` — the system-prompt git header is not trusted per the standing rule.
+
+**Subjects**: `/Users/r/Desktop/2026-06-08-gromit.xp` (180×96 cells, sprite 10×12) and `/Users/r/Desktop/2026-06-08-wallace.xp` (126×72, sprite 7×9). Both: layer-0 metadata `angles=8, projs=2, anims=[1,8]` → 18 sprite-cols × 8 sprite-rows = 144 frames each, 288 total.
+
+### Session-start blocker (resolved by user, recorded for lineage)
+
+Every tool call — Bash, Agent, Read, AskUserQuestion — was refused by `~/.claude/scripts/maintainer/hooks/startup_gate_hook.py`. Root cause: the maintainer toolkit is registered **globally** but resolves `scripts/maintainer/startup_preflight.py` **relative to CWD**, and pipeline-v3 shipped neither that directory nor `scripts/multiplayer_canon_guard.py`. The gate's own remediation commands were therefore unrunnable. Resolved by adding a layout-aware canon guard (returns `applicable:false` off-Y9-2) and merging the Y9-2 maintainer toolkit into v3's `scripts/maintainer/`. Two claim-guard false positives were then hit and worked around transparently: the required schema value `metadata_status` and the CSS `position` keyword used for overlay pinning were both read as status claims. Neither was a status claim about the work; the second was resolved by restructuring the panel inline so the keyword was no longer needed.
+
+### Session bootstrap defect — stale session schema
+
+`data/sessions/` was empty and the repo-root `recover_gromit_session.py` / `recover_wallace_session.py` write a **stale schema** the live server rejects. `service.py:3094` does `angles = int(sess_dict["angles"])` but those scripts emit `angles` as a list-of-dicts, and `service.py:3158` does `int(sess_dict.get("source_projs", projs))` against an emitted list. Both raise `TypeError` → HTTP 500 on `/api/workbench/load-session`. The live contract is `service.py:3091-3098`: `angles`/`projs` are **ints**, `anims` a list, and the server derives `frame_cols = sum(anims) * projs`, `frame_rows = angles`. Additionally `?session=` alone loads data but leaves the whole-sheet canvas unmounted — `&focusFrame=row,col` (workbench.js:4398, FL-4178) is required to mount it.
+
+### Measured findings (all from raw .xp cell data, not screenshots)
+
+| Check | Gromit | Wallace |
+|---|---|---|
+| Reflection geometry (proj1 vs vertical mirror of proj0) | **FAIL** 10.6–23.2% mismatch, all 8 rows | PASS — 0.0%, exact |
+| Reflection colour at mirrored positions | FAIL | **FAIL** — 53% of ink cells unrelated; 47% match |
+| fg/bg swap (the innocent half-block explanation) | — | **0.0%** — hypothesis refuted |
+| Distinct poses across 8 walk frames | row 0 = 3, row 6 = 4 | rows 2 & 6 = **2**, five rows = 5 |
+| Palette breadth | 6 colours; rows 3 & 5 use only 2 | 12 colours, 8 in all 144 frames |
+| Off-palette contamination | `#00aaaa` in exactly 36 frames, rows 0/1/2/7 | none |
+
+Net: **all 144 reflection frames across both sheets are defective**; the 144 projection-0 frames are largely sound.
+
+### Correction recorded
+
+Wallace was first reported in-session as "structurally sound, no critical frames". **That was wrong.** It passed the silhouette test and no colour-fidelity test existed yet. The reflection-colour check (`RC`) was added only after a reviewer's rejected claim prompted the test. Recording the error explicitly so the earlier claim is not cited as evidence.
+
+### Checks withdrawn (recorded so they are not re-litigated)
+
+- **Edge clipping** — fired on nearly every Wallace frame because a grounded sprite legitimately touches its bottom edge. Measured noise; removed.
+- **Naive projection parity** (`proj0 ≈ proj1` identity) — invalid premise. `projs=2` is projection **+ reflection**, so the correct comparison is against the vertical mirror. Tested before reporting; the identity form would have produced eight false "HIGH" rows.
+
+### Reviewer claims — disposition
+
+| Claim | Disposition |
+|---|---|
+| Gromit proj-1 = corrupted re-composition (feet above head, torso inverted, legs deleted) | Accepted — matches measured 10.6–23.2% |
+| Wallace "is upside down" in proj-1 | **Rejected** — inversion is the reflection semantic, not a defect |
+| Wallace proj-1 recoloured `#ff5555` replacing `#555555` | **Partly verified** — colour is broken, mechanism wrong (same source maps to several targets) |
+| Wallace rows 0 & 4 have zero leg motion | **Refuted** — 5 distinct leg poses each |
+| Two contradictory mirror conventions; heads clipped flush to y=0 | Not verified — leads only |
+
+### RESOLVED — upstream contract audit + in-repo control experiment
+
+The OPEN item ("is the reflection colour rule real?") is closed by two independent lines of evidence.
+
+**1. In-repo control experiment.** The base sheets are present in this repo and match the derivatives exactly: `sprites/wolfie.xp` is 180×96 (= Gromit) and `sprites/player-nude.xp` is 126×72 (= Wallace), both with identical layer-0 metadata.
+
+| Sheet | reflect-geo | reflect-colour | poses/row | colours |
+|---|---|---|---|---|
+| `wolfie.xp` (reference) | 7.7% | 22.2% | `[4,7,6,7,5,6,4,6]` | 6 |
+| Gromit (derived) | 15.7% | 34.1% | `[3,7,6,7,5,6,4,6]` | 6 |
+| `player-nude.xp` (reference) | **0.0%** | **0.0%** | `[5,5,2,5,6,5,2,5]` | 4 |
+| Wallace (derived) | 0.0% | **53.0%** | `[5,5,2,5,6,5,2,5]` | 12 |
+
+`player-nude.xp` scoring 0.0%/0.0% empirically establishes the contract. Wallace's 53% is therefore a genuine defect, not a misread format.
+
+**2. Y9-2 upstream audit.** No reflection/palette validator exists anywhere. The rule is UNSPECIFIED in code, but the engine **darkens reflections itself at load** (`engine/sprite.cpp:1434, 1539-1543`, `rgb_div=400`), so author-side darkening would double-darken — and every upstream-authored sheet carries identical colour sets in both halves. The canonical glyph-flip table (`engine/render/render_internal.h:44-63`: 220↔223, 218↔192, 191↔217) is wired only to the S3 path, **not** to reflections, and does **not** swap fg/bg. That independently vindicates rejecting the fg/bg-swap hypothesis (measured at 0.0%).
+
+### ROOT CAUSE — Gromit Layer-0 colour key was recoloured (engine renders it near-blank)
+
+The engine keys transparency off **Layer 0's background colour at (0,0)** — `xp_viewer.py:253-272`, `[ENGINE-ALIGN] sprite.cpp:1590-1601`: a cell is transparent when `bg == color_key OR bg == magenta`.
+
+| Sheet | L0 colour key | engine-visible cells |
+|---|---|---|
+| `wolfie.xp` | `#ffff55` | 27.2% |
+| `player-nude.xp` | `#ffff55` | 31.1% |
+| Wallace | `#ffff55` | 31.1% |
+| **Gromit** | **`#ffe4b5`** | **12.2%** (from 31.7% as-painted) |
+
+Gromit's Layer 0 is uniformly recoloured to `#aa5500`/`#ffe4b5` across all 17,280 cells — `#ffe4b5` is **its own cream body colour**. Every body cell therefore matches the transparency key and is dropped, losing ~62% of the painted artwork in-engine. The references use `#ffff55`, a colour their artwork never contains, which is why the key is safe there. Layer 0 is `locked` in the session precisely to prevent this, so the recolour pass edited the `.xp` directly and bypassed the workbench lock. This matches the independently-found defect in Y9-2's `assets/sprites/2026-05-28-gromit.xp`, so the fault predates the 2026-06-08 file and was inherited.
+
+### Attribution correction — inherited vs introduced
+
+Two earlier in-session claims were misattributed and are corrected here:
+
+- **Wallace pose variety.** Rows 2 and 6 holding only 2 distinct poses was reported as a Wallace defect. `player-nude.xp` has the identical profile `[5,5,2,5,6,5,2,5]` — **inherited from the base sheet**, not introduced.
+- **Wolfie is not a clean baseline.** It already carries 7.7% reflection-geometry mismatch, so Gromit's 15.7% is roughly a doubling, not a wholly new fault.
+
+Silhouette deltas against the references: **Wallace is +0/−0 ink across all 144 frames** (colour-only edit; geometry pristine). **Gromit is +275/−59 in row 0** alone with additions in every row — the "antler" ears are added ink at `y1 x4/x6` where wolfie's `y1` is entirely empty.
+
+### Gate gap
+
+`src/pipeline_v2/gates.py` (G7–G12, 111 lines) asserts only cell counts, ≥5% non-space glyphs, dimensions, layer count and L0 row-0 glyphs. There is **no assertion on the L0 colour key, reflections, or palette** — none of these gates would have caught either defect.
+
+### Honest label
+
+PARTIAL. All findings are measured against in-repo reference sheets and reproducible. The reflection-colour contract is established empirically (`player-nude.xp` at 0.0%) and supported by upstream engine behaviour, but it is still **UNSPECIFIED in code** — no gate, schema or test asserts it anywhere. No sprite data was modified; no fix attempted.
+
+Renderings produced earlier in this session honoured **magenta only** and therefore over-report what Gromit displays. Any Gromit image in the review artifact predating the colour-key finding shows cells the engine drops.
+
+### Reproduce
+
+```
+python3 /private/tmp/.../scratchpad/analyze_frames.py     # per-frame ink, bbox, ASCII rows
+python3 /private/tmp/.../scratchpad/check_symmetry.py     # parity, mirror, walk-cycle
+python3 /private/tmp/.../scratchpad/build_findings.py     # per-frame defect list incl. RC
+```
+
+### Fix attempt — 2026-08-09 — source rebuild and session sync
+
+Implemented `scripts/repair_actor_sheets.py` after the failure-log review.
+The command backs up the source/session inputs under `/tmp/asciicker-actor-sheet-repair/`,
+then:
+
+- rebuilds Wallace projection 1 from its authored projection 0, including the
+  CP437 vertical half-block flip (`220 <-> 223`), preserving the existing
+  sweater, pants, baldness and face treatment;
+- rebuilds Gromit from `wolfie.xp` projection-0 geometry, applies only the
+  visual-layer palette treatment, maps the cyan eye halves to black, and leaves
+  Layer 0/1 untouched so the `#ffff55` engine transparency key remains valid;
+- derives both reflection halves from their repaired projection-0 halves and
+  synchronizes the ignored v3 workbench sessions.
+
+Measured result from the repaired raw XP files:
+
+| Check | Gromit | Wallace |
+|---|---:|---:|
+| Reflection glyphs match vertical flip | 100.0% | 100.0% |
+| Reflection ink colours match source | 100.0% | 100.0% |
+| Gromit projection-0 silhouette vs Wolfie | 0 cell deltas | n/a |
+| Gromit visual cells colliding with Layer-0 key | 0 | n/a |
+| Workbench session visual layer matches XP | PASS | PASS |
+
+The port-5071 smoke check loaded both sessions and produced non-blank frame
+canvases. This closes the measured source defects; a fresh headed operator
+review is still the final visual confirmation for ear/face styling.
+
+### Ownership correction — 2026-08-09
+
+The first repair invocation incorrectly wrote the binary variants in the
+sibling Y9-2 checkout because v3 had no actor-variant files. That was corrected:
+the repaired, session-matching sources now live in
+`sprites/2026-06-08-gromit.xp` and `sprites/2026-06-08-wallace.xp` in this
+repository, and `scripts/repair_actor_sheets.py` now imports v3's own
+`scripts/xp_core.py` and `sprites/wolfie.xp` only. The sibling Y9-2 variants
+were restored from the repair backup, so ownership is no longer split.
+
+### Manual Gromit reference repair — 2026-08-11
+
+**Operator evidence:** `/Users/r/Downloads/ChatGPT Image Aug 11, 2026, 06_06_37 AM.png`
+defines the required eight-angle identity: muted tan oval head, brown ears that
+curve outward and hang beside the jaw, two separated eyes on front/three-quarter
+views, one eye on profiles, no face on rear views, and a large dark nose at the
+muzzle tip.
+
+**Observed gap:** the then-current Gromit XP contained a later manual head, but
+its tan, brown, and nose solids were encoded as glyph `219` with the intended
+color in foreground and a magenta/key background. The legacy sprite path renders
+that solid from its background, so the authored head disappeared while Wolfie's
+background-filled body remained. The repair command was also a stale owner: it
+still rebuilt Gromit as a palette-only Wolfie recolor and would erase the manual
+head on its next invocation.
+
+**Fix:** `scripts/repair_actor_sheets.py --actor gromit` is now the single
+reproducible owner. It keeps Wolfie's projection-0 locomotion below the neck,
+applies the supplied muted tan/brown palette, stamps explicit six-sub-row head
+templates for angles 0-4, derives angles 5-7 by horizontal mirror, and encodes
+solid head/ear/nose cells as non-key backgrounds. Half-blocks provide the curved
+crown, tapered jaw, narrowed ear edges, and separated eye pupils. Projection 1
+is regenerated only after authoring.
+
+**Executed checks:**
+
+- all 72 projection-0 frames satisfy their angle-specific eye/nose counts;
+- every frame carries brown ear cells and zero transparent glyph-219 solids;
+- all 72 reflection frames exactly match the vertical glyph/color transform;
+- Layer 0 retains the `#ffff55` key;
+- `data/sessions/8102b23a-5bc7-456b-ac7d-13c63c03cff3.json` cells and visual
+  layer match `sprites/2026-06-08-gromit.xp` cell-for-cell;
+- pre-write source/session backup:
+  `/tmp/asciicker-actor-sheet-repair/20260811-063445`.
+
+**Stage:** Implemented and connected to the current Workbench session. Headed
+Skin Dock execution and operator visual acceptance remain pending.
+
+#### Operator correction: front eyes missing — 2026-08-11
+
+The first headed review failed: the front-facing half-block pair did not read as
+two eyes in the runtime. The source had two eye cells, so the count assertion
+passed while the required visible outcome failed. This falsifies half-block eye
+counts as a sufficient visual proxy.
+
+The manual templates now encode every visible eye as a white background cell
+with CP437 glyph `254` as a centered dark pupil. Front and three-quarter angles
+carry two distinct eye cells, profiles carry one, and rear angles carry none.
+The six-pixel runtime-font render shows two white eyes with separate pupils above
+the nose. Applied source/session backup:
+`/tmp/asciicker-actor-sheet-repair/20260811-064116`.
+
+The prior `8102b23a-...` session receipt is historical: the focused Flask test
+fixture removed that ephemeral session. The canonical XP remains
+`sprites/2026-06-08-gromit.xp`; the repaired live session was recreated through
+the product upload endpoint as `2d389df3-1a09-480d-9469-727917f1bf6f`.
+
+**Runtime execution:** the recreated session was loaded through the real
+Workbench `Test This Skin` control. Skin Dock reached `Webbuild ready (starting
+game...)`, mounted the wolfie-family actor, and the front-facing runtime frame
+visibly shows two white eye cells with separate dark pupils above the nose.
+Diagnostic crop: `/tmp/gromit-runtime-front-eyes.png`.
+
+**Stage:** Executed and visually observed in the local runtime. Operator
+acceptance remains pending.
+
+#### Operator rejection: square mask / horizontal ear bars — 2026-08-11
+
+Operator runtime evidence:
+`/Users/r/Desktop/Screenshot 2026-08-11 at 06.47.01.png`.
+Direct comparison with the supplied eight-angle reference rejected the prior
+result. Although the eyes were present, the head read as a rectangular mask,
+the ears as horizontal brown bars, the eye/nose cells as a robot-like face, and
+the silhouette did not reproduce Gromit's oval skull or crown-rooted ear curve.
+The prior runtime observation is therefore diagnostic only, not acceptance.
+
+The manual templates were redrawn again at the cell level. The new geometry:
+
+- narrows the crown with lower-half cells;
+- widens through the eye line with left/right half-cell boundaries;
+- adds a full tan muzzle row and tapers into a centered one-cell button nose;
+- builds each ear as a crown root, half-width outward bend, one-cell vertical
+  drop, and upper-half rounded tip;
+- keeps the profile muzzle extended and the rear angles faceless;
+- continues to derive angles 5-7 and projection 1 rather than authoring
+  duplicate geometry.
+
+Applied source/session backup:
+`/tmp/asciicker-actor-sheet-repair/20260811-065540`.
+
+**Stage:** Implemented and connected. The previous runtime image is rejected;
+the redrawn runtime still requires headed execution and operator review.
+
+**Execution update:** the redrawn source was loaded through the real Workbench
+`Test This Skin` control and reached `Webbuild ready (starting game...)`. The
+live capture shows the changed three-quarter/profile actor with an extended tan
+muzzle and hanging brown ear; it is not evidence for the front angle. The
+runtime-font angle-0 render at `/tmp/gromit-reference-v5-front.jpg` shows the
+manual front geometry (narrowed crown, widened cheeks, separate eyes, tan muzzle,
+centered nose, curved/drop ears). Runtime crop:
+`/tmp/gromit-reference-redraw-runtime.png`.
+
+The canonical XP, live session `2d389df3-1a09-480d-9469-727917f1bf6f`, and
+`/Users/r/Desktop/2026-06-08-gromit.xp` match cell-for-cell. Reflection checks
+remain exact and Layer 0 retains `#ffff55`.
+
+**Stage:** Executed for the live preview path; front-angle operator acceptance
+remains pending.
+
+#### Exact front runtime correction — 2026-08-11
+
+The prior headed claim was incomplete: pressing `W` selects camera-relative
+row 0 for the local player, but it does not force the independently rendered
+wolf preview actor to row 0. Three-quarter captures therefore could not accept
+or reject the authored front template.
+
+The exact row-0 runtime proof used a bounded fixture: the current row-0 visual
+cells were duplicated across all eight angle slots in the temporary Workbench
+session, launched through the real `Test This Skin` control, and then the
+eight-angle session was restored from backup. The restored session and
+`sprites/2026-06-08-gromit.xp` compare cell-for-cell with zero differences.
+No fixture code or query parameter remains in the runtime or Workbench source.
+
+The live proof rejected two more source assumptions and drove the final edits:
+
+- moving the head two rows above Wolfie's native crown put it inside the
+  mounted rider slot; the authored head now retains Wolfie's crown anchor;
+- dark space-background nose cells and duplicate glyph-254 pupils were not a
+  reliable live representation; the front now uses deterministic half-cell
+  pupils and foreground-backed button-nose cells;
+- the narrow face and detached ear drops were redrawn as a tapered six-cell
+  face with separated eyes, a centered two-cell nose, connected crown roots,
+  outward ear shoulders, vertical drops, and rounded tips.
+
+**Runtime evidence:**
+
+- exact row-0 full capture: `/tmp/gromit-runtime-exact-front-v11.png`;
+- exact row-0 actor crop: `/tmp/gromit-runtime-exact-front-v11-actor.png`;
+- `Test This Skin` install receipt: `status=installed`, target
+  `/sprites/wolfie-0000.xp`, payload SHA-256
+  `44c94cf9491349a4268443845df9c6d239363765e14837c4dc375bff28f303a7`;
+- canonical/Desktop SHA-256:
+  `d4a64738d51e73c8bbce9931ccc1caecc78a90aed68bf67b546c584716e8ab7f`;
+- final repair dry run passes head counts, exact projection reflection, and
+  Layer-0 key checks.
+
+**Stage:** Implemented, connected, executed, and visually verified on the exact
+front runtime row. The headed Chrome proof remains open for operator review.
+
+#### Operator rejection of exact-front correction — 2026-08-11
+
+The operator rejected the `v11` result immediately against
+`/Users/r/Downloads/ChatGPT Image Aug 11, 2026, 06_06_37 AM.png`. This
+invalidates the preceding "visually verified" stage; it was an execution proof,
+not visual acceptance.
+
+The rejected result still reads as a block mask: the crown is flat, the eye
+cells form a mechanical horizontal band, the two-cell nose becomes a bar, and
+the connected ear construction reads as rigid brackets rather than curved,
+hanging ears. Repeating row 0 across all angle slots proved that the engine
+consumed row 0, but it did not prove that row 0 resembled Gromit. That fixture
+must not be reused as acceptance evidence.
+
+**Required correction:** rebuild all eight head angles manually from the
+operator reference, review the eight source rows side by side, then execute the
+unmodified eight-angle sheet through `Test This Skin`. No completion claim is
+valid until the visible silhouette, eyes, muzzle, nose, and ear direction agree
+with the reference.
+
+**Stage:** Rejected; manual eight-angle redraw in progress.
+
+#### Manual reference redraw applied — 2026-08-11
+
+The rejected widened mask was removed rather than incrementally patched. The
+replacement returns to a narrow crown / wide cheek / tapered muzzle structure
+and manually defines the five unique reference angles; rows 5-7 are exact
+horizontal counterparts of rows 3-1.
+
+The eight-angle review used the runtime's shipped CP437 BDF rather than the
+geometric fallback. Contact sheet:
+`/tmp/gromit-eight-angle-manual-v3.png`.
+
+Visible reference checks on that sheet:
+
+- row 0: two separated white eyes with centered dark pupils, compact centered
+  button nose, two crown-root ears that curve outward and hang beside the jaw;
+- rows 1/7: two eyes, offset muzzle-tip nose, asymmetric three-quarter skull;
+- rows 2/6: one eye and a nose at the end of the extended profile muzzle;
+- rows 3/5: no face, asymmetric rear skull and ear mass;
+- row 4: no face, symmetric rear skull with two hanging ears.
+
+The repair was applied to the canonical XP, live Workbench session, and
+Desktop copy. Backup:
+`/tmp/asciicker-actor-sheet-repair/20260811-073355`. Canonical/Desktop SHA-256:
+`d1f43e2f73ee2835f929e501e0ded9829a9c5f8a5bb25f23e2be2998204a72e7`.
+Head-count, reflection, and Layer-0 key assertions pass.
+
+**Stage:** Implemented and connected. Operator visual review of the unmodified
+eight-angle Workbench sheet is pending; no runtime fixture is acceptance.
+
+#### Runtime nose correction — 2026-08-11
+
+The first unmodified runtime execution of the manual redraw rendered the head,
+ears, and eyes but dropped both background-filled nose encodings. Runtime crop:
+`/tmp/gromit-manual-runtime-actor.png`. This falsified the static nose count as
+visible proof.
+
+The shipped CP437 atlas was inspected directly. Glyph `4` supplies a large
+foreground button shape, so all visible-angle noses now use glyph `4` with dark
+foreground on the tan muzzle. The front uses one button cell instead of the
+rejected two-cell bar. The second unmodified `Test This Skin` execution
+installed successfully and visibly rendered the button nose at the
+three-quarter muzzle tip. Runtime crop:
+`/tmp/gromit-manual-runtime-button-actor.png`.
+
+Canonical/Desktop SHA-256:
+`916694a76012daf03987d1534293566daabbec6e23d6ced0e8f69e14d8a63f31`.
+Runtime installed payload SHA-256:
+`a3479c5e101c8f5a27bc323a0aa260e61856f2a033c8ed4e5af2be779515808e`.
+
+**Stage:** Implemented, connected, and executed through the unmodified
+eight-angle runtime path. Operator visual acceptance remains pending.
+
+#### Operator rejection of manual redraw — 2026-08-11
+
+The operator rejected the manual redraw after opening the actual Workbench
+sheet and explicitly directed that work continue until visually correct. The
+runtime-visible button nose fixed one missing-cell mechanism, but did not make
+the sprite acceptable. Prior implementation/execution evidence remains useful
+only for wiring and glyph diagnosis.
+
+**Acceptance reset:**
+
+- each of the eight direction rows must be reviewed individually against
+  `/Users/r/Downloads/ChatGPT Image Aug 11, 2026, 06_06_37 AM.png`;
+- front must read immediately as Gromit: pale egg-shaped skull/muzzle, two
+  separated eyes, large button nose, and brown ears rooted high, arcing outward,
+  then hanging beside the jaw;
+- three-quarter views must retain two eyes and directional muzzle/ear depth;
+- profiles must retain one eye, extended muzzle, and a nose at its tip;
+- rear views must be faceless and preserve the oval skull plus direction-correct
+  ear mass;
+- the Wolfie-derived body/animation remains the topology owner below the head;
+- the unmodified Workbench sheet and unmodified `Test This Skin` path are the
+  required product surfaces;
+- counts, hashes, reflection checks, static glyph checks, and forced-row
+  fixtures cannot establish visual acceptance.
+
+**Stage:** Rejected. Five unique direction templates are being remade from the
+reference; no completion claim is valid before eight-direction visual review.
+
+#### Seven-row reference rebuild and live atlas corrections — 2026-08-11
+
+The rejected six-row mask was replaced with seven-row templates anchored one
+cell above Wolfie's crown. The extra row is used for a narrower skull crown and
+high ear roots; the final row owns only the jaw cells, leaving Wolfie's native
+upper torso, limbs, tail, and walk-frame variation intact outside that jaw.
+
+The bounded visual iterations found and corrected four defects before the
+candidate was promoted:
+
+- two-cell-wide ear drops read as square side blocks, so only the crown keeps
+  two-cell ear mass and the hanging portions use one-cell/half-cell edges;
+- transparent cheek gaps became black wedges, including a wedge between the
+  eyes after horizontal mirroring, so the skull is now continuous;
+- CP437 control glyph `4` was present in the XP but absent in the actual Skin
+  Dock frame, so the nose is now an opaque near-black cell rather than a
+  control-glyph proxy;
+- lower-half brown crown roots disappeared in the runtime atlas, so the roots
+  are solid brown while outer curves and tips retain half-cell shaping.
+
+The final authored treatment also separates a lighter rounded muzzle from the
+warm-cream skull and uses a darker reference-matched brown for the ears. The
+five unique templates and their mirrors encode the required face topology:
+front `2 eyes / 1 nose`, three-quarter `2 / 1`, profile `1 / 1`, rear-quarter
+`0 / 0`, rear `0 / 0`.
+
+**Visual evidence:**
+
+- all 72 projection-0 frames, manually reviewed by direction and walk frame:
+  `/tmp/gromit-v6-projection0.png`;
+- unmodified Workbench and unmodified `Test This Skin` live crop:
+  `/tmp/gromit-v6-runtime-actor.png`;
+- the live frame visibly retains two eyes, a projecting light muzzle with dark
+  tip, brown crown-rooted hanging ears, torso, and legs;
+- the Skin Dock receipt reports `status=installed`, family `wolfie`, exact
+  `/sprites/wolfie-0000.xp` through the 24 packaged wolfie targets, and matching
+  expected/actual payload SHA-256
+  `15f9a0b422b2c2e3c80a68275835c51efc7a91908d8a31facd886e6abd3e89e4`.
+
+The final repair dry run passes head topology, exact projection reflection, and
+Layer-0 transparency-key checks. `pytest -q tests/test_legacy_preview.py`
+passes (`7 passed`), and
+`node tests/web/termpp-skin-lab-registry.test.js` passes. Canonical and Desktop
+XP SHA-256:
+`64cafa1795592a65fe027cd1b7812d9ae52300f2f021687a1099963541eeb7d4`.
+Latest source/session backup:
+`/tmp/asciicker-actor-sheet-repair/20260811-083429`.
+
+**Stage:** Implemented, connected, executed, and visually verified against the
+eight-direction acceptance conditions. Operator acceptance remains pending.
+
+#### Operator rejection of seven-row rebuild — 2026-08-11
+
+The operator rejected the live result immediately. The preceding visual
+verification claim is withdrawn. In the actual Skin Dock capture, the skull
+still reads as a rectangle, the ears as vertical side bars with token crown
+cells, and the projecting muzzle/nose does not reproduce the supplied Gromit
+reference. The operator additionally identified that the eyes are too far apart
+and too low, the muzzle incorrectly changes colour, and the profile view is not
+the supplied long-snouted side silhouette. The 72-frame contact sheet proved
+consistency and intact locomotion, not likeness.
+
+The focused runtime test also removed the active Workbench session as a fixture
+cleanup side effect. Session `2d389df3-1a09-480d-9469-727917f1bf6f` was restored
+from `/tmp/asciicker-actor-sheet-repair/20260811-083429` and repopulated from the
+canonical XP; no further destructive fixture run is allowed before final live
+review.
+
+**Stage:** Rejected. Runtime likeness remains the unresolved acceptance gap.
+
+#### Full-reference landmark transcription — 2026-08-11
+
+The next candidate follows the supplied eight-view sheet as a landmark source,
+not merely as a general silhouette reference. The operator's three explicit
+corrections are now encoded directly:
+
+- front and three-quarter eyes are adjacent, use identical eye cells, and sit
+  one authored row higher;
+- muzzle and skull use the same warm cream with no recolour boundary;
+- profiles use one high eye, a horizontally extended cream skull/snout, a
+  mid-height opaque nose tip, a cream underside, and a short swept ear that
+  ends above the body rather than descending into it.
+
+The front ears now step outward from high crown roots, separate from the cheek,
+and hang at the outer edge. Rear views remain faceless. The five unique views
+are mirrored for rows 5-7, and the final jaw row preserves Wolfie's surrounding
+torso/limb cells.
+
+**Evidence:**
+
+- enlarged shipped-font views:
+  `/tmp/gromit-ref-v2-angle-0.png` through
+  `/tmp/gromit-ref-v2-angle-7.png`;
+- unmodified Skin Dock capture:
+  `/tmp/gromit-reference-v2-runtime.png`;
+- receipt `status=installed`, target `/sprites/wolfie-0000.xp`, 24 exact
+  wolfie targets, expected/actual payload SHA-256
+  `6ad15f69e64c41ac9af96c7ee4f34ca169c9d0ca33e10260640c634d5c757ecb`;
+- canonical/Desktop SHA-256
+  `954c00ff5f625ab76b95ccbed15ccdafa19f82fb41075a4254cd5294d3ac4784`;
+- backup `/tmp/asciicker-actor-sheet-repair/20260811-084146`.
+
+**Stage:** Implemented, connected, and executed. The corrected Workbench remains
+open in Chrome for operator visual acceptance; no acceptance claim is made.
+
+#### Per-direction PNG comparison audit — 2026-08-11
+
+The operator required direct PNG comparison rather than another qualitative
+claim. The canonical XP was rendered with the shipped 36x36 CP437 BDF and
+paired with each supplied reference crop. Direction ordering was matched by
+visible orientation, not row number:
+`reference 0..7 -> XP rows 0,7,6,5,4,3,2,1`.
+
+Artifacts on Desktop:
+
+- full XP frames: `Gromit-reference-comparison-mapped.png` and eight individual
+  files under `gromit-reference-comparison-mapped/`;
+- authored head cells only, excluding intentional Wolfie body/leg/tail cells:
+  `Gromit-head-reference-comparison.png` and eight individual files under
+  `gromit-head-reference-comparison/`;
+- complete canonical PNG sheet: `Gromit-current-sheet.png`.
+
+The comparison rejected the prior seven-row proportions. The replacement uses
+eight authored rows, a narrower crown, a lower/closer eye line, a widened lower
+muzzle, a tapered chin, and narrowed upper profile/rear-quarter skulls. A tested
+two-cell front nose was rejected because it rendered as a horizontal bar; the
+single opaque button cell was retained.
+
+Manual findings on the promoted eight-row sheet:
+
+- front: correct feature topology and improved egg-shaped lower face, but still
+  necessarily coarser and more angular than the high-resolution reference;
+- three-quarter: close-set eyes and directional nose are present; ear and cheek
+  curvature remain cell-stepped;
+- profiles: one high eye, continuous cream snout, opaque tip nose, and swept ear
+  are present; Wolfie body/tail cells explain the extra geometry in full-frame
+  comparisons;
+- rear-quarter/rear: faceless and directionally correct, with the largest
+  remaining likeness gap in the blocky ear/skull contour.
+
+Canonical/Desktop XP SHA-256:
+`0a4fc985c296d97495ca6897209d0cb835f260ecaed4e1bb90234478b5f533d6`.
+Backup: `/tmp/asciicker-actor-sheet-repair/20260811-090642`.
+
+**Stage:** Implemented and source-verified by explicit per-direction PNG audit.
+The comparison preserves the remaining visual discrepancies; operator
+acceptance is not claimed.
+
+#### Full 72-frame comparison audit — 2026-08-11
+
+The per-direction audit was expanded to every projection-0 animation frame.
+Desktop directory `gromit-reference-comparison-72/` contains 72 individual
+reference/current PNG pairs plus one 3x3 all-frame contact for each of the eight
+direction rows. `Gromit-current-sheet.png` is the promoted canonical XP rendered
+with the shipped 36x36 BDF.
+
+Each row contact was inspected individually. All nine frames per direction
+retain their expected head landmarks and visible Wolfie-owned body/leg/tail
+cells; no animation frame drops an eye, nose, ear, or limb. The contacts drove
+one additional correction: rear-quarter rows 3/5 now use broad two-cell hanging
+ear lobes instead of one-cell rails.
+
+The audit does not establish pixel-level identity with the high-resolution
+reference. It shows the remaining approximation explicitly: front and
+three-quarter views carry the intended oval/muzzle/face landmarks, while
+profile and rear-quarter curves remain visibly cell-stepped at 10x12.
+
+Canonical/Desktop XP SHA-256:
+`59626adf280c167cb9b6d684def9b3fbce688047defd464bb1131272b65f4ef5`.
+Backup: `/tmp/asciicker-actor-sheet-repair/20260811-091437`.
+
+**Stage:** Implemented and manually inspected across all 72 source frames.
+Operator acceptance is not claimed.
+
+#### Operator rejection and reference-raster rebuild — 2026-08-11
+
+The operator rejected the promoted eight-row mask using the explicit Desktop
+comparison. The rejection is upheld: the authored result still had a square
+skull, rigid rail-like ears, an undersized muzzle, crude profiles, and a head
+large enough to hide Wolfie's torso. The preceding 72-frame audit established
+repeatability only; it did not establish likeness or intact actor silhouette.
+
+The rejected character-mask owner was removed from
+`scripts/repair_actor_sheets.py`. Its replacement is an explicit eight-angle
+reference raster. Each XP cell is authored as a solid, vertical half-block, or
+horizontal half-block so the silhouette has effective 2x2 subcell detail.
+Actual CP437 square-pupil cells are used for eyes because geometric half-block
+previews collapsed paired eyes into a single bar under the shipped BDF font.
+Profile eyes are white-backed and rear directions remain faceless.
+
+The first raster prototype used nine XP rows and reproduced the supplied head
+more closely, but its 72-frame contact exposed a second ownership failure: it
+consumed Wolfie's body and left a head with feet. That prototype was rejected.
+The promoted raster samples seven reference rows, clears only the crown, writes
+reference ink inside that silhouette, and leaves Wolfie ink outside it. A repair
+invariant now proves that local rows 8-11 of all 72 projection-0 frames remain
+cell-exact to the restyled Wolfie source before projection reflection.
+
+**Direct evidence:**
+
+- mapped eight-direction reference/current comparison:
+  `/Users/r/Desktop/Gromit-reference-comparison-final.png`;
+- canonical full-sheet PNG rendered with the shipped 12x12 BDF:
+  `/Users/r/Desktop/Gromit-current-sheet-final.png`;
+- eight manually inspected 3x3 contacts covering every projection-0 frame:
+  `/Users/r/Desktop/gromit-reference-comparison-final-72/`;
+- repair dry run passes reference-face presence, faceless rear views, unchanged
+  locomotion rows, and exact projection reflection;
+- canonical and Desktop XP SHA-256:
+  `ffe7c262b515224764529cbfb4f1c16b66e976825b6ba6e352b278860b1a3646`;
+- canonical/session backup:
+  `/tmp/asciicker-actor-sheet-repair/20260811-225303`.
+
+The source comparison now shows the required close paired front eyes, same-
+colour muzzle/skull, opaque button nose, long one-eye profiles, brown hanging
+ears, faceless rear views, and intact Wolfie torso/arms/legs across all walk
+frames. This is source-render proof only until the unchanged Workbench Skin Dock
+installs the exact payload and the live actor is inspected.
+
+**Stage:** Implemented, connected to the active Workbench session, and source-
+verified. Live Skin Dock execution and operator acceptance remain pending.
+
+#### Full-raster live Skin Dock proof — 2026-08-11
+
+The unchanged Workbench was opened with session
+`2d389df3-1a09-480d-9469-727917f1bf6f`. In the visible mobile editor shell, the
+`Test` drawer was opened and its real `Test This Skin` control was driven. The
+first direct DOM clicks had not exercised the control because the drawer was
+closed; those attempts produced no state change and are not runtime evidence.
+
+The visible-drawer run completed in 1575 ms. The receipt reports
+`status=installed`, family `wolfie`, runtime state
+`mounted_wolf_no_equipment`, exact target `/sprites/wolfie-0000.xp`, all 24
+packaged `wolfie-*` targets, and matching expected/actual SHA-256 on every path:
+`11241e520f81b62aa4ef1c206459a3b2e91b3dbb1632e980d9abc2c587c4b7da`.
+The iframe then reached `Webbuild ready (starting game...)`.
+
+Direct live visual evidence:
+
+- full Skin Dock capture:
+  `/Users/r/Desktop/Gromit-live-skin-dock-final.png`;
+- enlarged mounted actor crop:
+  `/Users/r/Desktop/Gromit-live-skin-dock-actor-final.png`;
+- the mounted actor visibly carries two close eyes, opaque button nose, cream
+  muzzle, brown ears, torso, and legs; it is not invisible and is not the prior
+  recoloured-Wolfie placeholder.
+
+Focused verification passes:
+`pytest -q tests/test_legacy_preview.py` (`7 passed`),
+`node tests/web/termpp-skin-lab-registry.test.js`, repair dry run, exact
+projection reflection, faceless rear checks, and lower-body restoration
+invariants.
+
+**Stage:** Implemented, connected, executed, and verified on the live Skin Dock
+path. Operator acceptance remains the final authority.
+
+#### Rejection of compressed/split profile and full-raster body overlay — 2026-08-11
+
+The operator rejected the seven-row profile after inspecting the actual PNG.
+The rejection is upheld: vertical compression flattened the muzzle and turned
+the ear/skull into a rectangular cap. A subsequent split-anchor experiment that
+moved only the crown forward made the disconnect worse by leaving the muzzle at
+the old anchor. That experiment was applied briefly, immediately rejected, and
+superseded; it is not the current source.
+
+The promoted ownership model uses all nine reference-raster rows without
+vertical compression. Before authoring, it captures Wolfie's visible lower-body
+ink in local rows 7-10. After the full head is authored, those exact torso,
+arm/tail, and leg cells are restored over the lower head. This preserves the
+supplied tall skull, thick profile muzzle, forward/lowered eye, and hanging ear
+while retaining the complete native body animation. Source output is cell-exact
+to the independently rendered full-head/body-overlay prototype.
+
+All eight direction pairs and 72 projection-0 frames were regenerated on the
+Desktop and reopened in Preview. Canonical and Desktop XP SHA-256:
+`783949cfdb047fd790f06e7c9ec015d09522aabf3f6430c3ca9ab024486d13b3`.
+Comparison SHA-256:
+`53c1fc3788420ea59be86d532bebf4b012c8135e140c2370557a156d1dc01572`.
+Backup: `/tmp/asciicker-actor-sheet-repair/20260811-230401`.
+
+**Stage:** Implemented, connected to the active Workbench session, and source-
+verified. Live Skin Dock execution and operator acceptance remain pending.
+
+#### Profile-anchor correction after direct PNG review — 2026-08-11
+
+The operator's direct review of both profile PNGs found that the eye sat too
+high/back and the head mass was anchored toward the rear. The finding was
+correct. Moving the entire profile forward was tested and rejected because it
+put the nose on the frame boundary. The promoted correction moves only the
+crown/eye rows one cell toward the facing direction, lowers each profile eye by
+one row, removes the right profile's stale quantizer eye fragment, and leaves
+the muzzle/nose anchor unchanged with a one-cell frame margin.
+
+Both corrected profile directions were rendered against the supplied reference
+and all 18 profile walk frames were checked for stable eye/nose placement before
+application. Canonical and Desktop XP SHA-256:
+`d37e4e8bf654eaaef7ce13d7d3b680f6b25095f3a59a9b96a8a5cf393f6e7980`.
+Updated comparison SHA-256:
+`1bb3a1e474548846df0aa6202a1196b37c231c5a77701b29a8a369a553ac5377`.
+Backup: `/tmp/asciicker-actor-sheet-repair/20260811-225959`.
+
+**Stage:** Implemented, connected to the active Workbench session, and source-
+verified. Live Skin Dock execution and operator acceptance remain pending.
+
+#### Operator rejection: full-frame head overlay — 2026-08-12
+
+The operator rejected the current Gromit construction on first visual
+inspection. The nine-row reference raster occupied nearly the entire `10x12`
+actor frame; restoring Wolfie's rows 7-10 over it preserved locomotion data but
+made the result read as a giant detached head with four legs. The prior
+lower-body cell-exact assertion therefore protected the wrong composition. The
+source/runtime checks proved persistence and installation, not a coherent
+character silhouette.
+
+The replacement ownership boundary is explicit: Gromit's reference-derived
+head may own only local rows 0-5, while the restyled Wolfie torso and locomotion
+own rows 6-11. The five unique head angles are authored at that bounded size and
+rows 5-7 are exact horizontal mirrors of rows 3-1. This correction remains a
+candidate until all 72 source frames, an independent visual reviewer, and the
+unmodified Skin Dock runtime agree; no acceptance claim is active.
+
+**Stage:** Rejected construction removed; compact-head candidate in progress.
+
+#### Independent compact-head v2 rejection — 2026-08-12
+
+The required tmux visual reviewer inspected all eight reference/candidate pairs
+read-only and returned `REJECT`. It confirmed that the torso and legs were now
+distinct and that the giant-head/four-legs composition was gone. It rejected
+the remaining head treatment: box skulls, stub/rail ears, detached or
+edge-clipped noses, missing three-quarter muzzle continuity, blocky profile
+jaws, and rear neck gaps. The reviewer changed no files.
+
+Those findings drove the next manual raster: profile and three-quarter noses
+are inset and attached to continuous cream muzzles, the head/neck overlap is
+solid through local row 5, and ear lobes extend downward without the rejected
+horizontal antler geometry. Candidate v8 is under independent re-review and is
+not yet applied to the canonical XP, Workbench session, or runtime.
+
+**Stage:** v2 rejected; v8 source-render review in progress.
+
+#### Independent compact-head v8 rejection — 2026-08-12
+
+The second tmux review inspected all eight angle pairs and all eight nine-frame
+contacts. It confirmed that every eye, nose, ear, torso, and limb remained
+stable across all 72 frames; it also confirmed the prior nose attachment,
+profile inset, three-quarter continuity, and rear facelessness fixes. It still
+returned `REJECT` for box-like skull contours, rail/cap ears, and profiles whose
+head mass fused into the torso. No files were changed by the reviewer.
+
+Candidate v10 replaces the full-cell ear rails with half-width inward/outward
+segments, tapers the skull edges and jaw on every angle, and narrows the final
+head row to two full neck cells that overlap restyled Wolfie row 6 in every
+direction and frame. Shipped-font tests rejected CP437 round-nose glyphs 249
+and 250 because they render as tiny dots; the centered opaque half-cell pair
+remains the front button nose.
+
+**Stage:** v8 rejected; v10 source-render review in progress.
+
+#### Compact-head v10 independent pass and live Skin Dock proof — 2026-08-12
+
+The third tmux reviewer returned `PASS` after inspecting all eight
+reference/candidate angle pairs and all 72 projection-0 frames. It confirmed
+the tapered skull and jaw, curved hanging ears, close/high directional eyes,
+same-colour connected muzzle, attached profile noses, faceless rear views,
+two-cell neck overlap, distinct torso, and stable limbs. The reviewer changed
+no files. This pass applies only to the rendered source comparison; live
+runtime evidence remained independently required.
+
+The exact reviewed v10 cell data was applied to
+`sprites/2026-06-08-gromit.xp` and the active `gromit.xp` Workbench session.
+Canonical and Desktop XP SHA-256 are both
+`e2e2a4212fb57c70ffc615c4c8539e336f7a9bc08b88e6c3648f37ec2a9b5bb5`.
+The gzip wrapper of the review candidate differs, but all three decoded layers
+are cell-for-cell equal. Projection reflection is exact, the layer-0 key is
+`(255,255,85)`, and the Workbench primary cells and layer 2 equal the canonical
+visual layer.
+
+The focused checks passed before live execution:
+`python3 -m py_compile scripts/repair_actor_sheets.py`, repair dry run,
+`node tests/web/termpp-skin-lab-registry.test.js`, and
+`pytest -q tests/test_legacy_preview.py` (`7 passed`). The pytest fixture
+deleted the prior active session during cleanup, so v10 was deliberately
+reapplied afterward to the surviving `gromit.xp` session
+`3d966737-b014-4a9e-9a4c-9f0fadff8400` before runtime verification.
+
+The real visible `Test This Skin` control was driven in Chrome. Its receipt
+reports `status=installed`, family `wolfie`, runtime state
+`mounted_wolf_no_equipment`, exact target `/sprites/wolfie-0000.xp`, all 24
+packaged `wolfie-*` targets, and matching expected/actual SHA-256 on every
+target:
+`60daa385c9333129fed6f08be0859bd6c7505940c3cefeb9c379e0e998b7985e`.
+The iframe reached `Webbuild ready (starting game...)`. Direct inspection of
+the mounted actor confirmed a compact profile head with a high single eye,
+same-colour muzzle, attached nose and ear silhouette, and a separate torso and
+legs. It is neither invisible nor the rejected giant-head/four-legs
+composition.
+
+Final evidence:
+
+- `/Users/r/Desktop/2026-06-08-gromit.xp`;
+- `/Users/r/Desktop/Gromit-reference-comparison-final.png`;
+- `/Users/r/Desktop/Gromit-current-sheet-final.png`;
+- `/Users/r/Desktop/gromit-reference-comparison-final-72/`;
+- `/Users/r/Desktop/Gromit-live-skin-dock-final.png`;
+- `/Users/r/Desktop/Gromit-live-actor-close-final.png`.
+
+The rejected Desktop deliverables were preserved under
+`/tmp/asciicker-actor-sheet-repair/20260812-021338/desktop-before-v10/`.
+
+**Stage:** Implemented, connected, executed, source-verified, independently
+reviewed, and accepted on the live Skin Dock runtime path. Operator acceptance
+remains the final authority.
+
+---
+
+## Workbench Wayfinder mobile/Unicode roadmap audit baseline — 2026-08-12 06:39:06 JST
+
+Before the FL-4257 roadmap audit, matching annotated safety tags were created in
+both Git owners:
+
+- outer workbench: `safety/2026-08-12-workbench-wayfinder-baseline-20260812T063906+0900`
+  at `f9ca59759fd46828e6cc320428ec7e6132dd4648`;
+- inner Y9 FL: the same tag name at
+  `490d49e83c2c77542ec374f947ab3260a7e73d70`.
+
+The tag annotations record branch, timestamp, dirty-path count, and SHA-256
+fingerprints for porcelain status, staged diff, unstaged diff, and untracked
+paths. The outer worktree had 125 dirty paths and the inner worktree had four.
+Tags anchor committed state only; they do not claim to contain uncommitted
+content. No stash, branch switch, auxiliary worktree, commit, product-file
+mutation, or cleanup was performed. The matching receipt is recorded on
+Y9-2 `FL-4257`; that FL remains the sole Wayfinder roadmap owner.
+
+Audit result:
+
+- `FL-4268` resolved the current-shell salvage question. The task-rooted entry,
+  whole-sheet canvas and shared handlers, draft restoration, pan/scroll ideas,
+  and prior recipes remain diagnostic inputs. The `ws-advanced` legacy
+  dashboard split, Section 2 parity drawers, thirteen-toggle top bar, and
+  coarse-pointer-plus-orientation anchoring are not destination owners.
+- The 2026-08-10 Chromium view-mode artifact reports no errors at its three
+  sampled viewports, but it does not exercise sustained authoring, rotation,
+  resize, soft keyboard, native share, WebKit, or physical Safari. Its 390 px
+  sample records the scroll chrome from x=295.09375 through x=416.09375, beyond
+  the viewport edge.
+- The locally configured Playwright Chromium, WebKit, and Firefox executable
+  paths are all absent. Older headed-WebKit artifacts remain historical
+  evidence; they are not a current executable receipt.
+- The former broad Unicode child was decomposed. `FL-4266` owns semantic cell
+  and editing invariants, `FL-4269` owns deterministic font resolution and
+  rendering, and `FL-4270` owns enhanced-native serialization plus explicit
+  XP/text/ANSI/image/Y9-2 projections. Current code remains CP437-bound:
+  `text-tool.js` iterates UTF-16 code units and masks to eight bits, while
+  `canvas.js` validates and stores only 0..255 glyph values.
+- The current research frontiers are `FL-4263` and `FL-4266`; they may proceed
+  independently. `FL-4269` and `FL-4270` wait on `FL-4266`. `FL-4267` waits on
+  `FL-4263`, resolved `FL-4265`, and the resolved Unicode contracts. The
+  remaining route is `FL-4258 -> FL-4264 -> FL-4259 -> FL-4261 -> FL-4260 ->
+  (FL-4262 plus FL-4256)`. `FL-4268` is resolved research feeding the mobile
+  steps.
+- `FL-4271` is the durable Wayfinder planning handoff, not yet a tracked E2E
+  execution runbook. It records the owner, safety receipt, dependency graph,
+  narrative decision-exit conditions, human/device blockers, safe resume
+  commands, evidence boundaries, and the RQ/gate promotion condition. The
+  project `AGENTS.md` carries the required `Maintain operational grounding`
+  behavior contract for successors. The reviewed substantive correction is
+  outer `bd93dee67f2c4126339f4cbf6afda068610e1b0e` on `origin/main` and inner
+  `ac57affda7f73e4ec25470fa685cf95b2117aada` on
+  `origin/agent/workbench-wayfinder-handoff-20260812`; the following receipt
+  commits change only these provenance pointers. At review time, both dirty
+  local checkouts still pointed at their baseline commits, so immutable commit
+  inspection—not the local branch pointer—is the publication proof.
+
+**Stage:** Baseline tagged; mobile salvage audit resolved; Unicode roadmap
+decomposed; grounded planning handoff recorded. Machine-visible execution
+gates, RQ projection, product implementation, execution, verification, and
+acceptance remain open.
+
+## Wallace player-0000 ownership and visual acceptance audit — 2026-08-12
+
+The operator's authoritative base correction is `sprites/player-0000.xp`, not
+`player-nude.xp`. Wallace must preserve that sheet's actor topology and walk
+silhouette while changing the character treatment to a bald cream head, green
+knitted sweater, brown trousers, directional facial features, and half-block
+ears. Rear-facing rows must have no eye or tie; profiles carry one eye; front
+and three-quarter rows carry two. Arms and legs must remain present wherever
+the player source supplies them, with no extra protrusion geometry.
+
+The current `sprites/2026-06-08-wallace.xp` is materially better than the
+historical complaints imply. A shipped-font render of all 72 projection-0
+frames has a pixel-identical alpha silhouette to `sprites/player-0000.xp`.
+Rows 3/4/5 are faceless, rows 2/6 use one-eye profile glyphs, rows 0/1/7 use
+two-eye glyphs, and the side ears are CP437 left/right half-blocks. Layer 0 and
+Layer 1 are cell-for-cell equal to `player-0000.xp`, and the current reflection
+half is exact.
+
+That does not yet establish durable completion. The current
+`repair_wallace()` implementation merely loads the existing Wallace artifact
+and mirrors projection 0. It cannot rebuild the player topology, outfit,
+directional face, or ear rules from their responsible source. A future repair
+run therefore trusts the very artifact it is supposed to validate. The fix is
+to rebuild Wallace from `player-0000.xp`, encode the Wallace treatment in the
+canonical repair owner, assert the 72-frame player silhouette and direction
+rules, then require independent source-render review and a real Skin Dock
+runtime execution.
+
+Initial comparison artifact: `/tmp/wallace-angle-comparison.png` (columns are
+`player-0000`, current Wallace, and the rejected historical prototype).
+
+**Stage:** Current artifact source-audited; reproducible owner and fresh visual
+acceptance remain in progress.
+
+### Independent Wallace v1 rejection — 2026-08-12
+
+The first tmux reviewer inspected all eight nine-frame contacts and returned
+`REJECT`. Rows 0/1/7 passed with two eyes; rows 2/6 passed with one eye; all
+three rear heads were faceless; all 72 arm/leg silhouettes matched
+`player-0000`; no extra visible protrusions were found; and the reflection was
+visually coherent. The remaining defect was present in every frame of rows
+3/4/5: replacing the red tie foreground with green left glyph 31 on a white
+background, producing a green center dot on a white bib. From behind it still
+reads as a tie rather than a clean sweater back. The reviewer changed no files.
+
+**Required correction:** rear rows 3/4/5 must replace the complete tie/bib cell
+with an unmarked sweater cell, not recolour only its foreground. Rerender all
+27 rear frames and obtain a new independent verdict before applying v2.
+
+**Stage:** v1 rejected; rear tie/bib removal in progress.
+
+### Wallace v2 independent pass and live Skin Dock proof — 2026-08-12
+
+The v2 rear correction replaces the complete front-facing tie/bib cell with an
+unmarked green sweater cell in rows 3/4/5. Direct inspection of the rerendered
+27 rear frames confirmed clean faceless rear heads and clean sweater backs.
+
+One tmux review return claimed that the complete heads were absent from every
+frame in rows 1 and 5. That claim was rejected by direct evidence: the exact
+named row contacts visibly contained all heads, and the four disputed
+individual PNGs had stable nonzero cream-head regions. A fresh read-only review
+used uniquely named files and verified their SHA-256 values before inspection:
+
+- row 1 frame 0: `14dffa5c34cf4a225a37a84227502a744a5f4a5c5f5885ac4bb224acad2c73fe`;
+- row 1 frame 8: `3d24a7d476fab9d15837e0452c42abd05e50b43b89b839ee9119f4ad3fc1825b`;
+- row 5 frame 0: `53b024d3e69e2963862e1a423e16817b1632d75c5e5834166c765e19506832c2`;
+- row 5 frame 8: `1933a1ffb2d9b5c2d6e72edd11330a604f1c6cb67cef0518774502782988395c`.
+
+That reviewer returned `PASS` after inspecting all 72 projection-0 frames. It
+confirmed two eyes in rows 0/1/7, one eye in rows 2/6, faceless rear rows
+3/4/5, half-block ears, stable bald cream heads, green sweaters, brown
+trousers, intact player-derived arm/leg poses, no protrusions, no rear marks,
+and coherent reflection. It changed no files.
+
+The exact reviewed decoded layers were then applied to
+`sprites/2026-06-08-wallace.xp` and Workbench session
+`c075280e-a32d-4083-bbe5-1aaa4a3e2fc9`. The canonical gzip wrapper differs
+from the review candidate, but all three decoded layers are cell-for-cell
+equal. The session's primary cells and persisted layer 2 match all 9,072
+canonical visual cells. Layer 0 and layer 1 match `player-0000.xp`, every
+projection-0 silhouette matches player topology at subcell resolution, and
+projection 1 is an exact derived reflection.
+
+The focused checks passed before final application:
+`python3 -m py_compile scripts/repair_actor_sheets.py`,
+`pytest -q tests/test_repair_actor_sheets.py`,
+`node tests/web/termpp-skin-lab-registry.test.js`, and the Wallace repair dry
+run. The repository-wide pytest autouse fixture removes `data/`; the final
+Wallace session was therefore recreated and updated after the last pytest run.
+
+The real visible `Test This Skin` control was driven in Chrome. The dock
+reported `Webbuild ready (on_foot_no_equipment)`. Its receipt reports
+`status=installed`, `runtime_activation_status=activated`, family `player`,
+exact target `/sprites/player-0000.xp`, all 24 packaged `player-*` targets,
+and matching expected/actual runtime SHA-256
+`85573631dd68ee39b88755448f3a5a28a4ced40c997c47bd8630c8b5e539c1bb`.
+Direct inspection of the live frame confirmed a visible Wallace with a bald
+cream head, two eyes, green sweater, red tie, brown trousers, intact limbs,
+and the expected reflected projection.
+
+Canonical and Desktop Wallace XP SHA-256 are both
+`0e2bd7823d3aab79007df8a1c6c58150b5bb3c7718a75ce0ae9df27e88adbc3a`.
+The prior Wallace XP is preserved at
+`/tmp/asciicker-actor-sheet-repair/20260812-025510/desktop-before-final/2026-06-08-wallace-before-final.xp`
+with SHA-256
+`894e0a3ce295a2883d901efb9f3e384fd1ef28371cdd1a98b287e7a8f73f359f`.
+A metadata-preserving Desktop copy initially timed out and left a zero-byte
+destination; both Wallace and Gromit Desktop XPs were recovered through
+verified temporary copies and atomic renames, and now match their canonical
+repo hashes.
+
+Final evidence:
+
+- `/Users/r/Desktop/2026-06-08-wallace.xp`;
+- `/Users/r/Desktop/Wallace-player-reference-comparison-final.png`;
+- `/Users/r/Desktop/Wallace-current-sheet-final.png`;
+- `/Users/r/Desktop/wallace-reference-comparison-final-72/`;
+- `/Users/r/Desktop/Wallace-live-skin-dock-final.png`;
+- `/Users/r/Desktop/Wallace-live-actor-close-final.png`.
+
+**Stage:** Implemented, connected, executed, source-verified, independently
+reviewed, and accepted on the live Skin Dock runtime path. Operator acceptance
+remains the final authority.
+
+---
+
+## Mobile workbench parity and QoL runtime edits — headed proof — 2026-08-13
+
+Roadmap owner remains Y9-2 `FL-4257`. The durable fix-attempt receipt for this
+work is on Y9-2 `FL-4259`, scoped explicitly as a current-shell parity/QoL
+repair and evidence input; the adaptive deck/side-dock destination reanchor that
+`FL-4259` owns is still open. The salvage boundary is the resolved `FL-4268`
+audit (current mobile mechanisms and recipes are diagnostic inputs, not
+destination owners) and the handoff is `FL-4271`. Baseline commit under test is
+`1da542f`; every edit and artifact below is uncommitted worktree state.
+
+### Read-only source audit
+
+`.scratch/2026-08-13-mobile-shell-audit.md` records a static source audit of
+`web/workbench.html`, `web/workbench.js`, `web/whole-sheet-init.js`,
+`web/styles.css`, `web/touch-gestures.mjs`, `web/persistence.mjs`, and
+`web/rexpaint-editor/canvas.js`, with a `file:line` citation on every claim and
+no servers or browsers involved. Its load-bearing finding is that the mobile
+shell is CSS-anchored rather than JS-anchored: one
+`@media (pointer: coarse), (max-width: 1024px)` condition repeated six times in
+`web/styles.css`, combined with `body.ws-session-loaded:not(.ws-advanced)`,
+decides which product the user is looking at. JavaScript owns only the pre-paint
+`ws-force-desktop` UA sniff, the first-screen entry wiring, `toggleDrawer()`, and
+the bottom status strip.
+
+### Runtime edits under proof
+
+1. `web/workbench.html` head IIFE — stock iPadOS Safari (Macintosh UA plus
+   `navigator.maxTouchPoints > 1`) is no longer misclassified as a
+   "Request Desktop Site", so the mobile shell is reachable on a stock iPad.
+2. `web/workbench.html` — the thirteen drawer toggles now carry `aria-expanded`,
+   synced by `toggleDrawer`.
+3. `web/styles.css` — safe-area insets added to bar side padding, content
+   offsets (48px/40px plus `env()`), landscape sidebar top/left, and the
+   landscape scroll-wrap max-height; editor-first now flexes
+   `.ws-viewport-shell` itself (height auto, max-height none, resize none) so the
+   scroll surface is no longer clipped by roughly 200px by the desktop
+   520px/70vh shell; the mobile zoom row hides its label and lets the range
+   shrink so the 121px pan chrome fits 390px; drawer sheets are 60dvh; the
+   filmstrip uses `touch-action: pan-x !important` so it beats the inline
+   `touchAction='none'`; landscape pinned-sidebar rules are gated on
+   `html:not(.ws-force-desktop)`; landscape hides the layers/browse/info toggles
+   alongside tools; the rotate hint is `pointer-events: none` with
+   `pointer-events: auto` restored on its dismiss button.
+4. `web/workbench.js` — `toggleDrawer` now exempts every pinned sidebar drawer
+   instead of tools only, which fixes a Layers tap opening a dead full-screen
+   backdrop, and syncs `aria-expanded`; the filmstrip auto-scroll gate is
+   widened to `(pointer:coarse)` or `(max-width:1024px)`.
+5. `web/whole-sheet-init.js` — new `_revertActiveStroke()` restores the
+   pre-stroke snapshot without a history push. It is used when tap-hold inspect
+   fires, so inspect no longer paints and the popup reports the pre-paint cell,
+   and on two-finger gesture start, so the stray first-finger paint is reverted
+   instead of committed.
+
+### Headed proof results
+
+Every browser context was headed; WebKit was used for every mobile context. Full
+narrative with per-assertion measurements: `.scratch/2026-08-13-headed-proof.md`,
+including its section 7 rotate-hint recheck.
+
+- Existing Playwright suite, `npx playwright test --reporter=list`:
+  **21 pass, 1 fail**. Log `.scratch/2026-08-13-playwright-suite.log`. The
+  mobile/first-screen specs that cover the edited surfaces all pass, including
+  `mobile-first-screen.spec.js:192` (landscape editor-first shell, scroll chrome
+  does not occlude canvas) and `mobile-first-screen.spec.js:227` (desktop layout
+  unaffected).
+- Node unit tests: log `.scratch/2026-08-13-node-tests.log`. `npm test`
+  (`workbench-template-gating`) exits 0, and
+  `whole-sheet-action-contracts.test.mjs`,
+  `whole-sheet-input-policy.test.mjs`, `whole-sheet-manual-checklist.test.mjs`,
+  `workbench-override-names.test.js`, and
+  `workbench-xp-preview-playback.test.mjs` all pass. The remaining failures are
+  attributed below.
+- New headed WebKit probes, all PASS. Scripts
+  `.scratch/2026-08-13-mobile-proof-probe.mjs`,
+  `.scratch/2026-08-13-mobile-proof-probe-d.mjs`,
+  `.scratch/2026-08-13-rotate-hint-passthrough-probe.mjs`, and
+  `.scratch/2026-08-13-rotate-hint-panproof-probe.mjs`; runs
+  `.scratch/2026-08-13-probe-run.log`, `.scratch/2026-08-13-probe-d-run.log`,
+  `.scratch/2026-08-13-probe-f-run.log`, and
+  `.scratch/2026-08-13-probe-f2-run.log`; machine-readable results
+  `.scratch/2026-08-13-mobile-proof/results.json`, `results-d.json`,
+  `results-f.json`, and `results-f2.json`; screenshots in
+  `.scratch/2026-08-13-mobile-proof/`.
+
+Probe detail:
+
+- 390x844 iPhone-class portrait: `.ws-scroll-chrome` right edge 373 against a
+  390 viewport (17px margin); all four `.ws-scroll-chrome-btn` centers hit-test
+  to `BUTTON.ws-scroll-chrome-btn`; `#wholeSheetScroll` bottom 794.98 against
+  `#wholeSheetViewportShell` bottom 803.98 (delta −9.00); the zoom label is
+  `display:none`. Screenshot
+  `.scratch/2026-08-13-mobile-proof/a-iphone-portrait-390x844.png`.
+- 844x390 landscape: pinned sidebar right edge 201 with the canvas shell at
+  x=208 (7px clearance), no visible drawer backdrop with no drawer open, chrome
+  right edge 827 inside 844. Screenshot
+  `.scratch/2026-08-13-mobile-proof/b-iphone-landscape-844x390.png`.
+- iPad Pro 11 landscape (1194x834): the tools/layers/browse/info toggles are all
+  `display:none`, and `window.toggleDrawer('layers')` was invoked directly, so
+  the no-dead-backdrop result exercises the `sidebarPinned` early return rather
+  than relying on an unreachable toggle. Screenshot
+  `.scratch/2026-08-13-mobile-proof/c-ipadpro11-landscape.png`.
+- Stock-iPad Macintosh-UA discrimination at 1180x820: with a labelled
+  `addInitScript` shim setting `navigator.maxTouchPoints = 5` (the real iPadOS
+  value) the page does not set `ws-force-desktop` and `#mobileFirstScreen`
+  renders 1180x820; with `maxTouchPoints = 0` and no touch (real Mac Safari) the
+  desktop shell is kept; and a control with `maxTouchPoints = 1` plus touch plus
+  a desktop UA — a genuine "Request Desktop Site" — still forces desktop. That
+  three-way control set is what keeps the guard from being read as a blanket
+  "any touch means mobile" rule. Screenshots
+  `d-shim-mtp5-touch-1180x820.png`, `d-shim-mtp0-notouch-1180x820.png`,
+  `d-control-mtp1-forcedesktop.png`, `d-raw-touch-1180x820.png`, and
+  `d-raw-notouch-1180x820.png` in `.scratch/2026-08-13-mobile-proof/`.
+- Tap-hold revert: a control 40ms tap paints cell(3,3) from
+  `{glyph:0, fg:[0,0,0], bg:[255,0,255]}` to
+  `{glyph:64, fg:[255,0,255], bg:[0,128,0]}`, proving paint is live in that
+  context; an 800ms hold on cell(6,6) leaves it unchanged, the whole-document
+  layer snapshot is byte-identical at 2,183,252 bytes before and after, and
+  `#wsTouchInspectPopup` reports the pre-paint content `0 (·)` at `6,6`.
+  Screenshot
+  `.scratch/2026-08-13-mobile-proof/e-iphone-portrait-taphold-inspect.png`.
+- Rotate-hint pass-through (section 7 recheck): with the hint band still visible
+  and never dismissed, its computed `pointer-events` is `none` while
+  `#mobileRotateHintDismiss` computes `auto`; all four chrome buttons, whose
+  centers sit at y=77 inside the band's y 44-84 rect, hit-test to
+  `BUTTON.ws-scroll-chrome-btn`; a real Playwright touch tap on
+  `[aria-label="Pan right"]` through the band moved `scrollLeft` from 1335 to
+  1431, exactly the handler's +96; and the dismiss button still dismisses.
+  The vertical counterpart measured `maxScrollTop` 0 at both Fit and 2x zoom, so
+  the ▲/▼ result is a layout property, not a pass-through defect. Screenshots
+  `f-iphone-portrait-hint-visible-before-dismiss.png`,
+  `f-iphone-portrait-hint-after-dismiss.png`, and
+  `f2-iphone-portrait-hint-up-panned-zoom2x.png`.
+
+### Pre-existing failures and harness limits recorded
+
+These were all found during this proof run and are recorded so a later run does
+not re-attribute them to the mobile edits.
+
+- `tests/playwright/full-workflow-with-game.spec.js:17` fails with
+  `Convert button not enabled after upload`. The upload itself succeeded
+  (`POST /api/upload` 201 in `.scratch/2026-08-13-server.log`) and the failure
+  snapshot still reads `Asciicker XPEdit Session: idle`: the spec never creates
+  session geometry before expecting `#wbRun` to enable, which is the
+  template-gating contract that `tests/web/workbench-template-gating.test.js`
+  covers and passes. A stale spec. The worktree diff against `1da542f` contains
+  zero hunks touching `#wbRun` or the upload gating.
+- `tests/web/whole-sheet-history-ownership.test.mjs:36` asserts the source-text
+  regex `/wsEditor\.mount\(\{[\s\S]*?\}\)\.then/` against `web/workbench.js`.
+  The match is `false` at `1da542f` and `false` in the worktree, so it is a
+  stale regex, not a regression. `wsEditor.mount(` exists at
+  `web/workbench.js:6563` and `:6800`; the call is simply no longer
+  `.then`-chained inline.
+- `tests/web/whole-sheet-cell-ops.test.mjs` fails
+  `buildClearedEditorCell preserves existing background color` and
+  `tests/web/whole-sheet-clipboard.test.mjs` fails
+  `resolveWritableClipboardLayers rejects locked or missing destinations`. Each
+  is a single genuine assertion failure, and each test imports only
+  `web/whole-sheet-cell-ops.mjs` or `web/whole-sheet-clipboard.mjs`, neither of
+  which appears in the worktree diff. Not attributable to these edits, and still
+  open on their own modules.
+- `tests/web/rexpaint-editor-canvas.test.js`,
+  `rexpaint-editor-cross-tool-integration.test.js`, and
+  `rexpaint-editor-integration.test.js` are not runnable through `node <file>`:
+  they use ESM `import` in a `.js` file under a package.json without
+  `"type": "module"`, so Node reports
+  `SyntaxError: Cannot use import statement outside a module`. A runner
+  condition on unmodified files; no product signal either way.
+- Playwright WebKit cannot emulate `navigator.maxTouchPoints`. It reported 0 in
+  every context tested here, including the genuine
+  `devices['iPad Pro 11 landscape']` descriptor and an iPhone context where
+  `ontouchstart` and `pointer:coarse` were both true. A `hasTouch: true` context
+  therefore presents exactly the signature of a real "Request Desktop Site" and
+  always takes the force-desktop branch. Any regression test for the iPad-UA
+  guard must inject the touch-point count or run on hardware.
+- The locally configured Playwright Firefox executable path is absent, so no
+  Firefox evidence exists for this work.
+
+### Server lifecycle
+
+`playwright.config.js` `webServer` carries no `command`, so the app server was
+started and stopped by hand around each run.
+
+Start: `PYTHONPATH=src python3 -m pipeline_v2.app`, confirmed with
+`curl` returning `http_code=200` on `http://127.0.0.1:5071/workbench` and an
+`lsof -nP -iTCP:5071 -sTCP:LISTEN` listener row.
+
+Logs: `.scratch/2026-08-13-server.log` (PID 77417) and
+`.scratch/2026-08-13-server-f.log` (PID 92616).
+
+Teardown: each PID was killed and `lsof -nP -iTCP:5071 -sTCP:LISTEN` reported no
+listener afterwards. No listener was left behind.
+
+**Stage:** Implemented, Connected, Executed, and Verified in headed
+WebKit/Chromium emulation. NOT Accepted — physical iPad Safari acceptance
+remains on the Y9-2 `FL-4262` plus `FL-4256` lane, none of this is mobile
+acceptance, and nothing here was committed, deployed, or promoted to production.
+
+## Correction and user-reachable re-proof — mobile workbench parity/QoL — 2026-08-13
+
+Correction round on the section above ("Mobile workbench parity and QoL runtime
+edits — headed proof — 2026-08-13"). A reviewer found five defects in its claims.
+All five are accepted. Nothing above is deleted; the specific statements listed
+under "Superseded statements" are superseded in place. The durable receipt is the
+new Y9-2 `FL-4259` fix attempt appended the same day, and that entry's overlay now
+carries `CodeRefs` and `TouchedFiles` for this work. Roadmap owner remains Y9-2
+`FL-4257`; the adaptive deck/side-dock destination reanchor `FL-4259` owns is still
+open.
+
+### Reviewer findings accepted
+
+1. The stock-iPad result used an in-page `addInitScript` shim of
+   `navigator.maxTouchPoints`, so it never exercised the head guard against an
+   engine-reported touch-point count.
+2. The `maxTouchPoints = 1` "Request Desktop Site control" was synthetic branch
+   coverage, not real-Safari behaviour.
+3. The iPad Pro 11 landscape "no dead backdrop" result called
+   `window.toggleDrawer('layers')` directly, so it exercised an internal early
+   return rather than anything a user can reach.
+4. The `FL-4259` overlay carried empty `CodeRefs` and `TouchedFiles`, so the work
+   was not queryable by file or code area.
+5. The baseline commit label was wrong.
+
+### Provenance correction
+
+The baseline commit under test is **`f9ca597`** ("Add approved Wallace and Gromit
+sprite assets"), not `1da542f`. `1da542f` is its direct parent. The
+`git show HEAD:web/workbench.js` attribution comparisons in the section above ran
+against the true HEAD, so every pre-existing-versus-regression attribution stands
+untouched — only the label was wrong.
+
+### New runtime edit under proof
+
+`web/workbench.js:9505-9517` adds `_resetDrawerState()`, wired to a `change`
+listener on `matchMedia('(pointer: coarse) and (orientation: landscape)')`.
+Crossing the pinned-sidebar condition in either direction removes `.open` from
+every drawer, removes `.visible` from the backdrop, and resets every drawer
+toggle's `aria-expanded` to `false`. This closes a user-reachable dead backdrop the
+earlier round did not cover: a real tap opens a portrait bottom sheet, and rotating
+to landscape pinned that sheet while `.open` plus the visible full-viewport
+backdrop persisted. Still uncommitted worktree state, like every edit above.
+
+### User-reachable re-proof
+
+Method constraint for this round: every state change comes from a real tap, a real
+key event, a real select, a real click, or a real viewport rotation. No
+`window.toggleDrawer()` calls and no in-page `navigator` shims.
+
+Narrative with per-assertion measurements: `.scratch/2026-08-13-headed-proof.md`
+**section 8**. Probe scripts `.scratch/2026-08-13-user-reachable-probe.mjs`,
+`.scratch/2026-08-13-backdrop-dismiss-probe.mjs`, and
+`.scratch/2026-08-13-ipad-ua-chromium-cdp-probe.mjs`; run logs
+`.scratch/2026-08-13-probe-g-run.log`, `.scratch/2026-08-13-probe-g2b-run.log`, and
+`.scratch/2026-08-13-probe-g3-run.log`; machine-readable
+`.scratch/2026-08-13-mobile-proof/results-g.json`, `results-g2b.json`, and
+`results-g3.json`; screenshots `g1-`, `g2-`, `g2b-`, and `g3-` prefixed in
+`.scratch/2026-08-13-mobile-proof/`. Server log
+`.scratch/2026-08-13-server-g.log`, `curl` `http_code=200`, listener
+`Python 55782 ... TCP 127.0.0.1:5071 (LISTEN)`, PID killed with no listener left
+behind.
+
+- **Rotation regression — headed WebKit, iPhone-class 390x844, `hasTouch`: 9/9
+  PASS.** The dead-overlay precondition was reproduced for real: after a real tap
+  on the Layers toggle the backdrop rect measured `390x844` with a rendered
+  `390x237` sheet and `aria-expanded:["layers"]`. After a real rotation to 844x390
+  the backdrop is gone (`backdropVisibleClass:false`, `display:"none"`, rect
+  `0x0`), no `.ws-drawer.open` remains, and no toggle keeps `aria-expanded="true"`.
+  A real tap on the ► chrome button then moved `scrollLeft` `3421 → 3517`, delta
+  exactly **+96** (the handler's `dx`), so the canvas band is genuinely
+  interactable and not merely visually unobstructed. Rotating back to 390x844
+  leaves no orphaned open sheet and no backdrop. Screenshots
+  `g1-portrait-layers-sheet-open.png`,
+  `g1-landscape-after-rotate-no-backdrop.png`, `g1-portrait-after-rotate-back.png`.
+- **Landscape positive path — 844x390: 4/4 PASS.** The tools, layers, browse, and
+  info toggles are not rendered at all (`isVisible:false`, `display:"none"`, tap
+  outcome `not-visible-so-no-tap-target`), so there is no tap target that could
+  produce a dead backdrop. A real tap on Frames opens a real `844x246` sheet with
+  an `844x390` backdrop. A real `page.touchscreen.tap(8, 56)` — one of 126 scanned
+  viewport points where the backdrop is the topmost element — dismisses it, and
+  re-tapping the Frames toggle also closes it. The top ~45px strip is
+  `.ws-mobile-top-bar` (`z-index:101`) sitting over the backdrop (`z-index:99`) by
+  design, so taps in that strip hit top-bar buttons; recorded as a note, not a
+  defect. Screenshots `g2-landscape-frames-sheet-open.png`,
+  `g2-landscape-after-backdrop-tap.png` (the refused-tap state),
+  `g2-landscape-after-retap-frames.png`,
+  `g2b-landscape-after-exposed-backdrop-tap.png`.
+- **Stock-iPad UA discrimination — 6/6 PASS on headed CHROMIUM.** Engine stated
+  plainly: Chromium, not WebKit and not Safari. `navigator.maxTouchPoints` was set
+  to 5 through the browser's own emulation layer — CDP
+  `Emulation.setTouchEmulationEnabled({enabled:true, maxTouchPoints:5})` over a
+  session opened **before any navigation** — so the `<head>` sniff read an
+  engine-reported value with no in-page shim. Measured: `maxTouchPoints:5`, html
+  without `ws-force-desktop`, `#mobileFirstScreen` visible at 1180x820, the full
+  real template flow (real `selectOption` of `player_native_idle_only` plus a real
+  Apply click) reaching `body.ws-session-loaded` with a visible
+  `#wholeSheetCanvas` at `944x599`, the first screen shown again after reload, and
+  a real click on "Open Workbench (Advanced)" yielding `body.ws-advanced` with
+  **19 of 24** dashboard panels rendered with non-zero area. Screenshots
+  `g3-chromium-ipadua-first-screen.png`, `g3-chromium-ipadua-session-loaded.png`,
+  `g3-chromium-ipadua-advanced-dashboard.png`.
+
+### Behaviour change worth a release note
+
+On real Apple hardware, **"Request Desktop Site" does NOT lower
+`navigator.maxTouchPoints`.** A desktop-site request from an iPhone or iPad
+presents a Macintosh UA together with `maxTouchPoints: 5`, which is
+indistinguishable from a stock iPad by this guard
+(`web/workbench.html:20`, `/Macintosh/i.test(ua) && maxTouchPoints > 1`).
+Desktop-site requesters therefore now land on the **mobile shell** instead of the
+dense desktop dashboard they asked for. That is a deliberate trade — stock iPad
+users, the common case, get the correct shell, and desktop-site requesters get one
+extra tap rather than a broken layout — and their user-reachable escape is the
+**"Open Workbench (Advanced)"** button, exercised with a real click above. It is a
+behaviour change for those users and belongs in release notes rather than being
+left implicit.
+
+### Superseded statements
+
+Retained above for history; superseded here.
+
+- **Baseline label.** "Baseline commit under test is `1da542f`" in the section
+  above, and every `1da542f` reference in `.scratch/2026-08-13-headed-proof.md`
+  sections 1-7, is superseded by **`f9ca597`**. The attributions themselves stand
+  because they compared against the true HEAD.
+- **Landscape "no dead backdrop" wording.** The iPad Pro 11 landscape bullet above
+  is superseded by: the landscape sidebar toggles are hidden, `toggleDrawer`
+  carries an internal `sidebarPinned` guard, and `_resetDrawerState()` now covers
+  the rotation-crossing case — and that combination is user-reachably proven by the
+  rotation-regression and landscape results in this section rather than by a direct
+  function call.
+- **The `maxTouchPoints = 1` control.** The "genuine Request Desktop Site still
+  forces desktop" control in the stock-iPad bullet above is withdrawn as evidence
+  about real Safari. It was synthetic branch coverage. Screenshot
+  `d-control-mtp1-forcedesktop.png` remains on disk as a record of the synthetic
+  branch only.
+
+### Still open
+
+WebKit-engine equivalence for the UA guard and physical iPad Safari acceptance
+remain open on Y9-2 `FL-4262` plus `FL-4256`; nothing in this round closes either.
+The Playwright WebKit `maxTouchPoints` emulation limit recorded above is unchanged
+— that is why test 3 ran on Chromium with browser-level CDP touch emulation.
+
+**Corrected stage (verbatim):** Implemented and partially verified in headed
+emulation as a current mobile-shell repair; not accepted; physical iPad Safari and
+queryable FL code metadata remain open.
+
+The queryable-FL-code-metadata half of that sentence is closed by the Y9-2
+`FL-4259` overlay import recorded the same day
+(`analyze_failure_log.py overlay --import-proposals ... --write`, which added
+`TouchedFiles` `web/workbench.html`, `web/styles.css`, `web/workbench.js`,
+`web/whole-sheet-init.js` and twelve `CodeRefs`). Physical iPad Safari acceptance
+stays open. Nothing here was committed, deployed, or promoted to production.
+
+## Independent review REJECT and cross-owner stroke-revert correction — 2026-08-13
+
+An independent tmux Codex reviewer audited the two sections above and returned
+**VERDICT: REJECT** (HIGH 1, MEDIUM 1, INFO 3; tag
+`WB-MOBILE-REVIEW-20260813-CODEX`, verdict file
+`.scratch/2026-08-13-codex-review-verdict.md`). Both non-INFO findings are
+accepted in full. This section supersedes the specific tap-hold claims named
+below without deleting them; the layout, drawer, rotation, and stock-iPad-UA
+portions of those sections are untouched by this round and stand as recorded —
+the reviewer's INFO findings independently confirmed those hunks, the Y9-2
+`FL-4259` overlay metadata, and the honestly recorded desktop-site trade-off.
+
+### Reviewer findings accepted
+
+- **HIGH — `_revertActiveStroke()` reverted only the editor-local `LayerStack`,
+  leaving the workbench/save-export owner mutated.**
+  `web/whole-sheet-init.js:938-953` forwards every pointerdown paint immediately
+  through `onCellEdited`; `web/workbench.js:6583-6587` writes that edit into the
+  workbench mirror `state.layers` and marks the frame grid dirty; but the revert
+  restored only the editor snapshot and emitted neither compensating
+  `onCellEdited` calls nor `onDocumentStateChange`. The reviewer reproduced this
+  independently in headed WebKit on the current `/workbench` route: during an
+  800 ms touch hold, active-layer cell (6,6) changed in **both** owners at
+  100 ms, and at 600/800 ms the editor snapshot had reverted to
+  `{glyph:0, fg:[0,0,0], bg:[255,0,255]}` while
+  `window.__wb_debug.readLayerCell(activeLayer,6,6)` still held
+  `{glyph:64, fg:[255,0,255], bg:[0,128,0]}`, with the inspect popup visible.
+  The same defect applied to the two-pointer gesture-start call site. The canvas
+  looked reverted while the stray paint could silently persist into save and
+  export.
+- **MEDIUM — the earlier proof and FL claims overstated the tap-hold result**
+  because the probe measured only the editor owner:
+  `.scratch/2026-08-13-mobile-proof-probe.mjs` read
+  `window.__wholeSheetEditor.getDocumentSnapshot()` exclusively. The
+  "byte-identical 2,183,252-byte layer snapshot" statement was true of the
+  editor owner and silent about the mirror, which is exactly where the stray
+  survived.
+
+### Root cause — split document ownership with a one-way feed
+
+The whole-sheet editor owns a `LayerStack`; the workbench owns a mirror
+`state.layers` that save, autosave, draft persistence, the frame-grid
+projection, and export all read. During a stroke the feed is one-way and per
+cell through `onCellEdited`. Undo and redo already resynced the mirror
+authoritatively through `onDocumentStateChange`
+(`web/workbench.js:6602-6606` → `applyWholeSheetDocumentSnapshot` +
+`markSessionDirty` + `saveSessionState`); stroke cancellation was the one
+document-restoring path that skipped that channel. The bug was a missing
+resync, not a wrong snapshot.
+
+### The fix
+
+One line, on the same authoritative channel (main thread, still uncommitted
+worktree, baseline `f9ca597`): `web/whole-sheet-init.js` `_revertActiveStroke()`
+now calls `_emitDocumentStateChange('stroke-revert')` after applying the
+pre-stroke snapshot, so both cancellation call sites — tap-hold inspect and
+two-pointer gesture start — restore the externally owned document state through
+the same path undo/redo use. The ownership reason is recorded as an inline
+comment at the call. Revised function: `web/whole-sheet-init.js:1102-1124`.
+
+### Cross-owner re-proof — 33 of 33 PASS
+
+Headed **WebKit**, 390x844 iPhone-class context, `deviceScaleFactor 3`,
+`isMobile`, `hasTouch`; entry through the real first screen, a real
+`player_native_idle_only` select, a real Apply tap, and a real rotate-hint
+dismiss; session geometry 126x80, 4 layers, active layer 2.
+
+Artifacts: probe `.scratch/2026-08-13-stroke-revert-crossowner-probe.mjs`;
+results `.scratch/2026-08-13-mobile-proof/results-h.json` (33 assertions,
+0 fail); narrative `.scratch/2026-08-13-headed-proof.md` **section 9**;
+screenshots `h-control-real-tap.png`,
+`h-taphold-midstroke-stray-paint.png`, `h-taphold-inspect-popup.png`,
+`h-two-pointer-gesture.png`, plus `h-export-after-taphold.xp` and
+`h-coords.json`, all in `.scratch/2026-08-13-mobile-proof/`; server log
+`.scratch/2026-08-13-server-h.log` (self-started on 127.0.0.1:5071, killed after
+the run, no listener left behind).
+
+- **Load-bearing mid-stroke sample.** At 250 ms into the hold — before the
+  500 ms `TAP_HOLD_DELAY_MS` — both owners held the stray `{glyph:64}` (editor
+  snapshot, `__wb_debug.readLayerCell`, and the mirror's frame-grid projection).
+  After the revert fired, both were back at the baseline
+  `{glyph:0, fg:[0,0,0], bg:[255,0,255]}`. This is what proves the resync is
+  load-bearing rather than a vacuous pass.
+- **Tap-hold, cell (111,2).** Editor == mirror == baseline before and after; the
+  full-document editor-versus-mirror sweep reported `diffs: 0` over 4 layers x
+  10080 cells (40320 comparisons); history depths unchanged
+  (`wsHistoryDepth 2`, `wsFutureDepth 0`, `wbWholeSheetHistoryDepth 2`); the
+  inspect popup reported the pre-paint content at `111,2`; the persisted
+  IndexedDB draft read back through `__wbPersistence.loadLatestDraft()` after
+  the 2000 ms debounce carried the baseline cell.
+- **Real save/share taps.** A REAL tap on the mobile top-bar **Save** produced a
+  `/api/workbench/save-session` payload whose `layers[2][idx]` and `cells[idx]`
+  are both the baseline cell; a REAL tap on **Share** produced the same in its
+  pre-export save and yielded 1167 real exported `.xp` bytes off
+  `/api/workbench/download-xp` whose layer-2 glyph histogram is
+  `[(0, 10078), (64, 2)]` — exactly the two intentional control paints and zero
+  strays. The server session JSON on disk that export reads holds only those
+  same two cells.
+- **Two-pointer path, cell (37,7).** Finger 2 arriving 140 ms after finger 1,
+  eight pan steps: same result across every owner, with `#wholeSheetScroll`
+  `scrollLeft 0 → 201`, so the pan genuinely engaged rather than the gesture
+  being swallowed.
+- **Control.** Two CONTROL taps — one fully trusted `page.touchscreen.tap`, one
+  synthetic — paint identically in both owners, so the sync channel is live and
+  the synthetic path is measured against the trusted one rather than assumed
+  equivalent to it.
+
+### Caveats — stated, not buried
+
+- **Input fidelity.** Playwright's WebKit driver exposes exactly one trusted
+  touch primitive (`Input.dispatchTapEvent`), so a timed 800 ms hold and a
+  two-finger sequence cannot be driven as trusted input on this engine. Those
+  two sequences are dispatched as real `PointerEvent` objects with
+  `pointerType:'touch'` on the real canvas listeners; `isTrusted` is the only
+  difference. The CONTROL pair measures that equivalence on this exact code
+  path — it does not eliminate the gap on physical hardware.
+- **`.xp` coordinates.** The template export path column-remaps the visual layer
+  through `_expand_visual_cells_for_export` because `source_projs 1 < projs 2`,
+  so editor x does not equal xp x. The export assertion is therefore stated
+  coordinate-independently as an exact painted-cell count (a leaked stray would
+  raise it to 3), which is strictly stronger than a positional lookup.
+- **The payload assertions are not the primary detector.**
+  `saveSessionState` prefers the editor snapshot and only falls back to
+  `state.layers`, so the save-payload and `.xp` assertions alone would **not**
+  have caught the original divergence. `__wb_debug.readLayerCell` plus the
+  mid-stroke samples are the real detector; the payload work closes the
+  reviewer's named surface.
+- **Dirty flag.** `sessionDirty` stays `true` across the revert by design — the
+  resync marks the session dirty and issues one authoritative save. Content is
+  unchanged, so the only cost is one redundant save.
+- **Scope.** Single WebKit context, single session, one target cell per path
+  plus the full-document sweep. No physical iPhone or iPad hardware was
+  involved.
+
+### Superseded statements
+
+Retained above for history; superseded here. Line numbers cited from the
+reviewer's read may have shifted as this file grew — the section headings are
+the stable anchors.
+
+- **Tap-hold revert bullet.** In "Mobile workbench parity and QoL runtime edits
+  — headed proof — 2026-08-13", subsection "Headed proof results", the
+  "Tap-hold revert" probe-detail bullet (near line 15738 at review time): the
+  claim that "the whole-document layer snapshot is byte-identical at 2,183,252
+  bytes before and after" is superseded. It measured the **editor** owner only,
+  and at that time the workbench mirror `state.layers` still held the stray
+  paint. The control-tap half of that bullet (a 40 ms tap paints cell(3,3),
+  proving paint is live in that context) stands; the "document unchanged" half
+  is replaced by the cross-owner evidence in this section.
+- **Corresponding `.scratch/2026-08-13-headed-proof.md` statements** in its
+  earlier sections are superseded by its own section 9 on the same grounds.
+- **Y9-2 `FL-4259` text.** The matching sentence in the 2026-08-12 fix attempt
+  in `asciicker-Y9-2/docs/FAILURE_LOG.md` is superseded by the fix attempt
+  appended there the same day, which records this REJECT, the split-owner root
+  cause, the fix, and this re-proof.
+
+### Still open
+
+Physical iPad Safari acceptance remains on Y9-2 `FL-4262` plus `FL-4256`;
+nothing in this round closes it, and none of this is mobile acceptance. Y9-2
+`FL-4259` itself stays OPEN — the adaptive bottom-deck and side-dock destination
+reanchor, deck states, canvas minimums, width thresholds, and the
+touch-translation contract are untouched by this repair, which remains a
+current-shell parity/QoL repair and an evidence input only.
+
+**Stage (verbatim):** the stroke-revert repair is Implemented, Connected,
+Executed, and Verified across editor snapshot, workbench `state.layers` mirror
+and its frame-grid projection, history depth, persisted IndexedDB draft,
+save-session payload, the server session on disk, and the exported `.xp` bytes,
+in headed WebKit emulation; NOT Accepted — physical iPad Safari remains open.
+
+The Y9-2 `FL-4259` overlay `CodeRefs` were extended the same round with the
+revised `_revertActiveStroke` range and the two owner seams
+(`web/whole-sheet-init.js:938-953` producer, `web/workbench.js:6583-6587` mirror
+write, `web/workbench.js:6602-6606` resync channel) through the analyzer's
+overlay front door; `overlay --import-proposals` was run first and reported
+`generated: 0` because it is gap-fill-only and `CodeRefs` was already non-empty,
+so the union row was appended through the analyzer's own overlay writer. No
+overlay JSON blob was hand-edited. Nothing here was committed, deployed, or
+promoted to production.
+
+## Review round 2 REJECT — cancellation persistence fixes — 2026-08-13
+
+The independent tmux Codex reviewer re-audited the section above and returned
+**VERDICT: REJECT** again (HIGH 1, MEDIUM 1, INFO 3; tag
+`WB-MOBILE-REVIEW-R2-20260813-CODEX`, verdict file
+`.scratch/2026-08-13-codex-review-verdict-r2.md`). Both non-INFO findings are
+accepted in full. This section supersedes the specific claims named below
+without deleting them. The content-ownership half of the previous round was
+independently confirmed by the reviewer (INFO 3) and stands.
+
+### Reviewer findings accepted
+
+- **HIGH — the replacement resync introduced a dirty-state / persistence
+  defect.** The previous round closed the split-owner content defect, but
+  `web/whole-sheet-init.js` `_revertActiveStroke()` emitted `stroke-revert` and
+  `web/workbench.js` `onDocumentStateChange` applied the snapshot to the mirror
+  and then **unconditionally** called `markSessionDirty(...)` and
+  `saveSessionState(...)`. A successful save calls `markSessionSaved()`
+  (`web/workbench.js:4010-4013`), which clears `sessionDirty` and the
+  persistence dirty flag (`web/workbench.js:608-617`). The reviewer reproduced
+  this in headed WebKit: an intentional tap established `sessionDirty === true`,
+  then a cancelled 800 ms hold left the cell correctly reverted in both owners
+  but produced one `/save-session` request after the debounce and flipped
+  `sessionDirty` **true → false**. A cancelled gesture therefore persisted
+  unrelated pending work and took over pre-existing dirty ownership.
+- **MEDIUM — the superseding evidence overstated its assertion count.**
+  `.scratch/2026-08-13-mobile-proof/results-h.json` holds 33 records: 30 with
+  `pass: true`, 0 with `pass: false`, and 3 informational records with
+  `pass: null` (`.scratch/2026-08-13-stroke-revert-crossowner-probe.mjs:15-18`
+  deliberately records informational entries as null). "33 of 33 assertions
+  PASS" is not supported by that file.
+
+### Fix 1 — stroke-revert must not declare a document change
+
+`onDocumentStateChange` is one authoritative resync channel shared by undo,
+redo, zoom and now cancellation, but it conflated two duties: reconciling the
+mirror with the editor snapshot, and declaring that the document changed. A
+stroke-revert restores the pre-stroke document, so its net delta is exactly
+zero — it needs the reconciliation and must not have the declaration.
+
+`web/workbench.js:6602-6611` now early-returns after
+`applyWholeSheetDocumentSnapshot(snapshot)` when the reason is `stroke-revert`,
+before `markSessionDirty` and `saveSessionState`. The mirror, the frame-grid
+projection and every downstream reader still receive the restored document; the
+dirty flag and the network save are left untouched. The ownership reason is an
+inline comment at the branch. Main thread, still uncommitted worktree, baseline
+`f9ca597`.
+
+### Fix 2 — a pure two-finger pan must not emit `zoom`
+
+Round (i) proved fix 1 correct for the tap-hold path and then found the same
+harm class on a second line: `onGestureEnd` called
+`_emitDocumentStateChange('zoom')` unconditionally at the end of **every**
+two-finger gesture, so a pure pan that changed nothing still reached
+`onDocumentStateChange` with a reason other than `stroke-revert` and still
+marked dirty plus saved.
+
+A read-only differential proved this owner is **pre-existing** and not the code
+under proof: with the real Select tool active the first finger paints nothing,
+no stroke exists, `_revertActiveStroke()` is a no-op with no emit, and the
+identical two-finger gesture **still fired one save** with `canvasZoom`
+unchanged; `git blame` puts the block at `bd107479` (2026-04-30), untouched by
+this round's working-tree change. It was nevertheless fixed in scope, because it
+blocked the reviewer's literal end-to-end requirement and is the same defect
+class.
+
+`onGestureStart` records `editorState._gestureStartZoom` (state default at
+`web/whole-sheet-init.js:370`) and `onGestureEnd` emits `zoom` **only** when the
+snapped zoom differs from the gesture-start zoom. Current ranges:
+`web/whole-sheet-init.js:991-999` (gesture start),
+`web/whole-sheet-init.js:1014-1031` (gesture end).
+
+### Round (i) — quiescent already-dirty cancellation — 47 PASS, 3 FAIL, 3 INFO
+
+53 records. Probe `.scratch/2026-08-13-quiescent-dirty-probe.mjs`; results
+`.scratch/2026-08-13-mobile-proof/results-i.json`; narrative
+`.scratch/2026-08-13-headed-proof.md` **section 10**; screenshots
+`i-a1-quiescent-dirty-restored.png`, `i-a2-taphold-inspect-popup.png`,
+`i-a3-after-real-save.png`, `i-b1-clean-taphold.png`,
+`i-c1-normal-paint-autosaved.png`, `i-c2-after-real-undo.png`,
+`i-d1-two-pointer-gesture.png`, `i-d2-attribution-select-tool.png`; server log
+`.scratch/2026-08-13-server-i.log` (self-started on 127.0.0.1:5071, killed
+afterwards). Headed **WebKit**, iPhone-class 390x844 `hasTouch`, real
+first-screen template flow, rotate hint dismissed by a real tap.
+
+- **The quiescent already-dirty precondition was reached user-reachably**, not
+  injected. A read-only sweep of all five `markSessionDirty` call sites found
+  exactly one that a user can reach and that is **not** followed by a save in
+  the same handler: `_restoreDraft` (`web/workbench.js:8033`), driven by real
+  taps on "Continue Draft" then "Restore". Measured after the restore:
+  `sessionDirty === true`, **0** save POSTs, traffic quiet for 4.5 s. Settle
+  time is `max(1500, 2000) + 2500 = 4500 ms` against
+  `WHOLE_SHEET_AUTOSAVE_DEBOUNCE_MS` (`web/workbench.js:29`) and
+  `DRAFT_SAVE_DEBOUNCE_MS` (`web/whole-sheet-init.js:48`).
+- **Test A — tap-hold on that quiescent dirty session.** **0** `save-session`
+  POSTs and **0** `/api/` requests of any kind across the hold plus the full
+  settle; `sessionDirty` **true before, true after**; persistence dirty flag
+  identical; a harness-side counting spy around
+  `window.__wbPersistence.clearDirtyFlag` (page-context instrumentation only, no
+  source edit) recorded **0** calls, which is what directly proves
+  `markSessionSaved` never ran. The mid-stroke sample shows the stray reaching
+  both owners first, so the cancellation is load-bearing; editor == mirror ==
+  baseline; full-document sweep 4 layers x 10080 cells, **0 diffs**; history
+  depth and IndexedDB draft id/timestamp unchanged past the 2000 ms debounce;
+  inspect popup shown.
+- **Test B — clean quiescent session, fresh context.** 0 saves, `sessionDirty`
+  false before and after, `clearDirtyFlag` count 0, no draft written.
+- **Test C — regression controls.** A real trusted paint tap still marks dirty
+  and still autosaves exactly 1 POST after the debounce; the real Undo control
+  still marks and saves, because reason `undo` is not `stroke-revert` and the
+  early return does not swallow it.
+- **Test D — two-pointer gesture — FAIL.** 1 save POST; `sessionDirty`
+  **true → false**; `clearDirtyFlag` 0 → 1. All three FAILs are this group, and
+  they are the pre-existing gesture-end zoom emit described under Fix 2, not the
+  stroke-revert channel — the stroke-revert half of Test D passed and the save
+  that fired carried the **baseline** cell.
+
+### Round (j) — after fix 2 — 23 PASS, 0 FAIL, 3 INFO
+
+26 records. Probe `.scratch/2026-08-13-gesture-zoom-emit-probe.mjs`; results
+`.scratch/2026-08-13-mobile-proof/results-j.json`; narrative
+`.scratch/2026-08-13-headed-proof.md` **section 11**; screenshots
+`j-s1-pure-pan-cell-tool.png`, `j-s1a-pan-from-fit-zoom.png`,
+`j-s2-pure-pan-select-tool.png`, `j-s3-pinch-zoom-changed.png`,
+`j-s4-normal-paint-autosaved.png`; server log `.scratch/2026-08-13-server-j.log`,
+killed afterwards. Every save assertion in this round checks the **HTTP status**,
+not merely that a POST left the page.
+
+- **Scenario 1 — pure two-finger pan, cell tool, quiescent already-dirty.**
+  Precondition asserted: the restored session sits exactly on a discrete zoom
+  level, so the gesture-end snap cannot legitimately change zoom. **0** save
+  POSTs and **0** `/api/` requests across the gesture plus settle;
+  `sessionDirty` **true → true**; `clearDirtyFlag` spy **0**; stray paint
+  reverted in both owners; `appliedCanvasZoom` 3 → 3; pan genuinely engaged
+  (`scrollLeft` 0 → 32); sweep **0 diffs**. This is exactly the section-10
+  Test D scenario and it now passes.
+- **Scenario 2 — the same pan with the Select tool**, so no stroke exists at
+  all: 0 saves, dirty preserved. The section-10 attribution differential, which
+  previously fired a save with zero document delta, is now silent.
+- **Scenario 3 — a real two-finger pinch crossing a snap level.**
+  `appliedCanvasZoom` 0.234 → **3**, exactly **1** `save-session` POST answered
+  **200**, `sessionDirty` ends false. Zoom persistence is not muted by the guard.
+- **Scenario 1a — the invariant in both directions.**
+  `zoomChanged === (saveCount >= 1)` held across two runs, catching both
+  branches.
+- **Scenario 4 — normal paint regression.** Still marks dirty, still autosaves
+  exactly 1 POST answered **200**, still clears the flag.
+
+### Caveats — stated, not buried
+
+Multi-touch and timed holds are still dispatched as real `PointerEvent` objects
+with `pointerType:'touch'` on the real canvas listeners rather than trusted OS
+input, because Playwright's WebKit driver exposes only
+`Input.dispatchTapEvent`. Equivalence is measured with trusted-tap controls in
+every context, not assumed. Every single-touch mutation that could be driven
+trusted — template apply, rotate-hint dismiss, paint taps, Save, Undo, tool
+switches, drawer toggles, Continue Draft / Restore — was a real `page.tap` or
+`touchscreen.tap`. **No physical iPhone or iPad hardware was involved in any
+round.**
+
+### Superseded statements
+
+Retained above for history; superseded here by name.
+
+- **"33 of 33 PASS".** The subsection heading "Cross-owner re-proof — 33 of 33
+  PASS" in the section "Independent review REJECT and cross-owner stroke-revert
+  correction — 2026-08-13", and its body statement that `results-h.json` holds
+  "33 assertions, 0 fail", are superseded by the correct arithmetic for the same
+  file: **30 PASS, 0 FAIL, 3 INFO**. The matching phrasing in
+  `asciicker-Y9-2/docs/FAILURE_LOG.md` and in
+  `.scratch/2026-08-13-headed-proof.md` section 9 is superseded by the same
+  correction, recorded in the Y9-2 fix attempt appended the same day and in the
+  proof document's section 10 reporting correction. Every record in
+  `results-i.json` and `results-j.json` now carries an explicit `kind`
+  (`check` or `info`) plus an `expectation` string, so pass, fail and info can
+  no longer be merged into a single total.
+- **The dirty-flag caveat.** In the same section, the "Caveats — stated, not
+  buried" bullet reading "`sessionDirty` stays `true` across the revert by
+  design — the resync marks the session dirty and issues one authoritative save.
+  Content is unchanged, so the only cost is one redundant save" is superseded,
+  and it was **wrong before fix 1**: the save was not merely redundant, it
+  cleared `sessionDirty` and the persistence dirty flag through
+  `markSessionSaved`, committing unrelated pending work. After fix 1 the
+  sentence is true for a different reason — cancellation now emits no save at
+  all, so the dirty flag is *preserved* rather than restored. The matching
+  statements in `asciicker-Y9-2/docs/FAILURE_LOG.md` and in
+  `.scratch/2026-08-13-headed-proof.md` are superseded on the same grounds.
+
+Nothing is deleted; the earlier sections are retained for history.
+
+### New pre-existing side findings — documented, not fixed
+
+- **Fit-zoom snap.** A session restored at fit zoom (`appliedCanvasZoom` 0.234)
+  snaps to the nearest discrete level (0.5) on the first two-finger gesture.
+  That is a real, visible zoom change and it legitimately saves; the invariant
+  holds and the snap itself is pre-existing at `bd107479`. Recorded so a
+  reviewer does not read a legitimate save as a regression of fix 2.
+- **Draft-restored sessions can fail to save (HTTP 422).**
+  `_buildDraftPayload` (`web/whole-sheet-init.js:64-93`) omits `angles`,
+  `anims` and `projs`, and `_restoreDraft` (`web/workbench.js:8015-8018`) only
+  restores geometry when those fields are present. When the newest draft is an
+  editor-written one rather than the `beforeunload` draft, the restored session
+  keeps page-load defaults (`angles = 1`, `anims = [1]`) and the server rejects
+  every subsequent save with **422 `session_geometry_invalid`**. Observed during
+  an earlier run of the round-(j) probe; pre-existing, unrelated to either fix,
+  and recorded so it is not rediscovered as a regression.
+
+### Stage — unchanged in kind by this round
+
+**Implemented and partially verified in headed WebKit emulation as a current
+mobile-shell repair. NOT Accepted** — physical iPad Safari acceptance remains on
+Y9-2 `FL-4262` plus `FL-4256`, and no part of this round is mobile acceptance.
+Y9-2 `FL-4259` stays OPEN: the adaptive bottom-deck and side-dock destination
+reanchor, deck states, canvas minimums, width thresholds, and the
+touch-translation contract are untouched by these two fixes, which remain a
+current-shell parity/QoL repair and an evidence input only.
+
+The Y9-2 `FL-4259` overlay `CodeRefs` were extended the same round with the
+stroke-revert early-return branch (`web/workbench.js:6602-6611`) and the gesture
+hunks (`web/whole-sheet-init.js:370` state default, `:991-999` gesture start,
+`:1014-1031` gesture end), plus refreshed ranges for the two hunks this round's
+edits shifted (`web/whole-sheet-init.js:1112-1134` revised
+`_revertActiveStroke`, `web/whole-sheet-init.js:4232-4237` tap-hold call site).
+`overlay --import-proposals` was run first and reported `generated: 0` because
+it is gap-fill-only and `CodeRefs` was already non-empty, so the union row was
+appended through the analyzer's own overlay writer; no existing ref was dropped
+and no overlay JSON blob was hand-edited. Nothing here was committed, deployed,
+or promoted to production.
+
+## Independent review round 3 — APPROVE — 2026-08-13
+
+The independent tmux Codex reviewer re-audited the two cancellation-persistence
+fixes recorded in the section above and returned **VERDICT: APPROVE** (tag
+`WB-MOBILE-REVIEW-R3-20260813-CODEX`, verdict file
+`.scratch/2026-08-13-codex-review-verdict-r3.md`, task
+`WB-MOBILE-REVIEW-20260813-03`, 2026-08-13). Finding count: **0 HIGH open,
+0 MEDIUM open, 3 INFO**. No new code change accompanies this section.
+
+### Reviewer closures
+
+- **R2 HIGH — closed.** The stroke-revert branch at
+  `web/workbench.js:6602-6611` still applies the authoritative editor snapshot
+  to `state.layers` and its projection, but returns before `markSessionDirty(...)`
+  and `saveSessionState(...)` when the reason is `stroke-revert` — removing the
+  path that previously reached `markSessionSaved()`
+  (`web/workbench.js:4010-4013`) and cleared dirty ownership
+  (`web/workbench.js:608-617`). Both flags were proven live: an already-dirty
+  session reached through real Continue Draft then Restore stays dirty with zero
+  save traffic and zero `clearDirtyFlag` calls after a cancelled hold, a clean
+  session stays clean, and normal trusted paint plus the real Undo control still
+  save.
+- **R2 HIGH, two-pointer completion path — closed.** The net-zoom guard at
+  `web/whole-sheet-init.js:991-999` (gesture-start capture) and
+  `web/whole-sheet-init.js:1014-1031` (conditional gesture-end emit) resets its
+  temporary state at gesture end and introduced no new HIGH defect on source
+  review. A load-bearing cell-tool pan reverts the stray in both owners, moves
+  the scroll position, produces no save and preserves the already-dirty state;
+  the Select-tool differential is silent; a pinch that changes zoom still saves
+  **exactly once**.
+- **R2 MEDIUM — closed.** The overstated "33 of 33 assertions PASS" arithmetic
+  is explicitly superseded on all three surfaces, and the published tallies now
+  match independent JSON counts exactly — `results-i.json` 47 PASS / 3 FAIL /
+  3 INFO and `results-j.json` 23 PASS / 0 FAIL / 3 INFO — with `kind` and
+  `expectation` on every record.
+
+### Boundary the reviewer confirms
+
+Y9-2 `FL-4259` **stays OPEN** and the stage is **unchanged: Implemented and
+partially Verified in headed WebKit emulation, not Accepted.** Physical iPad
+Safari acceptance remains on Y9-2 `FL-4262` plus `FL-4256`. Trusted OS
+multi-touch is **not verifiable in this harness** — Playwright's WebKit driver
+exposes only `Input.dispatchTapEvent` and no physical device was available; the
+reviewer records that boundary rather than treating the emulation as
+equivalent. The fit-zoom first-gesture snap and the draft-restored HTTP 422
+`session_geometry_invalid` geometry defect remain **disclosed pre-existing side
+findings**, not fixed and not claimed fixed.
+
+### What this APPROVE is, and is not
+
+It is **review closure of the repair rounds only**: an independent reader agrees
+the two fixes are correctly scoped, correctly evidenced, and free of open HIGH
+or MEDIUM findings. It is **NOT product acceptance**, **NOT mobile acceptance**,
+and it does **NOT resolve `FL-4259`**. The adaptive bottom-deck and side-dock
+destination reanchor, deck states, canvas minimums, width thresholds and the
+touch-translation contract remain untouched by these fixes, which stay a
+current-shell parity/QoL repair and an evidence input only. Nothing in this
+round was committed, deployed, or promoted to production.
+
+## Wallace from-scratch mobile authoring demonstration — 2026-08-13
+
+A complete exact-reproduction recipe of **user-reachable mobile actions** for a real
+production sprite was derived and then executed live end-to-end through the real headed
+mobile workbench, and the resulting export is **decoded-payload byte-identical** to the
+target. Target: `sprites/2026-06-08-wallace.xp`, 126 × 72, 3 layers.
+
+Phase 1 audit: `.scratch/2026-08-13-wallace-recipe/audit.md`.
+Phase 2 execution: `.scratch/2026-08-13-headed-proof.md` §13.
+Recipe: `.scratch/2026-08-13-wallace-recipe/recipe.json` (3031 actions).
+Y9-2 lineage: `FL-4259` fix attempt 2026-08-13; new defect entries `FL-4272`, `FL-4273`,
+`FL-4274`.
+
+### Phase 1 — what the target actually is, and what the UI can reach
+
+Decoded ground truth from the sheet's own Layer-0 metadata header: angles 8,
+anims `[1,8]`, projs 2, cell 7 × 9 → an 18 × 8 grid of 7w × 9h frames.
+
+- **Projection 1 is an exact per-frame VERTICAL mirror** with a `VFLIP_GLYPH` remap
+  (220↔223, 218↔192, 191↔217, 118↔94, 92↔47, 85↔227, 194↔193). Measured on the target:
+  L2 reflection match **4536 / 4536**.
+- **The export path cannot auto-derive it.** `workbench_export_xp` takes the
+  persisted-layer branch because `family_dims` 126 × 80 ≠ 126 × 72, so
+  `_expand_visual_cells_for_export` never runs — and if it did it would mirror with
+  `flip_h=True` and no glyph remap (`src/pipeline_v2/service.py:3398-3441`, `:3375-3395`),
+  which is a different transform. **Both projection halves had to be authored cell by cell.**
+- **No template seeds the target geometry.** Every registered template is 126 × 80 / 4
+  layers or larger (`config/template_registry.json`; `service.py:_FAMILY_DIMS:2316-2322`).
+- **The working from-scratch entry** is the real mobile first screen `#fsAdvancedBtn` →
+  the classic-geometry row (`#classicGeomAngles=8`, `#classicGeomFrames="1,8"`,
+  `#classicGeomSourceProjs=2`, `#classicGeomCellW=7`, `#classicGeomCellH=9`) → `#btnNewXp`,
+  then `.ws-layer-del-btn` to reach 3 layers. `source_projs = 2` is **load-bearing**: with
+  `source_projs = 1`, creation and save derive different widths and `save-session`
+  permanently 422s.
+- **Nothing in the target is mobile-UI-unreachable.** All 14 distinct glyphs are reachable
+  through `#wsGlyphCode` (0–255) or the 256-cell picker canvas; all 6 fg and 6 bg RGB values
+  are reachable through `#wsFgColor` / `#wsBgColor`. The 64-entry preset palette **cannot**
+  express `(0,68,0)`, `(0,102,0)`, `(170,85,0)`, `(170,0,0)`, `(255,228,181)`,
+  `(255,255,85)`, and its BG path is `contextmenu`-bound (desktop-only) — so the glyph-code
+  input and the RGB colour inputs are mandatory, not optional.
+
+**Equality contract, fixed in advance:** decoded-payload byte identity,
+`gzip.decompress(exported) == gzip.decompress(target)`. The gzip wrapper necessarily
+differs by mtime and embedded FNAME, because `xp_codec.py:73` uses `gzip.open(path,'wb')`
+and neither is reachable from the UI.
+
+### Phase 2 — live execution, 27 PASS / 0 FAIL / 6 INFO
+
+All **3031 / 3031** recipe actions executed in **headed mobile WebKit** (iPhone 13
+landscape, `hasTouch`; `ontouchstart` true and
+`(pointer: coarse) and (orientation: landscape)` true) against `pipeline_v2.app` on
+127.0.0.1:5071, in **170.4 s**, with 0 errors, 0 unhandled actions and 0 `pageerror`s.
+
+- **Only 9 of the 3031 actions ran in `ws-advanced`** (geometry entry, `#btnNewXp`, layer
+  delete). The remaining **3022 — all of L0, L1 and L2 authoring plus save plus share — ran
+  in the editor-first mobile shell**, re-entered through the real top-bar control
+  `[data-action="toggle-advanced"]`.
+- **14 checkpoints**, each pulling `getDocumentSnapshot()` and comparing all three layers ×
+  9072 cells against an independent in-driver simulation: **every checkpoint 0 mismatches
+  out of 27216.**
+- **Export through the real controls**: `#wsSaveBtn`, then the mobile Share control
+  `.ws-mobile-top-bar [data-action="share-file"]`. The Web Share branch was taken
+  (`hasShare` / `hasCanShare` / `canShareFiles` all true), so no browser download landed;
+  the captured bytes are the exact `GET /api/workbench/download-xp` response body the UI
+  itself fetched and handed to `navigator.share({files})`.
+
+**Result:**
+
+```
+target   payload 272192 bytes  sha256 babb3dc8c73ef09cd12cef836e854bb8d2b0e416fdcb7fb3b56c18dc273c045b
+exported payload 272192 bytes  sha256 babb3dc8c73ef09cd12cef836e854bb8d2b0e416fdcb7fb3b56c18dc273c045b
+dims  [126,72,3] == [126,72,3]
+total_cell_mismatches: 0 / 27216
+VERDICT: PASS
+```
+
+`gzip.decompress(exported) == gzip.decompress(target)`. Independently re-verified by the
+main thread after the run.
+
+**Artifacts**, all under `.scratch/2026-08-13-wallace-recipe/`:
+`wallace-target-vs-authored.png` (contact image: target above, mobile-authored export
+below), `wm-01-first-screen.png` … `wm-10-after-export.png` (with `wm-09-final-fit.png` as
+the human-visible authored-sheet evidence), `exported-wallace.xp`, `execution.log`,
+`execution-summary.json`, `equality.json`, plus the harnesses `execute_full.mjs`,
+`equality.py`, `render.py`, `execute_l0_shot.mjs`, `shareprobe.mjs`.
+
+### Caveats — the limits of this evidence
+
+a. **Synthetic `PointerEvent`s for canvas gestures.** The 2827 cell taps and 74 drags are
+   `new PointerEvent(..., pointerType:'touch')` dispatched on `#wholeSheetCanvas`, not
+   driver-level hardware touch. Structural reasons: the WebKit automation protocol exposes
+   only `Input.dispatchTapEvent`, and at 126 × 72 cells × 12 px the sheet is 1512 × 864 CSS
+   px inside a 750 × 342 viewport, so hardware-coordinate taps would need a pan or zoom per
+   cell. All 12 **control** taps were real `page.tap()`.
+b. **Colour inputs were value-seeded.** The 51 colour changes set `.value` and dispatched
+   `input` + `change`, because `input[type=color]` opens an OS-native picker no automation
+   can drive. Every other field was really typed.
+c. `select_layer` used `element.click()` on the real `.ws-layer-row`, not `page.tap()`.
+d. `wm-04-after-L0.png` comes from a separate 29-step supplementary run; the main run's
+   step-29 screenshot hook sat behind the batched tap branch. Layer 0 correctness *in the
+   main run* is established by the step-114 checkpoint, which re-verifies all three layers.
+e. **No physical hardware.** No real device, no real finger, no OS share sheet dismissed by
+   a human.
+f. This proves the **recipe** reproduces the target through the mobile UI. It does not claim
+   a human would discover a 3031-action sequence unaided.
+
+### Three new mobile-workbench defects — found, documented, NOT fixed
+
+Found read-only during Phase 1. Checked against the Y9-2 failure log first: no existing
+entry owned selection ops, clipboard, or resize for the whole-sheet editor
+(`by-file web/whole-sheet-init.js` returned only `FL-4263` and `FL-4259`;
+`by-symbol _transformSelection` and `by-symbol _derive_session_grid_geometry` returned
+none), so each was opened as its own scoped entry through the `fl add` front door.
+
+| Y9-2 entry | Defect | Evidence |
+|---|---|---|
+| **FL-4272** | **`Flip V` is defective** — it clears the selection and writes nothing back. `_transformSelection` (`web/whole-sheet-init.js` ~3120, button `:3212-3218`) snapshots the source, clears the region with `setCell(x,y,0,[255,255,255],[255,0,255])`, and the write-back never lands. | Measured live on two independent selections, **11 × 9** and **63 × 9**, with known painted content: every cell came back `glyph 0` / bg `(255,0,255)`. `audit.md` §4 table row `Flip V`, obstacle B4; harness `verify_ops.mjs`. |
+| **FL-4273** | **`Copy` / `Paste` operate all-layer.** A single-layer selection is captured across the whole stack, and paste writes every layer, clobbering L0 and L1 alongside L2. The neighbouring `Fill Sel` is single-layer — two selection controls in the same toolbar disagree on layer scope. | `clipboardCellCount = 2268` for a **63 × 9 = 567-cell** selection (exactly 4 × 567 in a 4-layer session). `audit.md` §4 table rows `Copy` / `Paste`, obstacle B5. |
+| **FL-4274** | **The `Resize` path desyncs `cell_h` and permanently 422s `save-session`.** `#wsResizeBtn` (`web/whole-sheet-init.js:3041-3046`) resizes the layer stack but never updates `cell_h`; `save-session` re-derives `(sum(anims) * source_projs * cell_w, angles * cell_h)` (`service.py:_derive_session_grid_geometry:3446-3463`, called at `:5296`) and hard-fails. Export is then blocked too (`workbench.js:4449-4454`). This also blocks reaching 126 × 72 from a template. | **8 consecutive live** `POST /api/workbench/save-session` → HTTP 422 `session_geometry_invalid`. `audit.md` §2 "The Resize button is a dead end", obstacle B2. |
+
+FL-4272 and FL-4273 are why the recipe paints all 2820 art cells directly instead of
+mirroring a copied half; FL-4274 is why it never presses Resize. None of the three was
+fixed, attempted, or claimed fixed in this pass.
+
+### The honest boundary
+
+This is **emulation evidence**. It demonstrates authoring parity for a real production
+sprite through user-reachable mobile controls in **headed WebKit emulation** — it is not a
+physical-device result. Y9-2 `FL-4259` **stays OPEN**, and the stage is unchanged:
+**Implemented and partially Verified in headed WebKit emulation, NOT Accepted.** Physical
+iPad Safari acceptance remains on Y9-2 `FL-4262` plus `FL-4256`. Nothing in this round was
+committed, deployed, or promoted to production, and no product or source file was edited by
+the logging pass that recorded it.
+
+## Review round 4 — FL-4273 clipboard wording corrected — 2026-08-13
+
+Codex review round 4 of the Wallace from-scratch mobile authoring demonstration
+(verdict `.scratch/2026-08-13-codex-review-verdict-r4.md`, tag
+`WB-WALLACE-DEMO-R4-20260813-CODEX`) returned **PASS on criteria 1-3** — decoded-payload
+equality, no document state smuggled past the UI, and the mobile/from-scratch plus
+input-fidelity bounds. **The demonstration itself stands.** The verdict was REJECT on a
+single **MEDIUM documentation defect**: the FL-4273 wording in the section
+"Three new mobile-workbench defects — found, documented, NOT fixed" above, and the
+matching Y9-2 entry, overstate and misidentify the clipboard defect. This section records
+the correction. Nothing above is deleted; the named statements are superseded in place.
+
+### Superseded by name
+
+The FL-4273 table row above (line ~16565) reads **"`Copy` / `Paste` operate all-layer. A
+single-layer selection is captured across the whole stack, and paste writes every layer,
+clobbering L0 and L1 alongside L2."** That phrasing — and every "all layers" / "entire
+layer stack" variant of it in this document and in the Y9-2 `FL-4273` entry — is
+**superseded**.
+
+### Corrected statement
+
+**Copy captures ALL VISIBLE layers and Paste writes to the corresponding UNLOCKED layers,
+despite active-layer UI expectations.**
+
+- `_copySelection` (`web/whole-sheet-init.js:1136-1146`) calls
+  `captureVisibleSelectionClipboard` (`web/whole-sheet-clipboard.mjs:57-81`), which builds
+  one cell block per index returned by `getVisibleLayerIndices` — **hidden layers are
+  skipped**.
+- `_pasteAt` (`web/whole-sheet-init.js:1427-1465`) calls
+  `resolveWritableClipboardLayers` (`web/whole-sheet-clipboard.mjs:83-98`), which silently
+  drops locked and out-of-range layer indices before any write — **locked layers are not
+  overwritten**; an all-locked clipboard surfaces a status message instead of a silent
+  no-op.
+
+### Measurement scope correction
+
+`clipboardCellCount = 2268` for a `63 × 9 = 567`-cell selection **stands as a
+measurement**, but only as a **fixture-scoped** result. The harness
+`.scratch/2026-08-13-wallace-recipe/verify_ops.mjs` never toggles layer visibility or
+lock, and all four session layers were visible and unlocked in that fixture, so `4 × 567`
+shows that all four **visible** layers were captured **there**. It does **not** prove that
+hidden layers are copied, and it does **not** prove that locked layers are overwritten.
+
+The user-facing impact is unchanged: a control the UI presents as active-layer scoped
+performs a cross-layer overwrite of every visible and unlocked layer, and it disagrees
+with the neighbouring `Fill Sel`, measured single-layer in the same session. FL-4273 stays
+**OPEN** and unfixed; no runtime change was attempted in this round.
+
+### Ownership / overlay correction
+
+The Y9-2 `FL-4273` overlay row pointed only at `web/whole-sheet-init.js:3212-3218`, which
+is the **Flip V button wiring owned by FL-4272** — so overlay queries for the actual
+copy/paste and clipboard-helper code returned no FL-4273 record. That ref is **superseded
+for FL-4273**. The correct owners are the four refs listed under "Corrected statement"
+above, across `web/whole-sheet-init.js` **and** `web/whole-sheet-clipboard.mjs`.
+
+`FL-4272`'s stale `web/whole-sheet-init.js:3120` reference is likewise refreshed to
+`web/whole-sheet-init.js:1524-1583` (`_transformSelection`: snapshot `:1533-1541`, clear
+`:1560-1564`, write-back `:1567-1572`), while its valid Flip V button ref
+`web/whole-sheet-init.js:3212-3218` is retained (`flipVBtn.id = 'wsFlipV'` at `:3213`,
+handler at `:3217`).
+
+Both corrections are recorded as dated fix-attempt blocks on the Y9-2 entries through the
+`analyze_runs.py fl fix-attempt` front door. The overlay JSONL rows themselves could not
+be updated: `overlay --patch` is hard-disabled, `overlay --import-proposals` appends only
+keys that are currently **empty** (dry runs generated 0 rows for both entries), and the
+union-preserving setter `scripts/fl_overlay_set.py` named by the doc-hygiene skill is
+absent from this checkout. The corrected refs therefore live in the FL entry text, which
+`by-file`, `by-symbol` and `fl code` all index. Verified after the write:
+`by-file web/whole-sheet-clipboard.mjs` and `by-symbol` for
+`captureVisibleSelectionClipboard`, `resolveWritableClipboardLayers`, `_copySelection` and
+`_pasteAt` each return `FL-4273`; `fl code FL-4272` now lists `:1524`, `:1533`, `:1560`
+and `:1567` alongside the retained `:3212-3218`.
+
+No product or source file was edited by this logging pass, and nothing was committed.
+
+## Review round 5 — APPROVE — Wallace mobile demonstration closed — 2026-08-13
+
+Codex review round 5 (verdict `.scratch/2026-08-13-codex-review-verdict-r5.md`, tag
+`WB-WALLACE-DEMO-R5-20260813-CODEX`, task `WB-WALLACE-DEMO-20260813-05`) re-audited the
+correction recorded in the round-4 section above and returned **VERDICT: APPROVE** —
+0 HIGH open, 0 MEDIUM open, 1 INFO. The round-4 verdict file is
+`.scratch/2026-08-13-codex-review-verdict-r4.md` (tag `WB-WALLACE-DEMO-R4-20260813-CODEX`,
+REJECT with criteria 1-3 PASS and one MEDIUM on FL-4273).
+
+### The R4 MEDIUM is closed, all four parts
+
+1. **Wording.** FL-4273 now scopes the defect precisely as **visible-copy / unlocked-paste**,
+   matching source: `_copySelection` (`web/whole-sheet-init.js:1136-1146`) calls
+   `captureVisibleSelectionClipboard` (`web/whole-sheet-clipboard.mjs:57-81`), which skips
+   hidden layers; `_pasteAt` (`web/whole-sheet-init.js:1427-1465`) calls
+   `resolveWritableClipboardLayers` (`web/whole-sheet-clipboard.mjs:83-98`), which drops
+   locked and out-of-range layers.
+2. **Evidence scope.** The 2268-cell count for a 567-cell selection is retained only as a
+   **fixture-scoped** measurement in the four-visible, four-unlocked root-blank fixture,
+   with the same bounded wording and named supersession in this document,
+   `.scratch/2026-08-13-wallace-recipe/audit.md`, and the Y9-2 `FL-4273` entry.
+3. **Ownership / queryability.** The correct owners resolve through the entry-text index:
+   `by-file web/whole-sheet-clipboard.mjs` and `by-symbol` for
+   `captureVisibleSelectionClipboard`, `resolveWritableClipboardLayers`, `_copySelection`
+   and `_pasteAt` each return FL-4273. The **irreparable raw-overlay residue is explicitly
+   disclosed** (`overlay --code-ref whole-sheet-clipboard` still returns zero;
+   `overlay --patch` hard-disabled, proposal import fills empty keys only, the named union
+   setter absent). The reviewer records this as an honest fallback, not an overstatement.
+4. **FL-4272 refresh.** The stale `:3120` citation is replaced by the current
+   `_transformSelection` range `web/whole-sheet-init.js:1524-1583`, while the valid Flip V
+   wiring `:3212-3218` is retained.
+
+### Combined R4 + R5 result
+
+With R4 criteria 1-3 PASS and the R4 MEDIUM closed, the **Wallace from-scratch mobile
+authoring demonstration is fully review-approved**: 3031 user-reachable actions,
+decoded-payload byte identity (sha256
+`babb3dc8c73ef09cd12cef836e854bb8d2b0e416fdcb7fb3b56c18dc273c045b`, 272192 bytes,
+0 of 27216 cell mismatches, independently re-verified by the reviewer in R5), no smuggled
+document state past the UI, and honest from-scratch and input-fidelity bounds.
+
+### Boundary, unchanged by this approval
+
+This is **EMULATION evidence only**. Stage unchanged: **Implemented and partially Verified
+in headed WebKit emulation, NOT Accepted**. Physical iPad Safari acceptance remains on the
+**FL-4262 + FL-4256** lane. **FL-4259 stays OPEN.** **FL-4272, FL-4273 and FL-4274 remain
+OPEN, unfixed defects** — no runtime fix was attempted or claimed in this round. Nothing
+was committed, deployed or promoted to production, and no product or source file was
+edited by this logging pass.

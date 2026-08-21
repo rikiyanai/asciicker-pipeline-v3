@@ -367,6 +367,7 @@ let editorState = {
   _lastTouchPointerType: '',
   _strokeDirty: false,
   _pendingHistorySnapshot: null,
+  _gestureStartZoom: null,
   history: [],
   future: [],
   // Clipboard state (W19-W22 parity)
@@ -786,6 +787,31 @@ async function mount({
   zoomValue.textContent = 'Fit';
   zoomRow.appendChild(zoomValue);
 
+  // FL-MOB-02: translucent pan chrome adjacent to zoom bar (mobile only via CSS)
+  const scrollChrome = document.createElement('div');
+  scrollChrome.className = 'ws-scroll-chrome';
+  [
+    { label: '◄', title: 'Pan left',  dx: -96, dy:   0 },
+    { label: '►', title: 'Pan right', dx:  96, dy:   0 },
+    { label: '▲', title: 'Pan up',    dx:   0, dy: -96 },
+    { label: '▼', title: 'Pan down',  dx:   0, dy:  96 },
+  ].forEach(({ label, title, dx, dy }) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ws-scroll-chrome-btn';
+    btn.title = title;
+    btn.setAttribute('aria-label', title);
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      const sw = document.getElementById('wholeSheetScroll');
+      if (!sw) return;
+      if (dx !== 0) sw.scrollLeft = Math.max(0, sw.scrollLeft + dx);
+      if (dy !== 0) sw.scrollTop  = Math.max(0, sw.scrollTop  + dy);
+    });
+    scrollChrome.appendChild(btn);
+  });
+  zoomRow.appendChild(scrollChrome);
+
   viewportShell.appendChild(zoomRow);
 
   const scrollWrap = document.createElement('div');
@@ -963,8 +989,11 @@ async function mount({
   // Two-pointer pinch-zoom / pan gesture tracking
   attachGestures(canvasEl, {
     onGestureStart() {
-      // Flush any in-progress stroke to prevent orphaned stroke state
-      _onStrokeEnd();
+      // The first finger already painted before the second arrived. The
+      // user's intent is pan/zoom, not an edit — revert the stray cell
+      // instead of committing it.
+      _revertActiveStroke();
+      editorState._gestureStartZoom = editorState.appliedCanvasZoom || 1;
       editorState._gestureActive = true;
       if (editorState.canvas) editorState.canvas._gestureActive = true;
     },
@@ -990,7 +1019,15 @@ async function mount({
       const snapped = snapFn(current);
       editorState.canvasZoom = snapped;
       _applyCanvasZoom({ preserveCenter: true });
-      _emitDocumentStateChange('zoom');
+      // Emit only when the gesture actually changed the zoom. A pure pan
+      // (zoom unchanged) must not mark the session dirty or trigger a save —
+      // that silently persisted pending work and cleared dirty ownership at
+      // the end of every two-finger gesture.
+      const startZoom = editorState._gestureStartZoom;
+      editorState._gestureStartZoom = null;
+      if (snapped !== (startZoom == null ? snapped : startZoom)) {
+        _emitDocumentStateChange('zoom');
+      }
     },
   });
 
@@ -1070,6 +1107,30 @@ function _cancelDocumentTransaction() {
   editorState._strokeDirty = false;
   editorState._pendingHistorySnapshot = null;
   _updateHistoryButtons();
+}
+
+/**
+ * Revert an in-progress stroke to its pre-stroke document snapshot without
+ * pushing a history entry. Canvas paints on pointerdown, so by the time a
+ * tap-hold inspect or a two-finger gesture reveals the touch was not meant
+ * as an edit, a stray cell is already painted — this undoes it exactly.
+ * @returns {boolean} true if a dirty stroke was reverted
+ */
+function _revertActiveStroke() {
+  if (!editorState._strokeDirty) return false;
+  const snap = editorState._pendingHistorySnapshot;
+  editorState._strokeDirty = false;
+  editorState._pendingHistorySnapshot = null;
+  if (snap) {
+    _applyDocumentSnapshot(snap);
+    // The stray cells already reached the workbench mirror through
+    // onCellEdited during the stroke — resync it through the same
+    // authoritative channel undo/redo use, or state.layers keeps the
+    // paint the canvas no longer shows and save/export leak it.
+    _emitDocumentStateChange('stroke-revert');
+  }
+  _updateHistoryButtons();
+  return true;
 }
 
 function _copySelection() {
@@ -4170,6 +4231,9 @@ function _onTapHoldStart(e) {
   editorState._tapHoldTimer = setTimeout(() => {
     editorState._tapHoldTimer = null;
     editorState._tapHoldFired = true;
+    // pointerdown already painted the held cell; revert it before reading so
+    // the inspector shows the original content, not the fresh paint.
+    _revertActiveStroke();
     _showTapHoldInspect(canvasEl, e.clientX, e.clientY);
   }, TAP_HOLD_DELAY_MS);
 }

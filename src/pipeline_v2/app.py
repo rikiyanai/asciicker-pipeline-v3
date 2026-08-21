@@ -45,6 +45,8 @@ from .service import (
     workbench_termpp_stream_status,
     workbench_termpp_stream_frame_path,
     workbench_web_skin_payload,
+    workbench_mint_legacy_preview_token,
+    workbench_consume_legacy_preview_token,
     load_template_registry,
     get_registry_status,
     workbench_list_sessions,
@@ -140,6 +142,7 @@ def _runtime_preflight_payload() -> dict:
         "termpp-web-flat/index.wasm",
         "termpp-web-flat/index.data",
         "termpp-web-flat/flat_map_bootstrap.js",
+        "termpp-web-flat/legacy_skin_preview_bootstrap.js",
     ]
     required_map_any_of = [
         "termpp-web-flat/flatmaps/minimal_2x2.a3d",
@@ -360,6 +363,28 @@ def create_app() -> Flask:
     @bp.get("/api/workbench/runtime-preflight")
     def api_wb_runtime_preflight():
         return jsonify(_runtime_preflight_payload()), 200
+
+    @bp.post("/api/workbench/legacy-preview-token")
+    def api_wb_mint_legacy_preview_token():
+        req_id = str(uuid.uuid4())
+        try:
+            payload = request.get_json(silent=True) or {}
+            return jsonify(workbench_mint_legacy_preview_token(
+                req_id,
+                session_id=str(payload.get("session_id", "")).strip(),
+                xp_b64=str(payload.get("xp_b64", "")).strip(),
+                source_name=str(payload.get("source_name", "")).strip(),
+            )), 201
+        except ApiError as e:
+            return _err(e)
+
+    @bp.get("/api/workbench/legacy-preview-token/<token>")
+    def api_wb_consume_legacy_preview_token(token: str):
+        req_id = str(uuid.uuid4())
+        try:
+            return _no_cache(jsonify(workbench_consume_legacy_preview_token(token, req_id))), 200
+        except ApiError as e:
+            return _err(e)
 
     @bp.get("/api/workbench/known-bugs")
     def api_wb_known_bugs():
